@@ -1,202 +1,223 @@
-# Segment Tree Range Maximum Query Node Update
+# Segment Tree — Range Maximum Query with Node Update
 
 **Problem Link:**
 https://www.geeksforgeeks.org/dsa/segment-tree-set-2-range-maximum-query-node-update/
 
 **Topic:**
-Segment Tree Range Queries
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Point-update segment tree with range-max queries.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> a=[1,3,2,4]. Build t. Query(0,3)=4. Update(2,5): a=[1,3,5,4]. Query(0,3)=5.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Segment Tree / Range Queries
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: The Operations We Need
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Given an array `arr` of length n, support two operations efficiently:
+1. **Range maximum query**: `rmq(l, r)` returns `max(arr[l], arr[l+1], ..., arr[r])`.
+2. **Point update**: `update(i, x)` sets `arr[i] = x`.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Why do we need a data structure? Because:
+- Query in O(n) per call is too slow if there are many queries.
+- Storing all pairwise maxes upfront is O(n²) space.
 
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Point-update segment tree with range-max queries.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
+We want **O(log n) per operation** — and a **segment tree** delivers that.
 
 ----------------------------------------
 
-## Step 3: Build Intuition (VERY IMPORTANT)
+## Step 2: Intuition — Hierarchical Summaries
 
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
+Imagine splitting the array in half. Each half has its own max. To query the max over the whole array, take `max(left_half_max, right_half_max)`.
 
-A naive approach is to recompute the query from scratch every time — O(n) per query. When updates and queries mix, that becomes O(nq), which is often too slow. Segment trees and BITs compute both in O(log n) by precomputing partial results over carefully-chosen ranges.
+Recursively split each half. Each sub-range has a precomputed max. A balanced binary tree of depth O(log n) lets us answer any range query by **combining** ~O(log n) sub-range maxes.
 
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Segment tree partitions the array; each node stores the max of its range. Point updates touch O(log n) nodes, queries combine O(log n) nodes.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+That's the segment tree: each node stores the max of a contiguous segment of the array; children cover the left and right halves.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 3: Tree Structure
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+Represent the tree as an array `tree[]` of size 4n (safe upper bound):
+- `tree[1]` is the root, covering [0, n-1].
+- For node `v` covering [lo, hi]: children are `2v` (covers [lo, mid]) and `2v + 1` (covers [mid+1, hi]), where `mid = (lo + hi) / 2`.
+- Leaves correspond to single-element ranges [i, i].
 
-**The concept:** Point-update segment tree with range-max queries.
-
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever you have both updates *and* range queries on the same array → think Segment Tree or BIT.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+Each node stores the max of its segment.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 4: Build in O(n)
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+Recursively build: if [lo, hi] is a single element (lo == hi), tree[v] = arr[lo]. Otherwise, build children first, then tree[v] = max(tree[2v], tree[2v+1]).
 
-build(v,l,r) fills t[v]. update(v,l,r,i,val): recurse to leaf, set, then recompute ancestors. query(v,l,r,ql,qr): return 0/−∞ if out, full segment if inside, else max of recursion on children.
+```
+def build(v, lo, hi):
+    if lo == hi:
+        tree[v] = arr[lo]
+    else:
+        mid = (lo + hi) / 2
+        build(2v, lo, mid)
+        build(2v+1, mid+1, hi)
+        tree[v] = max(tree[2v], tree[2v+1])
+```
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Array-backed segment tree (size 4n).
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+Each of n leaves is visited once; internal nodes sum to O(n) total. Build is **O(n)**.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 5: Query in O(log n)
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+To query `rmq(l, r)` starting at node v covering [lo, hi]:
 
-a=[1,3,2,4]. Build t. Query(0,3)=4. Update(2,5): a=[1,3,5,4]. Query(0,3)=5.
+```
+def query(v, lo, hi, l, r):
+    if r < lo or hi < l: return -∞   # disjoint
+    if l <= lo and hi <= r: return tree[v]   # fully inside
+    mid = (lo + hi) / 2
+    return max(query(2v, lo, mid, l, r),
+               query(2v+1, mid+1, hi, l, r))
+```
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+Three cases: disjoint (no contribution), fully contained (use stored max), partial overlap (recurse).
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
-
-----------------------------------------
-
-## Step 8: Time and Space Complexity
-
-Complexity isn't magic — it's just counting the work.
-
-Build O(n), update/query O(log n).
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
+The partial-overlap case is where the recursion lives. At each level, at most 2 nodes are "partially overlapping" with [l, r] — so the recursion visits O(log n) nodes total.
 
 ----------------------------------------
 
-## Step 9: C++ Implementation
+## Step 6: Update in O(log n)
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+To update arr[i] = x:
+
+```
+def update(v, lo, hi, i, x):
+    if lo == hi:
+        tree[v] = x
+        return
+    mid = (lo + hi) / 2
+    if i <= mid: update(2v, lo, mid, i, x)
+    else update(2v+1, mid+1, hi, i, x)
+    tree[v] = max(tree[2v], tree[2v+1])
+```
+
+Walk down to the leaf corresponding to index i. Update. On the way back up, recompute the max at each ancestor from its children.
+
+Depth is O(log n) → update is O(log n).
+
+----------------------------------------
+
+## Step 7: Trace — Small Example
+
+arr = [1, 3, 5, 7, 9, 11]. n = 6.
+
+Build: tree will have:
+- Root [0, 5] → max(arr) = 11.
+- Left child [0, 2] → max(1, 3, 5) = 5.
+- Right child [3, 5] → max(7, 9, 11) = 11.
+- Left-left [0, 1] → max(1, 3) = 3.
+- Etc.
+
+Query rmq(1, 4) (arr[1..4] = [3, 5, 7, 9]):
+- Start at root [0, 5]. Partial overlap with [1, 4]. Recurse.
+- Left [0, 2]: partial overlap with [1, 4] (intersection [1, 2]). Recurse.
+  - Left-left [0, 1]: partial with [1, 4] (intersection [1, 1]). Recurse.
+    - [0, 0]: disjoint with [1, 4]. Return -∞.
+    - [1, 1]: fully inside. Return 3.
+  - Right-right [2, 2]: fully inside. Return 5.
+  - [0, 2] returns max(3, 5) = 5.
+- Right [3, 5]: partial with [1, 4] (intersection [3, 4]). Recurse.
+  - Right-left [3, 4]: fully inside. Return max(7, 9) = 9.
+  - Right-right [5, 5]: disjoint. Return -∞.
+  - Right returns 9.
+- Root returns max(5, 9) = **9**. ✓
+
+Update arr[3] = 20:
+- Walk root → right [3, 5] → right-left [3, 4] → leaf [3, 3]. Set tree[leaf] = 20.
+- On return, leaf [3, 3] = 20. [3, 4] = max(20, 9) = 20. [3, 5] = max(20, 11) = 20. Root = max(5, 20) = 20.
+
+New rmq(1, 4) would return 20.
+
+----------------------------------------
+
+## Step 8: Why 4n Size for the Tree Array?
+
+For n not a power of 2, the segment tree still fits in 4n nodes (overhead due to padding). Safe conservative bound. For optimization, use 2·2^⌈log2 n⌉ — the exact minimal.
+
+----------------------------------------
+
+## Step 9: Name It
+
+**Segment tree** — a universal range-query data structure. Supports any **associative** operation: sum, min, max, gcd, bitwise OR/AND, custom monoid.
+
+Variants:
+- **Range update, point query**: use "lazy propagation" on a difference-style structure.
+- **Range update, range query**: lazy propagation.
+- **Persistent segment tree**: keep history of updates.
+- **Merge sort tree / wavelet tree**: for k-th smallest in a range.
+
+For this problem (point update, range max query), the basic version suffices.
+
+----------------------------------------
+
+## Step 10: Complexity
+
+- Build: **O(n)**.
+- Query: **O(log n)**.
+- Update: **O(log n)**.
+- Space: **O(n)** (4n array).
+
+----------------------------------------
+
+## Step 11: C++ Implementation
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-class SegMax {
-    int n; vector<int> t;
-    void build(int v,int l,int r, vector<int>& a) {
-        if(l==r){t[v]=a[l];return;}
-        int m=(l+r)/2;
-        build(2*v,l,m,a); build(2*v+1,m+1,r,a);
-        t[v]=max(t[2*v], t[2*v+1]);
+class SegTree {
+    vector<int> tree;
+    int n;
+
+    void build(vector<int>& arr, int v, int lo, int hi) {
+        if (lo == hi) { tree[v] = arr[lo]; return; }
+        int mid = lo + (hi - lo) / 2;
+        build(arr, 2*v, lo, mid);
+        build(arr, 2*v+1, mid+1, hi);
+        tree[v] = max(tree[2*v], tree[2*v+1]);
     }
-    void upd(int v,int l,int r,int i,int val) {
-        if(l==r){t[v]=val;return;}
-        int m=(l+r)/2;
-        if(i<=m) upd(2*v,l,m,i,val); else upd(2*v+1,m+1,r,i,val);
-        t[v]=max(t[2*v], t[2*v+1]);
+
+    int query(int v, int lo, int hi, int l, int r) {
+        if (r < lo || hi < l) return INT_MIN;
+        if (l <= lo && hi <= r) return tree[v];
+        int mid = lo + (hi - lo) / 2;
+        return max(query(2*v, lo, mid, l, r),
+                   query(2*v+1, mid+1, hi, l, r));
     }
-    int qry(int v,int l,int r,int ql,int qr) {
-        if(ql>r||qr<l) return INT_MIN;
-        if(ql<=l&&r<=qr) return t[v];
-        int m=(l+r)/2;
-        return max(qry(2*v,l,m,ql,qr), qry(2*v+1,m+1,r,ql,qr));
+
+    void update(int v, int lo, int hi, int i, int x) {
+        if (lo == hi) { tree[v] = x; return; }
+        int mid = lo + (hi - lo) / 2;
+        if (i <= mid) update(2*v, lo, mid, i, x);
+        else update(2*v+1, mid+1, hi, i, x);
+        tree[v] = max(tree[2*v], tree[2*v+1]);
     }
+
 public:
-    SegMax(vector<int>& a):n(a.size()){t.assign(4*n,INT_MIN); build(1,0,n-1,a);}
-    void update(int i, int v) { upd(1,0,n-1,i,v); }
-    int query(int l, int r) { return qry(1,0,n-1,l,r); }
+    SegTree(vector<int>& arr) : n(arr.size()) {
+        tree.assign(4 * n, INT_MIN);
+        build(arr, 1, 0, n - 1);
+    }
+
+    int rangeMax(int l, int r) {
+        return query(1, 0, n - 1, l, r);
+    }
+
+    void pointUpdate(int i, int x) {
+        update(1, 0, n - 1, i, x);
+    }
 };
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
-
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 12: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Range update with lazy propagation.
-- Range set instead of point update.
-- Persistent segment tree.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Range minimum instead.** Swap `max` for `min`, and disjoint sentinel to +INF.
+- **Range sum.** Swap `max` for `+`, and disjoint sentinel to 0.
+- **Range update (e.g., add x to arr[l..r]).** Requires lazy propagation.
+- **k-th largest in a range.** Merge sort tree or wavelet tree.
+- **Why 4n size?** Worst case for non-power-of-2 n, the tree has up to 2·2^⌈log2 n⌉ ≤ 4n nodes.
+- **Iterative segment tree.** A more compact implementation exists; same complexities, faster in practice but trickier to get right.

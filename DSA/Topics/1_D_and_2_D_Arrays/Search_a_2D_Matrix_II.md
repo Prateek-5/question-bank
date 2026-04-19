@@ -4,184 +4,164 @@
 https://leetcode.com/problems/search-a-2d-matrix-ii/
 
 **Topic:**
-1 D and 2 D Arrays
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Start from top-right (or bottom-left) and eliminate row or column each step.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> matrix=[[1,4,7],[2,5,8],[3,6,9]], target=5. (0,2)=7>5 → c=1. (0,1)=4<5 → r=1. (1,1)=5 ✓.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+1-D & 2-D Arrays
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Understand the Matrix Structure
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+An `m × n` matrix where:
+- Each **row** is sorted left-to-right (ascending).
+- Each **column** is sorted top-to-bottom (ascending).
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Note: unlike "Search a 2D Matrix" (I), the matrix **isn't** a single sorted sequence in row-major. Rows and columns are individually sorted; the flattened matrix isn't sorted.
 
-So ask yourself:
+Search for target. Return true if found, false otherwise.
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Start from top-right (or bottom-left) and eliminate row or column each step.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
+Example:
+```
+ 1  4  7 11 15
+ 2  5  8 12 19
+ 3  6  9 16 22
+10 13 14 17 24
+18 21 23 26 30
+```
 
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-Your first instinct might be to loop over every possible subarray or sub-rectangle. That's cubic or worse. Often a prefix-sum precomputation, a clever index mapping, or a running-state scan collapses the work to linear time.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Rows sorted left-to-right, columns top-to-bottom. From top-right, if value > target move left (column eliminated); if value < target move down (row eliminated).
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Search 5: present. Return true.
+Search 20: not present. Return false.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: Why Binary Search on the Flattened Array Doesn't Work
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+In "Search a 2D Matrix I," the entire matrix was globally sorted in row-major order. Binary search over the flat array worked.
 
-**The concept:** Start from top-right (or bottom-left) and eliminate row or column each step.
+Here, rows and columns are each sorted, but row k+1's first element may be less than row k's last element. E.g., in the example, row 1's last is 19, but row 2's first is 3 (less than 19).
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever you need range sums or running aggregates → think Prefix Sum. Whenever you need fixed-size windows → Sliding Window.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+Global ordering is broken. We need a different approach.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 3: The Staircase Trick
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+Consider starting at the **top-right corner** `(0, n-1)`. Compare matrix[r][c] with target:
 
-r=0, c=m-1. While r<n and c>=0: if mat[r][c]==target return true; if mat[r][c]>target c--; else r++.
+- If equal: found, return true.
+- If matrix[r][c] > target: target must be in a column with smaller values. All of column c below row r is even larger (column sorted). So eliminate column c — move **left**.
+- If matrix[r][c] < target: target must be in a row with larger values. All of row r to the left is even smaller (row sorted). So eliminate row r — move **down**.
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
+Each comparison eliminates a full row or column. We make at most m + n steps total.
 
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Staircase search.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+Result: O(m + n) time. Beautiful.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 4: Why Start at Top-Right (or Bottom-Left)?
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+The top-right and bottom-left corners have the property that they're **larger than everything on one side and smaller than everything on another**.
 
-matrix=[[1,4,7],[2,5,8],[3,6,9]], target=5. (0,2)=7>5 → c=1. (0,1)=4<5 → r=1. (1,1)=5 ✓.
+Top-right (0, n-1):
+- Above: nothing.
+- Below: all values are larger (column sorted).
+- Left: all values are smaller (row sorted).
+- Right: nothing.
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+So at any step, we can **unambiguously decide** to move left (if too big) or down (if too small).
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+Corners like top-left don't have this property — top-left is smaller than both right-neighbor and down-neighbor, so we can't tell which direction to eliminate.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 5: Trace for Target = 5
 
-Complexity isn't magic — it's just counting the work.
+Starting at (0, 4) = 15.
 
-Time: O(n+m). Space: O(1).
+- 15 > 5. Move left. Now at (0, 3) = 11.
+- 11 > 5. Move left. Now at (0, 2) = 7.
+- 7 > 5. Move left. Now at (0, 1) = 4.
+- 4 < 5. Move down. Now at (1, 1) = 5.
+- 5 == 5. Return true. ✓
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+Trace for Target = 20:
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+- (0, 4) = 15 < 20. Move down. (1, 4) = 19.
+- 19 < 20. Down. (2, 4) = 22.
+- 22 > 20. Left. (2, 3) = 16.
+- 16 < 20. Down. (3, 3) = 17.
+- 17 < 20. Down. (4, 3) = 26.
+- 26 > 20. Left. (4, 2) = 23.
+- 23 > 20. Left. (4, 1) = 21.
+- 21 > 20. Left. (4, 0) = 18.
+- 18 < 20. Down. Row = 5, out of bounds.
+- Return false. ✓
 
+Total steps: 9 for this 5×5 matrix. O(m + n) = O(10) matches.
+
+----------------------------------------
+
+## Step 6: Why O(m + n)
+
+At each step, we decrement column or increment row. Column: n steps max (from n-1 to -1). Row: m steps max (from 0 to m). Total: m + n.
+
+For m = n = 100, that's 200 ops — blazing fast.
+
+Binary search per row would be O(m log n). Staircase is better.
+
+----------------------------------------
+
+## Step 7: Name It
+
+**Staircase search** on a matrix with sorted rows and columns. Elegant and unique — rarely applicable elsewhere but memorable.
+
+The key insight: **a corner has a direction from which elimination is always safe**.
+
+Related:
+- Search a 2D Matrix (I) — global sort, binary search.
+- Kth smallest in sorted matrix — heap or binary search on value.
+- Saddleback search (another name for this technique).
+
+----------------------------------------
+
+## Step 8: Complexity
+
+Time: **O(m + n)**.
+Space: **O(1)**.
+
+Much better than O(m · n) brute force or O(m · log n) per-row binary search.
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
-
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-bool searchMatrix(vector<vector<int>>& M, int t) {
-    int n = M.size(), m = M[0].size();
-    int r = 0, c = m - 1;
-    while (r < n && c >= 0) {
-        if (M[r][c] == t) return true;
-        if (M[r][c] > t) c--;
-        else r++;
+bool searchMatrix(vector<vector<int>>& matrix, int target) {
+    if (matrix.empty() || matrix[0].empty()) return false;
+    int m = matrix.size(), n = matrix[0].size();
+    int r = 0, c = n - 1;   // start at top-right
+    while (r < m && c >= 0) {
+        if (matrix[r][c] == target) return true;
+        if (matrix[r][c] > target) c--;   // eliminate column
+        else r++;                          // eliminate row
     }
     return false;
 }
 ```
 
-A few notes about the style:
+Five lines. Elegant staircase navigation.
 
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
+Alternative: start at **bottom-left** (m-1, 0). Same logic, mirrored:
+- If element > target, move up.
+- If element < target, move right.
 
+Either starting corner works.
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Count occurrences of target.
-- Find closest value.
-- If matrix is fully sorted flat, use binary search.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Return the position of target (not just true/false).** Record (r, c) on match.
+- **Count occurrences of target.** Can't directly use staircase; target might appear multiple times. Use staircase to find one, then explore neighbors.
+- **Find the k-th smallest element.** Different problem — use a min-heap or binary search on value.
+- **Matrix of float values.** Same algorithm.
+- **Matrix where rows AND columns are sorted, but allowed decreasing.** Different algorithm needed.
+- **3D analog.** Start at a "corner" in 3D space; eliminate plane by plane.

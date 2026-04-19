@@ -6,176 +6,159 @@ https://leetcode.com/problems/reverse-linked-list/
 **Topic:**
 Linked List
 
+----------------------------------------
+
+## Step 1: Picture the Problem Before Any Code
+
+You're given the head of a singly linked list: something like `1 → 2 → 3 → 4 → null`. You need to return the head of the reversed list: `4 → 3 → 2 → 1 → null`.
+
+Sounds simple. And conceptually it is. The catch is that in a singly linked list, a node only knows *who comes after it*, not who came before. So to truly reverse, we'd need every node's `next` pointer to flip direction. That's a lot of surgery on the pointers.
 
 ----------------------------------------
 
-## Step 1: Understand the Problem (Beginner Friendly)
+## Step 2: Tiny Cases First
 
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
+**Empty list (`head == null`):** nothing to reverse. Return `null`.
 
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
+**One node (`1 → null`):** already its own reverse. Return it.
 
-**In plain words:** Iterative pointer rotation.
+**Two nodes (`1 → 2 → null`):** we want `2 → 1 → null`. So `2.next` should be `1`, and `1.next` should be `null`. We need to flip exactly one pointer (and the head moves from 1 to 2).
 
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
+**Three nodes (`1 → 2 → 3 → null`):** target `3 → 2 → 1 → null`. We flip two pointers: `2→1` and `3→2`. Head moves to 3.
 
-> 1→2→3 → 3→2→1.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Pattern: for n nodes, we flip n-1 pointers. Each flip is a local operation on one node's `next`. The tricky part is that once we flip a node's `next`, we've "lost" the pointer to its original next node. We need to save it before we overwrite it.
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 3: Thinking Through a Single Flip
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Let me focus on the moment I want to flip a single node's `next`. Say I'm at node `cur`, and I want to make `cur.next` point *backward* to whatever came before `cur` (call that `prev`).
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+If I just do `cur.next = prev`, I've overwritten `cur`'s original next pointer — meaning I can no longer reach the rest of the list!
 
-So ask yourself:
+So **before** I overwrite, I need to remember the original `cur.next`. Let me call it `nxt`.
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Iterative pointer rotation.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
+```
+nxt = cur.next        # save pointer to the rest of the list
+cur.next = prev       # flip cur's pointer to backward
+prev = cur            # now cur is the new "previous" for the next iteration
+cur = nxt             # advance to the next node to process
+```
 
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
+Four lines. That's one iteration.
 
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-Because linked lists don't give random access, the temptation is to copy them into arrays and work there. Sometimes that's fine; often it wastes memory. The classic trick is to use two pointers moving at different speeds or with different gaps — it lets you solve many problems in a single pass.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Walk the list reversing each next pointer by remembering the previous node.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Now it all clicks. We walk the list once, keeping three pointers in motion: `prev`, `cur`, `nxt`. Each iteration flips one pointer and advances.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 4: Initialization and Termination
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+- **Initially:** `prev = null` (the original head has nothing before it; after reversal, the original head's `next` should point to `null`).
+- **Initially:** `cur = head`.
+- **Loop while `cur != null`.**
+- **At the end:** `prev` is the new head.
 
-**The concept:** Iterative pointer rotation.
-
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever you need to find cycles, middles, or the k-th-from-end → think slow/fast pointers.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+Why does `prev` become the new head? Because in the last iteration, we moved `cur` one past the final node, and set `prev` to that final node. The final node's `next` was already flipped to point to the previous one. So `prev` is the top of the reversed list.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 5: Trace on `1 → 2 → 3 → null`
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+I'll denote the list state as we go. Initially:
 
-prev=null, cur=head. While cur: next=cur->next; cur->next=prev; prev=cur; cur=next. Return prev.
+```
+prev = null, cur = 1
+List still looks like: 1 → 2 → 3 → null
+```
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
+**Iter 1:**
+```
+nxt = cur.next = 2
+cur.next = prev = null       →  node 1 now points to null
+prev = cur = 1
+cur = nxt = 2
 
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
+State: null ← 1    2 → 3 → null
+             (prev)  (cur)
+```
 
+**Iter 2:**
+```
+nxt = cur.next = 3
+cur.next = prev = 1          →  node 2 now points to 1
+prev = cur = 2
+cur = nxt = 3
 
-----------------------------------------
+State: null ← 1 ← 2    3 → null
+                 (prev)  (cur)
+```
 
-## Step 6: Final Approach
+**Iter 3:**
+```
+nxt = cur.next = null
+cur.next = prev = 2          →  node 3 now points to 2
+prev = cur = 3
+cur = nxt = null
 
-Now let's crystallize everything we've learned into a clean algorithm.
+State: null ← 1 ← 2 ← 3
+                   (prev)
+```
 
-Three-pointer sweep.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
-
-----------------------------------------
-
-## Step 7: Dry Run (Detailed)
-
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
-
-1→2→3 → 3→2→1.
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
-
-----------------------------------------
-
-## Step 8: Time and Space Complexity
-
-Complexity isn't magic — it's just counting the work.
-
-Time: O(n). Space: O(1).
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
+Loop exits because `cur == null`. Return `prev = 3`. New list: `3 → 2 → 1 → null`. ✓
 
 ----------------------------------------
 
-## Step 9: C++ Implementation
+## Step 6: A Recursive Alternative
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+There's a recursive way to solve this too, and it's worth knowing. It goes: reverse the sublist `head.next → ... → tail`, then attach `head` at the end.
 
 ```cpp
-struct ListNode { int val; ListNode* next; };
-ListNode* reverseList(ListNode* h) {
+ListNode* reverseList(ListNode* head) {
+    if (!head || !head->next) return head;
+    ListNode* newHead = reverseList(head->next);
+    head->next->next = head;   // the node after head now points back to head
+    head->next = nullptr;       // head becomes the tail
+    return newHead;
+}
+```
+
+The recursion bottoms out when we reach the last node, and unwinds flipping pointers on the way up. Elegant, but it uses O(n) stack space — and for a million-node list, the recursion would blow the stack. The iterative version is safer for unbounded lists.
+
+I like the iterative version for this reason, plus it's easier to reason about under pressure.
+
+----------------------------------------
+
+## Step 7: Complexity
+
+Time: we visit each node exactly once, constant work per node. **O(n)**.
+Space: three pointers regardless of list size. **O(1)** for iterative. **O(n)** stack for the recursive version.
+
+----------------------------------------
+
+## Step 8: C++ Implementation
+
+```cpp
+ListNode* reverseList(ListNode* head) {
     ListNode* prev = nullptr;
-    while (h) { auto* n = h->next; h->next = prev; prev = h; h = n; }
+    ListNode* cur = head;
+    while (cur) {
+        ListNode* nxt = cur->next;  // save next before we overwrite
+        cur->next = prev;            // flip
+        prev = cur;                  // advance prev
+        cur = nxt;                   // advance cur
+    }
     return prev;
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Five statements inside the loop. Notice the fixed ordering: save-next, flip, move-prev, move-cur. Mess up the order (especially forgetting to save `nxt` before overwriting `cur.next`) and the list becomes unreachable past the current node.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 9: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Recursive reverse.
-- Reverse only a sub-range (Reverse II).
-- Reverse in groups of k.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Reverse only between positions `left` and `right` (Reverse Linked List II).** Same idea, but isolate the sub-range first and splice it back.
+- **Reverse in groups of k (Reverse Nodes in k-Group).** Repeatedly reverse k-length chunks; handle a final partial group per the problem spec.
+- **Reverse a doubly-linked list.** Swap `next` and `prev` at every node; head and tail swap roles.
+- **Can we reverse in constant time by just relabeling head and tail?** Only if the list structure supports walking both directions (like a doubly-linked list with a "direction flag" — a clever hack).
+- **How do you detect that the list you're reversing has a cycle?** Pre-check with Floyd's algorithm; reversing a cyclic list leads to infinite loops.

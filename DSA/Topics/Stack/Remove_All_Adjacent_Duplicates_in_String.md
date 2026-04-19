@@ -6,178 +6,174 @@ https://leetcode.com/problems/remove-all-adjacent-duplicates-in-string/
 **Topic:**
 Stack
 
+----------------------------------------
+
+## Step 1: What Are We Doing?
+
+Given a string of lowercase letters, repeatedly remove any two **adjacent equal** characters. Keep doing this until no such pair remains. Return whatever's left.
+
+Example: `s = "abbaca"`.
+
+Let me apply the rule by hand:
+- `"abbaca"` — see the `bb`. Remove → `"aaca"`.
+- `"aaca"` — see the `aa` at the start. Remove → `"ca"`.
+- `"ca"` — no adjacent duplicates. Stop.
+
+Answer: `"ca"`.
+
+Another: `"azxxzy"`:
+- `"azxxzy"` — `xx` → `"azzy"`.
+- `"azzy"` — `zz` → `"ay"`.
+
+Answer: `"ay"`.
+
+One more: `"aaaa"`:
+- `"aaaa"` — `aa` (first pair) → `"aa"` — `aa` → `""`.
+
+Answer: `""`.
 
 ----------------------------------------
 
-## Step 1: Understand the Problem (Beginner Friendly)
+## Step 2: Brute Force Thinking
 
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
+Naïvely: repeatedly scan the string looking for any adjacent duplicate, remove it, restart.
 
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
+```
+while True:
+    found = False
+    for i in range(len(s) - 1):
+        if s[i] == s[i+1]:
+            s = s[:i] + s[i+2:]
+            found = True
+            break
+    if not found: break
+```
 
-**In plain words:** Stack — cancel adjacent duplicates.
+Each scan is O(n), and in the worst case we do n/2 scans (if n/2 pairs get removed). Total O(n²). For large inputs, too slow.
 
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
+But there's a bigger issue: after each removal, new adjacent duplicates might appear. Like in `"abbaca"`, removing the `bb` exposed `aa`. So we can't just mark pairs in one pass — removing one pair can create another.
 
-> 'abbaca' → 'a','ab','abb'→'a','ac'→'ac','aca'.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
-
-----------------------------------------
-
-## Step 2: Break Down the Problem
-
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
-
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
-
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Stack — cancel adjacent duplicates.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
+This "cascading removals" behavior is a classic hint for a **stack**.
 
 ----------------------------------------
 
-## Step 3: Build Intuition (VERY IMPORTANT)
+## Step 3: Think of the String as Being Built Left to Right
 
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
+Imagine I'm typing out the resulting string one character at a time, reading from the input. Each time I type a character, I can compare it with the character just before it. If they're equal, I've created an adjacent duplicate — I should erase both.
 
-You might try to scan multiple times, or use recursion to handle nested structure. A stack lets you remember just enough of the past to resolve it efficiently — especially 'next greater' or 'matching brackets' questions.
+Specifically:
+- If the new character equals the last character I've placed, erase the last and don't place the new.
+- Otherwise, place the new character.
 
-So how do we get smarter? Let's build the correct intuition step by step.
+That "last character placed" is always the top of a growing sequence. Popping the top when a new duplicate comes in is exactly stack behavior.
 
-Treat the string as a stack of chars; pushing a char equal to top cancels both.
+```
+for each char c in s:
+    if stack not empty and stack.top() == c:
+        stack.pop()
+    else:
+        stack.push(c)
+return string(stack, bottom to top)
+```
 
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
-
-----------------------------------------
-
-## Step 4: Connect to Concept
-
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
-
-**The concept:** Stack — cancel adjacent duplicates.
-
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever you see nested structure, matching brackets, or 'next greater element' → think Stack / Monotonic Stack.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+Beautiful and linear.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 4: Why This Catches Cascades
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+The key insight: when we pop the top, whatever was *below* the top becomes the new top. If the new incoming character matches *that* (which was just exposed), we pop again on the next iteration (actually wait — we already consumed this incoming char by popping; the *next* incoming char might match the newly exposed top).
 
-Iterate chars; if top==c pop, else push. Result is stack contents joined.
+Let me trace carefully on `"abbaca"`.
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
+```
+i=0, c='a': stack empty. Push. stack = [a].
+i=1, c='b': top='a' != 'b'. Push. stack = [a, b].
+i=2, c='b': top='b' == 'b'. Pop. stack = [a].
+i=3, c='a': top='a' == 'a'. Pop. stack = [].
+i=4, c='c': stack empty. Push. stack = [c].
+i=5, c='a': top='c' != 'a'. Push. stack = [c, a].
+```
 
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
+Result: "ca". ✓
 
+Look at steps 2 and 3. When `b` arrived at i=2, it matched the top `b` and we popped. That exposed `a` as the new top. Then at i=3, another `a` came in — matched the exposed `a` — we popped. The cascade was handled naturally by the stack.
 
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-String as stack.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+The scan sees each character exactly once. Each character is pushed at most once and popped at most once. So total work is **O(n)**.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 5: Implementation Choice — Use a String as the Stack
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+In C++, a `std::string` is perfect as a stack: `push_back` adds to the end (top), `back()` peeks, `pop_back()` removes. Plus, at the end we don't need to reverse anything — the string is already in correct order (bottom to top = start to end).
 
-'abbaca' → 'a','ab','abb'→'a','ac'→'ac','aca'.
+```cpp
+string result;
+for (char c : s) {
+    if (!result.empty() && result.back() == c) result.pop_back();
+    else result.push_back(c);
+}
+return result;
+```
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+No explicit stack container needed. Clean.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 6: Edge Cases
 
-Complexity isn't magic — it's just counting the work.
+- **Empty input:** loop doesn't run; return `""`.
+- **No duplicates at all:** every char is pushed, none popped; return the original string.
+- **All same characters even length:** every other char cancels; return `""`.
+- **All same characters odd length:** everything cancels except one; return one char.
 
-Time: O(n). Space: O(n).
+All handled naturally by the same logic.
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+----------------------------------------
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+## Step 7: Name What We Used
 
+The pattern is **stack-based cancellation** — process a stream one element at a time; when a new element "cancels" the top (by some rule), pop; otherwise push. Same shape solves:
+- Valid Parentheses (opens and their matching closes cancel).
+- Basic Calculator (numbers push, operators pop and combine).
+- Asteroid Collision (right-moving asteroids on the stack, left-moving ones can cancel).
+- Remove K Adjacent Duplicates (generalization of this problem).
+
+----------------------------------------
+
+## Step 8: Complexity
+
+Time: **O(n)**. Each character pushed at most once and popped at most once.
+Space: **O(n)** for the result in the worst case (when nothing cancels).
+
+Compare to the O(n²) naive: we avoid the rescanning by maintaining enough state (the stack) to react immediately to each incoming character.
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
-
 ```cpp
 string removeDuplicates(string s) {
-    string r;
+    string result;
     for (char c : s) {
-        if (!r.empty() && r.back() == c) r.pop_back();
-        else r += c;
+        if (!result.empty() && result.back() == c) {
+            result.pop_back();
+        } else {
+            result.push_back(c);
+        }
     }
-    return r;
+    return result;
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Short, direct, and fast. The "is the new char equal to the last placed one?" check handles everything.
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Remove k consecutive equals.
-- Remove via pattern-match.
-- Streaming version.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Remove All Adjacent Duplicates II (remove when `k` consecutive equal chars appear).** Use a stack of `(char, count)` pairs. When a new char matches the top's char, increment count; when count hits k, pop. When it doesn't match, push a new entry.
+- **Remove all adjacent duplicates, but allow re-insertion.** Different problem — would need more complex state.
+- **Find the final length without constructing the string.** Same algorithm, but just track the stack size; don't store characters.
+- **Given a stream (too big to buffer), output the result as it stabilizes.** Same idea — but "stable" output lags behind the stream (a char's permanence depends on future input).
+- **Remove duplicates with a custom "cancel rule" (e.g., any vowel cancels any other vowel).** Generalize the match check.

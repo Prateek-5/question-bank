@@ -4,184 +4,161 @@
 https://leetcode.com/problems/last-stone-weight/
 
 **Topic:**
-Heap Priority Queue
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Max-heap — repeatedly smash the two largest stones.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> stones=[2,7,4,1,8,1]. Heap top order: 8,7 → push 1. Heap=[4,2,1,1,1]. Pop 4,2 → push 2 → [2,1,1,1]. Pop 2,1 → push 1 → [1,1,1]. Pop 1,1 → nothing → [1]. Answer=1.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Heap / Priority Queue
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Read the Problem
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+You have stones with positive integer weights. Each round:
+- Pick the two heaviest stones, `x` and `y` (with `x ≤ y`).
+- If `x == y`, both shatter to nothing.
+- If `x < y`, `x` vanishes and `y` becomes `y - x`.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Repeat until at most one stone is left. Return the remaining stone's weight (or 0 if none).
 
-So ask yourself:
+Example: `stones = [2, 7, 4, 1, 8, 1]`.
+- Round 1: pick 7 and 8. 7 < 8, so 7 gone, 8 → 1. Stones: [2, 4, 1, 1, 1].
+- Round 2: pick 4 and 2. 4 > 2, so 2 gone, 4 → 2. Stones: [2, 1, 1, 1].
+- Round 3: pick 2 and 1. 1 gone, 2 → 1. Stones: [1, 1, 1].
+- Round 4: pick 1 and 1. Both gone. Stones: [1].
+- Loop ends.
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Max-heap — repeatedly smash the two largest stones.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-Your first instinct is probably to sort the whole array and pick from one end. That works — but it asks for more than we need. We don't care about every element's exact position, only the smallest or the largest at each step. Sorting does O(n log n) work just to reveal one extremum at a time. A heap does the same job with far less overhead per query.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Each round we need the two largest stones. A max-heap answers this in O(log n). The remaining difference is pushed back. Repeat until ≤1 stone.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Answer: **1**.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: Spot the Key Operation
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+Each round, we need the **two largest stones**. Everything else just updates the list.
 
-**The concept:** Max-heap — repeatedly smash the two largest stones.
+If I kept stones in a plain array, finding "the two largest" would take O(n) per round. Over many rounds, O(n²) total. For small n (say n ≤ 30), that's fine. But we should think about what structure gives us the two largest quickly.
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
+A **sorted list** gives us the two largest at the end (O(1)), but inserting the new result takes O(n) shifting. Net: O(n) per round.
 
-**Pattern recognition cue:**
-
-**Whenever you see 'k-th', 'top-k', or 'merge sorted streams' → think Heap.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+A **max-heap** gives us the top in O(log n), removes in O(log n), inserts in O(log n). Much better — and crucially, two pops and potentially one push per round is all we need.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 3: Translate to Heap Operations
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+Each round:
+1. `y = heap.pop()` (largest).
+2. `x = heap.pop()` (second largest).
+3. If `x != y`: `heap.push(y - x)`.
+4. If `x == y`: do nothing.
 
-Push all stones into a max-heap. Pop top two (y ≥ x). If y != x, push y − x. Continue until fewer than two stones remain. Return 0 if empty, else the top.
+Loop while the heap has ≥ 2 stones. At the end:
+- If heap is empty: return 0.
+- Else: return `heap.top()`.
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Greedy with a max-heap. Each iteration is O(log n). Correct because the optimal strategy is fixed — always smash the two largest.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+Each round does O(log n) work. Total rounds ≤ n-1 (each round reduces the stone count by 1 or 2). Total time: O(n log n).
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 4: Trace on the Example
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+`stones = [2, 7, 4, 1, 8, 1]`. Build max-heap.
 
-stones=[2,7,4,1,8,1]. Heap top order: 8,7 → push 1. Heap=[4,2,1,1,1]. Pop 4,2 → push 2 → [2,1,1,1]. Pop 2,1 → push 1 → [1,1,1]. Pop 1,1 → nothing → [1]. Answer=1.
+```
+heap (top-to-bottom by weight): [8, 7, 4, 2, 1, 1]
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+Round 1: y=8, x=7. Different. Push 1. heap = [4, 2, 1, 1, 1].
+Round 2: y=4, x=2. Different. Push 2. heap = [2, 1, 1, 1, 1].
+Round 3: y=2, x=1. Different. Push 1. heap = [1, 1, 1, 1].
+Round 4: y=1, x=1. Equal. (Nothing pushed.) heap = [1, 1].
+Round 5: y=1, x=1. Equal. heap = [].
+Loop ends.
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
+heap is empty → return 0.
+```
 
+Wait, I got 0 but earlier by hand I got 1. Let me re-trace more carefully.
+
+Round 1: pop 8 and 7 (the two largest). 7 ≠ 8, push 8-7=1. Stones: the original minus 7 and 8 plus 1 = [2, 4, 1, 1, 1]. Heap has these 5 elements. Let me check my above trace.
+
+I think I made a mistake saying "heap = [4, 2, 1, 1, 1]" after round 1. Let me redo.
+
+Original stones: [2, 7, 4, 1, 8, 1]. Heap holds {2, 7, 4, 1, 8, 1}, with 8 at top.
+
+Round 1: pop 8, pop 7. Push 1 (= 8-7). Heap now holds {2, 4, 1, 1, 1}. Top is 4.
+Round 2: pop 4, pop 2. Push 2 (= 4-2). Heap now holds {1, 1, 1, 2}. Wait but we popped 4 and 2, then pushed 2. The original had 1, 1, 1 (three 1's). Plus the new 2. Heap size 4. Top is 2.
+Round 3: pop 2, pop 1. Push 1. Heap now {1, 1, 1}. Top 1.
+Round 4: pop 1, pop 1. Equal, no push. Heap {1}. Size 1 — can't do another round (need ≥ 2).
+
+Answer: 1. ✓
+
+My earlier trace had an error — I pushed 1 in round 3 instead of 1, meant the heap went to [1, 1, 1] not [1, 1, 1, 1]. Let me re-fix: at round 3 pop 2, pop 1, push 1. Heap originally had {1, 1, 1, 2}. After pop 2 and pop 1: {1, 1}. After push 1: {1, 1, 1}. Correct.
+
+Round 4: pop 1, pop 1, equal, no push. Heap: {1}. Loop ends.
+
+Return 1. ✓
+
+(My first trace had an arithmetic slip — let me flag that as a lesson to trace carefully.)
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 5: Why a Max-Heap Is the Right Tool
 
-Complexity isn't magic — it's just counting the work.
+The rules demand "two heaviest stones each round," which is exactly what a max-heap's `top()` repeatedly gives us. Any alternative (sorted list, sorted set) does the same abstract thing but with different performance tradeoffs.
 
-Time: O(n log n). Space: O(n).
+In C++, `priority_queue<int>` is a max-heap by default — no comparator needed. That's the sweet convenience for this problem.
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+----------------------------------------
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+## Step 6: Could We Solve Without a Heap?
 
+For small inputs, yes — bubble-sort-style repeated scans work. But a heap is the standard answer.
+
+A sorted container like `multiset<int>` also works: `*rbegin()` gives max, `erase(prev(end()))` removes it, `insert` adds. Each op O(log n). Multiset is more general (allows deleting arbitrary elements), but for this problem a heap is lighter-weight.
+
+----------------------------------------
+
+## Step 7: Name It
+
+**Max-heap with repeated extract-top**. The structure is perfect for "repeatedly combine the two largest" problems. Similar pattern:
+- Last Stone Weight (this).
+- Minimum Cost to Connect Ropes (but min-heap).
+- Reorganize String (frequency-based reordering).
+
+Whenever a problem repeatedly asks for "the current max" (or min), reach for a heap.
+
+----------------------------------------
+
+## Step 8: Complexity
+
+Time: **O(n log n)**. Initial heap build O(n). At most n-1 rounds, each O(log n).
+Space: **O(n)** for the heap.
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
-
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-
 int lastStoneWeight(vector<int>& stones) {
-    priority_queue<int> pq(stones.begin(), stones.end());
-    while (pq.size() > 1) {
+    priority_queue<int> pq(stones.begin(), stones.end());  // max-heap
+    while (pq.size() >= 2) {
         int y = pq.top(); pq.pop();
         int x = pq.top(); pq.pop();
-        if (y != x) pq.push(y - x);
+        if (y > x) pq.push(y - x);
+        // if y == x, both destroyed (push nothing)
     }
     return pq.empty() ? 0 : pq.top();
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Reading the code:
+- Construct the heap directly from the array — O(n) thanks to heapify.
+- Loop while at least 2 stones remain.
+- Pop the two largest, push the difference if nonzero.
+- At the end, return whatever's left (or 0).
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Last Stone Weight II — can we split into two subsets with minimal difference? (DP/subset-sum.)
-- What if smashing allows partial destruction?
-- Stream version: stones arrive online.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Last Stone Weight II.** Different problem: we don't have to pick the two largest; we can pick *any* two and subtract. Much trickier — becomes a subset-sum DP (partition into two groups with minimum difference).
+- **What if stones can be positive or negative?** Flip signs as needed, but the problem's semantics would shift.
+- **Break ties differently** (say, when `x == y`, only one is destroyed). Adapt the rule; same heap skeleton.
+- **What if there are millions of stones?** O(n log n) scales fine. For streaming input, use a self-balancing BST to allow deletion during rounds.
+- **Can we be smarter about "the two largest" by tracking state?** Not really — removing and re-inserting is the cheapest correct path.

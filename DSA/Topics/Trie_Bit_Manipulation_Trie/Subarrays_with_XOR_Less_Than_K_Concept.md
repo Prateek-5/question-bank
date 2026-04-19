@@ -4,173 +4,225 @@
 https://leetcode.com/problems/subarray-xor-queries/
 
 **Topic:**
-Trie Bit Manipulation Trie
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Binary-trie over prefix XORs to count subarrays with XOR < K.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> arr=[1,2,3,4], K=4. Build prefix XOR; count pairs (p,q) with p^q<4 → answer derived via trie.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Trie / Bit Manipulation Trie
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: The Problem
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Given an integer array `nums` and integer k, count the number of **subarrays** (contiguous) whose XOR is **less than** k.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Example: `nums = [1, 2, 3]`, k = 2.
+- Subarrays and their XOR:
+  - [1] = 1. 1 < 2 ✓.
+  - [1, 2] = 3. ✗.
+  - [1, 2, 3] = 0. 0 < 2 ✓.
+  - [2] = 2. ✗.
+  - [2, 3] = 1. ✓.
+  - [3] = 3. ✗.
 
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Binary-trie over prefix XORs to count subarrays with XOR < K.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-You might try hashing every word or running regex matches. For prefix queries that's overkill — tries share prefixes so matching a new query touches only relevant nodes. For XOR problems, a binary trie lets you greedily chase the opposite bit at each level.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-For each prefix XOR p, count earlier prefix XORs q such that p ^ q < K. A bit-trie lets us count candidates branch-by-branch using bits of K.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Count = **3**.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: Brute Force
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+For each pair (i, j) with i ≤ j, compute XOR of nums[i..j] and check. Using prefix XORs, each query is O(1), so total O(n²). For n = 10⁵, that's 10¹⁰ — too slow.
 
-**The concept:** Binary-trie over prefix XORs to count subarrays with XOR < K.
-
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever you see prefix queries, dictionary lookups, or max-XOR → think Trie.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+We need something faster.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 3: Prefix XOR Trick
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+Define `pre[0] = 0` and `pre[i] = nums[0] XOR nums[1] XOR ... XOR nums[i-1]`.
 
-Insert prefix XORs into bit-trie; maintain subtree counts. For query p, traverse bits of K: if K's bit is 1, all numbers with different-current-bit in opposite branch satisfy strict-less; descend into same-bit branch to check the rest. If K's bit is 0, descend into same-bit.
+Then XOR of subarray nums[i..j-1] = `pre[j] XOR pre[i]`.
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
+The problem becomes: count pairs (i, j) with i < j such that `pre[j] XOR pre[i] < k`.
 
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Bit trie with subtree counters.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+Now the question is algorithmic: given n prefix-XOR values, count pairs whose mutual XOR is < k.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 4: Enter the Binary Trie
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+Insert prefix-XOR values one at a time into a **binary trie** (each path encodes the bits of a value). For each pre[j] being processed, we want to count the already-inserted values p such that `p XOR pre[j] < k`.
 
-arr=[1,2,3,4], K=4. Build prefix XOR; count pairs (p,q) with p^q<4 → answer derived via trie.
+The trie allows us to count these in **O(bit_width)** = O(30) per query.
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+Key idea: traverse the trie bit by bit (from most significant to least). At each bit, decide based on the corresponding bit of pre[j] and k:
+- If k's bit is 1: any path in the trie where the XOR-with-pre[j] has bit 0 at this position yields XOR strictly less than k (regardless of lower bits). **Count those, then continue into the branch that keeps XOR's bit = 1.**
+- If k's bit is 0: XOR at this bit must be 0 (else XOR >= 2 · this bit ≥ k). Continue into the branch matching pre[j]'s bit.
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
-
-----------------------------------------
-
-## Step 8: Time and Space Complexity
-
-Complexity isn't magic — it's just counting the work.
-
-Time: O(n·log max). Space: O(n·log max).
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
+Each node in the trie stores a counter: how many values pass through it. This lets us "count entire subtrees" when we decide "everything on this side is valid."
 
 ----------------------------------------
 
-## Step 9: C++ Implementation
+## Step 5: Algorithm (Sketch)
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+```
+trie = binary trie
+answer = 0
+trie.insert(0)        # prefix pre[0] = 0
 
-```cpp
-// Template omitted for brevity; see Maximum XOR trie structure with additional subtree counts.
+pre = 0
+for num in nums:
+    pre ^= num
+    answer += count_less_than_k(trie, pre, k)
+    trie.insert(pre)
+return answer
+
+def count_less_than_k(trie, x, k):
+    count = 0
+    node = trie.root
+    for bit from MSB to LSB:
+        xb = bit of x
+        kb = bit of k
+        if kb == 1:
+            # "XOR bit = 0" branch contributes whole subtree
+            if node.child[xb] exists: count += node.child[xb].size
+            # Move into "XOR bit = 1" branch (child with opposite bit of x)
+            if node.child[1 - xb] exists: node = node.child[1 - xb]
+            else: break
+        else:  # kb == 0
+            # XOR bit must be 0 → move into same-as-x child
+            if node.child[xb] exists: node = node.child[xb]
+            else: break
+    return count
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Insertion and each query are O(30). Total: **O(n · 30) = O(n)**.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 6: Why This Works
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
+The trie stores prefix-XOR values indexed by their bits. For each new pre[j], we want to find, among already-inserted p's, how many satisfy `p XOR pre[j] < k`.
 
-- XOR subarrays equal to K.
-- XOR in a range K1..K2.
-- Max XOR of subarray.
+Going bit-by-bit top-down:
+- At the current bit, we've established that XOR matches k so far on higher bits. Now we decide the current bit.
+- If we can make XOR's current bit strictly less than k's (possible only when k's bit is 1), then the rest of the lower bits don't matter — all of those values are valid.
+- If XOR's current bit must equal k's (in the tight case), we commit and recurse to lower bits.
 
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
+"Everything in a subtree" counts are available in O(1) per node if we store counters — no enumeration needed.
 
----
+----------------------------------------
 
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+## Step 7: Small Trace (Conceptual)
+
+`nums = [1, 2]`, k = 2.
+
+pre = [0, 1, 3] (prefix XORs, binary: 00, 01, 11 in 2 bits).
+
+Insert pre[0] = 0. Trie has one node for 00.
+
+Process num=1, pre=1. Count in trie values p such that p XOR 1 < 2.
+- p = 0: 0 XOR 1 = 1. 1 < 2 ✓. Count = 1.
+Insert 1. Trie has 00 and 01.
+
+Process num=2, pre=3. Count values p such that p XOR 3 < 2.
+- p = 0: 3. Not < 2.
+- p = 1: 2. Not < 2.
+Count = 0.
+
+Total = 1.
+
+Sanity: subarrays of nums = [1, 2]:
+- [1] = 1 ✓.
+- [1, 2] = 3 ✗.
+- [2] = 2 ✗.
+Count = 1. ✓
+
+----------------------------------------
+
+## Step 8: Name It
+
+**Binary trie for XOR-based counting**. A specialized but powerful structure.
+
+Applications:
+- Max XOR of two numbers in array (LeetCode 421).
+- Count subarrays with XOR ≤ k.
+- Max XOR queries.
+- Similar patterns for "count pairs with some bit condition."
+
+The trie generalizes hashing to support **range queries over bits**, which plain hashmaps can't do.
+
+----------------------------------------
+
+## Step 9: Complexity
+
+Time: **O(n · B)** where B = bit width (≤ 32).
+Space: **O(n · B)** for the trie nodes.
+
+For n = 10⁵ and B = 30: about 3 × 10⁶ nodes — manageable.
+
+----------------------------------------
+
+## Step 10: C++ Implementation (Outline)
+
+```cpp
+struct TrieNode {
+    int count = 0;
+    TrieNode* ch[2] = {nullptr, nullptr};
+};
+
+class XorTrie {
+    TrieNode* root = new TrieNode();
+    static const int BITS = 30;
+public:
+    void insert(int x) {
+        TrieNode* cur = root;
+        for (int b = BITS - 1; b >= 0; --b) {
+            int bit = (x >> b) & 1;
+            if (!cur->ch[bit]) cur->ch[bit] = new TrieNode();
+            cur = cur->ch[bit];
+            cur->count++;
+        }
+    }
+
+    int countLessThan(int x, int k) {
+        TrieNode* cur = root;
+        int count = 0;
+        for (int b = BITS - 1; b >= 0 && cur; --b) {
+            int xb = (x >> b) & 1;
+            int kb = (k >> b) & 1;
+            if (kb == 1) {
+                // If there's a branch with XOR bit = 0, add its subtree count
+                if (cur->ch[xb]) count += cur->ch[xb]->count;
+                // Move into XOR bit = 1 branch
+                cur = cur->ch[1 - xb];
+            } else {
+                // XOR bit must be 0; move into xb branch
+                cur = cur->ch[xb];
+            }
+        }
+        return count;
+    }
+};
+
+int countSubarraysXorLessThanK(vector<int>& nums, int k) {
+    XorTrie trie;
+    trie.insert(0);
+    int pre = 0, answer = 0;
+    for (int num : nums) {
+        pre ^= num;
+        answer += trie.countLessThan(pre, k);
+        trie.insert(pre);
+    }
+    return answer;
+}
+```
+
+Each insert and query is O(30); total O(30 · n).
+
+----------------------------------------
+
+## Step 11: Follow-up Questions
+
+- **Count subarrays with XOR equal to K.** Use a hashmap of prefix XOR counts (simpler; no trie needed).
+- **Count subarrays with XOR ≥ K.** Same trie, mirror the logic.
+- **Max XOR of any two elements in array.** Trie insert all; for each, greedily traverse to find opposite bits.
+- **Generalize to sum or product.** Different structure — segment tree or Fenwick tree over values.
+- **Memory too large?** Use path compression (radix trie) or persistent trie.
+- **Why not sort prefix-XORs?** XOR-ordering doesn't align with value-ordering; sorting doesn't help for XOR range queries.

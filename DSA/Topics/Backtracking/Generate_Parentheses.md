@@ -6,178 +6,176 @@ https://leetcode.com/problems/generate-parentheses/
 **Topic:**
 Backtracking
 
+----------------------------------------
+
+## Step 1: Understand the Goal
+
+Given an integer `n`, generate **all valid** strings made of exactly `n` pairs of parentheses (so length `2n`). "Valid" means every `(` is properly matched with a `)`.
+
+Example for `n = 3`:
+- `"((()))"`
+- `"(()())"`
+- `"(())()"`
+- `"()(())"`
+- `"()()()"`
+
+That's 5 valid strings. (Not coincidentally, 5 is the 3rd Catalan number.)
 
 ----------------------------------------
 
-## Step 1: Understand the Problem (Beginner Friendly)
+## Step 2: First Thoughts — Generate All Strings?
 
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
+Most naïve approach: generate all 2^(2n) binary strings over `{'(', ')'}`, keep the valid ones. For n = 3, that's 64 strings to check — manageable. For n = 10, it's a million — tolerable. For n = 100, forget it.
 
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
+Also, we'd spend a lot of work generating obviously broken strings like `"))))((((" ` just to throw them out. We should be smarter.
 
-**In plain words:** Backtracking on open/close counts.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> n=3 → ['((()))','(()())','(())()','()(())','()()()'].
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Can we *construct* only valid strings, never touching the invalid ones? Let's think about the constraints that make a string valid.
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 3: What Makes a Partial String Potentially Extendable?
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Suppose I'm building a string character by character from left to right. At any point, I've placed some opens `o` and some closes `c`. A partial string is **on track** to be valid if:
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+1. **`o ≤ n`** — I haven't placed more opens than allowed.
+2. **`c ≤ o`** — I haven't closed more than I've opened (otherwise a `)` would have no matching `(`).
 
-So ask yourself:
+At the end, we need `o = c = n`.
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Backtracking on open/close counts.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
+So at each position, the question is: given current `(o, c)`, what characters can I safely append?
 
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
+- Append `(` is allowed if `o < n`.
+- Append `)` is allowed if `c < o` (there's an unmatched open to close).
 
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-Brute-force enumeration is the starting point. The real engineering is pruning — cutting branches as soon as they can't lead to a valid answer. Good pruning can turn an exponential search into something that finishes in milliseconds.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Build string character by character; only append '(' if opens<n, only append ')' if closes<opens. Guarantees validity.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+If neither is allowed, we can't extend — but that should only happen when `o = n` and `c = n`, i.e., the string is done.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 4: The Recursive Construction
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+Think of it as a tree of choices: at each position we branch on the valid characters.
 
-**The concept:** Backtracking on open/close counts.
+```
+build(partial, o, c):
+    if len(partial) == 2n:
+        result.append(partial)
+        return
+    if o < n:  build(partial + '(', o + 1, c)
+    if c < o:  build(partial + ')', o, c + 1)
+```
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever you need to generate all permutations, combinations, or configurations → think Backtracking with pruning.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-dfs(s, open, close): if s.length==2n record. If open<n: dfs with '('. If close<open: dfs with ')'.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
+This is **backtracking**. We try each valid choice, recurse, and when we come back we try the next choice. The beauty is that we never build an invalid partial string — we only explore the space of potentially valid ones.
 
 ----------------------------------------
 
-## Step 6: Final Approach
+## Step 5: Trace for n = 2
 
-Now let's crystallize everything we've learned into a clean algorithm.
+Let's hand-trace.
 
-DFS with count constraints.
+```
+build("", 0, 0):
+  o=0 < 2: try '('
+  build("(", 1, 0):
+    o=1 < 2: try '('
+    build("((", 2, 0):
+      o == n, no '('
+      c=0 < o=2: try ')'
+      build("(()", 2, 1):
+        o == n, no '('
+        c=1 < 2: try ')'
+        build("(())", 2, 2):
+          len = 4 == 2n. RECORD "(())".
+    c=0 < o=1: try ')'
+    build("()", 1, 1):
+      o=1 < 2: try '('
+      build("()(", 2, 1):
+        c=1 < 2: try ')'
+        build("()()", 2, 2):
+          RECORD "()()".
+      c=1 < o=1? No. Skip.
+```
 
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+Results: `"(())"`, `"()()"`. Both valid. Total: 2, matching the 2nd Catalan number.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 6: Why the Constraints Are Both Necessary and Sufficient
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+**Necessary:** if `o > n`, the final count of opens will exceed n, which is wrong. If `c > o` at any intermediate point, there's an unmatched close, which can't be fixed by appending more.
 
-n=3 → ['((()))','(()())','(())()','()(())','()()()'].
+**Sufficient:** if we always maintain `o ≤ n` and `c ≤ o`, can we always finish with a valid string? Yes. Reason: we can always close remaining opens before running out of space. Specifically, if the string currently has `o` opens and `c` closes with `o ≤ n` and `c ≤ o`, we can append `(n - o)` more opens followed by `(n - c)` more closes in some order to reach `2n` length with `n` of each.
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+So the two invariants exactly characterize "this partial string can potentially be extended to a valid one."
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 7: Name It
 
-Complexity isn't magic — it's just counting the work.
+This is a classic **backtracking** problem — we build solutions incrementally, pruning branches that violate constraints. The general template is:
 
-Time: O(Catalan(n)). Space: O(n).
+```
+backtrack(state):
+    if state is complete: record it
+    else for each valid extension:
+        apply extension
+        backtrack(extended state)
+        undo extension
+```
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+Our version uses pass-by-value strings (since C++ string concatenation creates copies), so we don't literally "undo" — the recursion returns and the caller's state is unaffected. If we wanted efficiency, we'd use a mutable buffer and explicitly pop the last char after recursing.
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+The "validity invariants per partial state" idea generalizes to many problems: valid Sudoku, N-Queens, word ladders, etc.
 
+----------------------------------------
+
+## Step 8: Complexity
+
+Time: the number of valid strings is the n-th **Catalan number**, roughly `4^n / (n * √n)`. We do O(n) work per string (copy and store). Total: `O(4^n / √n)`.
+
+Space: recursion depth `2n`, plus the output list. **O(n)** stack, `O(Catalan(n) · n)` output.
+
+The algorithm is output-sensitive — we spend time proportional to how much we produce, which is near-optimal.
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
-
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-void dfs(int n, int o, int c, string& s, vector<string>& res) {
-    if ((int)s.size() == 2*n) { res.push_back(s); return; }
-    if (o < n) { s += '('; dfs(n, o+1, c, s, res); s.pop_back(); }
-    if (c < o) { s += ')'; dfs(n, o, c+1, s, res); s.pop_back(); }
+void build(string& cur, int o, int c, int n, vector<string>& res) {
+    if ((int)cur.size() == 2 * n) {
+        res.push_back(cur);
+        return;
+    }
+    if (o < n) {
+        cur.push_back('(');
+        build(cur, o + 1, c, n, res);
+        cur.pop_back();         // undo
+    }
+    if (c < o) {
+        cur.push_back(')');
+        build(cur, o, c + 1, n, res);
+        cur.pop_back();         // undo
+    }
 }
-vector<string> generateParenthesis(int n) { vector<string> res; string s; dfs(n, 0, 0, s, res); return res; }
+
+vector<string> generateParenthesis(int n) {
+    vector<string> res;
+    string cur;
+    cur.reserve(2 * n);
+    build(cur, 0, 0, n, res);
+    return res;
+}
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+The `cur.push_back` / `cur.pop_back` pair is the explicit "apply then undo" — faster than passing strings by value.
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Count only (Catalan numbers).
-- Multiple bracket types.
-- Lexicographic generation.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Count the number of valid parenthesizations without generating them.** Catalan number formula or DP: `C_n = sum of C_i * C_{n-1-i} for i in 0..n-1`.
+- **Generate valid strings of multiple bracket types (e.g., `( { [ ] } )`).** Extend the constraints: we can close a bracket only if its corresponding open is the most recent unclosed one (stack-based).
+- **Generate all valid balanced strings of length 2n allowing empty brackets pattern modifications.** Depends on specifics.
+- **Generate with constraints (e.g., no two consecutive `(`).** Add conditions in the recursive branches.
+- **Check if a given string is valid — don't generate.** Simple stack-based check in O(n).
+- **Variable-length generation up to n.** Collect from builds of every length 0..n.

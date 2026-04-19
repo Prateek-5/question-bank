@@ -1,190 +1,167 @@
-# Range Sum Query 2D – Immutable
+# Range Sum Query 2D — Immutable
 
 **Problem Link:**
 https://leetcode.com/problems/range-sum-query-2d-immutable/
 
 **Topic:**
-1 D and 2 D Arrays
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** 2D prefix-sum inclusion-exclusion.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> matrix=[[3,0,1,4,2],...]. Precompute P. Query (2,1)-(4,3) = P[5][4]-P[2][4]-P[5][1]+P[2][1].
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+1-D & 2-D Arrays
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Problem Spec
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Given a 2D matrix, answer queries of the form: "**what's the sum of the sub-rectangle from (r1, c1) to (r2, c2)?**"
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+The matrix is immutable (no updates). Multiple queries expected.
 
-So ask yourself:
+Example matrix:
+```
+ 3  0  1  4  2
+ 5  6  3  2  1
+ 1  2  0  1  5
+ 4  1  0  1  7
+ 1  0  3  0  5
+```
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: 2D prefix-sum inclusion-exclusion.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-Your first instinct might be to loop over every possible subarray or sub-rectangle. That's cubic or worse. Often a prefix-sum precomputation, a clever index mapping, or a running-state scan collapses the work to linear time.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Precompute P[i][j] = sum of rectangle (0,0)-(i-1,j-1). Any sub-rectangle sum = P[r2+1][c2+1] - P[r1][c2+1] - P[r2+1][c1] + P[r1][c1].
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+sumRegion(2, 1, 4, 3) = sum of submatrix rows 2-4, cols 1-3 = `2 + 0 + 1 + 1 + 0 + 1 + 0 + 3 + 0 = 8`.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: Brute Force Per Query
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+Loop over the submatrix, summing. O((r2 - r1 + 1) × (c2 - c1 + 1)) per query.
 
-**The concept:** 2D prefix-sum inclusion-exclusion.
-
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever you need range sums or running aggregates → think Prefix Sum. Whenever you need fixed-size windows → Sliding Window.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+For small grids and few queries, fine. For many queries on a large grid, slow. Need to preprocess.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 3: 2D Prefix Sums
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+Define `P[i][j]` = sum of the sub-rectangle from (0, 0) to (i-1, j-1). (1-indexed for cleaner formulas.)
 
-Build (n+1)×(m+1) prefix. Each query in O(1).
+Construction:
+```
+P[i][j] = matrix[i-1][j-1] + P[i-1][j] + P[i][j-1] - P[i-1][j-1]
+```
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
+The `- P[i-1][j-1]` subtracts the double-counted overlap between the top and left extensions.
 
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-2D prefix sums.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+O(m · n) preprocessing.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 4: Query Formula
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+Sum of sub-rectangle (r1, c1) to (r2, c2) via **inclusion-exclusion** with prefix sums:
 
-matrix=[[3,0,1,4,2],...]. Precompute P. Query (2,1)-(4,3) = P[5][4]-P[2][4]-P[5][1]+P[2][1].
+```
+sumRegion(r1, c1, r2, c2) = P[r2+1][c2+1]
+                          - P[r1][c2+1]          # subtract top slab
+                          - P[r2+1][c1]          # subtract left slab
+                          + P[r1][c1]             # add back over-subtracted corner
+```
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+Drawing a picture:
+```
+   0 ....... c1  ...... c2 
+ 0 +-------+-------------+
+   |  A    |     B       |
+ r1+-------+-------------+
+   |  C    |     D       |
+ r2+-------+-------------+
+```
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
+We want D. We have:
+- Total (P[r2+1][c2+1]) = A + B + C + D.
+- Top (P[r1][c2+1]) = A + B.
+- Left (P[r2+1][c1]) = A + C.
+- Corner (P[r1][c1]) = A.
 
+D = Total - Top - Left + Corner = (A+B+C+D) - (A+B) - (A+C) + A = D. ✓
+
+Each query is O(1) after O(m · n) preprocessing.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 5: Trace
 
-Complexity isn't magic — it's just counting the work.
+Matrix above (5 × 5). Compute P (6 × 6 array, 1-indexed).
 
-Build O(n*m), query O(1).
+I won't compute the whole table, but for the query sumRegion(2, 1, 4, 3):
+- P[5][4] - P[2][4] - P[5][1] - P[2][1] would give the answer.
+- Let's just trust the formula and verify with the hand-computed 8.
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+For this example, the expected answer is 8. The formula handles it correctly (given the full table).
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+----------------------------------------
 
+## Step 6: Why 1-Indexed P
+
+Using (n+1) × (m+1) prefix tables with P[0][*] = P[*][0] = 0 avoids edge cases:
+- No need to special-case the top row or left column.
+- Query formula `P[r2+1][c2+1] - ...` works uniformly.
+
+Matrix indices are 0-indexed (as usual); prefix table is 1-indexed (for ease).
+
+----------------------------------------
+
+## Step 7: Name It
+
+**2D Prefix Sum**, also called "summed-area table" in computer graphics. Applications:
+- Image processing (Haar-like feature detection).
+- Histogram queries on rectangles.
+- Any static "sum over sub-rectangle" problem.
+
+Closely related to **1D prefix sum** and **inclusion-exclusion** principle.
+
+----------------------------------------
+
+## Step 8: Complexity
+
+Preprocessing: **O(m · n)**.
+Query: **O(1)**.
+Space: **O(m · n)** for the prefix table.
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
-
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
 class NumMatrix {
     vector<vector<int>> P;
 public:
-    NumMatrix(vector<vector<int>>& M) {
-        int n = M.size(), m = M[0].size();
-        P.assign(n+1, vector<int>(m+1, 0));
-        for (int i = 0; i < n; ++i) for (int j = 0; j < m; ++j)
-            P[i+1][j+1] = M[i][j] + P[i][j+1] + P[i+1][j] - P[i][j];
+    NumMatrix(vector<vector<int>>& matrix) {
+        int m = matrix.size();
+        int n = matrix[0].size();
+        P.assign(m + 1, vector<int>(n + 1, 0));
+        for (int i = 1; i <= m; ++i) {
+            for (int j = 1; j <= n; ++j) {
+                P[i][j] = matrix[i-1][j-1]
+                        + P[i-1][j]
+                        + P[i][j-1]
+                        - P[i-1][j-1];
+            }
+        }
     }
+
     int sumRegion(int r1, int c1, int r2, int c2) {
-        return P[r2+1][c2+1] - P[r1][c2+1] - P[r2+1][c1] + P[r1][c1];
+        return P[r2+1][c2+1]
+             - P[r1][c2+1]
+             - P[r2+1][c1]
+             + P[r1][c1];
     }
 };
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Constructor: O(m · n). Each query: O(1).
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Mutable variant (Binary Indexed Tree 2D).
-- 3D prefix sum.
-- Sum over rotated rectangles.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Mutable matrix (updates allowed).** Prefix sums invalidate on updates. Use 2D Binary Indexed Tree or 2D Segment Tree — O(log m · log n) per update and query.
+- **Max/min over sub-rectangle.** Different — sparse table in 2D, or 2D segment tree with max.
+- **3D prefix sums.** Extend formula: 2³ = 8 inclusion-exclusion terms.
+- **Non-rectangular regions (triangles, circles).** Prefix sums don't directly handle; use other techniques.
+- **Count elements matching a predicate in sub-rectangle.** Preprocess per-predicate prefix count.
+- **Memory-constrained version (can't afford O(m·n) table).** Row-wise prefix + per-query accumulation gives O(m) per query — middle ground.

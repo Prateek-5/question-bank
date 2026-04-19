@@ -4,195 +4,171 @@
 https://leetcode.com/problems/maximum-gap/
 
 **Topic:**
-Arrays and Matrices
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Bucket/pigeonhole sort for O(n) max adjacent gap.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> nums=[3,6,9,1]. min=1,max=9, n=4, w=3. Buckets: idx 0:{1,3}, idx 1:{6}, idx 2:{9}. Gaps 6-3=3, 9-6=3. Answer=3.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Arrays & Matrices
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Understand the Task
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Given an **unsorted** array, find the **maximum gap between successive elements in the sorted order**. Return 0 if the array has fewer than 2 elements.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Example: `nums = [3, 6, 9, 1]`.
+Sort: [1, 3, 6, 9]. Successive gaps: 2, 3, 3. Max: **3**.
 
-So ask yourself:
+Constraint: must run in **O(n)** time and O(n) space.
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Bucket/pigeonhole sort for O(n) max adjacent gap.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
+If we could use O(n log n), just sort and scan. But the problem's twist is the linear-time requirement.
 
 ----------------------------------------
 
-## Step 3: Build Intuition (VERY IMPORTANT)
+## Step 2: The Linear-Time Trick — Pigeonhole
 
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
+If we have n numbers in a range [min, max], the **average** gap between consecutive sorted numbers is `(max - min) / (n - 1)`. The **max** gap must be ≥ this average (you can't have all gaps below average).
 
-Your first instinct is often a straightforward double loop over rows and columns. That's O(n·m), which is sometimes fine. When it isn't, look for contribution counting — asking 'for each element, how many sub-ranges include it?' — or look for patterns along diagonals, spirals, or boundaries.
+Here's the key observation: if we divide the range [min, max] into **n - 1 buckets of width (max - min) / (n - 1)**, then by pigeonhole:
+- There are n numbers and n - 1 buckets.
+- Some bucket must contain at least 2 numbers, but that's irrelevant.
+- The **gap between two consecutive sorted numbers in the same bucket is at most the bucket width** = average gap.
+- The maximum gap overall must therefore span **across** buckets.
 
-So how do we get smarter? Let's build the correct intuition step by step.
+So the max gap is always `(max of some bucket) - (min of the next non-empty bucket to the right)`. We don't need to know the internal order of numbers within buckets — just per-bucket min and max.
 
-With n elements in range [min,max], dividing into n-1 buckets of size (max-min)/(n-1) guarantees the max gap lies across two buckets (not within one) by pigeonhole.
+That's the insight. The algorithm:
+1. Find global min and max.
+2. Compute bucket width `= ceil((max - min) / (n - 1))`.
+3. Bucket each number: `bucket_idx = (num - min) / width`. Record each bucket's min and max.
+4. Scan buckets left to right. For each non-empty bucket, compute `bucket.min - previous_bucket.max`. Track the largest such cross-bucket gap.
+5. Return the max.
 
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
-
-----------------------------------------
-
-## Step 4: Connect to Concept
-
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
-
-**The concept:** Bucket/pigeonhole sort for O(n) max adjacent gap.
-
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever the problem is about rows, columns, diagonals, or all sub-rectangles → think contribution counting or per-row/col precomputation.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+All O(n). Neat.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 3: Why Pigeonhole Forces Max Gap Across Buckets
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+Suppose for contradiction the max gap is **within** a bucket. A bucket has width w = (max - min) / (n - 1). Any two numbers in the same bucket differ by at most w. But w ≤ max gap. So the within-bucket gap is ≤ average gap, which is ≤ max gap.
 
-Find min and max. Bucket width w = ceil((max-min)/(n-1)). For each num compute bucket idx (num-min)/w. Track each bucket's min and max. Max gap = max over consecutive non-empty buckets of (nextMin - prevMax).
+Hmm, that's not quite a contradiction yet. Let me think again.
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
+Actually: we have n numbers spanning [min, max], so total span = max - min. If gaps sum to max - min and there are n - 1 gaps, the max gap ≥ (max - min) / (n - 1) = bucket width w.
 
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
+Within a bucket, any gap is < w (bucket width). So within-bucket gaps are all strictly less than the max gap. Therefore the max gap must lie across buckets. ✓
 
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Bucket sort is O(n). Radix sort also works.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+That's the pigeonhole argument. Subtle but correct.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 4: Trace on `[3, 6, 9, 1]`
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+n = 4. min = 1, max = 9. Range = 8.
+Bucket width w = ceil(8 / 3) = 3 (we want width such that we get ≥ n-1 = 3 buckets).
 
-nums=[3,6,9,1]. min=1,max=9, n=4, w=3. Buckets: idx 0:{1,3}, idx 1:{6}, idx 2:{9}. Gaps 6-3=3, 9-6=3. Answer=3.
+Actually let me recompute. w = (max - min) / (n - 1) = 8 / 3 ≈ 2.67. If we take w = 3, we have buckets of width 3:
+- Bucket 0: [1, 4).
+- Bucket 1: [4, 7).
+- Bucket 2: [7, 10).
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+Numbers:
+- 1: bucket (1 - 1) / 3 = 0.
+- 3: bucket (3 - 1) / 3 = 0.
+- 6: bucket (6 - 1) / 3 = 1.
+- 9: bucket (9 - 1) / 3 = 2.
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
+Per-bucket min/max:
+- Bucket 0: {1, 3}. min=1, max=3.
+- Bucket 1: {6}. min=6, max=6.
+- Bucket 2: {9}. min=9, max=9.
 
+Cross-bucket gaps:
+- Bucket 0 max=3 → Bucket 1 min=6. Gap = 3.
+- Bucket 1 max=6 → Bucket 2 min=9. Gap = 3.
+
+Max gap: **3**. ✓
+
+Notice we ignored within-bucket gaps (like 3 - 1 = 2 in bucket 0) — by pigeonhole they can't be the max.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 5: Bucket Width Details
 
-Complexity isn't magic — it's just counting the work.
+For n = 4, we want n - 1 = 3 buckets to span [min, max]. Bucket width should be such that max lands in the last bucket.
 
-Time: O(n). Space: O(n).
+Naive: w = (max - min) / (n - 1), integer division. Edge cases: if max == min, w = 0 (answer is 0 — all same). Ensure w ≥ 1 otherwise.
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+Some prefer w = ceil((max - min) / (n - 1)) to guarantee numbers fit in exactly n - 1 buckets. Using `max(1, (max - min) / (n - 1))` handles the degenerate cases.
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+Bucket count: `ceil((max - min + 1) / w)` or similar. Using `(max - min) / w + 1` works cleanly.
 
+These off-by-one details are subtle; test your implementation carefully on edge cases.
 
 ----------------------------------------
 
-## Step 9: C++ Implementation
+## Step 6: Name It
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+**Bucket sort by quantized values** + **pigeonhole argument**. The technique:
+1. Divide range into buckets of carefully-chosen width.
+2. Exploit pigeonhole to avoid within-bucket work.
+3. Scan cross-bucket gaps.
+
+This is a specialized algorithm — not widely reusable — but the pattern of "use pigeonhole to prove a structural bound, then exploit it" is valuable.
+
+Alternative: **radix sort** also gives O(n) for integer arrays, but its constants are higher. For an interview, bucket-based is more elegant.
+
+----------------------------------------
+
+## Step 7: Complexity
+
+Time: **O(n)** — one pass to find min/max, one pass to bucket, one pass over buckets.
+Space: **O(n)** for bucket storage.
+
+----------------------------------------
+
+## Step 8: C++ Implementation
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
 int maximumGap(vector<int>& nums) {
-    int n = nums.size();
-    if (n < 2) return 0;
-    int mn = *min_element(nums.begin(), nums.end()),
-        mx = *max_element(nums.begin(), nums.end());
+    if (nums.size() < 2) return 0;
+
+    int mn = *min_element(nums.begin(), nums.end());
+    int mx = *max_element(nums.begin(), nums.end());
     if (mn == mx) return 0;
-    int w = max(1, (mx - mn + n - 2) / (n - 1));
-    int cnt = (mx - mn) / w + 1;
-    vector<int> bmin(cnt, INT_MAX), bmax(cnt, INT_MIN);
+
+    int n = nums.size();
+    int width = max(1, (mx - mn) / (n - 1));
+    int numBuckets = (mx - mn) / width + 1;
+
+    vector<int> bucketMin(numBuckets, INT_MAX);
+    vector<int> bucketMax(numBuckets, INT_MIN);
+
     for (int x : nums) {
-        int b = (x - mn) / w;
-        bmin[b] = min(bmin[b], x);
-        bmax[b] = max(bmax[b], x);
+        int idx = (x - mn) / width;
+        bucketMin[idx] = min(bucketMin[idx], x);
+        bucketMax[idx] = max(bucketMax[idx], x);
     }
-    int prev = mn, ans = 0;
-    for (int i = 0; i < cnt; ++i) if (bmin[i] != INT_MAX) {
-        ans = max(ans, bmin[i] - prev);
-        prev = bmax[i];
+
+    int prevMax = mn;
+    int maxGap = 0;
+    for (int i = 0; i < numBuckets; ++i) {
+        if (bucketMin[i] == INT_MAX) continue;   // empty bucket
+        maxGap = max(maxGap, bucketMin[i] - prevMax);
+        prevMax = bucketMax[i];
     }
-    return ans;
+    return maxGap;
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Key implementation details:
+- `width = max(1, (mx - mn) / (n - 1))` avoids division by zero and ensures meaningful buckets.
+- Empty buckets are skipped (their `bucketMin` stays at `INT_MAX`).
+- `prevMax` tracks the max of the last non-empty bucket seen, for cross-bucket gap computation.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 9: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Stream version.
-- Top-k adjacent gaps.
-- 2D extension (nearest-pair).
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Array of floats instead of ints.** Same algorithm, use floating-point bucket widths.
+- **Find the second largest gap.** Track top-2 instead of top-1.
+- **Return the (smaller, larger) pair forming the max gap.** Track which pair produced the max during the scan.
+- **Negative values in the array.** Algorithm works — mn might be negative, but `x - mn` is non-negative, so bucket indices stay valid.
+- **Array where most values are duplicates.** Many buckets are empty; algorithm still O(n).
+- **Why not radix sort?** Works, but has higher constants and is less conceptually clean than pigeonhole-bucket for this problem.

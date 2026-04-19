@@ -6,179 +6,232 @@ https://leetcode.com/problems/maximize-sum-of-array-after-k-negations/
 **Topic:**
 Greedy
 
+----------------------------------------
+
+## Step 1: Read the Problem
+
+Given an integer array `nums` and an integer `k`, perform **exactly k** negations. Each negation flips the sign of one array element (you can pick the same element multiple times). After k negations, maximize the sum.
+
+Example: `nums = [4, 2, 3]`, k = 1.
+- Flip 4 → sum = -4+2+3 = 1.
+- Flip 2 → sum = 4-2+3 = 5.
+- Flip 3 → sum = 4+2-3 = 3.
+
+Best: **5**.
+
+`nums = [-2, 3, -1, 5, -6]`, k = 3. I'll work through this more carefully in a moment.
+
+The key subtle word: **exactly** k. We can't skip flips; we can only use them up, possibly by flipping the same element twice (which cancels).
 
 ----------------------------------------
 
-## Step 1: Understand the Problem (Beginner Friendly)
+## Step 2: Which Flips Are Helpful?
 
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
+Let me think about what each flip does:
+- **Flip a negative number** (say -5): it becomes +5. Sum increases by 10. *Good move.*
+- **Flip zero**: stays 0. Sum unchanged. *Free move.*
+- **Flip a positive**: +5 becomes -5. Sum drops by 10. *Bad move.*
 
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
+So if we have any negatives, we want to flip them (best bang for the buck: flip the **most negative** first — it produces the biggest gain).
 
-**In plain words:** Always flip the smallest element; parity determines final move.
+If we have no negatives left and we still have flips, we're forced to use them on non-negatives. Zeros are free. Positives are costly — but flipping the same positive twice is a net no-op.
 
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> nums=[-2,-3,-1], k=1. Flip -3 → [-2,3,-1] sum=0. But smallest abs=1. No remaining flips. Correction: sort abs→ sum=0.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+So the question becomes: **is the number of "unproductive" flips even or odd?**
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 3: The Greedy Strategy Emerges
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Step by step:
+1. Flip the most negative values first. Each flip turns a negative into its positive twin, increasing sum by 2·|value|.
+2. Keep flipping negatives until either (a) we've done k flips or (b) no negatives remain.
+3. If k flips are done, we're happy.
+4. If flips remain (no more negatives), we must burn them on non-negatives.
+   - If a zero exists, target it — zero flips are free. We can burn all remaining flips on zero and change nothing.
+   - If no zero, we must flip a positive. If remaining flips are **even**, flip the smallest positive twice, four times, etc. — always cancels out. No loss.
+   - If remaining flips are **odd**, we can't fully cancel. Flip the smallest-magnitude element once to minimize loss.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
-
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Always flip the smallest element; parity determines final move.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
+This is the greedy strategy. Let me verify it's optimal.
 
 ----------------------------------------
 
-## Step 3: Build Intuition (VERY IMPORTANT)
+## Step 4: Why Greedy Is Optimal
 
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
+**Claim 1:** When a negative exists, we should always flip a negative (specifically, the most negative) instead of a positive.
 
-It's very tempting to try every combination. That's exponential. The key insight for greedy problems is that a *local* choice — the earliest end time, the smallest available item, the highest-priority task — is provably as good as any global decision. When the local choice is safe, greedy works.
+*Proof sketch:* Flipping a negative gains 2·|negative| in sum. Flipping a positive costs 2·|positive|. Trading flips: if we're forced to flip a positive instead of the negative, we lose 2·|negative| + 2·|positive| compared to the optimal. So never do this swap.
 
-So how do we get smarter? Let's build the correct intuition step by step.
+**Claim 2:** Among negatives, flip the most negative first.
 
-Flipping the smallest maximizes gain if negative; if all positive, remaining flips should target the smallest absolute value. After all flips, parity of remaining k determines if we lose the min.
+*Proof sketch:* The order doesn't actually matter for the final sum, because we're computing the sum of absolute values of everything we flip (we negate each flipped element once, net effect: add |value|·2 per flip of a negative). But flipping in order of "most negative first" is a clean mental model.
 
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
+Wait, order doesn't matter? Let me check. If I flip -5 and -3, total gain is 10 + 6 = 16. If I flip -3 and -5, same gain. So order among negatives-to-be-flipped doesn't affect the final sum. What matters is *which* negatives we choose.
 
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
+If k is large enough to flip every negative, we flip them all. If k is smaller, we should flip the **k** most-negative values — that gives the maximum total gain.
 
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
+**Claim 3:** After all beneficial flips, if flips remain, minimize loss by flipping the smallest-absolute-value element on odd parity.
 
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+*Proof sketch:* We must use exactly k flips. Among remaining non-negatives, flipping one loses 2·|value|. Double-flipping cancels. So pair up flips; any leftover single flip should target the smallest-absolute-value element to minimize loss.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 5: Trace on `[-2, 3, -1, 5, -6]`, k = 3
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+All negatives sorted by most-negative: -6, -2, -1. We have 3 negatives and k=3. Flip all 3.
 
-**The concept:** Always flip the smallest element; parity determines final move.
+Array after: `[2, 3, 1, 5, 6]`. k remaining = 0. Done.
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
+Sum: 2 + 3 + 1 + 5 + 6 = **17**.
 
-**Pattern recognition cue:**
+Initial sum was -2 + 3 - 1 + 5 - 6 = -1. Flipping negatives gives a gain of 2·(6 + 2 + 1) = 18. New sum: -1 + 18 = 17. ✓
 
-**Whenever a problem asks for min/max and a local 'best' choice seems correct → check if Greedy applies. Always prove it with an exchange argument before trusting it.**
+Try k = 4 (one more flip than negatives). Flip all 3 negatives, then 1 remaining flip.
 
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
+Remaining array: `[2, 3, 1, 5, 6]`. No zeros. 1 remaining flip (odd). Smallest-abs is 1. Flip it: becomes -1. Sum decreases by 2 (from 17 to 15).
 
+Sum: **15**.
 
-----------------------------------------
+Try k = 5. Flip all negatives (3 flips), 2 remaining. Even, so cancel them (flip any element twice). Sum stays 17.
 
-## Step 5: Visual / Step-by-Step Explanation
+Actually let me double-check with odd-parity: k = 6 means 3 extra after negatives. Flip 1 → -1 (sum 15). Flip 1 again → 1 (sum 17). Flip 1 again → -1 (sum 15). Sum = 15, same as k=4. So for any odd remaining, answer is 15 (lose smallest-abs once). For any even remaining, answer is 17.
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-Sort asc. For i from 0 with k>0 and nums[i]<0: nums[i]=-nums[i], k--. Sum all; if remaining k odd, subtract 2*min|value|.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
+This matches my claim: remaining parity determines the outcome.
 
 ----------------------------------------
 
-## Step 6: Final Approach
+## Step 6: The Clean Algorithm
 
-Now let's crystallize everything we've learned into a clean algorithm.
+```
+# Step 1: flip the k most-negative values (or all negatives if fewer than k)
+sort nums by value ascending  # most-negative first
+i = 0
+while i < len(nums) and nums[i] < 0 and k > 0:
+    nums[i] = -nums[i]
+    k -= 1
+    i += 1
 
-Sort + selective negation.
+# Step 2: handle remaining flips if any
+# (all remaining flips must target non-negatives)
+if k % 2 == 1:
+    # need to flip one element. Pick the smallest-absolute-value.
+    flip the element with smallest |value|
 
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
+return sum(nums)
+```
 
-**Before coding, it's worth asking:**
+Why sort by value ascending (not absolute value)? Because the "most negative" is literally the smallest value. After flipping, they become large positives. Then when we look for "smallest absolute value" among the post-flip array, it could be anywhere — but we can find it with a scan, or by maintaining state.
 
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
-
-----------------------------------------
-
-## Step 7: Dry Run (Detailed)
-
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
-
-nums=[-2,-3,-1], k=1. Flip -3 → [-2,3,-1] sum=0. But smallest abs=1. No remaining flips. Correction: sort abs→ sum=0.
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+Actually, a cleaner approach: sort by **absolute value**. Then smallest-abs is at the start, and we'll re-sort later... let me just show it cleanly.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 7: Why Sort by Absolute Value
 
-Complexity isn't magic — it's just counting the work.
+If we sort by `|value|` ascending:
+- Negatives and positives are intermixed by magnitude.
+- The **smallest-absolute** element is at index 0.
 
-Time: O(n log n). Space: O(1).
+This makes the algorithm crisp:
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+```
+sort nums by |value| ascending
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+# Flip negatives we encounter, going right-to-left (largest-abs first).
+for i from n-1 down to 0:
+    if nums[i] < 0 and k > 0:
+        nums[i] = -nums[i]
+        k -= 1
 
+# If k remaining and odd, flip smallest-abs (index 0).
+if k % 2 == 1:
+    nums[0] = -nums[0]
+
+return sum
+```
+
+Traversing right-to-left targets large-absolute-value elements first. If any of them are negative, we flip (biggest gain). After this pass, remaining unfllpped negatives (if any) must have been the smallest-abs values — but wait, we ran out of k, so we couldn't flip them all. That's fine.
+
+If k > 0 after the pass, no negatives remain (we would have flipped them all). Parity decides the rest.
 
 ----------------------------------------
 
-## Step 9: C++ Implementation
+## Step 8: Even Cleaner — Min-Heap
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+The algorithm is pristine with a min-heap:
+
+```
+heap = min-heap of all nums
+for _ in range(k):
+    x = heap.pop()
+    heap.push(-x)
+return sum(heap)
+```
+
+At each step, we flip the **current minimum** — which is the most-negative element (if any exist) or the smallest non-negative (if all are non-negative). Flipping it:
+- If negative: becomes positive, big gain.
+- If zero: stays zero, no change.
+- If positive: becomes negative, which is the new minimum. Next iteration flips it back. Pairs cancel automatically.
+
+The heap handles the greedy choice at every step without explicit case analysis. Beautiful.
+
+----------------------------------------
+
+## Step 9: Complexity
+
+- Sort approach: **O(n log n)** for sort + O(n) for pass + O(1) for parity adjustment. Total O(n log n).
+- Heap approach: **O((n + k) log n)**.
+
+For typical inputs, both are fast.
+
+----------------------------------------
+
+## Step 10: C++ Implementation
+
+**Sort version:**
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-int largestSumAfterKNegations(vector<int>& a, int k) {
-    sort(a.begin(), a.end());
-    for (int i = 0; i < (int)a.size() && k > 0 && a[i] < 0; ++i, --k) a[i] = -a[i];
-    int s = accumulate(a.begin(), a.end(), 0);
-    if (k % 2) s -= 2 * *min_element(a.begin(), a.end());
-    return s;
+int largestSumAfterKNegations(vector<int>& nums, int k) {
+    sort(nums.begin(), nums.end(), [](int a, int b) {
+        return abs(a) < abs(b);
+    });
+
+    // Flip largest-abs negatives first.
+    for (int i = (int)nums.size() - 1; i >= 0 && k > 0; --i) {
+        if (nums[i] < 0) {
+            nums[i] = -nums[i];
+            k--;
+        }
+    }
+    // Handle remaining flips: if odd, flip smallest-abs (at index 0 after sort by abs).
+    if (k % 2 == 1) nums[0] = -nums[0];
+
+    return accumulate(nums.begin(), nums.end(), 0);
 }
 ```
 
-A few notes about the style:
+**Heap version (shortest, elegant):**
 
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
+```cpp
+int largestSumAfterKNegations(vector<int>& nums, int k) {
+    priority_queue<int, vector<int>, greater<int>> pq(nums.begin(), nums.end());
+    while (k--) {
+        int x = pq.top(); pq.pop();
+        pq.push(-x);
+    }
+    int sum = 0;
+    while (!pq.empty()) { sum += pq.top(); pq.pop(); }
+    return sum;
+}
+```
 
+The heap version is my favorite — each step exactly implements "flip the current smallest," which is the greedy rule we derived.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 11: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- What if we cannot flip twice the same element?
-- Maximize sum after k increments/decrements.
-- Multiple test cases with same array.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Each element can be negated at most once.** Different problem — sort by value, flip the k smallest.
+- **Maximize product instead of sum.** Sign count matters more than magnitudes; different analysis.
+- **Minimize sum with k negations.** Symmetric — flip the largest positives greedily.
+- **k is massive (10^9).** After all negatives are flipped and the array stabilizes, further flips alternate on the smallest element. Shortcut via parity rather than iterating.
+- **Array mixed with decimals / negatives of various forms.** Same greedy works as long as the "flip improves" rule holds (i.e., for any real negative, flipping gains 2·|value|).

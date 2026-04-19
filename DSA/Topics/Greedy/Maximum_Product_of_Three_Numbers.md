@@ -6,177 +6,179 @@ https://leetcode.com/problems/maximum-product-of-three-numbers/
 **Topic:**
 Greedy
 
+----------------------------------------
+
+## Step 1: Understand the Twist
+
+Given an integer array `nums`, find the **maximum product** of any three numbers.
+
+Simple intuition: pick the three largest numbers. Their product is the max.
+
+Example: `nums = [1, 2, 3, 4]`. Top 3: 2, 3, 4. Product = 24. ✓
+
+But there's a subtle case: **negative numbers**. Two negatives multiplied give a positive.
+
+Example: `nums = [-10, -10, 5, 2]`. Top 3 by value: -10, 2, 5. Product = -100. Bad.
+
+But: (-10) × (-10) × 5 = 500. Much better.
+
+So two very negative numbers can combine with one very positive to beat the "top 3 largest" strategy.
 
 ----------------------------------------
 
-## Step 1: Understand the Problem (Beginner Friendly)
+## Step 2: The Two Candidates
 
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
+Actually, only two configurations can give the maximum product of three:
 
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
+1. **Three largest**: if no negatives (or all positives dominate), this wins.
+2. **Two smallest (most negative) × largest**: if there are two large-magnitude negatives, their positive product times the largest gives a candidate.
 
-**In plain words:** Consider either the top 3 or the two smallest (negatives) × the largest.
+The answer is `max(top3_product, smallest_two_times_largest)`.
 
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
+Why no other configurations? 
+- One negative × two positives = negative. Worse than any purely positive product.
+- Three negatives = negative (product of three negatives is negative). Worse.
+- Zero in the mix = product 0. Worse unless forced.
 
-> nums=[-10,-10,1,3,2]. Sorted: [-10,-10,1,2,3]. top3: 1*2*3=6. neg2*max: -10*-10*3=300 → answer 300.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
-
-----------------------------------------
-
-## Step 2: Break Down the Problem
-
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
-
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
-
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Consider either the top 3 or the two smallest (negatives) × the largest.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
+So the two candidates cover all cases.
 
 ----------------------------------------
 
-## Step 3: Build Intuition (VERY IMPORTANT)
+## Step 3: Algorithm
 
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
+Sort the array. Then:
+- max1 = `nums[n-1] * nums[n-2] * nums[n-3]` (top three).
+- max2 = `nums[0] * nums[1] * nums[n-1]` (two smallest × largest).
 
-It's very tempting to try every combination. That's exponential. The key insight for greedy problems is that a *local* choice — the earliest end time, the smallest available item, the highest-priority task — is provably as good as any global decision. When the local choice is safe, greedy works.
+Return `max(max1, max2)`.
 
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Maximum product uses either three largest positives or two largest-magnitude negatives plus the biggest positive.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+O(n log n) due to sort. Space O(1).
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 4: Without Sorting — O(n)
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+We don't need a full sort. Just track:
+- Top 3 largest (max1, max2, max3).
+- Bottom 2 smallest (min1, min2).
 
-**The concept:** Consider either the top 3 or the two smallest (negatives) × the largest.
+One pass over nums updating these 5 running bests.
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
+Then answer is `max(max1 * max2 * max3, min1 * min2 * max1)`.
 
-**Pattern recognition cue:**
-
-**Whenever a problem asks for min/max and a local 'best' choice seems correct → check if Greedy applies. Always prove it with an exchange argument before trusting it.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+O(n) time, O(1) space.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 5: Trace on `[-10, -10, 5, 2]`
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+Sorted: `[-10, -10, 2, 5]`.
 
-Sort. Return max(nums[n-1]*nums[n-2]*nums[n-3], nums[0]*nums[1]*nums[n-1]).
+- Top 3 product: -10 * 2 * 5 = -100.
+- Two smallest × largest: -10 * -10 * 5 = 500.
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
+Max: **500**. ✓
 
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
+For `[1, 2, 3, 4]`:
+- Top 3: 4 * 3 * 2 = 24.
+- Two smallest × largest: 1 * 2 * 4 = 8.
 
+Max: **24**. ✓
 
-----------------------------------------
+For `[-5, -4, -3, -2, -1]` (all negative):
+- Top 3 (least negative): -1 * -2 * -3 = -6.
+- Two smallest × largest: -5 * -4 * -1 = -20.
 
-## Step 6: Final Approach
+Max: **-6**. ✓ (Makes sense: among negative products, the "least negative" is the max.)
 
-Now let's crystallize everything we've learned into a clean algorithm.
+For `[-4, -3, -2, -1, 60]`:
+- Top 3: 60 * -1 * -2 = 120.
+- Two smallest × largest: -4 * -3 * 60 = 720.
 
-Sort + compare two candidates.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+Max: **720**. ✓
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 6: Why the Two Candidates Cover All Cases
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+Let a ≤ b ≤ c ≤ d ≤ e ≤ ... ≤ z be the sorted array.
 
-nums=[-10,-10,1,3,2]. Sorted: [-10,-10,1,2,3]. top3: 1*2*3=6. neg2*max: -10*-10*3=300 → answer 300.
+The maximum product of three elements must come from:
+- Three largest: (x, y, z) at the top.
+- Two smallest × one largest: (a, b, z).
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+Any mix like (a, c, z) or (a, z, y)? Let's check:
+- (a, y, z): if a is negative, a·y·z could beat (x,y,z) if a's magnitude is much larger than x. But then (a, b, z) (both a and b negative, b has large magnitude too) would be even better. So (a, y, z) is dominated by (a, b, z) when a < 0. Not needed separately.
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
+- (a, b, y): if a, b negative, ab > 0, so (a, b, z) > (a, b, y) since z ≥ y.
 
+So only (x, y, z) and (a, b, z) need checking. Done.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 7: Name It
 
-Complexity isn't magic — it's just counting the work.
+**Greedy with case analysis.** The "sort + take edges" pattern is common. Examples:
+- Maximum product of k numbers (generalized).
+- Minimum product subarray (handle signs carefully).
+- Maximum sum with constraints.
 
-Time: O(n log n). Space: O(1).
+The principle: for product/max-value problems, the extremes (highest positives and lowest negatives) matter, middle values rarely do.
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+----------------------------------------
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+## Step 8: Complexity
 
+Sort approach: **O(n log n)**.
+Running-top-bottom approach: **O(n)**.
+Space: **O(1)**.
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+**Sort version (simpler):**
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-int maximumProduct(vector<int>& a) {
-    sort(a.begin(), a.end());
-    int n = a.size();
-    return max(a[n-1]*a[n-2]*a[n-3], a[0]*a[1]*a[n-1]);
+int maximumProduct(vector<int>& nums) {
+    sort(nums.begin(), nums.end());
+    int n = nums.size();
+    return max(nums[n-1] * nums[n-2] * nums[n-3], 
+               nums[0] * nums[1] * nums[n-1]);
 }
 ```
 
-A few notes about the style:
+**O(n) running-top-bottom version:**
 
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
+```cpp
+int maximumProduct(vector<int>& nums) {
+    int max1 = INT_MIN, max2 = INT_MIN, max3 = INT_MIN;   // top 3 largest
+    int min1 = INT_MAX, min2 = INT_MAX;                   // 2 smallest
 
+    for (int x : nums) {
+        // Update top 3
+        if (x > max1) { max3 = max2; max2 = max1; max1 = x; }
+        else if (x > max2) { max3 = max2; max2 = x; }
+        else if (x > max3) { max3 = x; }
+
+        // Update bottom 2
+        if (x < min1) { min2 = min1; min1 = x; }
+        else if (x < min2) { min2 = x; }
+    }
+
+    return max(max1 * max2 * max3, min1 * min2 * max1);
+}
+```
+
+The O(n) version is longer but avoids the sort. Use whichever fits your interview style.
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- O(n) single pass tracking top3/bottom2.
-- Product of k numbers — DP or careful greedy.
-- Subarray product maximum.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Maximum product of k numbers.** Generalize: for each even k', consider combinations of pairs of negatives with positives. Becomes a DP problem.
+- **Minimum product of three.** Symmetric: the two candidates are "three smallest" and "largest two × smallest."
+- **Product of any subset.** NP-hard (subset-sum-ish).
+- **Handle very large products (overflow).** Use long long.
+- **Streaming array.** Maintain top-3 and bottom-2 incrementally.
+- **Max sum instead of product.** Just top 3.

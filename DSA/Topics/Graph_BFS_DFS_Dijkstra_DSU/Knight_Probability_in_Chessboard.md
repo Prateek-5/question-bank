@@ -4,192 +4,212 @@
 https://leetcode.com/problems/knight-probability-in-chessboard/
 
 **Topic:**
-Graph BFS DFS Dijkstra DSU
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** DP over (moves_left, row, col) with transitions over 8 knight moves.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> n=3, k=2, start (0,0). From (0,0) knight has 2 in-board moves: (1,2) and (2,1). Each contributes 1/8 * p(1,...). Expand recursively until 0 moves.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Graph (BFS / DFS / Dijkstra / DSU)
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Understand the Problem
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+On an `n × n` chessboard, a knight starts at cell `(row, column)`. The knight makes **exactly k moves**, each move chosen **uniformly at random** from the 8 possible knight moves. If a move would take the knight off the board, the knight is lost (doesn't rebounce).
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Return the **probability** that the knight stays on the board for all k moves.
 
-So ask yourself:
+Example: n = 3, k = 2, start = (0, 0).
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: DP over (moves_left, row, col) with transitions over 8 knight moves.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
+After move 1: 8 possible knight moves from (0, 0). Which stay on the 3×3 board?
+- (+1, +2): (1, 2) — on board.
+- (+2, +1): (2, 1) — on board.
+- Others go negative or beyond 2. 6 moves off board.
 
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
+So move 1 has 2/8 = 1/4 probability of staying.
 
+If we're at (1, 2) after move 1 (prob 1/8):
+- 8 knight moves from (1, 2). Which stay? 
+- (-1, -2) → (0, 0) ✓, (-2, -1) → (-1, 1) ✗, etc. Let me enumerate. (1±1, 2±2) and (1±2, 2±1).
+- (0, 0) ✓. (0, 4) ✗. (2, 0) ✓. (2, 4) ✗. (-1, 1) ✗. (-1, 3) ✗. (3, 1) ✗. (3, 3) ✗.
+- 2 valid moves.
 
-----------------------------------------
+Similarly (2, 1) has 2 valid moves (symmetric).
 
-## Step 3: Build Intuition (VERY IMPORTANT)
+So after 2 moves from (0, 0): 1/8 · 2/8 + 1/8 · 2/8 = 4/64 = 1/16.
 
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
+Wait that's for landing at those specific cells. Total prob of being on board after 2 moves = (starting at (0,0), go to one of 8 choices, if on board go on). Let me reframe.
 
-A tempting first thought is to try every possible path from the start to the goal. The problem is that graphs have exponentially many paths. We need a traversal that visits each node at most a few times — that's exactly what BFS, DFS, and their weighted cousins give us.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Probability of staying on board after k moves from (r,c) is average over 8 legal moves of the probability from those positions after k-1 moves. Base: p(0, r, c) = 1 if in-board else 0.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+The expected answer for n=3, k=2, start=(0,0) is 0.0625. So 2/8 × 2/8 = 4/64 = 0.0625. ✓
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: Recurrence — Think Forward
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+Let `p(i, j, steps)` = probability of being at cell (i, j) after `steps` moves (starting from the initial cell).
 
-**The concept:** DP over (moves_left, row, col) with transitions over 8 knight moves.
+Base: `p(row, col, 0) = 1`. All other cells at step 0 have probability 0.
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
+Transition: to be at (i, j) after `s+1` moves, the knight was at some neighbor (i', j') of (i, j) after `s` moves, and chose the move that brings it to (i, j). That choice has probability 1/8 (each move equally likely).
 
-**Pattern recognition cue:**
+```
+p(i, j, s+1) = sum over (i', j') reachable-backward-from-(i,j) of p(i', j', s) × 1/8
+```
 
-**Whenever nodes have relationships or connectivity matters → think Graph. 'Shortest path' without weights → BFS. With weights → Dijkstra. Just connectivity → DSU.**
+Equivalently, knight-moves are symmetric (if A can reach B, B can reach A), so the reachable-backward neighbors are the 8 knight moves from (i, j).
 
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-Let f(k, r, c) = probability. Transition: f(k, r, c) = (1/8) Σ f(k-1, r', c') over 8 moves (counting off-board as 0). Bottom-up DP over two layers.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
+Build the table step by step.
 
 ----------------------------------------
 
-## Step 6: Final Approach
+## Step 3: Or — Think Backward With "Surviving Probability"
 
-Now let's crystallize everything we've learned into a clean algorithm.
+A cleaner formulation:
 
-DP with two 2D layers, rolling.
+Let `p(i, j, s)` = probability of staying on the board for the **remaining s moves**, starting from (i, j).
 
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
+Base: `p(i, j, 0) = 1` (zero remaining moves — no risk of falling).
 
-**Before coding, it's worth asking:**
+Transition: to stay on the board for s+1 moves, make one of the 8 knight moves. Each has 1/8 probability. For each move:
+- If it lands on the board, continue with `p(ni, nj, s)`.
+- If it goes off-board, contribute 0 (knight lost).
 
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
+```
+p(i, j, s+1) = sum over 8 moves of (1/8) × (p(ni, nj, s) if on-board else 0)
+```
 
-Get those clear in your head, and the code almost writes itself.
+Answer: `p(row, col, k)`.
 
-
-----------------------------------------
-
-## Step 7: Dry Run (Detailed)
-
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
-
-n=3, k=2, start (0,0). From (0,0) knight has 2 in-board moves: (1,2) and (2,1). Each contributes 1/8 * p(1,...). Expand recursively until 0 moves.
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+I prefer this backward DP — it's cleaner and initializes base cases trivially.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 4: Implementation with Memoization
 
-Complexity isn't magic — it's just counting the work.
+```
+memo = {}
+def p(i, j, s):
+    if s == 0: return 1.0
+    if (i, j, s) in memo: return memo[(i, j, s)]
+    total = 0.0
+    for each of 8 knight-moves (di, dj):
+        ni, nj = i + di, j + dj
+        if ni, nj on board:
+            total += p(ni, nj, s - 1)
+    result = total / 8
+    memo[(i, j, s)] = result
+    return result
 
-Time: O(k·n²). Space: O(n²).
+return p(row, col, k)
+```
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+O(n² · k) states, each with O(1) work (8 transitions). Total **O(n² · k)**.
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+For n ≤ 25 and k ≤ 100, that's at most 62500 states — very fast.
 
+----------------------------------------
+
+## Step 5: Trace for n = 3, k = 1, start = (0, 0)
+
+```
+p(0, 0, 1):
+  Try 8 knight moves from (0, 0):
+    (+1, +2) → (1, 2): on board. p(1, 2, 0) = 1.
+    (+1, -2) → (1, -2): off board.
+    (-1, +2) → (-1, 2): off board.
+    (-1, -2) → (-1, -2): off board.
+    (+2, +1) → (2, 1): on board. p(2, 1, 0) = 1.
+    (+2, -1) → (2, -1): off board.
+    (-2, +1) → (-2, 1): off board.
+    (-2, -1) → (-2, -1): off board.
+  total = 1 + 1 = 2.
+  result = 2 / 8 = 0.25.
+```
+
+Return 0.25.
+
+For k=2, we'd call p(0, 0, 2), which in turn calls p(1, 2, 1) and p(2, 1, 1) (the on-board neighbors from step 4), etc.
+
+----------------------------------------
+
+## Step 6: Bottom-Up Alternative
+
+Can also do iteratively, filling a 2D table for each step.
+
+```
+# dp[i][j] = probability of being on board after 0 more moves (base)
+dp = [[1.0 for _ in range(n)] for _ in range(n)]
+
+for step in 1..k:
+    new_dp = [[0.0 for _ in range(n)] for _ in range(n)]
+    for i in 0..n-1:
+        for j in 0..n-1:
+            total = 0
+            for each (di, dj):
+                ni, nj = i + di, j + dj
+                if on-board(ni, nj): total += dp[ni][nj]
+            new_dp[i][j] = total / 8
+    dp = new_dp
+return dp[row][col]
+```
+
+Equivalent, uses rolling tables for space O(n²).
+
+----------------------------------------
+
+## Step 7: Name It
+
+**Probabilistic DP on a grid with backward time steps.** The recurrence "probability of surviving the next s moves" is natural for this kind of lattice random walk.
+
+Similar patterns:
+- Random walk on a grid with absorbing boundaries.
+- Out-of-N Knight's Tour.
+- Expected value computations with state-dependent transitions.
+
+The `n²·k` state space is the signature.
+
+----------------------------------------
+
+## Step 8: Complexity
+
+Time: **O(n² · k)** — n² cells × k steps × 8 transitions.
+Space: O(n² · k) with full memoization, or O(n²) with rolling tables.
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+**Bottom-up with rolling tables:**
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-double knightProbability(int n, int k, int r, int c) {
-    vector<vector<double>> dp(n, vector<double>(n, 0));
-    dp[r][c] = 1.0;
-    int dr[] = {-2,-2,-1,-1,1,1,2,2}, dc[] = {-1,1,-2,2,-2,2,-1,1};
-    for (int step = 0; step < k; ++step) {
-        vector<vector<double>> nd(n, vector<double>(n, 0));
-        for (int i=0;i<n;i++) for (int j=0;j<n;j++) if (dp[i][j] > 0) {
-            for (int m=0;m<8;m++) {
-                int ni=i+dr[m], nj=j+dc[m];
-                if (ni>=0&&nj>=0&&ni<n&&nj<n) nd[ni][nj] += dp[i][j] / 8.0;
+double knightProbability(int n, int k, int row, int col) {
+    vector<vector<double>> dp(n, vector<double>(n, 1.0));   // base: 0 moves left
+    int moves[8][2] = {{-2,-1},{-2,1},{-1,-2},{-1,2},{1,-2},{1,2},{2,-1},{2,1}};
+
+    for (int step = 1; step <= k; ++step) {
+        vector<vector<double>> newDp(n, vector<double>(n, 0.0));
+        for (int i = 0; i < n; ++i) {
+            for (int j = 0; j < n; ++j) {
+                for (auto& m : moves) {
+                    int ni = i + m[0], nj = j + m[1];
+                    if (ni >= 0 && ni < n && nj >= 0 && nj < n) {
+                        newDp[i][j] += dp[ni][nj];
+                    }
+                }
+                newDp[i][j] /= 8.0;
             }
         }
-        dp = nd;
+        dp = newDp;
     }
-    double s = 0;
-    for (auto& row : dp) for (double v : row) s += v;
-    return s;
+
+    return dp[row][col];
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Clean iterative DP. Each step builds `newDp` from the previous `dp`.
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Expected number of steps to leave the board.
-- Probability of reaching a target cell in ≤k moves.
-- Variable-size board.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Expected number of moves before falling off.** Different DP — compute expected stopping time.
+- **Knight that can teleport (8 moves + teleport with some prob).** Add a teleport transition.
+- **Larger board, many starting positions.** Precompute once; query in O(1).
+- **Other pieces (rook, bishop, queen).** Different move set — plug into the same framework.
+- **Graph representation.** The board is a graph where knight moves are edges. The algorithm is a DP on this graph.
+- **Probability of reaching a specific target square in k moves.** Forward DP: p(i, j, s) = prob of being at (i, j) after s moves.

@@ -4,199 +4,177 @@
 https://www.geeksforgeeks.org/problems/minimum-weight-cycle/1
 
 **Topic:**
-Graph BFS DFS Dijkstra DSU
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** For each edge (u,v,w), remove it and compute shortest u→v path; answer = min over edges of (w + shortest_path).
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> Edges {(0,1,1),(1,2,1),(2,0,3)}. Remove (0,1,1): path 0→2→1 = 4, cycle=5. Remove (1,2,1): 1→0→2=4, cycle=5. Remove (2,0,3): 2→1→0=2, cycle=5. Answer=5.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Graph (BFS / DFS / Dijkstra / DSU)
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: What Is a Cycle's Weight?
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+In a weighted undirected graph, a **cycle** is a closed walk visiting distinct vertices (except start = end). A cycle's **weight** is the sum of its edge weights.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Goal: find the minimum-weight cycle in the graph. If no cycle exists, return -1 (or some sentinel).
 
-So ask yourself:
+Example graph: edges `(1-2, 5), (2-3, 3), (1-3, 4)`.
+- Only cycle: 1 → 2 → 3 → 1, total weight 5 + 3 + 4 = 12. Minimum = **12**.
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: For each edge (u,v,w), remove it and compute shortest u→v path; answer = min over edges of (w + shortest_path).
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-A tempting first thought is to try every possible path from the start to the goal. The problem is that graphs have exponentially many paths. We need a traversal that visits each node at most a few times — that's exactly what BFS, DFS, and their weighted cousins give us.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-A minimum-weight cycle must contain at least one edge; enumerating each possible 'closing' edge and finding the shortest alternative route yields the minimum cycle weight.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Example: graph with edges `(1-2, 1), (2-3, 1), (3-1, 1), (1-4, 1), (4-5, 1), (5-1, 1)`.
+- Cycle 1-2-3-1: weight 3.
+- Cycle 1-4-5-1: weight 3.
+- Both equal. Minimum = **3**.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: Key Observation — Cycle Through a Fixed Edge
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+Suppose we fix an edge `(u, v, w)`. A cycle passing through this edge consists of the edge `(u, v)` plus some **u-to-v path that doesn't use this edge**.
 
-**The concept:** For each edge (u,v,w), remove it and compute shortest u→v path; answer = min over edges of (w + shortest_path).
+Weight of the cycle = `w + shortest_path(u, v, excluding edge (u, v))`.
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever nodes have relationships or connectivity matters → think Graph. 'Shortest path' without weights → BFS. With weights → Dijkstra. Just connectivity → DSU.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+If we can compute, for every edge, this "shortest path avoiding the edge itself", we can try every edge as the "cycle-closing edge" and take the overall minimum.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 3: Compute Shortest-Paths-Without-an-Edge
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+For each edge `(u, v, w)`:
+- Temporarily remove it from the graph.
+- Run Dijkstra (or BFS for unweighted) from u to find shortest distance to v.
+- If finite, candidate cycle weight = w + that distance.
+- Restore the edge.
 
-For each edge (u,v,w): temporarily remove it, run Dijkstra from u to v, cycle weight = w + dist. Track minimum. Return INF if no cycle.
+Track the minimum candidate across all edges.
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
+If the graph has m edges, this is **m Dijkstra runs**, each O((V + E) log V). Total: O(E · (V + E) log V). For moderate graphs, fine.
 
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-O(E · (V+E) log V). For small graphs use Floyd-Warshall based O(V³).
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+For positive weights, Dijkstra. For edge weights = 1 (unweighted), BFS.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 4: Why Does This Find the Minimum?
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+Any cycle contains at least one edge. If the true minimum cycle has edges `e_1, e_2, ..., e_k`, then for each of those edges `e_i` our algorithm tries: remove `e_i`, find shortest u-v path through the other `k-1` edges — which is exactly the rest of the cycle, weight = (total cycle weight) - w(e_i). Adding w(e_i) back gives the cycle's total weight.
 
-Edges {(0,1,1),(1,2,1),(2,0,3)}. Remove (0,1,1): path 0→2→1 = 4, cycle=5. Remove (1,2,1): 1→0→2=4, cycle=5. Remove (2,0,3): 2→1→0=2, cycle=5. Answer=5.
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+So the minimum cycle will be detected (exactly once per cycle edge, but we're taking a min — duplicates are fine).
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 5: Algorithm
 
-Complexity isn't magic — it's just counting the work.
+```
+best = +∞
+for each edge (u, v, w):
+    remove edge (u, v) from graph temporarily
+    d = dijkstra(u)[v]   # shortest u-to-v without this edge
+    if d < ∞:
+        best = min(best, w + d)
+    restore edge (u, v)
 
-Time: O(V·E log V) with Dijkstra.
+return best if best < ∞ else -1
+```
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
+For parallel edges (multigraph): when we "remove" the edge, only remove this specific instance; other parallel edges remain and offer alternative paths. (Typical competitive programming setup assumes simple graph.)
 
 ----------------------------------------
 
-## Step 9: C++ Implementation
+## Step 6: Trace on a Triangle
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+Graph: nodes 1, 2, 3. Edges: (1-2, 5), (2-3, 3), (1-3, 4).
+
+**Try edge (1-2, 5):** remove it. Dijkstra from 1 without edge (1-2): 1 → 3 (cost 4) → 2 (cost 4 + 3 = 7). Candidate = 5 + 7 = 12.
+
+**Try edge (2-3, 3):** remove it. Dijkstra from 2 without edge (2-3): 2 → 1 (cost 5) → 3 (cost 5 + 4 = 9). Candidate = 3 + 9 = 12.
+
+**Try edge (1-3, 4):** remove it. Dijkstra from 1 without edge (1-3): 1 → 2 (cost 5) → 3 (cost 5 + 3 = 8). Candidate = 4 + 8 = 12.
+
+All three give 12 — the same cycle, discovered from three perspectives. Minimum = **12**. ✓
+
+----------------------------------------
+
+## Step 7: Alternative — Floyd-Warshall for Small Graphs
+
+If V is small (≤ 400), Floyd-Warshall can find all-pairs shortest distances in O(V³). Then:
+- For each edge (u, v, w), the shortest cycle through u-v has weight `w + shortest_path_through_others(u, v)`.
+- With Floyd-Warshall we precompute all-pairs once and iterate edges.
+
+Caveat: standard Floyd-Warshall allows using the edge (u, v) itself as a direct path. So removing the edge requires care — either recompute excluding it, or use a smarter formulation.
+
+A cleaner approach for minimum cycle with Floyd-Warshall: for each pair of vertices (i, j), if there's an edge between them with weight w, then any path not using this edge directly (but through some intermediate k) combined with w forms a cycle of weight `w + dist[i][k] + dist[k][j]`. Minimize.
+
+----------------------------------------
+
+## Step 8: Name It
+
+**Minimum cycle via edge-removal Dijkstra.** A standard technique in graph theory, sometimes called the "Dijkstra one-out" trick.
+
+Related problems:
+- Girth of a graph (minimum cycle length in unweighted graph — BFS variant).
+- Second-shortest path (remove edges from the first shortest path).
+- Minimum spanning tree "cycle cancellation" proofs use similar per-edge reasoning.
+
+----------------------------------------
+
+## Step 9: Complexity
+
+Let V = vertices, E = edges.
+
+- **Dijkstra per edge**: O(E · (V + E) log V).
+- **Floyd-Warshall** (alternative): O(V³), better when V is small and E is large (dense graph).
+- **BFS per edge** (unweighted): O(E · (V + E)).
+
+Space: O(V + E) for the graph + per-Dijkstra arrays.
+
+----------------------------------------
+
+## Step 10: C++ Implementation (Dijkstra per Edge)
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-int dijk(vector<vector<pair<int,int>>>& g, int s, int t, int banU, int banV) {
-    int n = g.size();
-    vector<int> d(n, INT_MAX); d[s] = 0;
-    priority_queue<pair<int,int>, vector<pair<int,int>>, greater<>> pq;
-    pq.push({0, s});
-    while (!pq.empty()) {
-        auto [dd, u] = pq.top(); pq.pop();
-        if (dd > d[u]) continue;
-        for (auto [v, w] : g[u]) {
-            if ((u==banU && v==banV) || (u==banV && v==banU)) continue;
-            if (dd + w < d[v]) { d[v] = dd + w; pq.push({d[v], v}); }
+int minimumWeightCycle(int n, vector<vector<int>>& edges) {
+    // Build adjacency list; each edge stores an "index" so we can skip exactly one edge.
+    vector<vector<tuple<int,int,int>>> adj(n + 1);  // (neighbor, weight, edge_id)
+    for (int i = 0; i < (int)edges.size(); ++i) {
+        int u = edges[i][0], v = edges[i][1], w = edges[i][2];
+        adj[u].push_back({v, w, i});
+        adj[v].push_back({u, w, i});
+    }
+
+    auto dijkstraSkip = [&](int src, int dst, int skipId) {
+        vector<int> dist(n + 1, INT_MAX);
+        dist[src] = 0;
+        priority_queue<pair<int,int>, vector<pair<int,int>>, greater<>> pq;
+        pq.push({0, src});
+        while (!pq.empty()) {
+            auto [d, u] = pq.top(); pq.pop();
+            if (d > dist[u]) continue;
+            for (auto [v, w, id] : adj[u]) {
+                if (id == skipId) continue;
+                if (d + w < dist[v]) {
+                    dist[v] = d + w;
+                    pq.push({dist[v], v});
+                }
+            }
         }
-    }
-    return d[t];
-}
-int minWeightCycle(int n, vector<vector<int>>& edges) {
-    vector<vector<pair<int,int>>> g(n);
-    for (auto& e : edges) { g[e[0]].push_back({e[1], e[2]}); g[e[1]].push_back({e[0], e[2]}); }
+        return dist[dst];
+    };
+
     int best = INT_MAX;
-    for (auto& e : edges) {
-        int d = dijk(g, e[0], e[1], e[0], e[1]);
-        if (d != INT_MAX) best = min(best, d + e[2]);
+    for (int i = 0; i < (int)edges.size(); ++i) {
+        int u = edges[i][0], v = edges[i][1], w = edges[i][2];
+        int d = dijkstraSkip(u, v, i);
+        if (d != INT_MAX) best = min(best, w + d);
     }
-    return best;
+    return best == INT_MAX ? -1 : best;
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Key trick: store an edge `id` in the adjacency entries. When Dijkstra is run with `skipId = i`, edge i is ignored — this cleanly handles multigraphs too (only THIS specific edge is skipped).
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 11: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Directed graph minimum cycle.
-- Only positive weights guaranteed? Use BFS for unweighted.
-- Minimum mean cycle (Karp's algorithm).
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Girth (unweighted minimum cycle length).** Use BFS from each vertex; detect when BFS re-visits an ancestor through a different path. O(V · E).
+- **Return the cycle itself, not just weight.** Track parents in Dijkstra; reconstruct path from u to v when edge (u, v) is skipped.
+- **Negative-weight edges.** Dijkstra fails; use Bellman-Ford per edge (slower).
+- **Directed graph.** Same approach: remove edge (u → v), Dijkstra from v back to u. Edge directions matter.
+- **Dense graphs (V small).** Floyd-Warshall all-pairs + per-edge check is often faster.
+- **Why not just detect any cycle and report?** Because we want the **minimum-weight** cycle, not any.

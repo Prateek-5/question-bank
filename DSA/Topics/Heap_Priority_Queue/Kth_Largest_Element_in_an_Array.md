@@ -4,183 +4,176 @@
 https://leetcode.com/problems/kth-largest-element-in-an-array/
 
 **Topic:**
-Heap Priority Queue
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Min-heap of size k, or Quickselect.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> nums=[3,2,1,5,6,4], k=2. Heap: 3, [2,3], [1,2,3] (pop 1) → [2,3], push 5 → pop 2 → [3,5], push 6 → pop 3 → [5,6], push 4 (size=3>2) pop 4 → [5,6]. Top=5.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Heap / Priority Queue
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: What We're Finding
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Given an integer array `nums` and an integer k, return the **k-th largest element** (k-th in sorted-descending order — NOT the k-th distinct element).
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Example: `nums = [3, 2, 1, 5, 6, 4]`, k = 2. Sorted descending: [6, 5, 4, 3, 2, 1]. 2nd largest = **5**.
+Example: `nums = [3, 2, 3, 1, 2, 4, 5, 5, 6]`, k = 4. Sorted descending: [6, 5, 5, 4, 3, 3, 2, 2, 1]. 4th = **4**.
 
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Min-heap of size k, or Quickselect.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
+Note duplicates count as separate entries.
 
 ----------------------------------------
 
-## Step 3: Build Intuition (VERY IMPORTANT)
+## Step 2: Baseline — Sort Entire Array
 
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
+Easiest solution: sort in descending order, return `nums[k - 1]`. O(n log n) time.
 
-Your first instinct is probably to sort the whole array and pick from one end. That works — but it asks for more than we need. We don't care about every element's exact position, only the smallest or the largest at each step. Sorting does O(n log n) work just to reveal one extremum at a time. A heap does the same job with far less overhead per query.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Keep the k largest seen so far in a min-heap. The smallest among them (heap top) is the k-th largest overall after processing all elements.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+For large n, we're paying to sort everything when we only need the top k. Can we avoid that?
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 3: Min-Heap of Size k
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+Here's the classic heap idea. Maintain a **min-heap** of the top k largest elements seen so far.
 
-**The concept:** Min-heap of size k, or Quickselect.
+Why min-heap? Because the **smallest** of the top-k is the one we'd kick out when a bigger challenger arrives. A min-heap gives O(log k) access to its minimum.
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
+Algorithm:
+1. Push first k elements into the heap.
+2. For each remaining element, if it's larger than the heap's minimum (top), pop the min and push the new element.
+3. After processing all elements, the heap's minimum is the k-th largest.
 
-**Pattern recognition cue:**
+```
+heap = min-heap
+for x in nums:
+    heap.push(x)
+    if heap.size() > k: heap.pop()
+return heap.top()
+```
 
-**Whenever you see 'k-th', 'top-k', or 'merge sorted streams' → think Heap.**
+This keeps exactly k elements in the heap at all times (the current top k). The smallest of them is the k-th largest overall.
 
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-Iterate numbers, push into a min-heap, and pop when size > k. Final heap top is the answer. Quickselect partitions around a pivot and recurses into the half containing the k-th index for O(n) average.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
+Time: O(n log k). Space: O(k). Better than full sort when k << n.
 
 ----------------------------------------
 
-## Step 6: Final Approach
+## Step 4: Quickselect — Average O(n)
 
-Now let's crystallize everything we've learned into a clean algorithm.
+Even smarter: **Quickselect**. A partition-based algorithm.
 
-Heap is simple and stable. Quickselect is faster on average but has O(n²) worst case unless randomized.
+Idea: pick a pivot. Partition the array into "greater than pivot" and "less than pivot" (classic quicksort partition). Now you know where the pivot ranks.
+- If its rank is exactly k (counting from largest), return the pivot.
+- If k is among the "greater than" side, recurse into that side.
+- Else recurse into the "less than" side.
 
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
+Average: O(n) (each recursion halves the size; linear via master theorem). Worst: O(n²) if pivots are bad — mitigate with random pivot or median-of-three.
 
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+For interview purposes, the heap solution is usually accepted. Quickselect is faster but more fiddly.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 5: Heap Trace on `[3, 2, 1, 5, 6, 4]`, k = 2
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+```
+heap (min-heap, at most size 2):
+push 3: heap = [3]. size 1 ≤ 2.
+push 2: heap = [2, 3]. size 2 ≤ 2.
+push 1: heap = [1, 3, 2]. size 3 > 2. Pop min → 1. heap = [2, 3].
+push 5: heap = [2, 3, 5]. size 3 > 2. Pop min → 2. heap = [3, 5].
+push 6: heap = [3, 5, 6]. size 3 > 2. Pop min → 3. heap = [5, 6].
+push 4: heap = [4, 6, 5]. size 3 > 2. Pop min → 4. heap = [5, 6].
 
-nums=[3,2,1,5,6,4], k=2. Heap: 3, [2,3], [1,2,3] (pop 1) → [2,3], push 5 → pop 2 → [3,5], push 6 → pop 3 → [5,6], push 4 (size=3>2) pop 4 → [5,6]. Top=5.
+Heap min (top) = 5.
+```
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+Return **5**. ✓
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
-
-----------------------------------------
-
-## Step 8: Time and Space Complexity
-
-Complexity isn't magic — it's just counting the work.
-
-Heap: O(n log k). Quickselect: O(n) avg.
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
+Through the process, the heap always held the top-2 elements seen so far. At the end, heap = {5, 6}; the min of those is 5 — the 2nd largest.
 
 ----------------------------------------
 
-## Step 9: C++ Implementation
+## Step 6: Why Min-Heap (Not Max-Heap)?
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+Intuition check: why not a max-heap?
+
+If we put all elements in a max-heap and popped k times, we'd find the k-th largest. But that's O(n + k log n) — worse when k is close to n. And it requires storing all n elements, losing the O(k) space advantage.
+
+With min-heap of size k, we store just k elements. When a new one arrives, we need to know "is this bigger than the smallest we've kept?" The min-heap's top gives that instantly. Push and immediately pop if size exceeds k — net size stays k.
+
+----------------------------------------
+
+## Step 7: Name It
+
+**Heap-based selection**, specifically "bounded min-heap of size k" for top-k selection. Universal pattern:
+- Top k largest: min-heap of size k.
+- Top k smallest: max-heap of size k.
+- Streaming median: two heaps (min and max, balanced).
+
+Related problems:
+- K closest points to origin.
+- Top K frequent elements.
+- Kth smallest in sorted matrix.
+
+All use the same size-bounded heap idiom.
+
+**Quickselect** is the alternative when average-case O(n) matters and the data is in memory.
+
+----------------------------------------
+
+## Step 8: Complexity
+
+**Heap approach:** Time O(n log k), Space O(k).
+**Quickselect:** Average O(n), Worst O(n²), Space O(log n) for recursion (randomized pivot).
+**Full sort:** O(n log n), Space O(1) or O(log n).
+
+For large n and small k, heap wins. For arbitrary k, quickselect wins in practice.
+
+----------------------------------------
+
+## Step 9: C++ Implementation (Heap)
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-
 int findKthLargest(vector<int>& nums, int k) {
-    priority_queue<int, vector<int>, greater<int>> pq;
+    priority_queue<int, vector<int>, greater<int>> minHeap;
     for (int x : nums) {
-        pq.push(x);
-        if ((int)pq.size() > k) pq.pop();
+        minHeap.push(x);
+        if ((int)minHeap.size() > k) minHeap.pop();
     }
-    return pq.top();
+    return minHeap.top();
 }
 ```
 
-A few notes about the style:
+`priority_queue` with `greater<int>` gives a min-heap. Keep only k elements; the top is the answer.
 
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
+## Step 10: C++ Implementation (Quickselect)
 
+```cpp
+int quickselect(vector<int>& a, int lo, int hi, int k) {
+    // k = 0-based index in sorted-descending order we want.
+    int pivot = a[lo + rand() % (hi - lo + 1)];
+    int i = lo, j = hi;
+    // Partition so a[lo..i-1] > pivot, a[j+1..hi] < pivot.
+    // (3-way would also work for duplicates.)
+    while (i <= j) {
+        while (a[i] > pivot) i++;
+        while (a[j] < pivot) j--;
+        if (i <= j) { swap(a[i], a[j]); i++; j--; }
+    }
+    // After partition: a[lo..j] has elements >= pivot, a[i..hi] has <= pivot.
+    if (k <= j) return quickselect(a, lo, j, k);
+    if (k >= i) return quickselect(a, i, hi, k);
+    return a[k];
+}
+
+int findKthLargest(vector<int>& nums, int k) {
+    return quickselect(nums, 0, nums.size() - 1, k - 1);
+}
+```
+
+Random pivot avoids the adversarial worst case on pre-sorted inputs.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 11: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Implement via Quickselect.
-- Find the k-th smallest instead.
-- Stream version with online updates.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Kth smallest instead.** Flip: max-heap of size k, or descending quickselect.
+- **Find all k largest elements.** The heap's contents at the end are exactly the top k.
+- **Streaming: elements arrive one by one.** Perfect for heap approach — O(log k) per element.
+- **Memory constraint: can't fit all n elements.** Heap with O(k) space is the right choice.
+- **Worst case guarantee.** Use median-of-medians to pick pivots deterministically — Quickselect in worst-case O(n), but constants are high.
+- **Why `k - 1` in quickselect?** Because "kth largest" in 1-indexed language is index k-1 in a 0-indexed descending array.

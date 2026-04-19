@@ -4,183 +4,152 @@
 https://leetcode.com/problems/find-peak-element/
 
 **Topic:**
-Searching Binary Search
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Binary search using neighbor comparison.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> nums=[1,2,3,1]. m=1:2<3 → lo=2. m=2: 3>1 → hi=2. Return 2.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Searching / Binary Search
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Nail Down the Definition
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+A **peak** is an element that is **strictly greater than its neighbors**. The array has the boundary convention: out-of-bounds neighbors (beyond the array) are treated as `-∞`. So the first element is a peak if it's greater than the second; the last element is a peak if it's greater than the second-to-last.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Given an array, return the **index of any peak**. The problem promises at least one peak exists, and requires O(log n) time.
 
-So ask yourself:
+Example: `[1, 2, 3, 1]`. At index 2, the value 3 is greater than neighbors 2 and 1. Peak. Return 2.
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Binary search using neighbor comparison.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
+Example: `[1, 2, 1, 3, 5, 6, 4]`. Index 1 (value 2) is a peak (neighbors 1 and 1). Also index 5 (value 6) is a peak (neighbors 5 and 4). Either answer is accepted.
 
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
+Note: the problem allows **any** peak — not necessarily the global max. This turns out to matter for the algorithm.
 
 ----------------------------------------
 
-## Step 3: Build Intuition (VERY IMPORTANT)
+## Step 2: The Linear Scan First
 
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
+If we weren't constrained to O(log n), we could scan left to right and return the first i where `a[i] > a[i-1]` and `a[i] > a[i+1]` (with boundary care). O(n).
 
-A linear scan is the default. When the data is sorted *or* some predicate is monotonic over the search space, that linear scan becomes a logarithmic one. The core question to ask: 'If the answer is X, is the answer also valid for X+1?' If yes, binary search on the answer is on the table.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-An element is a peak iff greater than both neighbors. If nums[m] < nums[m+1], a peak exists in [m+1, n-1]; else in [0, m].
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+But the problem demands O(log n), which immediately suggests **binary search**. But binary search usually works on sorted data — here the array can be any shape. What property lets binary search work?
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 3: A Really Useful Observation
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+Look at any two adjacent elements `a[m]` and `a[m+1]`. They're different (since the problem guarantees strict comparisons, and typical constraints have distinct neighbors). Suppose `a[m] < a[m+1]` — the array is going up at that position.
 
-**The concept:** Binary search using neighbor comparison.
+**Claim:** a peak must exist in the right half `[m+1, n-1]`.
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
+Why? Consider the array restricted to `[m+1, n-1]`. Its leftmost element is `a[m+1]`. Its out-of-bounds neighbor on the left (as far as the sub-array is concerned) is `-∞`. So `a[m+1]` is either:
+- A peak of this sub-array (if `a[m+1] > a[m+2]`).
+- Not a peak, in which case `a[m+2] > a[m+1]` — the ascent continues. Apply the same argument to `[m+2, n-1]`.
 
-**Pattern recognition cue:**
+Either we find a peak at some point, or we reach the right boundary. At the right boundary `a[n-1]`, its right-side out-of-bounds neighbor is `-∞`, so `a[n-1]` is a peak iff `a[n-1] > a[n-2]`. Since we've been ascending all along (each step was `a[i] > a[i-1]`), yes — `a[n-1]` is a peak.
 
-**Whenever the input is sorted or the answer space is monotonic → think Binary Search.**
+Symmetric argument if `a[m] > a[m+1]`: a peak exists in `[0, m]`.
 
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-lo=0, hi=n-1. While lo<hi: m=(lo+hi)/2. If nums[m] < nums[m+1] lo=m+1 else hi=m. Return lo.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
+So comparing `a[m]` with `a[m+1]` tells us which half to search. That's the binary-search hook.
 
 ----------------------------------------
 
-## Step 6: Final Approach
+## Step 4: The Algorithm
 
-Now let's crystallize everything we've learned into a clean algorithm.
+```
+lo = 0, hi = n - 1
+while lo < hi:
+    m = (lo + hi) / 2
+    if a[m] < a[m + 1]:
+        lo = m + 1       # peak is in the right half (including m+1)
+    else:
+        hi = m           # peak is in the left half (including m)
+return lo
+```
 
-Binary search O(log n).
+When `lo == hi`, we've zeroed in on a peak index. The loop invariant guarantees this index is a peak.
 
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
-
-----------------------------------------
-
-## Step 7: Dry Run (Detailed)
-
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
-
-nums=[1,2,3,1]. m=1:2<3 → lo=2. m=2: 3>1 → hi=2. Return 2.
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+Two subtleties:
+- We use `a[m]` vs `a[m+1]`, which requires `m + 1 ≤ hi`. Since `m = (lo + hi) / 2` with `lo < hi`, we have `m ≤ hi - 1 < hi`, so `m + 1 ≤ hi`. Safe.
+- The loop terminates because each iteration shrinks the range by at least half.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 5: Trace on `[1, 2, 1, 3, 5, 6, 4]`
 
-Complexity isn't magic — it's just counting the work.
+```
+lo=0, hi=6.
+m=3. a[3]=3, a[4]=5. a[m] < a[m+1]. lo = m+1 = 4.
+lo=4, hi=6.
+m=5. a[5]=6, a[6]=4. a[m] > a[m+1]. hi = m = 5.
+lo=4, hi=5.
+m=4. a[4]=5, a[5]=6. a[m] < a[m+1]. lo = m+1 = 5.
+lo=5, hi=5. Loop exits.
+Return 5.
+```
 
-Time: O(log n). Space: O(1).
+a[5] = 6. Its neighbors are 5 and 4. It's a peak. ✓
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+Let me try `[1, 2, 3, 1]`:
+```
+lo=0, hi=3.
+m=1. a[1]=2, a[2]=3. a[m] < a[m+1]. lo=2.
+lo=2, hi=3.
+m=2. a[2]=3, a[3]=1. a[m] > a[m+1]. hi=2.
+lo=2, hi=2. Return 2.
+```
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+a[2] = 3. Peak. ✓
 
+----------------------------------------
+
+## Step 6: Why O(log n) Works Without Sorted Data
+
+Normally binary search requires a **monotonic predicate** over positions — something like "is a[m] >= target?" that flips from false to true at one point. Here, the predicate is "does the answer (a peak) lie in the right half?" and that predicate is monotonic in a different sense: it's determined entirely by the local comparison `a[m] vs. a[m+1]`.
+
+As long as each binary-search step reliably narrows down a region where we *know* a peak exists, we get O(log n). And the key argument (from Step 3) is that a region still ends in a peak regardless of what's outside — the boundary "−∞" on the sub-array guarantees this.
+
+That's the real insight: *local* comparisons at the midpoint tell us enough about *global* structure to halve the problem at each step. That's more powerful than sorting, in a sense.
+
+----------------------------------------
+
+## Step 7: Name It
+
+This is **binary search on a non-sorted array** — a common and powerful pattern. The same thinking applies to problems like:
+- Search in a rotated sorted array (different monotonic predicate).
+- Find a local minimum in a tree or graph.
+- Finding a local minimum in a bitonic array.
+
+The core mental move: "binary search doesn't need the array to be sorted — it needs a monotonic property over *decisions*."
+
+----------------------------------------
+
+## Step 8: Complexity
+
+Time: each iteration halves the search range. **O(log n)**.
+Space: **O(1)**.
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
-
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-int findPeakElement(vector<int>& a) {
-    int lo = 0, hi = a.size() - 1;
+int findPeakElement(vector<int>& nums) {
+    int lo = 0, hi = nums.size() - 1;
     while (lo < hi) {
-        int m = (lo + hi) / 2;
-        if (a[m] < a[m+1]) lo = m + 1;
-        else hi = m;
+        int m = lo + (hi - lo) / 2;        // overflow-safe midpoint
+        if (nums[m] < nums[m + 1]) {
+            lo = m + 1;                     // peak in right half
+        } else {
+            hi = m;                         // peak in left half (including m)
+        }
     }
     return lo;
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+One thing worth noting: `lo + (hi - lo) / 2` instead of `(lo + hi) / 2` prevents integer overflow for very large arrays. Small habit, always worth using.
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Peak in 2D matrix.
-- Multiple peaks (return all).
-- Bitonic array peak.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Find the global maximum, not any peak.** The problem guarantees adjacent elements are distinct — but there can be multiple peaks. To find global max, you need O(n). No log n trick there.
+- **2D Peak (matrix).** There's an O(m log n) algorithm: find the max of the middle row, then recurse into the half (top or bottom) containing its larger vertical neighbor. Neat extension of the 1D idea.
+- **What if duplicates are allowed in neighbors?** Harder — the monotonic predicate breaks. Worst case O(n).
+- **Find a local minimum instead.** Flip all comparisons in the algorithm.
+- **Ternary search on a bitonic (strictly increasing then strictly decreasing) array.** Since the shape is more constrained, ternary search is also O(log n) but uses a slightly different step.

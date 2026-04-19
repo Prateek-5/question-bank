@@ -4,183 +4,144 @@
 https://leetcode.com/problems/special-positions-in-a-binary-matrix/
 
 **Topic:**
-1 D and 2 D Arrays
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Row/column sums; a position is special if its cell is 1 and row sum = col sum = 1.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> mat=[[1,0,0],[0,0,1],[1,0,0]]. rowSum=[1,1,1], colSum=[2,0,1]. (0,0):rowSum=1,colSum=2 → no. (1,2):1,1 → yes. Special=1.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+1-D & 2-D Arrays
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Define "Special"
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+A position (r, c) in a binary matrix is **special** if:
+- `mat[r][c] == 1`, and
+- All other cells in **row r** are 0, and
+- All other cells in **column c** are 0.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Count special positions.
 
-So ask yourself:
+Example:
+```
+1 0 0
+0 0 1
+1 0 0
+```
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Row/column sums; a position is special if its cell is 1 and row sum = col sum = 1.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
+- (0, 0) = 1. Row 0: [1, 0, 0] — the 1 is only at (0, 0). Column 0: [1, 0, 1]. Two 1s. Not special.
+- (1, 2) = 1. Row 1: [0, 0, 1] — only at (1, 2). Column 2: [0, 1, 0] — only at (1, 2). Special. ✓
+- (2, 0) = 1. Column 0 has two 1s. Not special.
 
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-Your first instinct might be to loop over every possible subarray or sub-rectangle. That's cubic or worse. Often a prefix-sum precomputation, a clever index mapping, or a running-state scan collapses the work to linear time.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-A special 1 must be alone in its row and column. Precompute row/column sums, then count cells that are 1 with both sums equal to 1.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Count: 1.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: Precompute Row and Column Sums
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+Naive: for each cell that's 1, check row and column for other 1s. O(n²) cells × O(n + m) check = O(n² · (n+m)).
 
-**The concept:** Row/column sums; a position is special if its cell is 1 and row sum = col sum = 1.
+Better: **precompute** row sums and column sums in O(m·n). Then checking a cell is O(1).
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
+```
+rowSum[i] = sum of row i
+colSum[j] = sum of col j
 
-**Pattern recognition cue:**
+count = 0
+for each (r, c) with mat[r][c] == 1:
+    if rowSum[r] == 1 and colSum[c] == 1:
+        count++
+return count
+```
 
-**Whenever you need range sums or running aggregates → think Prefix Sum. Whenever you need fixed-size windows → Sliding Window.**
+Why does this work? If (r, c) is 1 and its row sum is 1, the only 1 in row r is at (r, c). Same for column.
 
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-Compute rowSum, colSum. For each (i,j) with mat[i][j]==1 and rowSum[i]==1 and colSum[j]==1, increment.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
+O(m · n) time, O(m + n) space.
 
 ----------------------------------------
 
-## Step 6: Final Approach
+## Step 3: Trace
 
-Now let's crystallize everything we've learned into a clean algorithm.
+Matrix:
+```
+1 0 0
+0 0 1
+1 0 0
+```
 
-Two passes.
+rowSum = [1, 1, 1]. colSum = [2, 0, 1].
 
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
+Check each cell with value 1:
+- (0, 0): rowSum[0]=1 ✓, colSum[0]=2 ✗. Not special.
+- (1, 2): rowSum[1]=1 ✓, colSum[2]=1 ✓. Special!
+- (2, 0): rowSum[2]=1 ✓, colSum[0]=2 ✗. Not special.
 
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
-
-----------------------------------------
-
-## Step 7: Dry Run (Detailed)
-
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
-
-mat=[[1,0,0],[0,0,1],[1,0,0]]. rowSum=[1,1,1], colSum=[2,0,1]. (0,0):rowSum=1,colSum=2 → no. (1,2):1,1 → yes. Special=1.
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+Count: 1. ✓
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 4: Why Precomputation Helps
 
-Complexity isn't magic — it's just counting the work.
+Without precomputation, for each 1-cell we re-scan its row and column. Redundant: many cells share rows/columns.
 
-Time: O(n*m). Space: O(n+m).
+Precomputing once (O(m·n)) amortizes the row/column sum cost. Each cell's check becomes O(1) lookup.
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
+Classic speed-up: pay upfront for aggregate structures, then query in constant time.
 
 ----------------------------------------
 
-## Step 9: C++ Implementation
+## Step 5: Name It
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+**Row-and-column sum preprocessing**. A specialized case of the more general prefix-sum technique.
+
+Related:
+- Lucky Numbers in a Matrix (per-row min vs per-column max).
+- Find Valid Matrix Given Row and Column Sums.
+- Row With Maximum Ones.
+
+Whenever a problem asks about "this cell's relationship to its row and column," precomputing aggregates is usually the move.
+
+----------------------------------------
+
+## Step 6: Complexity
+
+Time: **O(m · n)** for precomputation + O(m · n) for checking. Total O(m · n).
+Space: O(m + n) for row and column sums.
+
+Beats the naive O(m · n · (m + n)).
+
+----------------------------------------
+
+## Step 7: C++ Implementation
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-int numSpecial(vector<vector<int>>& M) {
-    int n = M.size(), m = M[0].size();
-    vector<int> rs(n,0), cs(m,0);
-    for (int i=0;i<n;i++) for (int j=0;j<m;j++) { rs[i]+=M[i][j]; cs[j]+=M[i][j]; }
-    int cnt = 0;
-    for (int i=0;i<n;i++) for (int j=0;j<m;j++)
-        if (M[i][j]==1 && rs[i]==1 && cs[j]==1) cnt++;
-    return cnt;
+int numSpecial(vector<vector<int>>& mat) {
+    int m = mat.size(), n = mat[0].size();
+    vector<int> rowSum(m, 0), colSum(n, 0);
+
+    for (int r = 0; r < m; ++r) {
+        for (int c = 0; c < n; ++c) {
+            rowSum[r] += mat[r][c];
+            colSum[c] += mat[r][c];
+        }
+    }
+
+    int count = 0;
+    for (int r = 0; r < m; ++r) {
+        for (int c = 0; c < n; ++c) {
+            if (mat[r][c] == 1 && rowSum[r] == 1 && colSum[c] == 1) {
+                count++;
+            }
+        }
+    }
+    return count;
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Two passes: first compute sums, then check cells. Clean separation.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 8: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Special positions in a non-binary matrix.
-- Return the positions.
-- Weighted version with thresholds.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Count "almost special" positions (row sum ≤ k, column sum ≤ k).** Just change the threshold.
+- **Positions unique to their row only (ignore column).** Remove column check.
+- **Return the positions, not just count.** Record (r, c) pairs.
+- **Dynamic matrix (cells change).** Maintain rowSum and colSum incrementally.
+- **3D version.** Row, column, depth sums.
+- **Matrix with values beyond 0/1.** Special might mean "distinct from row/column others"; different definition.

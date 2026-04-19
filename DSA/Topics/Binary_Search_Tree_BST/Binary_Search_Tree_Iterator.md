@@ -4,188 +4,232 @@
 https://leetcode.com/problems/binary-search-tree-iterator/
 
 **Topic:**
-Binary Search Tree BST
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Lazy in-order iterator using a stack.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> BST 7,3,15,_,_,9,20. Stack after init: [7,3]. next→3; stack=[7]. next→7, push 15 then 9 → [15,9]. next→9, stack=[15]. next→15, push 20 → [20].
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Binary Search Tree (BST)
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: What's an "Iterator" for a BST?
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Design a class that simulates a **forward iterator** over a BST's values in **sorted order** (equivalent to in-order traversal). The class needs:
+- `BSTIterator(root)` — constructor.
+- `next()` — return the next (smallest unreturned) value.
+- `hasNext()` — is there another value to return?
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Key constraint: `next()` and `hasNext()` should run in **O(1) average time**, and total memory should be **O(h)** where h is the tree's height.
 
-So ask yourself:
+Example:
+```
+    7
+   / \
+  3   15
+      / \
+     9   20
+```
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Lazy in-order iterator using a stack.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
+The sorted (in-order) values are: 3, 7, 9, 15, 20.
 
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-Many people's first instinct on a tree problem is to flatten it into an array and then work there. Sometimes that works — but it throws away the structural property of BSTs that makes them special: left < node < right. The right solutions exploit that property directly.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-An iterator should expose next() in O(1) amortized. Maintain a stack storing the left spine of the current subtree; on next() pop top, then push the left spine of its right child.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+```
+it = BSTIterator(root)
+it.next()     → 3
+it.next()     → 7
+it.hasNext()  → true
+it.next()     → 9
+...
+```
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: The Naive Approach — Flatten Upfront
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
-
-**The concept:** Lazy in-order iterator using a stack.
-
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever you need ordered operations (k-th smallest, range queries, predecessor/successor) → think BST.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-Init: push left-spine of root. next(): pop node, if it has a right child, push left-spine of the right. hasNext(): stack non-empty.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Amortized O(1) per next with O(h) space.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
-
-----------------------------------------
-
-## Step 7: Dry Run (Detailed)
-
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
-
-BST 7,3,15,_,_,9,20. Stack after init: [7,3]. next→3; stack=[7]. next→7, push 15 then 9 → [15,9]. next→9, stack=[15]. next→15, push 20 → [20].
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
-
-----------------------------------------
-
-## Step 8: Time and Space Complexity
-
-Complexity isn't magic — it's just counting the work.
-
-Time: O(1) amortized. Space: O(h).
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
-
-----------------------------------------
-
-## Step 9: C++ Implementation
-
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+Do a full in-order traversal in the constructor, store all values in an array, and use a running index for `next()` and `hasNext()`.
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-struct TreeNode { int val; TreeNode *left,*right; };
-
 class BSTIterator {
-    stack<TreeNode*> st;
-    void pushLeft(TreeNode* n) { while (n) { st.push(n); n = n->left; } }
+    vector<int> values;
+    int idx = 0;
 public:
-    BSTIterator(TreeNode* root) { pushLeft(root); }
-    int next() {
-        TreeNode* n = st.top(); st.pop();
-        pushLeft(n->right);
-        return n->val;
-    }
-    bool hasNext() { return !st.empty(); }
+    BSTIterator(TreeNode* root) { inorder(root, values); }
+    int next() { return values[idx++]; }
+    bool hasNext() { return idx < (int)values.size(); }
 };
 ```
 
-A few notes about the style:
+Works. `next` and `hasNext` are O(1). But memory is **O(n)** — we store every value. The problem wants O(h), where h can be much smaller than n (for a balanced BST, h = log n).
 
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Can we do the in-order traversal "lazily" — compute each next value on-demand?
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 3: What Does In-Order "Want" at Each Step?
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
+In-order traversal visits: left subtree, then node, then right subtree. If we were doing it recursively, the call stack implicitly tracks "where we are." Can we make that stack explicit and pause/resume it?
 
-- prev() operation (requires parent pointers or Morris).
-- Range iterator [lo, hi].
-- Iterator with updates during iteration.
+Yes. Here's the pattern:
+- To visit a subtree in-order, first walk all the way down its **left spine**, pushing each node onto a stack.
+- When we pop a node, we've "visited" it — return its value.
+- Then move to its right child and repeat the left-spine walk.
 
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
+The stack holds nodes whose values are yet to be returned, waiting for us to process their subtrees.
 
----
+----------------------------------------
 
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+## Step 4: The Algorithm
+
+```
+constructor(root):
+    stack = []
+    pushLeftSpine(root)
+
+pushLeftSpine(node):
+    while node:
+        stack.push(node)
+        node = node.left
+
+next():
+    node = stack.pop()
+    # before returning, prepare stack for the next call
+    pushLeftSpine(node.right)
+    return node.val
+
+hasNext():
+    return not stack.empty()
+```
+
+Reading the algorithm:
+- After the constructor, the stack holds the left spine starting from the root — these are the smallest values, with the top being the smallest.
+- When `next()` is called, the top is the smallest unvisited value. Pop it, return it.
+- But before returning, we need to make sure the stack's next top is the next-smallest value. That's done by pushing the left spine of the popped node's right child.
+
+Why does this work? In in-order traversal, after visiting a node, we go into its right subtree. And for the right subtree, the next value to visit is its leftmost — which is what `pushLeftSpine` queues up.
+
+----------------------------------------
+
+## Step 5: Trace Through an Example
+
+Tree:
+```
+    7
+   / \
+  3   15
+      / \
+     9   20
+```
+
+Constructor: pushLeftSpine(7). Walk 7 → 3 → null. Stack = [7, 3].
+
+```
+next() call 1:
+  pop 3. Stack = [7].
+  pushLeftSpine(3.right = null). No-op.
+  return 3.
+
+next() call 2:
+  pop 7. Stack = [].
+  pushLeftSpine(7.right = 15). Walk 15 → 9 → null. Stack = [15, 9].
+  return 7.
+
+next() call 3:
+  pop 9. Stack = [15].
+  pushLeftSpine(9.right = null). No-op.
+  return 9.
+
+next() call 4:
+  pop 15. Stack = [].
+  pushLeftSpine(15.right = 20). Walk 20 → null. Stack = [20].
+  return 15.
+
+next() call 5:
+  pop 20. Stack = [].
+  pushLeftSpine(20.right = null). No-op.
+  return 20.
+
+hasNext() → false.
+```
+
+Sequence: 3, 7, 9, 15, 20. ✓ Matches in-order traversal.
+
+----------------------------------------
+
+## Step 6: Why O(1) Average Per Call?
+
+Each node is pushed onto the stack exactly once (across the entire iteration) and popped exactly once. So the **total** work across n calls to `next()` is O(n). Amortized per call: O(1).
+
+Some individual `next()` calls might be O(h) (if pushing a long left spine), but most are O(1) (empty right subtree). Averaged out, O(1) per call.
+
+This is the amortized-O(1) trade-off: rare expensive operations compensated by many cheap ones.
+
+----------------------------------------
+
+## Step 7: Why O(h) Space?
+
+The stack only holds ancestors of the "current cursor position" — at most h at any moment (where h is the tree height). In a balanced BST, h = log n; in a skewed one, h = n.
+
+For a balanced BST with n = 10^6, that's log 10^6 ≈ 20 stack entries. Much better than 10^6 for the flatten-upfront approach.
+
+----------------------------------------
+
+## Step 8: Name It
+
+This is the classic **lazy in-order traversal** using an explicit stack. The pattern generalizes:
+- Iterators over sorted sets / maps (built into most standard libraries).
+- "On-demand" traversals where full materialization is too expensive.
+- Coroutines / generators in languages that support them (Python's `yield`, JavaScript generators).
+
+The key idea — maintain minimal state to resume traversal — applies anywhere you need lazy evaluation.
+
+----------------------------------------
+
+## Step 9: Complexity
+
+Time: `next()` is **O(1) amortized**. `hasNext()` is **O(1)**. Constructor is **O(h)** (pushing the initial left spine).
+
+Space: **O(h)** for the stack.
+
+----------------------------------------
+
+## Step 10: C++ Implementation
+
+```cpp
+class BSTIterator {
+    stack<TreeNode*> st;
+
+    void pushLeft(TreeNode* node) {
+        while (node) {
+            st.push(node);
+            node = node->left;
+        }
+    }
+
+public:
+    BSTIterator(TreeNode* root) {
+        pushLeft(root);
+    }
+
+    int next() {
+        TreeNode* node = st.top(); st.pop();
+        pushLeft(node->right);     // prepare for next in-order step
+        return node->val;
+    }
+
+    bool hasNext() {
+        return !st.empty();
+    }
+};
+```
+
+Reading the code:
+- The stack holds nodes whose values haven't been returned yet, in order (top = next to return).
+- `pushLeft` builds up the left spine — all ancestors plus the leftmost path.
+- `next()` pops the top, queues up its right subtree's left spine, returns the value.
+- The invariant "stack.top() is always the next node in in-order order" is maintained throughout.
+
+----------------------------------------
+
+## Step 11: Follow-up Questions
+
+- **Support `prev()` (backward iteration).** Maintain a second stack of the right spine, or use a doubly-linked traversal — trickier.
+- **Support random-access (jump to kth).** Augment BST nodes with subtree sizes; compute k-th in O(log n) per call.
+- **Iterator with filtering (only return values in a range [lo, hi]).** Skip nodes outside the range; use BST property to prune.
+- **Thread-safe iterator.** Lock during pushes/pops, or use snapshot-based iteration.
+- **Why not Morris traversal?** Morris is also O(1) space but modifies the tree during iteration, which is generally unacceptable for a library iterator.
+- **What if the tree is modified during iteration?** Standard iterators in most libraries are invalidated. You'd need a version-tagged iterator or copy-on-iterate semantics.

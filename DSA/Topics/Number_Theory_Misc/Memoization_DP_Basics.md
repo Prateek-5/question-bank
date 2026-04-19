@@ -4,179 +4,225 @@
 https://leetcode.com/tag/dynamic-programming/
 
 **Topic:**
-Number Theory Misc
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Memoized recursion — cache results to avoid recomputation.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> Fibonacci f(5)=f(4)+f(3); each subproblem computed once with memo[].
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Number Theory / Misc (concepts primer)
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Why Dynamic Programming Exists
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Some recursive problems have **overlapping subproblems** — the same sub-computation is requested many times. Without caching, this leads to exponential blowup.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Example: Fibonacci. `fib(n) = fib(n-1) + fib(n-2)`. Naive recursion calls `fib(5)` via two branches that both eventually hit `fib(2)`, `fib(1)`, ... many times. For `fib(40)`, we do ~1 billion redundant calls.
 
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Memoized recursion — cache results to avoid recomputation.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
+**DP's promise**: compute each subproblem **once**; reuse the answer.
 
 ----------------------------------------
 
-## Step 3: Build Intuition (VERY IMPORTANT)
+## Step 2: Two Flavors of DP
 
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
+**Top-down (memoization):** recursive function with a cache. Call it; it computes or returns cached.
 
-A brute-force factor check or a digit-by-digit loop is usually the first attempt. Cleverer approaches exploit modular arithmetic, parity, or digit-DP recurrences to get O(1) or O(log n) from what looks like an O(n) problem.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-DP problems often have overlapping subproblems; caching transforms exponential recursion into polynomial.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
-
-----------------------------------------
-
-## Step 4: Connect to Concept
-
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
-
-**The concept:** Memoized recursion — cache results to avoid recomputation.
-
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever digits, GCD, primes, or modular properties appear → check for closed-form solutions before coding loops.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-Identify state; write recurrence; cache via map/array; base case; return cached on hit.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Top-down recursion with memoization.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
-
-----------------------------------------
-
-## Step 7: Dry Run (Detailed)
-
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
-
-Fibonacci f(5)=f(4)+f(3); each subproblem computed once with memo[].
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
-
-----------------------------------------
-
-## Step 8: Time and Space Complexity
-
-Complexity isn't magic — it's just counting the work.
-
-Depends on state count × work per state.
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
-
-----------------------------------------
-
-## Step 9: C++ Implementation
-
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
-
-```cpp
-#include <bits/stdc++.h>
-using namespace std;
-int fib(int n, vector<int>& memo) {
-    if (n < 2) return n;
-    if (memo[n] != -1) return memo[n];
-    return memo[n] = fib(n-1, memo) + fib(n-2, memo);
-}
+```
+memo = {}
+def f(state):
+    if state in memo: return memo[state]
+    compute using recursive calls to f(other_states)
+    memo[state] = result
+    return result
 ```
 
-A few notes about the style:
+**Bottom-up (tabulation):** fill a table in the right order, so every value is ready when needed.
 
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
+```
+table = array sized over state space
+for state in some_topological_order:
+    table[state] = compute from table[earlier states]
+return table[goal]
+```
 
+Both have the same time complexity. Top-down is easier to derive from the recurrence; bottom-up is faster (no recursion overhead) and sometimes allows space optimization.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 3: Key Ingredients
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
+For DP to apply, your problem needs:
+- **Overlapping subproblems**: same subproblem computed multiple ways.
+- **Optimal substructure**: the optimal answer to the whole is built from optimal answers to subproblems.
 
-- Bottom-up conversion.
-- Space optimization with rolling arrays.
-- Recognizing DP states in new problems.
+If either is missing, DP won't help.
 
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
+Example of **no overlapping subproblems**: a pure tree recursion where every leaf is unique (like enumerating all permutations). DP doesn't reduce anything — it's just recursion.
 
----
+Example of **no optimal substructure**: finding the longest **simple** path in a general graph. Optimal for subpath doesn't imply optimal for the whole.
 
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+----------------------------------------
+
+## Step 4: Formulating a DP — Five Questions
+
+1. **What's the state?** What parameters uniquely identify a subproblem? (For LCS: (i, j) = positions in two strings.)
+2. **What's the base case?** Smallest state with a trivial answer. (LCS: if either i = 0 or j = 0, answer is 0.)
+3. **What's the recurrence?** How does a state relate to smaller states?
+4. **What order fills the table?** (Bottom-up only — which states depend on which?)
+5. **Where's the answer?** Which state(s) contain the final result?
+
+Answering all five gives the DP.
+
+----------------------------------------
+
+## Step 5: Walkthrough — Fibonacci
+
+**State**: n (one integer).
+**Base**: fib(0) = 0, fib(1) = 1.
+**Recurrence**: fib(n) = fib(n-1) + fib(n-2).
+**Order**: increasing n.
+**Answer**: fib(n).
+
+Top-down:
+```
+def fib(n, memo = {}):
+    if n < 2: return n
+    if n in memo: return memo[n]
+    memo[n] = fib(n-1, memo) + fib(n-2, memo)
+    return memo[n]
+```
+
+Bottom-up:
+```
+dp[0] = 0; dp[1] = 1
+for i in 2..n:
+    dp[i] = dp[i-1] + dp[i-2]
+return dp[n]
+```
+
+Both O(n) time, O(n) space. Bottom-up further optimized to O(1) space by keeping only two variables.
+
+----------------------------------------
+
+## Step 6: Walkthrough — Climbing Stairs
+
+n steps; 1 or 2 steps per move. How many ways to reach step n?
+
+**State**: i (current step).
+**Recurrence**: f(i) = f(i - 1) + f(i - 2).
+**Base**: f(0) = 1 (one way to stand at start), f(1) = 1.
+**Answer**: f(n).
+
+Same shape as Fibonacci. Many DP problems reduce to Fibonacci-like recurrences.
+
+----------------------------------------
+
+## Step 7: Walkthrough — Longest Common Subsequence
+
+Given strings s, t: length of longest common subsequence.
+
+**State**: (i, j) = "considering first i chars of s and first j chars of t."
+**Recurrence**:
+- If s[i-1] == t[j-1]: `lcs(i, j) = 1 + lcs(i-1, j-1)`.
+- Else: `lcs(i, j) = max(lcs(i-1, j), lcs(i, j-1))`.
+
+**Base**: `lcs(0, j) = 0 = lcs(i, 0)`.
+**Answer**: lcs(|s|, |t|).
+
+Bottom-up:
+```
+dp = 2D array (|s|+1) x (|t|+1), init 0
+for i in 1..|s|:
+    for j in 1..|t|:
+        if s[i-1] == t[j-1]:
+            dp[i][j] = 1 + dp[i-1][j-1]
+        else:
+            dp[i][j] = max(dp[i-1][j], dp[i][j-1])
+return dp[|s|][|t|]
+```
+
+O(|s| · |t|) time and space.
+
+----------------------------------------
+
+## Step 8: When to Use Memoization vs. Tabulation
+
+**Top-down (memoization)** is preferred when:
+- The state space is large but **many states are unreachable** from the initial call (e.g., sparse graphs of subproblems). Memoization visits only reachable states.
+- The recurrence naturally falls out of the problem — just add a cache.
+
+**Bottom-up (tabulation)** is preferred when:
+- All states are reachable and you want maximum speed (no recursion overhead).
+- You need space optimization — often a 2D table collapses to 1D.
+- Recursion depth would exceed the stack.
+
+----------------------------------------
+
+## Step 9: Common DP Patterns
+
+- **Linear (1D)**: Fibonacci, Climbing Stairs, Max Subarray (Kadane's variant).
+- **Grid (2D)**: Unique Paths, Edit Distance, LCS.
+- **Interval**: Matrix Chain Multiplication, Burst Balloons, Longest Palindromic Subsequence.
+- **Subset / Bitmask**: TSP, Assignment, Subset Sum variants.
+- **Tree DP**: rooted tree recurrences with children states.
+- **Digit DP**: count numbers in [0, N] with digit constraints.
+- **State-machine DP**: Buy/Sell Stock with Cooldown — multiple "modes" per index.
+
+Recognizing the pattern is half the battle.
+
+----------------------------------------
+
+## Step 10: Space Optimization
+
+Many 2D DPs only need the **current row and previous row** at any time. Collapse to two 1D arrays or one 1D array with careful updating order.
+
+Example: in LCS, `dp[i][j]` depends on `dp[i-1][j-1]`, `dp[i-1][j]`, `dp[i][j-1]`. Keep two rows: prev and curr.
+
+Some DPs (like Unique Paths II) can collapse to **one row** by updating in place — but requires care about when each cell's old value is still needed.
+
+----------------------------------------
+
+## Step 11: Common Pitfalls
+
+- **Wrong base case.** Double-check small inputs.
+- **Incorrect state definition.** If you can't derive the recurrence cleanly, your state is probably missing a dimension.
+- **Off-by-one in grid DP.** Indexing `dp[i][j]` with string index `s[i-1]` is a common confusion — stay consistent.
+- **Forgetting to memoize.** In top-down, if you forget to check the cache, you devolve to exponential.
+- **Over-engineering.** If the brute force is already O(n), don't DP it.
+- **Mutable default argument (Python).** `def f(n, memo={})` — the memo persists across calls, surprising many.
+
+----------------------------------------
+
+## Step 12: C++ Memoization Idiom
+
+```cpp
+vector<int> memo;
+int f(int n) {
+    if (n < 2) return n;
+    if (memo[n] != -1) return memo[n];
+    return memo[n] = f(n - 1) + f(n - 2);
+}
+
+// Caller:
+memo.assign(N + 1, -1);
+int ans = f(N);
+```
+
+The `memo[n] = ... ; return memo[n]` idiom is compact. For multi-dimensional state, use a nested vector or unordered_map.
+
+----------------------------------------
+
+## Step 13: Transitioning to Harder DPs
+
+Once you've mastered linear and grid DPs, harder ones usually involve:
+- **Augmented states**: an extra index or flag (e.g., "used item i or not").
+- **Aggregating over decisions**: min / max / sum / count over some choice per step.
+- **Ranges**: dp[l][r] for interval [l, r]; transitions split the interval.
+
+Practice: Edit Distance → Regular Expression Matching → Dungeon Game → Burst Balloons.
+
+----------------------------------------
+
+## Step 14: Follow-up / Exploration
+
+- **Memoization vs. tabulation — which is faster?** Tabulation, usually: no function call overhead, no recursion stack.
+- **Space-optimized DP on very long strings.** Rolling array; O(min(m, n)) space.
+- **Can all DPs be written as graph shortest-paths?** Often yes — state transitions form a DAG.
+- **DP with real-valued states.** Needs discretization; pure DP over floats rarely works.
+- **DP with non-polynomial state counts.** You might need better structure (exchange arguments, greedy, or reformulation).
+- **Why is greedy sometimes enough?** When the optimal substructure is so strong that local choices are always globally optimal — rare.

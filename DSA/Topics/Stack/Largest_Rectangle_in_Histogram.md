@@ -6,186 +6,176 @@ https://leetcode.com/problems/largest-rectangle-in-histogram/
 **Topic:**
 Stack
 
+----------------------------------------
+
+## Step 1: Read the Problem
+
+You have an array `heights` representing bar heights of a histogram (each bar has width 1). Find the area of the largest rectangle that fits entirely within the histogram. The rectangle must be **axis-aligned** and formed by a contiguous span of bars, with height equal to the shortest bar in that span.
+
+Example: `heights = [2, 1, 5, 6, 2, 3]`.
+
+The largest rectangle has area **10**, formed by bars at indices 2 and 3 (heights 5 and 6). Rectangle dimensions: height = min(5, 6) = 5, width = 2 → area = 10.
 
 ----------------------------------------
 
-## Step 1: Understand the Problem (Beginner Friendly)
+## Step 2: The Brute-Force Idea
 
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
+Every rectangle in the histogram is characterized by:
+- A left boundary `l`.
+- A right boundary `r`.
+- A height = `min(heights[l..r])`.
 
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
+So we try every `(l, r)` pair and compute its min. That's O(n³) naively, or O(n²) if we extend `r` and track the running min incrementally.
 
-**In plain words:** Monotonic increasing stack of bar indices.
+```cpp
+int best = 0;
+for (int l = 0; l < n; ++l) {
+    int min_h = INT_MAX;
+    for (int r = l; r < n; ++r) {
+        min_h = min(min_h, heights[r]);
+        best = max(best, min_h * (r - l + 1));
+    }
+}
+```
 
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> h=[2,1,5,6,2,3] → max area 10.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
-
-----------------------------------------
-
-## Step 2: Break Down the Problem
-
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
-
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
-
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Monotonic increasing stack of bar indices.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
+O(n²). For `n = 10^5`, too slow. We need better.
 
 ----------------------------------------
 
-## Step 3: Build Intuition (VERY IMPORTANT)
+## Step 3: Change the Lens
 
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
+Instead of parameterizing rectangles by their left/right boundaries, parameterize them by their **height-determining bar**.
 
-You might try to scan multiple times, or use recursion to handle nested structure. A stack lets you remember just enough of the past to resolve it efficiently — especially 'next greater' or 'matching brackets' questions.
+Every rectangle in the histogram has one (or more) bar that's the shortest in its span. Let's say bar `i` is "the shortest bar" in some candidate rectangle. Then:
 
-So how do we get smarter? Let's build the correct intuition step by step.
+- The rectangle has height `heights[i]`.
+- Its left boundary extends as far left as possible without encountering a strictly shorter bar.
+- Its right boundary extends as far right as possible without encountering a strictly shorter bar.
 
-For each bar, the largest rectangle with it as the shortest bar has width equal to the distance between the previous smaller and next smaller bars.
+If we define:
+- `L[i]` = index of the nearest bar to the left of `i` with height **strictly less** than `heights[i]` (or -1 if none).
+- `R[i]` = index of the nearest bar to the right of `i` with height strictly less than `heights[i]` (or `n` if none).
 
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
+Then the largest rectangle where `i` is the shortest bar has:
+- Height = `heights[i]`.
+- Width = `R[i] - L[i] - 1`.
+- Area = `heights[i] * (R[i] - L[i] - 1)`.
 
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
+The overall answer is the max over all `i`.
 
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
+Why does this work? Every rectangle has some bar that's tied for shortest. For that bar, the rectangle's width can't extend past any strictly shorter bar (else that bar would be the shortest). So each rectangle gets counted when we process its shortest bar.
 
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
-
-----------------------------------------
-
-## Step 4: Connect to Concept
-
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
-
-**The concept:** Monotonic increasing stack of bar indices.
-
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever you see nested structure, matching brackets, or 'next greater element' → think Stack / Monotonic Stack.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+This reduces the problem to: **find `L[i]` and `R[i]` for every `i`**. If we can do that in O(n) total, we're done.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 4: Finding Previous / Next Smaller with a Monotonic Stack
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+"Previous smaller element" and "next smaller element" are textbook monotonic-stack problems. The same trick we used for Daily Temperatures, in the opposite direction.
 
-Append sentinel 0. For each i: while top's height > h[i], pop as height; width = stack.empty() ? i : i - stack.top() - 1. Track max. Push i.
+Let me construct `L[]`. Scan left to right, maintaining a stack of indices whose heights are strictly increasing (from bottom to top).
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
+- When we process `i`, pop the stack while its top's height is **≥** `heights[i]`. The top after popping (if any) is the first index to the left with height strictly less than `heights[i]` — that's `L[i]`.
+- Push `i`.
 
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
+Wait — let me get the comparison right. We want previous *strictly smaller*, so we pop everything that's ≥ `heights[i]`. After popping, the top (if it exists) has height < `heights[i]`, which is exactly `L[i]`.
 
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Monotonic stack.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+Symmetric for `R[]`: scan right to left.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 5: A Cleaner One-Pass Version
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+We can avoid two passes with a single pass that resolves `R[]` as we go. Here's the idea:
 
-h=[2,1,5,6,2,3] → max area 10.
+- Maintain a stack of indices whose heights form a strictly increasing sequence (bottom to top).
+- When we see a new height `heights[i]` that's smaller than the stack's top height, the top's rectangle is **done**: its right boundary is `i` (the first strictly smaller element to the right).
+- Pop it, compute its rectangle: height = the popped bar, width = `i - new_top - 1` (where `new_top` is the index below the popped one, or -1 if stack is now empty).
+- Keep popping while the top is ≥ current.
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+At the end, add a sentinel bar of height 0 at the right to force all remaining bars out of the stack.
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+This is the classic single-pass O(n) algorithm.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 6: Trace on `[2, 1, 5, 6, 2, 3]` with Sentinel
 
-Complexity isn't magic — it's just counting the work.
+I'll append a 0 at the end so the final pops happen naturally. Heights: `[2, 1, 5, 6, 2, 3, 0]`.
 
-Time: O(n). Space: O(n).
+```
+i=0 (h=2): stack empty. push. stack=[0].
+i=1 (h=1): top is 0 (h=2) ≥ 1. pop. popped_h=2; new_top is empty → width = i-(-1)-1 = 1. area = 2*1 = 2. best=2.
+          stack empty, push 1. stack=[1].
+i=2 (h=5): top is 1 (h=1) < 5. push. stack=[1, 2].
+i=3 (h=6): top is 2 (h=5) < 6. push. stack=[1, 2, 3].
+i=4 (h=2): top is 3 (h=6) ≥ 2. pop. popped_h=6; new_top is 2 → width = 4-2-1 = 1. area = 6*1 = 6. best=6.
+          top is 2 (h=5) ≥ 2. pop. popped_h=5; new_top is 1 → width = 4-1-1 = 2. area = 5*2 = 10. best=10.
+          top is 1 (h=1) < 2. push. stack=[1, 4].
+i=5 (h=3): top is 4 (h=2) < 3. push. stack=[1, 4, 5].
+i=6 (h=0): top is 5 (h=3) ≥ 0. pop. popped_h=3; new_top=4 → width = 6-4-1 = 1. area = 3. best=10.
+          top is 4 (h=2) ≥ 0. pop. popped_h=2; new_top=1 → width = 6-1-1 = 4. area = 2*4 = 8. best=10.
+          top is 1 (h=1) ≥ 0. pop. popped_h=1; new_top empty → width = 6-(-1)-1 = 6. area = 6. best=10.
+          stack empty, push 6. stack=[6].
+```
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+Final best = **10**. ✓
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+Notice the rectangle of area 8 (bars [1,5,6,2] with height 2) — that's the "width=4" rectangle from popping the bar of height 2. And of course the 5×2 = 10 rectangle is the answer.
 
+----------------------------------------
+
+## Step 7: Why This Works
+
+When we pop bar `j` from the stack:
+- The stack's new top (or -1 if empty) is the **previous strictly smaller index** for `j`.
+- The current `i` is the **next strictly smaller or equal index** for `j` (we pop when top is ≥ current).
+
+Wait — "smaller or equal"? Let me re-check. Yes, we pop when `heights[top] >= heights[i]`. That means `i` might have height equal to `heights[j]`. Does that break correctness?
+
+No. Here's why: if bar `j` and bar `i` have equal heights, and there are no strictly smaller bars between them, then the rectangle spanning both with height `heights[j]` has the same height. We might compute `j`'s rectangle with a narrower width, and `i`'s rectangle with a wider width. We'd miss `j`'s "true" rectangle only if no larger rectangle is later computed — but the wider rectangle containing `i` will have the same height and larger width, so it strictly dominates. So we never miss the best.
+
+Proof of correctness at the right boundary mirrors this argument.
+
+----------------------------------------
+
+## Step 8: Complexity
+
+Time: each index is pushed at most once and popped at most once. **O(n)**.
+Space: stack can hold up to n indices. **O(n)**.
+
+From O(n²) brute force to O(n) via the "for each bar, find how far it can extend left and right" reformulation. The monotonic stack is how we compute both boundaries cheaply.
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
-
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
 int largestRectangleArea(vector<int>& h) {
-    h.push_back(0);
-    stack<int> st; int best = 0;
+    h.push_back(0);                  // sentinel to flush the stack at the end
+    stack<int> st;
+    int best = 0;
     for (int i = 0; i < (int)h.size(); ++i) {
-        while (!st.empty() && h[st.top()] > h[i]) {
+        while (!st.empty() && h[st.top()] >= h[i]) {
             int top = st.top(); st.pop();
-            int w = st.empty() ? i : i - st.top() - 1;
-            best = max(best, h[top] * w);
+            int left = st.empty() ? -1 : st.top();
+            int width = i - left - 1;
+            best = max(best, h[top] * width);
         }
         st.push(i);
     }
-    h.pop_back();
+    h.pop_back();                    // leave input unchanged
     return best;
 }
 ```
-
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Maximal rectangle in 0/1 matrix.
-- Rectangles with at most k ones.
-- Dynamic histogram queries.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Maximal Rectangle (in a binary matrix):** treat each row as a histogram where heights[j] = consecutive 1s above position j; apply this algorithm per row. O(m·n).
+- **Return the rectangle's actual bounds (left, right, height).** Track them when updating `best`.
+- **Largest square (rather than rectangle).** Can be done with a simpler DP (O(m·n)) — you don't need this stack trick.
+- **What if heights can be very large (10^9)?** Use `long long` for the area; other logic unchanged.
+- **Minimum rectangle area containing at least k ones (for 2D).** Builds on this pattern with an extra constraint.
+- **2D version — largest sub-rectangle in a histogram of histograms.** This problem extends naturally to higher dimensions via the same "flatten" trick.

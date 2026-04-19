@@ -4,194 +4,214 @@
 https://leetcode.com/problems/find-k-pairs-with-smallest-sums/
 
 **Topic:**
-Heap Priority Queue
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Min-heap over pair indices — BFS-like expansion from the smallest sum.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> nums1 = [1,7,11], nums2 = [2,4,6], k = 3. Heap: (3,0,0). Pop (1,2). Push (5,1,0),(7,0,1). Pop (5,1,0) → (7,2). Push (9,2,0),(11,1,1). Pop (7,0,1) → (1,4). Result = [[1,2],[7,2],[1,4]].
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Heap / Priority Queue
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Read the Problem
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+You have two sorted integer arrays `nums1` and `nums2` (both ascending), and an integer `k`. Return the `k` pairs `(u, v)` with `u` from `nums1` and `v` from `nums2` having the **smallest sums**.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Example: `nums1 = [1, 7, 11]`, `nums2 = [2, 4, 6]`, k = 3.
 
-So ask yourself:
+All pairs and sums:
+- (1, 2) = 3
+- (1, 4) = 5
+- (1, 6) = 7
+- (7, 2) = 9
+- (7, 4) = 11
+- (7, 6) = 13
+- (11, 2) = 13
+- (11, 4) = 15
+- (11, 6) = 17
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Min-heap over pair indices — BFS-like expansion from the smallest sum.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
+Sorted by sum: 3, 5, 7, 9, 11, 13, 13, 15, 17.
 
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
+Top 3 smallest: (1,2), (1,4), (1,6).
 
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-Your first instinct is probably to sort the whole array and pick from one end. That works — but it asks for more than we need. We don't care about every element's exact position, only the smallest or the largest at each step. Sorting does O(n log n) work just to reveal one extremum at a time. A heap does the same job with far less overhead per query.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Sorted arrays nums1 and nums2 mean the smallest possible sum is nums1[0] + nums2[0]. The next smallest comes from expanding either the first-array or second-array index. Treat it like a shortest-path expansion in a grid of sums.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Return these three pairs.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: Naive Approach
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+Enumerate all pairs (n × m of them), sort by sum, take the first k. Time: O(n·m · log(n·m)). Space: O(n·m).
 
-**The concept:** Min-heap over pair indices — BFS-like expansion from the smallest sum.
+For small inputs, fine. For large n, m (say 10^5 each), we'd be enumerating 10^10 pairs — completely infeasible.
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever you see 'k-th', 'top-k', or 'merge sorted streams' → think Heap.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+We need something smarter that exploits the fact that **both arrays are sorted**.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 3: A Useful Mental Picture — 2D Grid of Sums
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+Imagine a grid where cell (i, j) holds `nums1[i] + nums2[j]`. Because both arrays are sorted:
+- Moving right (increasing j): sums increase (nums2 is sorted).
+- Moving down (increasing i): sums increase (nums1 is sorted).
 
-Push (nums1[0]+nums2[0], 0, 0) into a min-heap. Pop the smallest pair, record it, and push its neighbors (i+1, j) and (i, j+1). Use a visited set to avoid duplicates. Stop when we have k pairs or the heap is empty. This explores sums in non-decreasing order.
+So the grid is "monotone" in both directions. The **smallest sum** is at (0, 0). The **k smallest sums** form some staircase shape in the top-left.
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
+Visualizing:
+```
+(0,0)=3   (0,1)=5   (0,2)=7
+(1,0)=9   (1,1)=11  (1,2)=13
+(2,0)=13  (2,1)=15  (2,2)=17
+```
 
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
+Top 3 smallest are (0,0), (0,1), (0,2) — the first row's first three. Fits the answer.
 
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Start at corner (0,0), grow the frontier via a min-heap of sums. Mark visited cells. This yields the k smallest sums efficiently without enumerating all n*m pairs.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+In general the k smallest won't all be on one row — they form a more complex shape. We need to efficiently explore the grid in sum order.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 4: Exploring the Grid in Sum Order — Use a Min-Heap
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+Here's the key idea. Start at (0, 0) — definitely the smallest sum. Push it into a min-heap keyed on sum. Then pop the smallest (that's one of our answers), and push its "neighbors" — (i+1, j) and (i, j+1) — into the heap.
 
-nums1 = [1,7,11], nums2 = [2,4,6], k = 3. Heap: (3,0,0). Pop (1,2). Push (5,1,0),(7,0,1). Pop (5,1,0) → (7,2). Push (9,2,0),(11,1,1). Pop (7,0,1) → (1,4). Result = [[1,2],[7,2],[1,4]].
+Repeat k times.
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+This is BFS-style exploration of the grid in sum order. Crucially, we only ever push neighbors of popped cells, so we don't enumerate the full grid.
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
+Gotcha: we might push the same cell from multiple predecessors. E.g., (1, 1) could be pushed from (0, 1) or (1, 0). To avoid duplicates, **maintain a visited set**.
 
+```
+heap = min-heap
+seen = empty set
+
+push (nums1[0] + nums2[0], 0, 0)
+seen.add((0, 0))
+
+result = []
+while result.size < k and heap is not empty:
+    (sum, i, j) = heap.pop()
+    result.append((nums1[i], nums2[j]))
+    if i + 1 < n and (i + 1, j) not in seen:
+        push (nums1[i+1] + nums2[j], i+1, j); seen.add((i+1, j))
+    if j + 1 < m and (i, j + 1) not in seen:
+        push (nums1[i] + nums2[j+1], i, j+1); seen.add((i, j+1))
+
+return result
+```
+
+At any point, the heap contains "frontier" cells — cells that are candidates for the next smallest. We always pop the truly smallest.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 5: Trace on the Example
 
-Complexity isn't magic — it's just counting the work.
+nums1 = [1, 7, 11], nums2 = [2, 4, 6], k = 3.
 
-Time: O(k log k). Space: O(k) for heap and visited set.
+```
+heap: [(3, 0, 0)]. seen: {(0, 0)}.
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+Pop (3, 0, 0). result = [(1, 2)]. Push (1+4=5, 0, 1) and (7+2=9, 1, 0). seen: +{(0,1), (1,0)}.
+heap: [(5, 0, 1), (9, 1, 0)].
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+Pop (5, 0, 1). result = [(1, 2), (1, 4)]. Push (1+6=7, 0, 2) and (7+4=11, 1, 1). seen: +{(0,2), (1,1)}.
+heap: [(7, 0, 2), (9, 1, 0), (11, 1, 1)].
 
+Pop (7, 0, 2). result = [(1, 2), (1, 4), (1, 6)]. 
+(0, 3) out of bounds for nums2. Push (7+6=13, 1, 2). seen: +{(1,2)}.
+heap: [(9, 1, 0), (11, 1, 1), (13, 1, 2)].
+
+result.size == 3 == k. Stop.
+```
+
+Return `[(1, 2), (1, 4), (1, 6)]`. ✓
 
 ----------------------------------------
 
-## Step 9: C++ Implementation
+## Step 6: Why This Works Correctly
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+**Invariant:** at any moment, the heap contains all the "frontier" cells — cells whose predecessors have been popped but they themselves haven't. The smallest-sum frontier cell is the next overall smallest unpopped cell.
+
+**Claim:** when we pop a cell, it's the next smallest among all unpopped cells.
+
+*Proof sketch:* Any unpopped cell either is in the frontier (and thus in the heap) or is some descendant of a frontier cell. Descendants have sums ≥ their ancestor's sum (monotonicity). So the min of the frontier ≤ min of unpopped overall. Popping the heap top gives us that min.
+
+This is the standard argument for grid-BFS-by-priority.
+
+----------------------------------------
+
+## Step 7: Complexity
+
+Time: we pop k times. Each pop: O(log heap-size). Heap size is bounded by O(k) (we push at most 2 per pop, so heap grows by at most 1 per pop). Total: **O(k log k)**.
+Space: O(k) for heap and seen set.
+
+Dramatic improvement over O(n·m log(n·m)) for small k.
+
+----------------------------------------
+
+## Step 8: An Even Cleaner Initialization
+
+An alternative: seed the heap with the first column `(nums1[0..min(k,n)-1] + nums2[0], i, 0)`. Then we only ever push "right" (j+1), never "down." Avoids the visited set because each cell can only be reached by a single path.
+
+```
+for i in 0..min(k, n)-1:
+    push (nums1[i] + nums2[0], i, 0)
+
+for _ in 1..k:
+    (sum, i, j) = heap.pop()
+    result.append((nums1[i], nums2[j]))
+    if j + 1 < m:
+        push (nums1[i] + nums2[j+1], i, j+1)
+```
+
+This is a clever compression. Equivalent result, no `seen` tracking.
+
+Why does it work? Every cell (i, j) is reached through exactly one path: start at (i, 0), go right j steps. No duplicates possible.
+
+----------------------------------------
+
+## Step 9: Name It
+
+This is **multi-source BFS / k-way merge in a priority queue**. In fact, we can view the problem as merging sorted sequences:
+- For each i, the sequence `nums1[i] + nums2[0], nums1[i] + nums2[1], ..., nums1[i] + nums2[m-1]` is sorted (since nums2 is sorted).
+- We have n such sequences. Merging them and taking the first k elements is classic k-way merge.
+
+The heap-based technique is the same pattern as Merge K Sorted Lists: one head from each list, pop the smallest, advance that list.
+
+----------------------------------------
+
+## Step 10: C++ Implementation
+
+Clean version with "seed first column, advance right only":
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-
-vector<vector<int>> kSmallestPairs(vector<int>& a, vector<int>& b, int k) {
-    using T = tuple<int,int,int>;
+vector<vector<int>> kSmallestPairs(vector<int>& nums1, vector<int>& nums2, int k) {
+    int n = nums1.size(), m = nums2.size();
+    // Priority queue: (sum, i, j)
+    using T = tuple<int, int, int>;
     priority_queue<T, vector<T>, greater<T>> pq;
-    set<pair<int,int>> seen;
-    pq.push({a[0]+b[0], 0, 0});
-    seen.insert({0,0});
-    vector<vector<int>> res;
-    while (k-- && !pq.empty()) {
-        auto [s, i, j] = pq.top(); pq.pop();
-        res.push_back({a[i], b[j]});
-        if (i+1 < (int)a.size() && !seen.count({i+1,j})) {
-            pq.push({a[i+1]+b[j], i+1, j}); seen.insert({i+1,j});
-        }
-        if (j+1 < (int)b.size() && !seen.count({i,j+1})) {
-            pq.push({a[i]+b[j+1], i, j+1}); seen.insert({i,j+1});
+
+    for (int i = 0; i < min(k, n); ++i) {
+        pq.push({nums1[i] + nums2[0], i, 0});
+    }
+
+    vector<vector<int>> result;
+    while (!pq.empty() && (int)result.size() < k) {
+        auto [sum, i, j] = pq.top(); pq.pop();
+        result.push_back({nums1[i], nums2[j]});
+        if (j + 1 < m) {
+            pq.push({nums1[i] + nums2[j + 1], i, j + 1});
         }
     }
-    return res;
+    return result;
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Notes:
+- `min(k, n)` avoids seeding more than we need.
+- `tuple<int,int,int>` with `greater<>` makes a min-heap keyed on the first element (the sum).
+- The loop exits when we've collected k pairs or run out of candidates.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 11: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Generalize to k sorted arrays (Merge k Sorted Lists).
-- What if arrays are not sorted? Pre-sort first — O(n log n + k log k).
-- Solve the k-th smallest sum (return only one value).
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Both arrays infinite / very long.** Works — the heap version only explores enough cells to fill k.
+- **Three sorted arrays instead of two.** Generalize the grid to 3D; push "right," "down," "forward" neighbors (with visited tracking).
+- **K largest sums.** Symmetric — start at the bottom-right, expand toward top-left, use max-heap.
+- **Count pairs whose sum ≤ threshold (not top-k).** Different problem — binary search or two-pointer sweep.
+- **Unsorted arrays.** Sort them first, O(n log n + m log m), then apply this algorithm.
+- **Guarantee exactly k pairs (not fewer).** Problem usually assumes n·m ≥ k; if fewer, return whatever's available.

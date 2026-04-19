@@ -4,190 +4,248 @@
 https://leetcode.com/problems/maximum-xor-of-two-numbers-in-an-array/
 
 **Topic:**
-Trie Bit Manipulation Trie
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Bit Trie (size-2 branches) to pair bits maximizing XOR.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> nums=[3,10,5,25,2,8]. Max XOR = 25 ^ 5 = 28.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Trie / Bit Manipulation Trie
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: What's XOR?
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+For two numbers, `a XOR b` compares them bit by bit. Each bit of the result is 1 if the corresponding bits of a and b **differ**, and 0 if they match.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Example in 5-bit:
+- 3 (00011) XOR 5 (00101) = 00110 = 6. The two numbers differ in bits 1 and 2.
+- 25 (11001) XOR 5 (00101) = 11100 = 28. Differ in bits 2, 3, 4.
 
-So ask yourself:
+**Maximizing XOR** means finding two numbers that differ in as many high-value bits as possible.
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Bit Trie (size-2 branches) to pair bits maximizing XOR.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
+Given an array `nums`, find the max value of `a XOR b` over all pairs.
 
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-You might try hashing every word or running regex matches. For prefix queries that's overkill — tries share prefixes so matching a new query touches only relevant nodes. For XOR problems, a binary trie lets you greedily chase the opposite bit at each level.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Insert each number's bits into a binary trie. For each number, traverse preferring the opposite bit at each level to maximize XOR.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Example: `[3, 10, 5, 25, 2, 8]` → max XOR is 25 XOR 5 = 28.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: Brute Force and Its Limit
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+Try all pairs: O(n²). Simple. For n = 10^5, that's 10^10 — too slow.
 
-**The concept:** Bit Trie (size-2 branches) to pair bits maximizing XOR.
-
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever you see prefix queries, dictionary lookups, or max-XOR → think Trie.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+We need something smarter. The question becomes: can we find the optimal pair without checking every one?
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 3: Think Bit-by-Bit, Not Number-by-Number
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+Instead of picking two numbers and comparing, think about the **max XOR's binary representation**.
 
-Build a bit-trie (MSB to LSB). For each x, greedily pick child with bit (1 - xbit) where possible; accumulate XOR value.
+We want each bit of the max XOR to be 1, ideally. But we can't just freely choose 1s — we're constrained by what the array contains.
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
+**Greedy idea:** go bit by bit from the most significant bit (say, bit 30) down to bit 0. At each bit, ask: **"Can we find two numbers in the array whose XOR has a 1 at this bit, consistent with the bits we've already 'locked in'?"**
 
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
+If yes, set this bit to 1 in our running max. If no, it stays 0.
 
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Bit-Trie with 32-level depth.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+Higher bits matter more (bit 30 adds 2^30 ≈ 10^9 to the value), so this greedy is optimal: setting a 1 at a high bit beats anything we could gain at lower bits.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 4: How to Answer "Can We Find Two Numbers With This XOR Pattern?"
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+Suppose we've decided max_xor's top bits so far. At the current bit, we want to check: does the array have two numbers x, y such that `x XOR y` equals `max_xor | (1 << current_bit)`, restricted to the bits decided so far?
 
-nums=[3,10,5,25,2,8]. Max XOR = 25 ^ 5 = 28.
+Restricting to "bits decided so far" means we only care about the higher bits; ignore the lower ones.
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+Here's the trick. Let `mask` be a bitmask keeping bits from the current one upward. Compute the "high-bit prefix" of each number: `x & mask`. If two different prefixes in the array XOR to `candidate = max_xor | (1 << current_bit)`, then those prefixes' source numbers have the required XOR pattern at the high bits.
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
+Mathematical insight: `a XOR b = candidate` is equivalent to `candidate XOR a = b`. So for each prefix `a`, check if `candidate XOR a` is also a prefix in the array. If yes, we've found a pair.
 
-
-----------------------------------------
-
-## Step 8: Time and Space Complexity
-
-Complexity isn't magic — it's just counting the work.
-
-Time: O(n·32). Space: O(n·32).
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
+Using a hash set of prefixes makes the check O(1).
 
 ----------------------------------------
 
-## Step 9: C++ Implementation
+## Step 5: The Bit-by-Bit Algorithm
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+```
+max_xor = 0
+mask = 0
+
+for bit in 30 down to 0:
+    mask |= (1 << bit)          # include this bit in the mask
+
+    prefixes = { x & mask for x in nums }   # set of all high-bit prefixes
+
+    candidate = max_xor | (1 << bit)  # try to extend max_xor with a 1 at this bit
+
+    for prefix p in prefixes:
+        if (candidate XOR p) in prefixes:
+            max_xor = candidate
+            break          # confirmed: some pair achieves this XOR
+    # if no match found, max_xor stays unchanged (this bit contributes 0)
+
+return max_xor
+```
+
+Reading the inner check: we're looking for prefixes p, q where `p XOR q = candidate`. Equivalently, `candidate XOR p = q`. So for each p, we check "is `candidate XOR p` in the set?"
+
+31 iterations (bits 30 to 0), each doing O(n) work. Total: **O(n · 32) = O(n)**.
+
+----------------------------------------
+
+## Step 6: Small Trace
+
+`nums = [3, 10, 5]`. Expected max XOR is 3 XOR 10 = 9 (binary 1001), 3 XOR 5 = 6, 10 XOR 5 = 15. Max is 15.
+
+In binary: 3 = 00011, 10 = 01010, 5 = 00101.
+
+```
+max_xor = 0, mask = 0.
+
+bit 4 (value 16):
+  mask = 10000.
+  prefixes = {3 & 16, 10 & 16, 5 & 16} = {0, 0, 0} = {0}.
+  candidate = 0 | 16 = 16.
+  For p=0: 16 XOR 0 = 16. Is 16 in {0}? No.
+  No match. max_xor stays 0.
+
+bit 3 (value 8):
+  mask = 11000.
+  prefixes = {0, 8, 0} = {0, 8}.
+  candidate = 0 | 8 = 8.
+  For p=0: 8 XOR 0 = 8. In {0, 8}? Yes.
+  max_xor = 8.
+
+bit 2 (value 4):
+  mask = 11100.
+  prefixes = {0, 8, 4} = {0, 4, 8}.
+  candidate = 8 | 4 = 12.
+  For p=0: 12 XOR 0 = 12. Not in prefixes.
+  For p=4: 12 XOR 4 = 8. In prefixes? Yes.
+  max_xor = 12.
+
+bit 1 (value 2):
+  mask = 11110.
+  prefixes = {2, 10, 4} = {2, 4, 10}.
+  candidate = 12 | 2 = 14.
+  For p=2: 14 XOR 2 = 12. Not in.
+  For p=4: 14 XOR 4 = 10. In prefixes? Yes.
+  max_xor = 14.
+
+bit 0 (value 1):
+  mask = 11111.
+  prefixes = {3, 10, 5} (the originals).
+  candidate = 14 | 1 = 15.
+  For p=3: 15 XOR 3 = 12. Not in.
+  For p=10: 15 XOR 10 = 5. In prefixes? Yes.
+  max_xor = 15.
+```
+
+Final: 15. ✓ (10 XOR 5 = 15.)
+
+Each bit we successfully set rules out some pairs and confirms there are compatible candidates. The greedy commits to each "1" as soon as it's possible.
+
+----------------------------------------
+
+## Step 7: Alternative — Build a Binary Trie
+
+Another elegant approach: insert each number into a binary trie (where each node has at most 2 children, one for bit 0 and one for bit 1). Then for each number x, traverse the trie greedily: at each bit, try to go in the **opposite** direction of x's bit (since opposite XOR is 1). If that direction has a subtree, go there; else go the same direction.
+
+After traversing all 32 bits, you've computed the max XOR of x with anything in the trie. Do this for each number; track the overall max.
+
+Time: O(n · 32). Same complexity as the hashset approach, slightly more memory.
+
+This is the "trie" flavor of the solution; the hashset is the "DP" flavor.
+
+----------------------------------------
+
+## Step 8: Name It
+
+**Greedy bit-by-bit XOR maximization**, with either a **hashset** or **binary trie** for efficient lookups.
+
+The key idea is that higher bits of XOR dominate, so a greedy "set bit if possible" strategy is optimal. The only algorithmic work is efficiently checking "is this bit achievable given our commitments so far?"
+
+Similar patterns:
+- Max XOR With Element in Array (offline query problem).
+- Subarray XOR equals K (prefix-XOR + hashset).
+- XOR-related problems generally lean on these tools.
+
+----------------------------------------
+
+## Step 9: Complexity
+
+Time: **O(n · 32)** = O(n) for 32-bit ints.
+Space: **O(n)** for the prefixes hashset (or O(n · 32) for the trie).
+
+----------------------------------------
+
+## Step 10: C++ Implementation
+
+**Hashset version (cleaner):**
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-int findMaximumXOR(vector<int>& a) {
-    struct N { N* c[2] = {}; };
-    N* root = new N();
-    for (int x : a) { auto* n = root; for (int b = 31; b >= 0; --b) { int bit = (x >> b) & 1; if (!n->c[bit]) n->c[bit] = new N(); n = n->c[bit]; } }
-    int best = 0;
-    for (int x : a) {
-        auto* n = root; int v = 0;
-        for (int b = 31; b >= 0; --b) {
-            int want = 1 - ((x >> b) & 1);
-            if (n->c[want]) { v |= (1 << b); n = n->c[want]; }
-            else n = n->c[1 - want];
+int findMaximumXOR(vector<int>& nums) {
+    int max_xor = 0;
+    int mask = 0;
+    for (int bit = 30; bit >= 0; --bit) {
+        mask |= (1 << bit);
+        unordered_set<int> prefixes;
+        for (int x : nums) prefixes.insert(x & mask);
+
+        int candidate = max_xor | (1 << bit);
+        for (int p : prefixes) {
+            if (prefixes.count(candidate ^ p)) {
+                max_xor = candidate;
+                break;
+            }
         }
-        best = max(best, v);
     }
+    return max_xor;
+}
+```
+
+The critical check is `prefixes.count(candidate ^ p)`. We're saying: "If `candidate = p ^ q`, then `q = candidate ^ p`. Does q's prefix exist in our set?"
+
+**Binary trie version (more scalable):**
+
+```cpp
+struct TrieNode { TrieNode* ch[2] = {nullptr, nullptr}; };
+
+class Trie {
+    TrieNode* root = new TrieNode();
+public:
+    void insert(int n) {
+        TrieNode* cur = root;
+        for (int bit = 30; bit >= 0; --bit) {
+            int b = (n >> bit) & 1;
+            if (!cur->ch[b]) cur->ch[b] = new TrieNode();
+            cur = cur->ch[b];
+        }
+    }
+    int maxXor(int n) {
+        TrieNode* cur = root;
+        int result = 0;
+        for (int bit = 30; bit >= 0; --bit) {
+            int b = (n >> bit) & 1;
+            int opp = 1 - b;
+            if (cur->ch[opp]) { result |= (1 << bit); cur = cur->ch[opp]; }
+            else cur = cur->ch[b];
+        }
+        return result;
+    }
+};
+
+int findMaximumXOR(vector<int>& nums) {
+    Trie trie;
+    for (int x : nums) trie.insert(x);
+    int best = 0;
+    for (int x : nums) best = max(best, trie.maxXor(x));
     return best;
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
-
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 11: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Max XOR of subarray.
-- Max XOR with at most k modifications.
-- Min XOR pair.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Minimum XOR of two numbers.** Same trie approach, go in **same** direction (not opposite) greedily.
+- **Max XOR with at most k elements.** Harder — combinatorial.
+- **Max XOR of subarray.** Use prefix-XOR + trie.
+- **Online queries: given x, find max XOR of x with previously-inserted numbers.** Trie is naturally online; hashset doesn't directly fit.
+- **Why doesn't brute-force (O(n²)) work?** For n > 10^4, too slow. But it's fine for small inputs.
+- **What if array contains duplicates?** No problem — duplicates XOR to 0, never best.

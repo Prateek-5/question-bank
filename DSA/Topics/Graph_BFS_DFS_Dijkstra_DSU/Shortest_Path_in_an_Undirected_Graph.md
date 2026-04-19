@@ -4,185 +4,217 @@
 https://www.geeksforgeeks.org/problems/shortest-path-in-weighted-undirected-graph/1
 
 **Topic:**
-Graph BFS DFS Dijkstra DSU
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Unweighted BFS from source.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> Graph 0-1-2, 0-3. BFS from 0: level 0 {0}, level 1 {1,3}, level 2 {2}. dist=[0,1,2,1].
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Graph (BFS / DFS / Dijkstra / DSU)
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Frame the Task
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+You have an **undirected, weighted** graph with `n` nodes (1-indexed) and `m` edges. Edge weights are positive integers. Given a source (1) and destination (n), return the shortest-weight path as a **sequence of nodes**. If no path exists, return `[-1]`.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Two things to produce:
+1. The **weight** of the shortest path.
+2. The **actual path** (list of nodes from 1 to n).
 
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Unweighted BFS from source.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-A tempting first thought is to try every possible path from the start to the goal. The problem is that graphs have exponentially many paths. We need a traversal that visits each node at most a few times — that's exactly what BFS, DFS, and their weighted cousins give us.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-BFS layers correspond to hop-counts. The shortest path length from s to any node is the level it's first dequeued.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Example: 5 nodes, edges `{(1,2,2), (2,5,5), (2,3,4), (1,4,1), (4,3,3), (3,5,1)}`. Shortest from 1 to 5?
+- 1 → 2 → 5: 2 + 5 = 7.
+- 1 → 4 → 3 → 5: 1 + 3 + 1 = 5.
+- 1 → 2 → 3 → 5: 2 + 4 + 1 = 7.
+- Shortest is **5**, path `[1, 4, 3, 5]`.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: Which Shortest-Path Algorithm?
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+- **BFS:** works when all edges have the same weight. Here weights vary — so no.
+- **Dijkstra:** works for non-negative weights. Here weights are positive — ✓.
+- **Bellman-Ford:** handles negative edges; we don't need that generality, and it's slower.
 
-**The concept:** Unweighted BFS from source.
-
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever nodes have relationships or connectivity matters → think Graph. 'Shortest path' without weights → BFS. With weights → Dijkstra. Just connectivity → DSU.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+Dijkstra it is. The twist: we must also recover the path, not just its weight.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 3: Dijkstra Reminder
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+Dijkstra from source `s`:
+- `dist[s] = 0`, all others `∞`.
+- Min-heap of `(current_distance, node)`.
+- Pop the smallest; for each neighbor v of u with edge weight w, if `dist[u] + w < dist[v]`, update `dist[v]` and push (new_dist, v).
 
-Initialize dist[s]=0, others -1. BFS; for each neighbor with dist==-1 set dist = dist[u]+1 and enqueue.
+After the heap empties, `dist[n]` holds the shortest-path weight.
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Standard BFS.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+For path recovery: whenever we relax an edge u → v, record `parent[v] = u`. Then reconstruct by walking from n back through parents.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 4: Path Reconstruction
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+Suppose `parent[v]` stores the predecessor of v on the best path found so far. To rebuild the path from 1 to n:
 
-Graph 0-1-2, 0-3. BFS from 0: level 0 {0}, level 1 {1,3}, level 2 {2}. dist=[0,1,2,1].
+```
+path = []
+cur = n
+while cur != -1:
+    path.append(cur)
+    cur = parent[cur]
+reverse(path)
+```
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+If `path[0] != 1` (source unreachable, parent chain never reaches the source), no path exists — return `[-1]`.
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
-
-----------------------------------------
-
-## Step 8: Time and Space Complexity
-
-Complexity isn't magic — it's just counting the work.
-
-Time: O(V+E). Space: O(V).
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
+Important: whenever we update `dist[v]` (find a shorter way), we must also update `parent[v]` to the new predecessor. Otherwise we'd end up with an outdated parent that points to a predecessor on a longer path — wrong reconstruction.
 
 ----------------------------------------
 
-## Step 9: C++ Implementation
+## Step 5: Algorithm
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+```
+Build adjacency list from edges (undirected: add both directions).
+dist[] = ∞ for all; dist[1] = 0.
+parent[] = -1 for all.
+heap = [(0, 1)].
+
+while heap not empty:
+    (d, u) = pop min.
+    if d > dist[u]: skip stale entry.
+    for each (v, w) in adj[u]:
+        if dist[u] + w < dist[v]:
+            dist[v] = dist[u] + w
+            parent[v] = u
+            push (dist[v], v)
+
+if dist[n] == ∞: return [-1]
+
+Reconstruct path from n by walking parent[].
+return path.
+```
+
+----------------------------------------
+
+## Step 6: Trace
+
+Graph (undirected, with weights):
+- 1 ↔ 2 (2), 1 ↔ 4 (1), 2 ↔ 3 (4), 2 ↔ 5 (5), 3 ↔ 4 (3), 3 ↔ 5 (1).
+
+Initialize: dist = [_, 0, ∞, ∞, ∞, ∞] (ignoring index 0). parent = [_, -1, -1, -1, -1, -1]. heap = [(0, 1)].
+
+```
+Pop (0, 1). Neighbors: 2 (w=2), 4 (w=1).
+  1 → 2: dist[2] = 2, parent[2] = 1. Push (2, 2).
+  1 → 4: dist[4] = 1, parent[4] = 1. Push (1, 4).
+
+Pop (1, 4). Neighbors: 1 (w=1), 3 (w=3).
+  4 → 1: 1 + 1 = 2 > dist[1]=0. Skip.
+  4 → 3: 1 + 3 = 4 < ∞. dist[3] = 4, parent[3] = 4. Push (4, 3).
+
+Pop (2, 2). Neighbors: 1, 3, 5.
+  2 → 3: 2 + 4 = 6 > dist[3]=4. Skip.
+  2 → 5: 2 + 5 = 7 < ∞. dist[5] = 7, parent[5] = 2. Push (7, 5).
+
+Pop (4, 3). Neighbors: 2, 4, 5.
+  3 → 2: 4 + 4 = 8 > 2. Skip.
+  3 → 4: 4 + 3 = 7 > 1. Skip.
+  3 → 5: 4 + 1 = 5 < 7. dist[5] = 5, parent[5] = 3. Push (5, 5).
+
+Pop (5, 5). Neighbors: 2, 3.
+  5 → 2: 5 + 5 = 10 > 2. Skip.
+  5 → 3: 5 + 1 = 6 > 4. Skip.
+
+Pop (7, 5). d=7 > dist[5]=5. Skip stale.
+
+Heap empty.
+```
+
+Final: dist[5] = 5. parent = [_, -1, 1, 4, 1, 3].
+
+Reconstruct from 5:
+- 5 → parent[5] = 3 → parent[3] = 4 → parent[4] = 1 → parent[1] = -1.
+- Reverse: `[1, 4, 3, 5]`. ✓
+
+----------------------------------------
+
+## Step 7: Edge Cases
+
+- **n = 1 (source = destination).** dist[1] = 0. Path is just `[1]`.
+- **Disconnected graph, n unreachable.** dist[n] remains ∞. Return `[-1]`.
+- **Multiple edges between same pair of nodes.** Dijkstra processes both; the shorter one wins naturally.
+- **Self-loops.** Harmless — `dist[u] + w ≥ dist[u]`, so no relaxation happens.
+
+Some variants of this problem expect the **weight** as the first element of the returned list, followed by the path. Check the exact output format.
+
+----------------------------------------
+
+## Step 8: Name It
+
+**Dijkstra's algorithm with parent tracking**. Parent arrays are the standard path-recovery mechanism, used in:
+- BFS (unweighted shortest path).
+- Dijkstra (non-negative weighted).
+- Bellman-Ford (handles negatives).
+- A* search (heuristic-guided).
+
+The algorithm itself (computing distances) is often 90% of the work — reconstructing the path is a mechanical afterthought once you've stored predecessors.
+
+----------------------------------------
+
+## Step 9: Complexity
+
+Time: **O((n + m) log n)** with a binary heap.
+Space: **O(n + m)** — adjacency list + dist + parent + heap.
+
+----------------------------------------
+
+## Step 10: C++ Implementation
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-vector<int> shortestPath(int n, vector<vector<int>>& edges, int src) {
-    vector<vector<int>> g(n);
-    for (auto& e : edges) { g[e[0]].push_back(e[1]); g[e[1]].push_back(e[0]); }
-    vector<int> d(n, -1); d[src] = 0;
-    queue<int> q; q.push(src);
-    while (!q.empty()) {
-        int u = q.front(); q.pop();
-        for (int v : g[u]) if (d[v] == -1) { d[v] = d[u] + 1; q.push(v); }
+vector<int> shortestPath(int n, int m, vector<vector<int>>& edges) {
+    vector<vector<pair<int,int>>> adj(n + 1);
+    for (auto& e : edges) {
+        int u = e[0], v = e[1], w = e[2];
+        adj[u].push_back({v, w});
+        adj[v].push_back({u, w});   // undirected
     }
-    return d;
+
+    const int INF = INT_MAX;
+    vector<int> dist(n + 1, INF), parent(n + 1, -1);
+    dist[1] = 0;
+
+    priority_queue<pair<int,int>, vector<pair<int,int>>, greater<>> pq;
+    pq.push({0, 1});
+
+    while (!pq.empty()) {
+        auto [d, u] = pq.top(); pq.pop();
+        if (d > dist[u]) continue;   // stale
+        for (auto& [v, w] : adj[u]) {
+            if (dist[u] + w < dist[v]) {
+                dist[v] = dist[u] + w;
+                parent[v] = u;
+                pq.push({dist[v], v});
+            }
+        }
+    }
+
+    if (dist[n] == INF) return {-1};
+
+    vector<int> path;
+    for (int cur = n; cur != -1; cur = parent[cur]) path.push_back(cur);
+    reverse(path.begin(), path.end());
+    return path;
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Three pieces:
+1. Adjacency list with undirected edges (both directions).
+2. Dijkstra computes `dist` and records `parent` when relaxing.
+3. Walk `parent` from n back to source; reverse.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 11: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Return parent pointers to reconstruct paths.
-- Weighted variant uses Dijkstra.
-- BFS from multiple sources.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Return the weight too.** Prepend `dist[n]` to the path.
+- **All pairs shortest paths.** Floyd-Warshall in O(n³), or Dijkstra from each source in O(n · (n+m) log n).
+- **Negative edges.** Bellman-Ford; Dijkstra breaks.
+- **Count shortest paths.** Track `count[v]` alongside `dist[v]`; when dist[v] gets tied, add count[u] instead of overwriting.
+- **K-th shortest path.** Yen's algorithm or repeated Dijkstra with detours.
+- **Why store parent instead of path lists?** Parent is O(n) space; storing full paths per node would be O(n²).
+- **Why is the stale-check `d > dist[u]` needed?** Because we may push multiple entries per node; only the first pop of each is still-valid, the rest have been superseded.

@@ -4,195 +4,193 @@
 https://leetcode.com/problems/design-add-and-search-words-data-structure/
 
 **Topic:**
-Trie Bit Manipulation Trie
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Trie with '.' wildcard handled via DFS.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> Add 'bad','dad','mad'. Search 'pad'→false. Search '.ad'→true. Search 'b..'→true.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Trie / Bit Manipulation Trie
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: The Spec
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Design a class supporting:
+- `addWord(word)`: add a word to the dictionary.
+- `search(word)`: return true if the dictionary contains any word matching the input. The input may include `'.'` which matches **any single character**.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Example:
+- addWord("bad"), addWord("dad"), addWord("mad").
+- search("pad") → false.
+- search("bad") → true.
+- search(".ad") → true (matches "bad", "dad", or "mad").
+- search("b..") → true (matches "bad").
 
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Trie with '.' wildcard handled via DFS.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-You might try hashing every word or running regex matches. For prefix queries that's overkill — tries share prefixes so matching a new query touches only relevant nodes. For XOR problems, a binary trie lets you greedily chase the opposite bit at each level.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-A trie stores words prefix-compactly. Wildcard '.' at search time branches into all children of the current node.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Wildcards are single-character, so ".ad" has length 3 and matches any length-3 word ending in "ad".
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: Which Data Structure?
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+Storing all words in a hashset gives O(1) `addWord` and O(1) exact `search`. But wildcard search would require scanning all stored words — O(n) per query. Bad for large dictionaries.
 
-**The concept:** Trie with '.' wildcard handled via DFS.
+A **trie** (prefix tree) handles exact search in O(|word|). For wildcards, we'd explore all matching paths at each '.'.
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever you see prefix queries, dictionary lookups, or max-XOR → think Trie.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+Trie + DFS is the right tool.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 3: Trie Mechanics
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+Same trie structure as Implement Trie:
+- Each node has `children[26]` (for lowercase letters a-z) and an `isEnd` flag.
+- `addWord` walks/creates the trie path for the word; marks end.
 
-addWord walks the trie creating nodes. search(word,node): if char '.', recurse on every existing child. Else follow exact child or fail. At end check node.isEnd.
+For search with wildcards:
+- If current char is a normal letter, recurse into that specific child.
+- If current char is `.`, try **every** non-null child.
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Standard Trie + DFS for wildcards.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+If any branch reaches the end with `isEnd = true`, return true.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 4: DFS Search With Wildcards
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+```
+def search(word):
+    return dfs(word, 0, root)
 
-Add 'bad','dad','mad'. Search 'pad'→false. Search '.ad'→true. Search 'b..'→true.
+def dfs(word, idx, node):
+    if idx == len(word):
+        return node.isEnd
+    ch = word[idx]
+    if ch == '.':
+        for child in node.children:
+            if child is not null and dfs(word, idx + 1, child):
+                return True
+        return False
+    else:
+        c = node.children[ch - 'a']
+        if c is null: return False
+        return dfs(word, idx + 1, c)
+```
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+Non-wildcard case: standard trie traversal. Wildcard case: try each child.
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+If at any point we run out of children to try (non-wildcard char missing), fail.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 5: Trace on the Example
 
-Complexity isn't magic — it's just counting the work.
+Add "bad", "dad", "mad":
 
-Add O(L), search O(26^w · L) worst-case.
+Trie:
+```
+root
+ ├── b → a → d*
+ ├── d → a → d*
+ └── m → a → d*
+```
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+All three words share structure under 'a' and 'd', with different prefix letters.
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+search("pad"):
+- idx 0, ch 'p'. root.children['p'] is null. Return false. ✓
 
+search("bad"):
+- idx 0, ch 'b'. Enter 'b' node.
+- idx 1, ch 'a'. Enter 'a' node.
+- idx 2, ch 'd'. Enter 'd' node.
+- idx 3, len. d.isEnd = true. Return true. ✓
+
+search(".ad"):
+- idx 0, ch '.'. Try each non-null child of root.
+  - Try 'b' child. Recurse with ("ad", 1, b_node).
+    - idx 1, ch 'a'. Enter b.a node.
+    - idx 2, ch 'd'. Enter b.a.d node.
+    - idx 3, len. isEnd. Return true. ✓ Return true.
+  
+  (We don't even need to try 'd' or 'm'.)
+
+search("b..")
+- idx 0, ch 'b'. Enter 'b' node.
+- idx 1, ch '.'. b has only 'a' child. Recurse with ("b..", 2, b.a node).
+  - idx 2, ch '.'. b.a has only 'd' child. Recurse (idx 3, b.a.d node).
+    - idx 3, len. isEnd. Return true. ✓ 
 
 ----------------------------------------
 
-## Step 9: C++ Implementation
+## Step 6: Why DFS Is Natural for Wildcards
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+Each wildcard creates a branching point with up to 26 children. DFS explores branches one at a time; if one succeeds, we return true early. If none succeed at some level, backtrack.
+
+BFS would also work but is less natural — level-by-level traversal in a trie isn't as clean as depth-first exploration.
+
+The worst case for wildcard search is when many '.' appear: exploring 26^k paths for k wildcards. In practice, the trie structure prunes heavily.
+
+----------------------------------------
+
+## Step 7: Complexity
+
+- **addWord**: O(|word|).
+- **search** (no wildcards): O(|word|).
+- **search** (with wildcards): O(26^W · |word|) worst case, where W is the number of wildcards. In practice much better due to trie pruning.
+
+Space: O(total characters of all added words) — proportional to trie nodes.
+
+----------------------------------------
+
+## Step 8: C++ Implementation
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
 class WordDictionary {
-    struct N { N* c[26] = {}; bool end = false; };
-    N* root = new N();
-    bool dfs(const string& s, int i, N* n) {
-        if (!n) return false;
-        if (i == (int)s.size()) return n->end;
-        char ch = s[i];
+    struct Node {
+        Node* children[26] = {nullptr};
+        bool isEnd = false;
+    };
+    Node* root;
+
+    bool dfs(const string& word, int idx, Node* node) {
+        if (idx == (int)word.size()) return node->isEnd;
+        char ch = word[idx];
         if (ch == '.') {
-            for (auto* k : n->c) if (dfs(s, i+1, k)) return true;
+            for (int i = 0; i < 26; ++i) {
+                if (node->children[i] && dfs(word, idx + 1, node->children[i])) {
+                    return true;
+                }
+            }
             return false;
+        } else {
+            Node* c = node->children[ch - 'a'];
+            if (!c) return false;
+            return dfs(word, idx + 1, c);
         }
-        return dfs(s, i+1, n->c[ch-'a']);
     }
+
 public:
-    void addWord(string w) {
-        auto* n = root;
-        for (char ch : w) { if (!n->c[ch-'a']) n->c[ch-'a'] = new N(); n = n->c[ch-'a']; }
-        n->end = true;
+    WordDictionary() : root(new Node()) {}
+
+    void addWord(string word) {
+        Node* cur = root;
+        for (char ch : word) {
+            int idx = ch - 'a';
+            if (!cur->children[idx]) cur->children[idx] = new Node();
+            cur = cur->children[idx];
+        }
+        cur->isEnd = true;
     }
-    bool search(string w) { return dfs(w, 0, root); }
+
+    bool search(string word) {
+        return dfs(word, 0, root);
+    }
 };
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+`dfs` handles both the wildcard and exact-char cases cleanly. The recursive structure mirrors the trie's branching.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 9: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Support '*' (zero-or-more).
-- Delete word from dictionary.
-- Prefix search.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Support '*' (zero or more characters).** More complex — match at any position. Requires careful DFS with variable length.
+- **Case-insensitive search.** Normalize to lowercase on add and search.
+- **Multiple wildcards in a single pattern.** Same algorithm handles it — just more branches.
+- **Return all matching words.** Modify DFS to collect words when `isEnd` is reached.
+- **Limit the maximum number of wildcards to avoid explosion.** Restrict at input validation.
+- **Regex-like patterns.** Generalize: each pattern-char might be a character class. DFS still works but becomes more complex.

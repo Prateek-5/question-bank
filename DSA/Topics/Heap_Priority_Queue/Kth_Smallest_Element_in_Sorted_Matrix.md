@@ -4,188 +4,208 @@
 https://leetcode.com/problems/kth-smallest-element-in-a-sorted-matrix/
 
 **Topic:**
-Heap Priority Queue
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Min-heap BFS from top-left; or binary search on value range.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> matrix=[[1,5,9],[10,11,13],[12,13,15]], k=8. Heap order pops: 1,5,9,10,11,12,13,13. 8th pop = 13.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Heap / Priority Queue
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Understand the Matrix Structure
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Given an `n × n` matrix where:
+- Each **row** is sorted ascending.
+- Each **column** is sorted ascending.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Find the **k-th smallest** element.
 
-So ask yourself:
+Example:
+```
+matrix = [
+    [ 1,  5,  9],
+    [10, 11, 13],
+    [12, 13, 15]
+]
+k = 8
+```
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Min-heap BFS from top-left; or binary search on value range.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
+Flattened and sorted: [1, 5, 9, 10, 11, 12, 13, 13, 15]. 8th smallest = **13** (the second 13).
 
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-Your first instinct is probably to sort the whole array and pick from one end. That works — but it asks for more than we need. We don't care about every element's exact position, only the smallest or the largest at each step. Sorting does O(n log n) work just to reveal one extremum at a time. A heap does the same job with far less overhead per query.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Rows and columns are sorted. The smallest element is at (0,0); the next smallest is among (0,1) or (1,0). A min-heap expands the frontier in non-decreasing order — the k-th pop is the answer.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Note: both rows and columns are sorted, but the full flattened matrix is **not** sorted (e.g., 5 < 10 is OK, but 9 > 5 comes after 1 in row-major order). So we can't just index directly.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: Naive — Flatten and Sort
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+```cpp
+vector<int> all;
+for (auto& row : matrix) for (int x : row) all.push_back(x);
+sort(all.begin(), all.end());
+return all[k - 1];
+```
 
-**The concept:** Min-heap BFS from top-left; or binary search on value range.
+O(n² log n) time. For large n, wasteful.
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever you see 'k-th', 'top-k', or 'merge sorted streams' → think Heap.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+Can we exploit the sorted rows/columns?
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 3: Observation — Merging Sorted Rows
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+Each row is sorted. Merging n sorted sequences and taking the k-th element is the classic **k-way merge**.
 
-Push (matrix[0][0], 0, 0) into a min-heap. Repeatedly pop the smallest and push its right and down neighbors, marking visited. After k-1 pops, the top is the answer. An alternative O(n log(max-min)) approach binary-searches the value range and counts how many are ≤ mid per row.
+Use a min-heap seeded with the first element of each row. Repeatedly:
+- Pop the smallest (that's the next overall smallest).
+- From the same row, push the next element if any.
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
+After k pops, the last popped is the k-th smallest.
 
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
+```
+heap seeded with (matrix[i][0], i, 0) for each row i
+for _ in range(k):
+    (val, row, col) = heap.pop()
+    if col + 1 < n: heap.push((matrix[row][col+1], row, col+1))
+return val
+```
 
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Heap + visited set — simple and O(k log k). For large matrices prefer binary search on value.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+Time: **O(k log n)**. Heap size ≤ n.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 4: Trace on the Example
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+`matrix = [[1, 5, 9], [10, 11, 13], [12, 13, 15]]`, k = 8.
 
-matrix=[[1,5,9],[10,11,13],[12,13,15]], k=8. Heap order pops: 1,5,9,10,11,12,13,13. 8th pop = 13.
+Seed heap: (1, 0, 0), (10, 1, 0), (12, 2, 0).
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+Pops (1-indexed):
+```
+1: pop (1, 0, 0). Push (5, 0, 1). Heap: {5, 10, 12}.
+2: pop (5, 0, 1). Push (9, 0, 2). Heap: {9, 10, 12}.
+3: pop (9, 0, 2). No next in row 0. Heap: {10, 12}.
+4: pop (10, 1, 0). Push (11, 1, 1). Heap: {11, 12}.
+5: pop (11, 1, 1). Push (13, 1, 2). Heap: {12, 13}.
+6: pop (12, 2, 0). Push (13, 2, 1). Heap: {13, 13}.
+7: pop (13, ?, ?). Let's say the one from row 1. Push nothing or the next depending on position.
+  Actually after 7 pops, we've popped 1, 5, 9, 10, 11, 12, 13. Next pop is the 8th.
+8: pop (13, ...). That's our 13.
+```
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+Return 13. ✓
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 5: Even Better — Binary Search on Value
 
-Complexity isn't magic — it's just counting the work.
+There's a slicker O(n log(max - min)) approach.
 
-Heap: O(k log k). Binary search: O(n log(max-min)).
+The answer lies in [matrix[0][0], matrix[n-1][n-1]]. Binary search over this **value range**.
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+For any candidate value `v`, count how many matrix elements are `≤ v`. Since rows and columns are sorted, we can count efficiently using a staircase walk from the top-right (or bottom-left).
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+Counting in O(n) per check:
+```
+count = 0
+row = n - 1, col = 0
+while row >= 0 and col < n:
+    if matrix[row][col] <= v:
+        count += row + 1    # all cells in this column from 0..row are ≤ v
+        col++
+    else:
+        row--
+```
 
+Binary search on v; total time: O(n · log(max - min)).
+
+Which to pick: for typical constraints, both are fine. Heap is simpler. Binary search is tighter when max-min is small.
+
+----------------------------------------
+
+## Step 6: Why the Heap Approach Is Correct
+
+**Claim:** after k pops from the min-heap, the last popped is the k-th smallest.
+
+**Proof sketch:** heap always holds one candidate from each "active" row — the smallest un-popped element. Popping the heap's top gives us the global minimum among all un-popped elements. Inductively, k pops yield the k smallest, in order.
+
+Why don't we need to track columns? Each row's "current" column starts at 0 and advances each time we pop from that row. The heap entry `(val, row, col)` tells us where to go next.
+
+----------------------------------------
+
+## Step 7: Name It
+
+**K-way merge via min-heap.** Same structure as Merge K Sorted Lists, just applied to the rows of a sorted matrix.
+
+The binary-search-on-value approach is a different pattern: **"search the answer space when the answer is numeric."**
+
+----------------------------------------
+
+## Step 8: Complexity
+
+Heap approach: **O(k log n)** time, **O(n)** space.
+Binary search approach: **O(n log(max - min))** time, **O(1)** space.
+
+For k = O(n²) both are comparable.
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+**Heap version:**
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-
-int kthSmallest(vector<vector<int>>& mat, int k) {
-    int n = mat.size();
-    using T = tuple<int,int,int>;
-    priority_queue<T, vector<T>, greater<T>> pq;
-    vector<vector<int>> seen(n, vector<int>(n, 0));
-    pq.push({mat[0][0], 0, 0}); seen[0][0] = 1;
-    while (--k) {
-        auto [v, r, c] = pq.top(); pq.pop();
-        if (r+1 < n && !seen[r+1][c]) { pq.push({mat[r+1][c], r+1, c}); seen[r+1][c]=1; }
-        if (c+1 < n && !seen[r][c+1]) { pq.push({mat[r][c+1], r, c+1}); seen[r][c+1]=1; }
+int kthSmallest(vector<vector<int>>& matrix, int k) {
+    int n = matrix.size();
+    // Min-heap of tuples (value, row, col).
+    priority_queue<tuple<int, int, int>, vector<tuple<int, int, int>>, greater<>> heap;
+    for (int i = 0; i < n; ++i) {
+        heap.push({matrix[i][0], i, 0});
     }
-    return get<0>(pq.top());
+
+    int val = 0;
+    for (int i = 0; i < k; ++i) {
+        auto [v, r, c] = heap.top(); heap.pop();
+        val = v;
+        if (c + 1 < n) heap.push({matrix[r][c + 1], r, c + 1});
+    }
+    return val;
 }
 ```
 
-A few notes about the style:
+**Binary search version:**
 
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
+```cpp
+int kthSmallest(vector<vector<int>>& matrix, int k) {
+    int n = matrix.size();
+    int lo = matrix[0][0], hi = matrix[n - 1][n - 1];
 
+    auto countLessOrEqual = [&](int v) {
+        int count = 0;
+        int row = n - 1, col = 0;
+        while (row >= 0 && col < n) {
+            if (matrix[row][col] <= v) {
+                count += row + 1;
+                col++;
+            } else {
+                row--;
+            }
+        }
+        return count;
+    };
+
+    while (lo < hi) {
+        int mid = lo + (hi - lo) / 2;
+        if (countLessOrEqual(mid) < k) lo = mid + 1;
+        else hi = mid;
+    }
+    return lo;
+}
+```
+
+Both return the correct k-th smallest.
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Solve in O(n) per query using binary search on value.
-- Handle dynamic updates (row/col sorted, but values mutate).
-- Generalize to k-way sorted streams.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **K-th largest in the same matrix.** Symmetric — max-heap or binary search with "count ≥".
+- **K-th smallest in an M-sorted-by-row matrix (but not column-sorted).** Heap works; binary search becomes trickier.
+- **Return the (row, col) of the k-th smallest.** Augment the heap entry.
+- **Multiple queries for different k's.** Precomputing a sorted flat array once is O(n² log n) then O(1) per query. Good for many queries.
+- **Streaming matrix (rows arrive over time).** Merge incoming rows into the heap as they appear.

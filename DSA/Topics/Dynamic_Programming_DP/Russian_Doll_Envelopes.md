@@ -4,183 +4,171 @@
 https://leetcode.com/problems/russian-doll-envelopes/
 
 **Topic:**
-Dynamic Programming DP
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Sort by width asc, height desc for same width; run LIS on heights.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> envelopes=[[5,4],[6,4],[6,7],[2,3]] → sort [[2,3],[5,4],[6,7],[6,4]]. LIS on heights [3,4,7,4]=3.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Dynamic Programming (DP)
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Read the Problem
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+You have `envelopes[i] = [width, height]`. Envelope A can fit inside envelope B if A's width < B's width **and** A's height < B's height (both **strictly** less).
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Nesting must be proper — no rotations allowed, and equal sizes don't nest.
 
-So ask yourself:
+Return the **maximum number** of envelopes that can be nested.
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Sort by width asc, height desc for same width; run LIS on heights.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
+Example: `envelopes = [[5, 4], [6, 4], [6, 7], [2, 3]]`.
+- [2, 3] < [5, 4]? Yes. Can nest.
+- [5, 4] < [6, 7]? Yes.
+- So [2, 3] → [5, 4] → [6, 7] is a chain of 3 envelopes. Does [6, 4] fit anywhere? Into [6, 7]: 6 < 6? No. Doesn't fit. Before [5, 4]? [6, 4] < [5, 4]? 6 > 5. No.
 
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-Your very first thought is often recursion. That's actually the right start — but naive recursion re-computes the same subproblems exponentially. The fix is memoization (top-down) or tabulation (bottom-up). The hard part is identifying the state that captures all we need to know about the past.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-We want a chain where each envelope strictly fits inside the next. Sorting with the twist prevents same-width envelopes from nesting during LIS on heights.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Max chain length: **3**.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: A 1D Warm-Up
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+Ignore the 2D (width × height) aspect for a moment. Imagine envelopes had only one dimension, and we wanted the longest sequence where each fits strictly inside the next.
 
-**The concept:** Sort by width asc, height desc for same width; run LIS on heights.
+With 1D values like `[5, 2, 6, 5, 3]`, the answer is the **Longest Strictly Increasing Subsequence** — `[2, 3, 5]` or `[2, 3, 6]`, length 3.
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
+LIS is a classic problem solvable in O(n log n) with patience sorting.
 
-**Pattern recognition cue:**
-
-**Whenever a brute-force recursion has overlapping subproblems → think DP. Identify state first, then transition.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+Can we somehow reduce our 2D envelope problem to a 1D LIS problem?
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 3: Sort First — But How?
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+If we sort envelopes by width (ascending), then in the sorted order, **any nesting chain is a sequence where widths are non-decreasing**. That's progress — but widths must be *strictly* less for nesting, not just ≤.
 
-Sort envelopes by w asc, h desc (tie-break). Then LIS on h sequence gives the answer.
+So after sorting by width, we need to find the longest chain where both width and height strictly increase. Widths are already non-decreasing, but they could be equal. If two envelopes have the same width, neither can contain the other — so within a "same-width group," we can pick at most one.
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
+Here's a clever trick: **sort primarily by width ascending, secondarily by height descending**. Why descending for height? Because within a same-width group, we do NOT want to pick multiple of them. If we sort heights descending within the group, then the LIS on heights would naturally skip same-width entries (a later entry in the group has smaller or equal height, so it can't extend the LIS).
 
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
+Let me verify with an example. Envelopes `[[6, 4], [6, 7]]`. Sort width asc, height desc: `[[6, 7], [6, 4]]`. LIS on heights `[7, 4]` is 1 (just 7, or just 4). Correct — you can't nest both same-width envelopes.
 
+If instead we'd sorted heights ascending within same-width, we'd get `[[6, 4], [6, 7]]` → LIS on [4, 7] would be 2, which would falsely say we can nest two same-width envelopes.
 
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Sort + patience-sort LIS.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+So the secondary sort order matters crucially.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 4: Boil It Down to LIS on Heights
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+After sorting (width asc, height desc on ties), we need the LIS (strictly increasing) on the heights array.
 
-envelopes=[[5,4],[6,4],[6,7],[2,3]] → sort [[2,3],[5,4],[6,7],[6,4]]. LIS on heights [3,4,7,4]=3.
+Why does this work?
+- After sort, widths are non-decreasing.
+- A strictly increasing sequence of heights (in the sorted order) gives a valid nesting chain, because:
+  - Heights strictly increase (directly).
+  - Widths also strictly increase (because if widths were equal, heights would be decreasing in the sorted order, so heights wouldn't be strictly increasing).
+- And any valid nesting chain corresponds to some strictly increasing height sequence in sorted order.
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+So the 2D problem collapses to **LIS** on the sorted heights.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 5: LIS in O(n log n)
 
-Complexity isn't magic — it's just counting the work.
+Classical patience sorting: maintain a `tails[]` array where `tails[i]` is the smallest tail of an increasing sequence of length i+1. For each incoming h:
+- Binary search for the first position in `tails` where `tails[pos] >= h`.
+- Replace `tails[pos]` with h (or append if pos is past the end).
+- The length of tails at the end is the LIS length.
 
-Time: O(n log n). Space: O(n).
+For strictly increasing, use `lower_bound` (find first ≥); for non-strict, `upper_bound`.
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+We want strictly increasing → `lower_bound`.
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+```cpp
+vector<int> tails;
+for (int h : heights) {
+    auto it = lower_bound(tails.begin(), tails.end(), h);
+    if (it == tails.end()) tails.push_back(h);
+    else *it = h;
+}
+return tails.size();
+```
 
+----------------------------------------
+
+## Step 6: Trace on the Example
+
+`envelopes = [[5, 4], [6, 4], [6, 7], [2, 3]]`.
+
+Sort width asc, height desc: `[[2, 3], [5, 4], [6, 7], [6, 4]]`. (Note how `[6, 7]` comes before `[6, 4]` — heights descending within width=6.)
+
+Heights: `[3, 4, 7, 4]`.
+
+Apply LIS:
+```
+tails = []
+h=3: tails empty, append. tails = [3].
+h=4: 4 > 3, append. tails = [3, 4].
+h=7: 7 > 4, append. tails = [3, 4, 7].
+h=4: find first >=4 in [3, 4, 7]. Position 1 (value 4). Replace. tails = [3, 4, 7].
+```
+
+Length = 3. ✓
+
+Notice the last h=4 would have extended to length 3 naively if we'd sorted height ascending ([[6, 4], [6, 7]] would give heights [3, 4, 4, 7] and LIS 3, but the chain would include both [6, 4] and [6, 7] which don't actually nest). The desc sort on ties correctly prevents this.
+
+----------------------------------------
+
+## Step 7: Name It
+
+This is **LIS on a 2D domain via sort-and-reduce**. The general technique: when you have pairs and need a chain in both dimensions, sort by one (with a careful tie-break) and LIS on the other.
+
+The tie-break rule is the subtle part. Sort one dimension ascending, the other descending (on ties) to make LIS respect strict inequality in both dimensions.
+
+The same trick extends to 3D (sort by one, LIS on 2D remainder — but 2D LIS is harder, often O(n²) or O(n² log n)).
+
+----------------------------------------
+
+## Step 8: Complexity
+
+Time:
+- Sort: O(n log n).
+- LIS: O(n log n).
+- Total: **O(n log n)**.
+
+Space: O(n) for tails.
+
+A naive approach — sort by width then do an O(n²) LIS on heights — is O(n²) and works but is slower. The log-n LIS is the standard answer for this problem.
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
-
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-int maxEnvelopes(vector<vector<int>>& e) {
-    sort(e.begin(), e.end(), [](auto& x, auto& y){ return x[0]!=y[0] ? x[0]<y[0] : x[1]>y[1]; });
-    vector<int> t;
-    for (auto& x : e) {
-        auto it = lower_bound(t.begin(), t.end(), x[1]);
-        if (it == t.end()) t.push_back(x[1]); else *it = x[1];
+int maxEnvelopes(vector<vector<int>>& envelopes) {
+    sort(envelopes.begin(), envelopes.end(),
+         [](const vector<int>& a, const vector<int>& b) {
+             if (a[0] != b[0]) return a[0] < b[0];   // width ascending
+             return a[1] > b[1];                      // height descending on ties
+         });
+
+    vector<int> tails;
+    for (auto& e : envelopes) {
+        int h = e[1];
+        auto it = lower_bound(tails.begin(), tails.end(), h);
+        if (it == tails.end()) tails.push_back(h);
+        else *it = h;
     }
-    return t.size();
+    return tails.size();
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Key details:
+- The comparator: width asc, height desc. Critical for correctness.
+- `lower_bound` for strictly increasing LIS. Using `upper_bound` would count same-width envelopes, giving wrong answers.
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Allow equality in nesting.
-- 3D boxes.
-- Maximize sum of widths/heights along chain.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Return the actual nesting chain.** Track parent pointers during LIS construction; walk them back.
+- **Number of distinct maximum chains.** Harder — needs counting in the LIS DP.
+- **Allow rotations (envelope can be rotated 90°).** Pre-process by normalizing each envelope's dimensions (e.g., `min(w,h)` as width).
+- **3D nesting (boxes).** Same trick extended — sort by one dim, LIS on pairs. Complexity usually O(n²).
+- **What if envelopes can be scaled uniformly?** Doesn't change the combinatorics if the "strictly less" comparison is unchanged.
+- **Why lower_bound (not upper_bound) for strict?** Because we want to replace the *first* position ≥ h (not strictly >), preserving all earlier tails for sequences of length < current.

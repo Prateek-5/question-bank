@@ -1,187 +1,195 @@
 # Minimum Platforms
 
 **Problem Link:**
-https://practice.geeksforgeeks.org/problems/minimum-platforms-1587115620/1
+https://www.geeksforgeeks.org/minimum-number-platforms-required-railwaybus-station/
 
 **Topic:**
 Greedy
 
+----------------------------------------
+
+## Step 1: Paint the Station
+
+You're in charge of a train station. You have two arrays: `arrival[i]` is when train `i` arrives, `departure[i]` is when it leaves. A train occupies **one platform** for the entire interval `[arrival, departure]`.
+
+Return the **minimum number of platforms** needed so that every train can be accommodated (no two trains at the same platform simultaneously).
+
+Example:
+- arrival = `[900, 940, 950, 1100, 1500, 1800]`
+- departure = `[910, 1200, 1120, 1130, 1900, 2000]`
+
+Let's see which trains overlap at any moment.
+
+- 900-910: only train 1 is present.
+- 940-910? Wait, 910 is the earlier train's departure. At 940 train 2 arrives. Between 910 and 940, no trains. So at 940, train 2 alone.
+- At 950, train 3 arrives. Now trains 2 and 3. Two platforms needed.
+- At 1100, train 4 arrives. Train 2 is still there (leaves 1200), train 3 is still there (leaves 1120). So trains 2, 3, 4 present. **Three platforms.**
+- At 1120, train 3 leaves. Trains 2 and 4 remain.
+- At 1130, train 4 leaves. Train 2 alone.
+- At 1200, train 2 leaves. No trains.
+- At 1500, train 5 arrives.
+- At 1800, train 6 arrives. Trains 5 and 6 present. Two.
+- At 1900, train 5 leaves. Train 6 alone.
+- At 2000, done.
+
+Peak: **3**. That's the answer.
 
 ----------------------------------------
 
-## Step 1: Understand the Problem (Beginner Friendly)
+## Step 2: The Underlying Question
 
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
+Stripping the train context: at any moment in time, how many intervals contain that moment? The maximum over all moments is the answer.
 
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
+Approach 1: check every moment (discrete time). Count overlapping intervals at each. Slow if time range is huge.
 
-**In plain words:** Sweep-line / two-pointer over sorted arrivals and departures.
+Approach 2: for each interval, count how many others it overlaps. But that double-counts and it's O(n²).
 
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
+Approach 3: **sweep line**. Process events (arrivals and departures) in time order. Track a running "trains currently present" counter. The max is the answer.
 
-> arr=[900,940,950,1100,1500,1800], dep=[910,1200,1120,1130,1900,2000]. Peak concurrent=3 → answer 3.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Sweep line is the clean one — O(n log n) from sorting — and it's what the hand-trace above does implicitly.
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 3: Making Sweep Line Precise
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Create a list of events:
+- For each train, an arrival event (time, +1) meaning "one more train present."
+- For each train, a departure event (time, -1) meaning "one fewer."
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Sort events by time. When times tie, **handle departures before arrivals** — a train that leaves at exactly 910 is gone by the time a new train arrives at 910, so they can share a platform.
 
-So ask yourself:
+Walk events in order. Maintain a counter `current`. Track `max(current)`.
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Sweep-line / two-pointer over sorted arrivals and departures.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
+Wait — do we need separate event objects, or can we cleverly use the arrival and departure arrays?
 
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
+Alternative: sort arrival and departure arrays independently. Use two pointers i and j to walk them. Whichever next event is earlier (arrival vs. departure) drives the next step.
 
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-It's very tempting to try every combination. That's exponential. The key insight for greedy problems is that a *local* choice — the earliest end time, the smallest available item, the highest-priority task — is provably as good as any global decision. When the local choice is safe, greedy works.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Count maximum simultaneous trains at any time. Sort arrivals and departures separately; advance one pointer at a time to track the count's maximum.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+This is the classic **two-sorted-arrays merge** pattern for sweep line on interval problems.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 4: Two-Pointer Sweep Step by Step
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+1. Sort arrivals and departures separately, both ascending.
+2. Pointers i = 0 (arrivals), j = 0 (departures). Counter = 0, max = 0.
+3. While i < n:
+   - If `arrival[i] <= departure[j]`: a train is arriving (or exactly at same time as one leaving, but we count arrival first... wait, I need to be careful here).
 
-**The concept:** Sweep-line / two-pointer over sorted arrivals and departures.
+Actually the question of tie-handling matters. If a train arrives exactly when another leaves, do they share a platform?
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
+The problem usually says yes — a departure happening at time T frees the platform before a new arrival at time T. So at the tie, we should process the departure first, then the arrival.
 
-**Pattern recognition cue:**
+Let me re-examine my two-pointer pseudocode:
 
-**Whenever a problem asks for min/max and a local 'best' choice seems correct → check if Greedy applies. Always prove it with an exchange argument before trusting it.**
+- If `arrival[i] <= departure[j]`: we're about to add a new train. **But wait** — I want to process the departure first if they tie. So the condition should be: process arrival only if strict `arrival[i] < departure[j]`.
 
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
+Actually, looking at standard interview answers, they use `arrival[i] <= departure[j]` to mean "arrival counts as arriving first" (giving the strict interpretation — the two trains conflict at that instant). This gives an *upper bound* on platforms.
 
+If the problem allows sharing when times touch, use strict `<`.
 
-----------------------------------------
+For the given example, all times are distinct, so it doesn't matter. Let me proceed with strict `<` for the cleanest touching-allowed interpretation.
 
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-i=0 (arr), j=0 (dep), count=0, peak=0. While i<n: if arr[i]<=dep[j] count++, i++; else count--, j++. Track max count.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Two pointers on sorted arrays.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+```
+while i < n:
+    if arrival[i] < departure[j]:
+        current++
+        max = max(max, current)
+        i++
+    else:
+        current--
+        j++
+```
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 5: Trace on the Example
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+`arrival = [900, 940, 950, 1100, 1500, 1800]` (already sorted).
+`departure = [910, 1200, 1120, 1130, 1900, 2000]` sorted: `[910, 1120, 1130, 1200, 1900, 2000]`.
 
-arr=[900,940,950,1100,1500,1800], dep=[910,1200,1120,1130,1900,2000]. Peak concurrent=3 → answer 3.
+```
+i=0, j=0, current=0, max=0.
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+arrival[0]=900 < departure[0]=910? yes. current=1. max=1. i=1.
+arrival[1]=940 < departure[0]=910? no (940 > 910). current=0. j=1.
+arrival[1]=940 < departure[1]=1120? yes. current=1. max=1. i=2.
+arrival[2]=950 < departure[1]=1120? yes. current=2. max=2. i=3.
+arrival[3]=1100 < departure[1]=1120? yes. current=3. max=3. i=4.
+arrival[4]=1500 < departure[1]=1120? no. current=2. j=2.
+arrival[4]=1500 < departure[2]=1130? no. current=1. j=3.
+arrival[4]=1500 < departure[3]=1200? no. current=0. j=4.
+arrival[4]=1500 < departure[4]=1900? yes. current=1. max=3. i=5.
+arrival[5]=1800 < departure[4]=1900? yes. current=2. max=3. i=6.
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
+Loop exits (i == n).
+```
 
+Max = **3**. ✓ Matches the hand-analysis.
+
+Cool thing about the trace: `max` is updated at each arrival (current's peak is always right after an arrival, never after a departure). So we could save the update to only arrival steps. Small optimization.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 6: Why Sweep Line Is the Right Mental Model
 
-Complexity isn't magic — it's just counting the work.
+Physically, the "number of trains present" is a step function over time: +1 at each arrival, -1 at each departure. The maximum of this step function is the answer. Any algorithm that computes this step function accurately — including our two-pointer merge over sorted arrival/departure arrays — solves the problem.
 
-Time: O(n log n). Space: O(1).
+The sweep doesn't care about pairs of intervals overlapping in any specific way. It just tracks the running count. That's why it handles arbitrary overlap configurations with one pass.
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+----------------------------------------
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+## Step 7: Name the Technique
 
+This is the **sweep-line algorithm**, specifically applied to interval overlap counting (sometimes called "interval partitioning"). The core pattern — sort events, walk them in order, maintain a running invariant — generalizes to many problems:
+- Max concurrent meetings (same problem).
+- Minimum rooms to schedule classes.
+- Max overlap of satellite broadcast windows.
+- Any "peak concurrency" question.
+
+----------------------------------------
+
+## Step 8: Complexity
+
+Time: sorting both arrays. **O(n log n)**.
+Space: **O(1)** beyond the sort (in-place) or **O(n)** (with separate event arrays).
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
-
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-int findPlatform(vector<int>& arr, vector<int>& dep) {
-    sort(arr.begin(), arr.end()); sort(dep.begin(), dep.end());
-    int n = arr.size(), i=0, j=0, cnt=0, peak=0;
+int findPlatform(vector<int>& arrival, vector<int>& departure) {
+    int n = arrival.size();
+    sort(arrival.begin(), arrival.end());
+    sort(departure.begin(), departure.end());
+
+    int i = 0, j = 0;
+    int current = 0, peak = 0;
     while (i < n) {
-        if (arr[i] <= dep[j]) { cnt++; i++; }
-        else { cnt--; j++; }
-        peak = max(peak, cnt);
+        if (arrival[i] < departure[j]) {
+            current++;
+            peak = max(peak, current);
+            i++;
+        } else {
+            current--;
+            j++;
+        }
     }
     return peak;
 }
 ```
 
-A few notes about the style:
+The loop exits when we've processed all arrivals. Remaining departures can't increase `current` (they only decrement), so we don't need to process them.
 
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+If the problem considers touching (arrival == departure) as overlap, change `<` to `<=`.
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Return the actual platform assignment per train.
-- Handle equal time-ties (pick policy).
-- Variable platform costs.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Return the schedule (which train goes to which platform).** Maintain a min-heap of "platform next-free time"; for each arrival, pop the platform that's ready earliest (if ≤ this arrival), else allocate a new one.
+- **Trains have different priority — minimize some cost.** Greedy might fail; use DP or min-cost matching.
+- **Streaming version — trains arrive and depart in real time.** Use a min-heap of "next-free time" plus a counter for current occupancy.
+- **Trains can be diverted to another station if no platform is free.** Now it's a rejection problem.
+- **Trains have variable platform requirements (some need a "long platform," some need a "short").** Multi-dimensional matching — harder.
+- **Can we avoid sorting departure separately — is the order guaranteed?** No — arrival and departure sort orders can differ; sort both.

@@ -4,196 +4,225 @@
 https://leetcode.com/problems/prefix-and-suffix-search/
 
 **Topic:**
-Trie Bit Manipulation Trie
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Trie indexed by 'suffix#prefix' concatenations.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> Words ['apple']. Suffixes 'apple','pple','ple','le','e',''. Insert each + '#apple'. Query ('a','e'): 'e#a' → node has idx 0.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Trie / Bit Manipulation Trie
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: The Task
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Design a class `WordFilter`:
+- Constructor takes a list of `words`.
+- `f(prefix, suffix)` returns the **largest index** of a word in the list that has the given `prefix` AND the given `suffix`. If none exists, return −1.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Example: `words = ["apple"]`.
+- `f("a", "e")` — "apple" starts with "a" and ends with "e". Index 0.
+- `f("b", "")` — no word starts with "b". Return −1.
 
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Trie indexed by 'suffix#prefix' concatenations.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
+With multiple words sharing the same prefix+suffix combo, pick the **largest** index. This favors later insertions — useful for "most recent wins" semantics.
 
 ----------------------------------------
 
-## Step 3: Build Intuition (VERY IMPORTANT)
+## Step 2: Two Separate Searches — and Why It's Not Enough
 
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
+The naive thought: build one trie for prefix lookups (forward trie) and another for suffix lookups (reverse trie, storing reversed words). For a query:
+1. Find all words matching the prefix (set A).
+2. Find all words matching the suffix (set B).
+3. Return max(A ∩ B) or −1.
 
-You might try hashing every word or running regex matches. For prefix queries that's overkill — tries share prefixes so matching a new query touches only relevant nodes. For XOR problems, a binary trie lets you greedily chase the opposite bit at each level.
+Works conceptually. But:
+- Intersecting two possibly-large sets per query is expensive.
+- For n words and q queries, worst-case O(n · q) — too slow when both are large.
 
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Insert every (suffix + '#' + word) variant into a trie; a prefix+suffix query becomes a single trie lookup for 'suf#pre'. Store word index at each node for latest match.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+We need a structure where a single lookup answers both constraints at once.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 3: The Trick — Fuse Suffix and Prefix into One Key
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+What if we could encode **both** the suffix and the prefix into a single string that a trie can search?
 
-**The concept:** Trie indexed by 'suffix#prefix' concatenations.
+For each word `w`, generate **every pair (suffix of w, w)**, joined by a delimiter like `#`:
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
+```
+"apple" produces:
+  "#apple", "e#apple", "le#apple", "ple#apple",
+  "pple#apple", "apple#apple"
+```
 
-**Pattern recognition cue:**
+That's `|w| + 1` entries per word (for each possible suffix, including empty).
 
-**Whenever you see prefix queries, dictionary lookups, or max-XOR → think Trie.**
+Now a query `f(prefix, suffix)` becomes: search the combined trie for words starting with `suffix + "#" + prefix`. A single trie traversal picks up everything that matches both.
 
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
+Why does this work? A generated key `"le#apple"` starts with `"le"` before the `#` and `"apple"` after. If a query string is `"le#ap"`, it matches this key's prefix (the key continues with `ple` after `"le#ap"`, which is fine — we're just checking the query is a prefix of the key).
 
+So **suffix + # + prefix** lines up with our generated keys perfectly.
 
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-For each word at index i, for each suffix s, insert s + '#' + word; at each node mark idx = i. Query: walk trie on 'suffix#prefix'; return stored idx or -1.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
+The `#` is a delimiter that isn't a letter, ensuring the suffix portion can't bleed into the prefix portion.
 
 ----------------------------------------
 
-## Step 6: Final Approach
+## Step 4: Storing the Word's Index
 
-Now let's crystallize everything we've learned into a clean algorithm.
+At every trie node, store the **maximum index** of any word whose generated key passes through that node. Why max? Because the problem asks for the largest index among matches.
 
-Trie with combined key.
+When we insert word `words[i]`, walk the trie for each of its generated keys; at every node, update `node.max_index = max(node.max_index, i)`.
 
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+On query: traverse the trie with the query string. If we reach the end, return the `max_index` at the final node — that's the largest word-index whose generated key has this prefix. If we can't traverse (character missing), return −1.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 5: Algorithm
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+```
+class WordFilter:
+    def __init__(words):
+        root = Trie node.
+        for i, w in enumerate(words):
+            for k in 0..len(w):           # k = suffix start index
+                key = w[k:] + "#" + w
+                insert key into trie; at each node update max_index = max(..., i)
 
-Words ['apple']. Suffixes 'apple','pple','ple','le','e',''. Insert each + '#apple'. Query ('a','e'): 'e#a' → node has idx 0.
+    def f(prefix, suffix):
+        query = suffix + "#" + prefix
+        cur = root
+        for c in query:
+            if c not in cur.children: return -1
+            cur = cur.children[c]
+        return cur.max_index
+```
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
-
-----------------------------------------
-
-## Step 8: Time and Space Complexity
-
-Complexity isn't magic — it's just counting the work.
-
-Build O(sum L²). Query O(P+S).
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
+Insertion cost per word: O(|w|²) (|w|+1 suffixes × up to |w| chars each). Query cost: O(|prefix| + |suffix|).
 
 ----------------------------------------
 
-## Step 9: C++ Implementation
+## Step 6: Trace
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+`words = ["apple", "ape"]`. Insert both.
+
+For "apple" (index 0), generate 6 keys:
+- "apple#apple", "pple#apple", "ple#apple", "le#apple", "e#apple", "#apple"
+
+For "ape" (index 1), generate 4 keys:
+- "ape#ape", "pe#ape", "e#ape", "#ape"
+
+As we insert keys, each node stores the max word-index passing through. Overlap happens, e.g., both "e#apple" (index 0) and "e#ape" (index 1) share prefix "e#a". Nodes along that prefix see both indices — store max = 1.
+
+**Query `f("a", "e")`** — prefix "a", suffix "e". Query string: "e#a".
+
+Walk the trie for "e#a":
+- "e" → exists (both "apple" and "ape" generate "e#..." keys).
+- "#" → exists.
+- "a" → exists; max_index at this node is max(0, 1) = 1.
+
+Return **1** ("ape"). Correct — both "apple" and "ape" match prefix "a" + suffix "e", and 1 is the larger index.
+
+**Query `f("ap", "le")`** — query string: "le#ap".
+
+Walk:
+- "l" → exists in trie? Only from "apple" keys (index 0). ✓
+- "e" → ✓ (next in "le#apple").
+- "#" → ✓.
+- "a", "p" → ✓.
+
+Final node's max_index = 0. Return **0**. Only "apple" matches "ap" + "le". ✓
+
+**Query `f("b", "")`** — query string: "#b".
+
+Walk: "#" ✓, "b" → doesn't exist (no word starts with "b"). Return **−1**. ✓
+
+----------------------------------------
+
+## Step 7: Why the Delimiter `#` Matters
+
+Suppose we didn't use `#`. Key for "apple" would include "leapple" (suffix "le" + word "apple"). A query with prefix "leap" and suffix "" would produce query string "leap" — and "leap" is a prefix of "leapple". False positive.
+
+`#` (not a letter) prevents the letters of suffix from blending into letters of the word. It's a **guard character**, making the boundary unambiguous. Any character that never appears in words works.
+
+Also, storing suffix **first** (before prefix) is important: the prefix portion of the key sits at the *end*, which means word-length variation doesn't prevent match-by-prefix. Try it the other way (prefix + # + suffix) and the match logic breaks.
+
+----------------------------------------
+
+## Step 8: Name It
+
+**Dual-key trie** or **suffix-concatenation trick**. A specific pattern for combining two independent constraints (prefix + suffix match) into a single trie lookup.
+
+Related ideas:
+- **Suffix trees / suffix automata** for arbitrary substring queries.
+- **Aho-Corasick** for multi-pattern matching.
+- In general, when you need to index strings for multiple query types, consider **key augmentation** — concatenating with delimiters to encode both constraints into one structure.
+
+----------------------------------------
+
+## Step 9: Complexity
+
+Let L = max word length, n = number of words, m = query prefix + suffix lengths.
+
+- **Construction**: O(n · L²) time and space (per word: L+1 suffixes × L chars).
+- **Query**: O(m) per call.
+
+For n · L² within memory budget (typically both ≤ 10), this is fast.
+
+----------------------------------------
+
+## Step 10: C++ Implementation
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
 class WordFilter {
-    struct N { N* c[27] = {}; int idx = -1; };
-    N* root = new N();
-    int cix(char ch) { return ch == '#' ? 26 : ch - 'a'; }
+    struct Node {
+        Node* ch[27] = {};      // 26 letters + '#'
+        int idx = -1;
+    };
+    Node* root = new Node();
+
+    int chIndex(char c) {
+        return c == '#' ? 26 : c - 'a';
+    }
+
+    void insert(const string& s, int wordIdx) {
+        Node* cur = root;
+        for (char c : s) {
+            int k = chIndex(c);
+            if (!cur->ch[k]) cur->ch[k] = new Node();
+            cur = cur->ch[k];
+            cur->idx = max(cur->idx, wordIdx);
+        }
+    }
+
 public:
     WordFilter(vector<string>& words) {
         for (int i = 0; i < (int)words.size(); ++i) {
-            string w = words[i];
-            for (int s = 0; s <= (int)w.size(); ++s) {
-                string key = w.substr(s) + "#" + w;
-                auto* n = root;
-                for (char ch : key) { if (!n->c[cix(ch)]) n->c[cix(ch)] = new N(); n = n->c[cix(ch)]; n->idx = i; }
+            const string& w = words[i];
+            for (int k = 0; k <= (int)w.size(); ++k) {
+                insert(w.substr(k) + "#" + w, i);
             }
         }
     }
-    int f(string pre, string suf) {
-        string key = suf + "#" + pre;
-        auto* n = root;
-        for (char ch : key) { n = n->c[cix(ch)]; if (!n) return -1; }
-        return n->idx;
+
+    int f(string prefix, string suffix) {
+        string q = suffix + "#" + prefix;
+        Node* cur = root;
+        for (char c : q) {
+            int k = chIndex(c);
+            if (!cur->ch[k]) return -1;
+            cur = cur->ch[k];
+        }
+        return cur->idx;
     }
 };
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Key lines:
+- Insert every **suffix + # + word** combination with the word's index.
+- At each node, track the **max** word index passing through (later insertions overwrite for ties).
+- Query: walk `suffix + # + prefix`; if the walk completes, return the node's idx.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 11: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- With weighted words.
-- Online insertions.
-- Overlapping prefix/suffix.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Memory concern for longer words.** For L = 20 and n = 15000, n · L² = 6M nodes — big but typically OK. For larger L, consider a **suffix array** + **prefix trie** hybrid or Aho-Corasick.
+- **Return all matching words instead of just the max-index one.** At each node, store a list (or sorted set) of indices; still O(answer count) per query.
+- **Insertion after construction.** Same trie supports live inserts; just update max_index at traversed nodes.
+- **Why store max index, not just presence?** Problem requires the **largest** index; storing max at each node avoids scanning all matches.
+- **What if words contain `#`?** Pick a different delimiter. In practice, use a character outside the problem's alphabet.
+- **Alternative approach: two tries + suffix indices.** Build a prefix trie and suffix trie, each node holding a sorted list of word indices. Query: intersect the two lists, take max. Memory-efficient but per-query intersection cost makes it slower.

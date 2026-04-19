@@ -4,184 +4,205 @@
 https://leetcode.com/problems/number-of-islands/
 
 **Topic:**
-Graph BFS DFS Dijkstra DSU
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Count connected components of 1s via DFS/BFS.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> grid=[['1','1','0'],['0','1','0'],['0','0','1']]. From (0,0) flood {(0,0),(0,1),(1,1)} → 1 island. From (2,2) → 2 islands.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Graph (BFS / DFS / Dijkstra / DSU)
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Read the Problem
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+You have an `m × n` grid of `'1'` (land) and `'0'` (water). An **island** is a group of land cells connected horizontally or vertically (4-directional). Water bounds the grid edges effectively. Count how many distinct islands there are.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Tiny example:
+```
+1 1 0
+0 1 0
+0 0 1
+```
 
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Count connected components of 1s via DFS/BFS.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
+Reading it by eye: the top-left 1s at (0,0), (0,1), and (1,1) are all touching (horizontally/vertically) — that's one island. The lone 1 at (2,2) is another. Total: **2 islands**.
 
 ----------------------------------------
 
-## Step 3: Build Intuition (VERY IMPORTANT)
+## Step 2: How Would a Human Solve This?
 
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
+If I pointed at a grid on paper and asked you to count islands, what would you do?
 
-A tempting first thought is to try every possible path from the start to the goal. The problem is that graphs have exponentially many paths. We need a traversal that visits each node at most a few times — that's exactly what BFS, DFS, and their weighted cousins give us.
+You'd probably pick a `1` you haven't crossed out yet, trace all its connected `1`s with your finger, cross them out, and count `+1`. Then repeat until no `1`s remain.
 
-So how do we get smarter? Let's build the correct intuition step by step.
+That's the algorithm in plain English. Two things need clarifying:
 
-Each island is a 4-connected component. Iterate all cells; whenever we hit an unvisited 1, flood-fill the whole island and increment a counter.
+1. **"Trace all connected 1s"** — visit every cell reachable via adjacent `1`s.
+2. **"Cross them out"** — mark visited cells so we don't count the same island twice.
 
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+That's literally all we need. No fancy theory, just paper-and-pencil reasoning mechanized.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 3: How Do We "Trace" Programmatically?
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+When we stand on a cell, we want to visit all 4 neighbors that are `1` and unvisited, then recursively do the same from each of them. That's **depth-first search (DFS)** — but that label isn't what matters. What matters is the behavior: "from here, spread to adjacent land cells, repeat."
 
-**The concept:** Count connected components of 1s via DFS/BFS.
+We can write it recursively:
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
+```cpp
+void flood(vector<vector<char>>& g, int r, int c) {
+    if (r < 0 || c < 0 || r >= (int)g.size() || c >= (int)g[0].size()) return;
+    if (g[r][c] != '1') return;   // water or already visited
+    g[r][c] = '0';                 // mark visited (by converting to water)
+    flood(g, r+1, c);
+    flood(g, r-1, c);
+    flood(g, r, c+1);
+    flood(g, r, c-1);
+}
+```
 
-**Pattern recognition cue:**
-
-**Whenever nodes have relationships or connectivity matters → think Graph. 'Shortest path' without weights → BFS. With weights → Dijkstra. Just connectivity → DSU.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-DFS from each unvisited land cell, marking visited by setting '1'→'0'. Each DFS launch counts as one island.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
+One trick worth noticing: instead of a separate `visited` matrix, I'm mutating the grid itself — converting `'1'` to `'0'` when visited. This saves memory but mutates the input, which is sometimes acceptable and sometimes not (check the problem's conventions).
 
 ----------------------------------------
 
-## Step 6: Final Approach
+## Step 4: The Outer Loop
 
-Now let's crystallize everything we've learned into a clean algorithm.
+Now the main algorithm. Scan every cell. When we find a `'1'` we haven't yet flooded, call `flood` and increment the island count. The `flood` function will sink the entire island to `'0'`, so we won't count it again when we encounter its other cells.
 
-DFS; could use BFS to avoid deep recursion.
+```cpp
+int numIslands(vector<vector<char>>& g) {
+    int islands = 0;
+    for (int r = 0; r < (int)g.size(); ++r) {
+        for (int c = 0; c < (int)g[0].size(); ++c) {
+            if (g[r][c] == '1') {
+                islands++;
+                flood(g, r, c);
+            }
+        }
+    }
+    return islands;
+}
+```
 
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
-
-----------------------------------------
-
-## Step 7: Dry Run (Detailed)
-
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
-
-grid=[['1','1','0'],['0','1','0'],['0','0','1']]. From (0,0) flood {(0,0),(0,1),(1,1)} → 1 island. From (2,2) → 2 islands.
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+That's the whole solution. Four nested directions inside a DFS, wrapped by a scan-the-grid outer loop.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 5: Dry Run on the Tiny Example
 
-Complexity isn't magic — it's just counting the work.
+```
+Grid:
+1 1 0
+0 1 0
+0 0 1
+```
 
-Time: O(n·m). Space: O(n·m) in the worst case.
+Outer loop iterates (r,c) from (0,0) to (2,2).
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+```
+(0,0): g=1. islands=1. flood(0,0):
+  mark g[0][0]=0.
+  flood(1,0): g[1][0]=0. return.
+  flood(-1,0): out of bounds. return.
+  flood(0,1): g[0][1]=1. mark g[0][1]=0.
+    flood(1,1): g[1][1]=1. mark g[1][1]=0.
+      flood(2,1): g[2][1]=0. return.
+      flood(0,1): g[0][1]=0 now. return.
+      flood(1,2): g[1][2]=0. return.
+      flood(1,0): g[1][0]=0. return.
+    flood(-1,1): OOB. return.
+    flood(0,2): g[0][2]=0. return.
+    flood(0,0): g[0][0]=0. return.
+  flood(0,-1): OOB. return.
+After (0,0) flood: grid is
+  0 0 0
+  0 0 0
+  0 0 1
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+(0,1) through (2,1): all 0, skip.
+(2,2): g=1. islands=2. flood(2,2):
+  mark g[2][2]=0. All neighbors OOB or 0. Return.
 
+End. islands = 2.
+```
+
+Matches our hand count.
+
+----------------------------------------
+
+## Step 6: BFS Instead of DFS — Same Idea, Different Walk
+
+DFS recurses deep. For very large islands, recursion can blow the stack (imagine a 1000x1000 grid that's all 1s — 10^6 recursive calls deep). Safer is BFS with an explicit queue:
+
+```cpp
+void flood_bfs(vector<vector<char>>& g, int sr, int sc) {
+    int m = g.size(), n = g[0].size();
+    queue<pair<int,int>> q;
+    q.push({sr, sc});
+    g[sr][sc] = '0';
+    int dr[] = {-1, 1, 0, 0}, dc[] = {0, 0, -1, 1};
+    while (!q.empty()) {
+        auto [r, c] = q.front(); q.pop();
+        for (int k = 0; k < 4; ++k) {
+            int nr = r + dr[k], nc = c + dc[k];
+            if (nr < 0 || nc < 0 || nr >= m || nc >= n) continue;
+            if (g[nr][nc] != '1') continue;
+            g[nr][nc] = '0';
+            q.push({nr, nc});
+        }
+    }
+}
+```
+
+Whether BFS or DFS, each cell is visited once. The count of islands doesn't depend on traversal order — only on which cells are connected.
+
+----------------------------------------
+
+## Step 7: Giving It a Name (at Last)
+
+This is a **connected-components** problem, and we solved it via flood-fill. If you squint, the grid is an implicit graph: each land cell is a node; edges connect horizontally/vertically adjacent land cells. The number of islands = the number of connected components in that graph.
+
+You could also use **Union-Find (DSU)** here: initially each land cell is its own component, merge horizontally/vertically adjacent land cells, count distinct roots. That's often overkill for a one-shot query but becomes essential when land cells are added over time (dynamic connectivity).
+
+Again — we didn't start from "this is a flood-fill problem" or "this is a connected-components problem". We started from "how would I count islands on paper?" and the algorithm emerged.
+
+----------------------------------------
+
+## Step 8: Complexity
+
+Time: every cell is visited at most a constant number of times (once by the outer loop, once by flood). **O(m · n)**.
+
+Space: in the DFS version, the recursion stack depth can be up to m · n in the worst case (one giant island). In the BFS version, the queue can hold up to m · n cells. **O(m · n)** worst case.
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
-
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-int numIslands(vector<vector<char>>& g) {
-    int n = g.size(), m = g[0].size(), cnt = 0;
-    function<void(int,int)> dfs = [&](int r, int c) {
-        if (r<0||c<0||r>=n||c>=m||g[r][c]!='1') return;
+class Solution {
+    int m, n;
+    void flood(vector<vector<char>>& g, int r, int c) {
+        if (r < 0 || c < 0 || r >= m || c >= n || g[r][c] != '1') return;
         g[r][c] = '0';
-        dfs(r+1,c); dfs(r-1,c); dfs(r,c+1); dfs(r,c-1);
-    };
-    for (int i=0;i<n;i++) for (int j=0;j<m;j++) if (g[i][j]=='1') { cnt++; dfs(i,j); }
-    return cnt;
-}
+        flood(g, r+1, c);
+        flood(g, r-1, c);
+        flood(g, r, c+1);
+        flood(g, r, c-1);
+    }
+public:
+    int numIslands(vector<vector<char>>& g) {
+        m = g.size(); n = g[0].size();
+        int islands = 0;
+        for (int r = 0; r < m; ++r)
+            for (int c = 0; c < n; ++c)
+                if (g[r][c] == '1') { islands++; flood(g, r, c); }
+        return islands;
+    }
+};
 ```
-
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Variant with 8-connectivity.
-- Count islands in a streamed grid (add land operations).
-- Largest island.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Largest island by area.** Instead of counting, have `flood` return the size of the island; track the max.
+- **8-directional connectivity (include diagonals).** Add four more neighbor offsets. The algorithm is unchanged otherwise.
+- **Grid updates: land added dynamically, answer queries after each add.** Switch to Union-Find — on each add, merge with any adjacent land cells and maintain a component count. Queries are O(α(n)) per update.
+- **Can't mutate the grid.** Use a separate `visited[m][n]` boolean matrix — O(m·n) extra space, otherwise identical.
+- **Count islands that touch the border.** Do DFS only starting from border `1`s; count those sources.
+- **Shape-based island counting (distinct shapes).** Normalize each island's cell coordinates (canonical form) and hash — count distinct hashes.

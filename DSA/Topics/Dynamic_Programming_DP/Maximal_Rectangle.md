@@ -4,198 +4,194 @@
 https://leetcode.com/problems/maximal-rectangle/
 
 **Topic:**
-Dynamic Programming DP
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Histogram rectangle per row using largest-rectangle-in-histogram.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> matrix=[['1','0','1','0','0'],...]. Answer=6.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Dynamic Programming (DP)
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Read the Problem
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+You have an `m × n` binary matrix (cells are `'0'` or `'1'`). Find the **largest rectangle containing only 1s** and return its area.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+The rectangle must be axis-aligned (sides parallel to the grid).
 
-So ask yourself:
+Example:
+```
+1 0 1 0 0
+1 0 1 1 1
+1 1 1 1 1
+1 0 0 1 0
+```
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Histogram rectangle per row using largest-rectangle-in-histogram.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
+By inspection, the rectangle in rows 1-2, columns 2-4 is size 2 × 3 = 6, all 1s. Is there bigger? 
 
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
+What about the all-1s 2×2 block in rows 1-2, columns 3-4? Size 4, smaller.
 
+What about the strip in row 2, columns 0-4? That's 1 × 5 = 5, smaller than 6.
 
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-Your very first thought is often recursion. That's actually the right start — but naive recursion re-computes the same subproblems exponentially. The fix is memoization (top-down) or tabulation (bottom-up). The hard part is identifying the state that captures all we need to know about the past.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-For each row treat consecutive 1s above as histogram bars; apply monotonic stack to find largest rectangle.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Rows 1-2, columns 2-4 gives 6, which is the known answer.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: Brute Force Thinking
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+Try every rectangle in the grid. Specify rectangle by (top, bottom, left, right) — O(m²·n²) rectangles. For each, check if all cells are 1s: O(m·n). Total O(m³·n³). Unusable for non-trivial inputs.
 
-**The concept:** Histogram rectangle per row using largest-rectangle-in-histogram.
+Even smarter brute: for each top-left corner, extend as far as possible. Still O(m²·n²) worst case.
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever a brute-force recursion has overlapping subproblems → think DP. Identify state first, then transition.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+We need to exploit some structural property to cut this down.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 3: Reduce to a 1D Problem
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+Here's a key reframing. Look at each row in turn. Imagine the cells above each row are "stacked" — for column c in row i, count how many consecutive 1s exist ending at row i. Call this height[c].
 
-Maintain heights[j]; for each row update heights (reset on 0). Compute row's largest rectangle; track max.
+Now for each row, the problem becomes: **given a histogram with bars of these heights, find the largest rectangle in the histogram**.
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
+Let me illustrate with the example.
 
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
+```
+Row 0: 1 0 1 0 0          heights: [1, 0, 1, 0, 0]
+Row 1: 1 0 1 1 1          heights: [2, 0, 2, 1, 1]
+Row 2: 1 1 1 1 1          heights: [3, 1, 3, 2, 2]
+Row 3: 1 0 0 1 0          heights: [4, 0, 0, 3, 0]
+```
 
+(When a cell is 0, its height resets to 0; when 1, increment from the previous row.)
 
-----------------------------------------
+Maximum rectangle in each histogram:
+- Row 0 heights [1,0,1,0,0]: largest rectangle = 1 (either single 1).
+- Row 1 heights [2,0,2,1,1]: options include 2×1=2 from column 0, 3×1=3 from columns 2-4 (min height 1), 2×1=2 from column 2. Hmm, let me re-check — the rectangle in columns 2-4 with height 1 (limited by columns 3, 4) is 3 × 1 = 3. Column 2 alone at height 2 is 2. So max is 3.
+- Row 2 heights [3,1,3,2,2]: columns 2-4 at min height 2 → 3 × 2 = 6. Column 0 at 3 → 3. Column 2 alone at 3 → 3. Max is 6.
+- Row 3 heights [4,0,0,3,0]: column 0 at 4 → 4. Column 3 at 3 → 3. Max is 4.
 
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-DP heights + monotonic stack per row.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+Overall max: **6**. ✓ Matches the expected answer.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 4: Why This Decomposition Is Correct
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+Any rectangle of all-1s in the matrix has a bottom row. Consider the rectangle's bottom row (say row i) and its columns [left, right]. The heights of the histogram for row i capture exactly how far up the all-1s column extends from row i.
 
-matrix=[['1','0','1','0','0'],...]. Answer=6.
+So a rectangle in the matrix with bottom at row i maps exactly to a rectangle in row i's histogram. The largest rectangle in the matrix is the maximum over all possible bottom rows, which is the max over all histograms.
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+No matrix rectangle is missed. Every matrix rectangle contributes to exactly one histogram (the one for its bottom row).
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 5: Largest Rectangle in Histogram — The Monotonic Stack
 
-Complexity isn't magic — it's just counting the work.
+If you haven't seen this subproblem, the classical solution uses a **monotonic stack**. For each bar, find the farthest-left and farthest-right bars that are ≥ this bar's height. The rectangle using this bar as the minimum has width = (right - left - 1) and height = bar's height.
 
-Time: O(n·m). Space: O(m).
+A monotonic increasing stack of indices achieves this in O(n):
+- When a bar shorter than the stack top arrives, the bar at the top has found its right boundary (the incoming shorter bar). Pop and compute its rectangle.
+- The new top of the stack after popping is its left boundary.
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+Full algorithm:
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+```
+stack = []   # indices of bars with strictly increasing heights
+best = 0
+for i in 0..n-1:
+    while stack and heights[stack.top()] > heights[i]:
+        popped = stack.pop()
+        h = heights[popped]
+        left = stack.top() if stack else -1
+        width = i - left - 1
+        best = max(best, h * width)
+    stack.push(i)
+# handle remaining bars at the end by treating "right boundary" as n
+while stack:
+    popped = stack.pop()
+    h = heights[popped]
+    left = stack.top() if stack else -1
+    width = n - left - 1
+    best = max(best, h * width)
+return best
+```
 
+Linear time. For each row's histogram, apply this → O(n) per row, O(m · n) total.
+
+----------------------------------------
+
+## Step 6: Stitching It All Together
+
+```
+heights = [0] * n
+best = 0
+for i in 0..m-1:
+    for c in 0..n-1:
+        if matrix[i][c] == '1': heights[c] += 1
+        else: heights[c] = 0
+    best = max(best, largestRectangleInHistogram(heights))
+return best
+```
+
+Each row update is O(n). Each histogram solve is O(n). Total: **O(m · n)**.
+
+----------------------------------------
+
+## Step 7: Name What We Did
+
+This problem combines **two DP-flavored techniques**: "build a column-height accumulator as we sweep rows" and "largest rectangle in histogram via monotonic stack." It's a classic example of reducing a 2D problem to a sequence of 1D problems.
+
+The column-height DP alone isn't a full DP per se — it's a rolling state. But the reframing from "find largest all-1s rectangle" to "for each bottom row, solve histogram" is the crux.
+
+----------------------------------------
+
+## Step 8: Complexity
+
+Time: **O(m · n)**. Each cell is touched once in the row updates, and the histogram pass is O(n) per row.
+Space: **O(n)** for the heights array and the stack.
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
-
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-int largestRectangleArea(vector<int>& h) {
-    h.push_back(0);
-    stack<int> st; int best = 0;
-    for (int i = 0; i < (int)h.size(); ++i) {
-        while (!st.empty() && h[st.top()] > h[i]) {
-            int top = st.top(); st.pop();
-            int w = st.empty() ? i : i - st.top() - 1;
-            best = max(best, h[top] * w);
+int largestInHistogram(vector<int>& heights) {
+    stack<int> stk;
+    int best = 0;
+    int n = heights.size();
+    for (int i = 0; i <= n; ++i) {
+        int curHeight = (i == n) ? 0 : heights[i];  // sentinel flushes remaining
+        while (!stk.empty() && heights[stk.top()] > curHeight) {
+            int h = heights[stk.top()]; stk.pop();
+            int left = stk.empty() ? -1 : stk.top();
+            int width = i - left - 1;
+            best = max(best, h * width);
         }
-        st.push(i);
+        stk.push(i);
     }
-    h.pop_back();
     return best;
 }
-int maximalRectangle(vector<vector<char>>& M) {
-    if (M.empty()) return 0;
-    int m = M[0].size(), best = 0;
-    vector<int> h(m, 0);
-    for (auto& r : M) {
-        for (int j = 0; j < m; ++j) h[j] = r[j]=='1' ? h[j]+1 : 0;
-        best = max(best, largestRectangleArea(h));
+
+int maximalRectangle(vector<vector<char>>& matrix) {
+    if (matrix.empty() || matrix[0].empty()) return 0;
+    int m = matrix.size(), n = matrix[0].size();
+    vector<int> heights(n, 0);
+    int best = 0;
+    for (int i = 0; i < m; ++i) {
+        for (int c = 0; c < n; ++c) {
+            heights[c] = (matrix[i][c] == '1') ? heights[c] + 1 : 0;
+        }
+        best = max(best, largestInHistogram(heights));
     }
     return best;
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Notes:
+- I use a sentinel `i == n` with height 0 to flush the stack cleanly at the end of each histogram.
+- Heights reset to 0 on '0' cells; otherwise they accumulate.
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Maximum square (easier DP).
-- Count maximal rectangles.
-- Sub-rectangle with sum constraint.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Largest square submatrix of 1s.** Much simpler DP: `dp[i][j] = 1 + min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1])` for cells with 1; answer is max dp² (side squared).
+- **Maximal rectangle in a grid where cells have weights and we maximize weighted sum.** Different DP — 2D prefix sums plus Kadane on the collapsed array.
+- **Maximum all-ones rectangle count, not just the biggest.** Count rectangles using similar stack techniques; trickier.
+- **Online matrix (cells flip 0↔1 over time).** Hard — updating heights and histograms efficiently needs segment trees.
+- **Why does the monotonic stack find rectangles correctly?** Each popped bar is a "minimum height" rectangle; we find its maximal extent. Every rectangle's determining-height-bar gets its rectangle computed when popped.
+- **What if the matrix is extremely large?** Stream-process row by row; we only need the current heights array, not the full matrix.

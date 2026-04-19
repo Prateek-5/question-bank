@@ -6,181 +6,154 @@ https://leetcode.com/problems/merge-two-sorted-lists/
 **Topic:**
 Linked List
 
+----------------------------------------
+
+## Step 1: Understand the Goal
+
+You get two linked lists, each already sorted in non-decreasing order. Combine them into one sorted linked list. You should splice the existing nodes together rather than creating copies — which affects memory usage, not correctness.
+
+Example:
+- List A: `1 → 2 → 4`
+- List B: `1 → 3 → 4`
+- Merged: `1 → 1 → 2 → 3 → 4 → 4`
+
+Both inputs can be empty; handle that gracefully.
 
 ----------------------------------------
 
-## Step 1: Understand the Problem (Beginner Friendly)
+## Step 2: Think About How You'd Merge on Paper
 
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
+Suppose you had two stacks of sorted cards face-up, and you wanted one merged sorted stack. The strategy is obvious: look at the top card of each stack, pick the smaller one, put it in the merged stack, reveal the next card underneath. Repeat. When one stack runs out, just append the rest of the other.
 
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
+That's the whole algorithm. Now we just need to translate "look at the top" and "reveal the next" into linked-list operations.
 
-**In plain words:** Iterative or recursive merge using a dummy head.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> A:1→2→4, B:1→3→4. Merged: 1→1→2→3→4→4.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+In a linked list, "the top card" is the head. "Reveal the next" means `head = head.next`.
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 3: Making It Concrete in Pseudocode
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+```
+tail = dummy node (we'll return dummy.next at the end)
+while both a and b are non-null:
+    if a.val <= b.val:
+        tail.next = a
+        a = a.next
+    else:
+        tail.next = b
+        b = b.next
+    tail = tail.next
+# at most one of a, b is still non-null
+tail.next = a if a else b
+return dummy.next
+```
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
-
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Iterative or recursive merge using a dummy head.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-Because linked lists don't give random access, the temptation is to copy them into arrays and work there. Sometimes that's fine; often it wastes memory. The classic trick is to use two pointers moving at different speeds or with different gaps — it lets you solve many problems in a single pass.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-At each step pick the smaller head and advance. Continue until one list empties, then attach the rest.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+The use of a **dummy head** deserves a moment. Without it, we'd need special logic for "the very first node" — is it from A or B? A dummy sidesteps that entirely: we always have a `tail` to append to. At the end, `dummy.next` points to the real merged head.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 4: Why It's Safe to Just Re-link Existing Nodes
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+We're not copying values; we're reusing the original nodes and changing their `next` pointers. This works because:
 
-**The concept:** Iterative or recursive merge using a dummy head.
+1. Each node is only "consumed" from one input list, never from both.
+2. Once we re-link a node's `next` via `tail.next = ...`, we never revisit the old pointer.
+3. The tail of the merged list gets whatever remains when one input finishes — by setting `tail.next = (whichever list is still non-null)`.
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever you need to find cycles, middles, or the k-th-from-end → think slow/fast pointers.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+No memory is leaked, nothing is copied. Just pointer reassignment.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 5: Trace on the Example
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+Let me use `A: 1 → 2 → 4` and `B: 1 → 3 → 4`. Dummy's `next` will eventually point to the merged head.
 
-Dummy head d; tail=d. While both non-null: pick smaller, attach, advance. Attach remaining list.
+```
+dummy, tail=dummy, a=1A, b=1B
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
+Iter 1: 1A <= 1B, tail.next = 1A, advance a to 2A. tail = 1A.
+        Merged so far: dummy → 1A. A: 2A → 4A. B: 1B → 3B → 4B.
 
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
+Iter 2: 2A > 1B, tail.next = 1B, advance b to 3B. tail = 1B.
+        Merged: dummy → 1A → 1B. A: 2A → 4A. B: 3B → 4B.
 
+Iter 3: 2A <= 3B, tail.next = 2A, advance a to 4A. tail = 2A.
+        Merged: dummy → 1A → 1B → 2A. A: 4A. B: 3B → 4B.
 
-----------------------------------------
+Iter 4: 4A > 3B, tail.next = 3B, advance b to 4B. tail = 3B.
+        Merged: ... → 3B. A: 4A. B: 4B.
 
-## Step 6: Final Approach
+Iter 5: 4A <= 4B, tail.next = 4A, advance a to null. tail = 4A.
+        Merged: ... → 4A. A: null. B: 4B.
 
-Now let's crystallize everything we've learned into a clean algorithm.
+Loop exit (a is null).
+tail.next = b = 4B.
+Merged: 1A → 1B → 2A → 3B → 4A → 4B.
+```
 
-Two-pointer merge with dummy.
+Values: `1, 1, 2, 3, 4, 4`. ✓
 
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
-
-----------------------------------------
-
-## Step 7: Dry Run (Detailed)
-
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
-
-A:1→2→4, B:1→3→4. Merged: 1→1→2→3→4→4.
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+Notice that when `a.val == b.val` (iter 1), we picked from A. The `<=` is a tie-breaker — you could pick from B on ties with `<` and still get a sorted result. Choosing one direction consistently keeps the merge stable (A's nodes stay before equivalent B nodes).
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 6: Comparing to Array Merge
 
-Complexity isn't magic — it's just counting the work.
-
-Time: O(n+m). Space: O(1).
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
+If you've written merge-sort's merge step, this feels identical — and it is. Merging two sorted arrays is an O(n + m) linear scan with two pointers. The linked list version is the same algorithm with pointer reassignments replacing array index increments. The algorithmic skeleton is universal: two sorted sequences plus monotonic pointers equals O(n + m) merge.
 
 ----------------------------------------
 
-## Step 9: C++ Implementation
+## Step 7: Complexity
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+Time: we touch each node exactly once. **O(n + m)**.
+Space: no extra data structures, just a dummy and a tail pointer. **O(1)**.
+
+If you wrote a recursive version (also elegant), you'd use O(n + m) stack space. The iterative version is the safer default.
+
+----------------------------------------
+
+## Step 8: C++ Implementation
 
 ```cpp
-struct ListNode { int val; ListNode* next; ListNode(int x):val(x),next(nullptr){} };
 ListNode* mergeTwoLists(ListNode* a, ListNode* b) {
-    ListNode d(0); auto t = &d;
+    ListNode dummy(0);
+    ListNode* tail = &dummy;
     while (a && b) {
-        if (a->val <= b->val) { t->next = a; a = a->next; }
-        else { t->next = b; b = b->next; }
-        t = t->next;
+        if (a->val <= b->val) {
+            tail->next = a;
+            a = a->next;
+        } else {
+            tail->next = b;
+            b = b->next;
+        }
+        tail = tail->next;
     }
-    t->next = a ? a : b;
-    return d.next;
+    tail->next = a ? a : b;
+    return dummy.next;
 }
 ```
 
-A few notes about the style:
+The dummy lives on the stack — local to the function. We return `dummy.next`, which points to a node that survives after the function ends (because heap-allocated input nodes persist).
 
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
+Recursive version (for reference, not the recommended one in practice):
 
+```cpp
+ListNode* mergeTwoLists(ListNode* a, ListNode* b) {
+    if (!a) return b;
+    if (!b) return a;
+    if (a->val <= b->val) { a->next = mergeTwoLists(a->next, b); return a; }
+    else { b->next = mergeTwoLists(a, b->next); return b; }
+}
+```
+
+Short and pretty, but O(n + m) stack depth.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 9: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Merge k sorted lists (heap).
-- Merge in place without dummy.
-- Merge by a custom comparator.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Merge k sorted lists.** Generalize with a min-heap of all the heads. Pop the smallest, push its `next`. O(N log k).
+- **Merge without modifying the original lists (make copies).** Allocate new nodes as you go.
+- **Merge in descending order.** Flip the comparison.
+- **Merge where ties should interleave (stability-sensitive).** Be explicit about the tie-break direction; test with repeated values.
+- **In-place merge of a linked list and an array.** Build a third list from the array first, then use the standard merge.

@@ -6,179 +6,237 @@ https://leetcode.com/problems/linked-list-cycle-ii/
 **Topic:**
 Linked List
 
+----------------------------------------
+
+## Step 1: Recap Linked List Cycle I
+
+In **Linked List Cycle I**, we just asked: does the list have a cycle? The answer was Floyd's tortoise-and-hare: two pointers, slow moves 1 step per tick, fast moves 2. If there's a cycle, they'll meet. If fast hits null, no cycle.
+
+Now we're asked something stronger: **where** does the cycle begin? That is, return the **first node** of the cycle.
+
+Example:
+```
+1 → 2 → 3 → 4 → 5 → 6
+            ↑           ↓
+            └────────────
+```
+Node 4 is where the cycle starts (5 → 6 → 4 wraps back). Return node 4.
+
+If no cycle, return null.
 
 ----------------------------------------
 
-## Step 1: Understand the Problem (Beginner Friendly)
+## Step 2: Warm-Up Analysis
 
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
+Let me set up some variables.
+- `μ` = distance from head to cycle start. ("mu")
+- `λ` = length of the cycle. ("lambda")
 
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
+Once slow enters the cycle, it moves at speed 1; fast moves at speed 2. Within the cycle, fast gains on slow by 1 step per tick. So they'll meet somewhere inside the cycle.
 
-**In plain words:** Floyd's algorithm — after meeting, reset one pointer to head.
+Where exactly do they meet? Let's trace. When slow enters the cycle (after μ steps), fast has also taken μ steps — but fast has moved 2μ cells, which means fast is μ cells into the cycle (after the cycle start), assuming μ ≥ λ (otherwise fast wrapped around).
 
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
+In general, inside the cycle, fast is "some offset ahead" of slow. They meet when fast catches up.
 
-> 1→2→3→4→5→3. Slow/fast meet inside. Reset slow to 1; both step → meet at node 3.
+Here's the elegant result:
 
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
+**Claim:** when slow and fast first meet inside the cycle, the distance from the meeting point going *forward* back to the cycle start equals μ (the distance from head to cycle start).
 
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
-
-----------------------------------------
-
-## Step 2: Break Down the Problem
-
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
-
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
-
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Floyd's algorithm — after meeting, reset one pointer to head.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
+This is Floyd's famous insight.
 
 ----------------------------------------
 
-## Step 3: Build Intuition (VERY IMPORTANT)
+## Step 3: Proof of the Claim
 
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
+Let `m` = the point where slow and fast meet.
+- Distance slow has walked: μ + x, where x is slow's position from the cycle start (0 ≤ x < λ).
+- Distance fast has walked: 2(μ + x).
 
-Because linked lists don't give random access, the temptation is to copy them into arrays and work there. Sometimes that's fine; often it wastes memory. The classic trick is to use two pointers moving at different speeds or with different gaps — it lets you solve many problems in a single pass.
+The difference must be a whole number of cycle lengths (since fast has lapped slow some number of times inside the cycle):
+```
+2(μ + x) - (μ + x) = k·λ
+μ + x = k·λ
+μ = k·λ - x
+```
 
-So how do we get smarter? Let's build the correct intuition step by step.
+Now consider starting two new walkers:
+- One from head.
+- One from the meeting point `m`.
 
-If slow and fast meet inside the cycle, the distance from head to start equals the distance from meeting point to start (mod cycle length). Reset one to head and advance both one step at a time to find the cycle's entry.
+Both move 1 step per tick. After some steps, they should meet at the cycle start.
 
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
+How many steps until they meet?
+- Walker from head reaches cycle start in exactly μ steps.
+- Walker from m: m is x cells into the cycle. To return to cycle start, it must walk λ - x cells forward around the cycle, then nothing more (once it reaches cycle start, it stops or both continue same direction). Actually, the walker from m keeps going; after μ steps, it's at position `m + μ` (inside the cycle, positions wrap mod λ). That's `x + μ = x + k·λ - x = k·λ ≡ 0 (mod λ)` — the cycle start.
 
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
+So both walkers meet at the cycle start after μ steps.
 
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
-
-----------------------------------------
-
-## Step 4: Connect to Concept
-
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
-
-**The concept:** Floyd's algorithm — after meeting, reset one pointer to head.
-
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever you need to find cycles, middles, or the k-th-from-end → think slow/fast pointers.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+**Algorithm:** after slow and fast meet at m, place a new pointer at head. Move both at speed 1. They meet at the cycle start.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 4: The Complete Algorithm
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+```
+# Phase 1: detect cycle with Floyd's
+slow = head, fast = head
+while fast and fast.next:
+    slow = slow.next
+    fast = fast.next.next
+    if slow == fast:
+        break
+else:
+    return null  # no cycle
 
-Detect meeting. Then slow=head; move both one step until they meet — that's the cycle start.
+# Phase 2: find cycle start
+walker = head
+while walker != slow:
+    walker = walker.next
+    slow = slow.next
+return walker
+```
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Floyd's phase 2.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+Clean. The "else" after while is Python-ish — in C++ we'd use a flag or break-else structure. Below is the clean C++ version.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 5: Trace on the Example
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+List: `1 → 2 → 3 → 4 → 5 → 6 → 4 (cycle back)`.
+μ = 3 (from head 1 to cycle start 4). λ = 3 (cycle length: 4, 5, 6).
 
-1→2→3→4→5→3. Slow/fast meet inside. Reset slow to 1; both step → meet at node 3.
+**Phase 1:**
+```
+slow=1, fast=1.
+Iter 1: slow=2, fast=3.
+Iter 2: slow=3, fast=5.
+Iter 3: slow=4, fast=4 (fast jumped 6→4). They meet at node 4!
+```
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+Wait, slow ends at 4 and fast ends at 4 at iter 3? Let me re-trace.
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
+Actually iter 3:
+- slow was at 3, moves to 4.
+- fast was at 5, moves to 6 then to 4.
+- They're both at 4. ✓
 
+The meeting point m is node 4 (which happens to be the cycle start in this particular case).
+
+**Phase 2:**
+```
+walker=1, slow=4.
+Iter 1: walker=2, slow=5.
+Iter 2: walker=3, slow=6.
+Iter 3: walker=4, slow=4. Match! Return 4.
+```
+
+Great — they meet at the cycle start (node 4). ✓
+
+In this example Phase 1's meeting point happened to coincide with the cycle start (because μ = λ). In general they won't coincide, but Phase 2 still finds the cycle start in exactly μ steps.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 6: A Different Example Where Meeting ≠ Cycle Start
 
-Complexity isn't magic — it's just counting the work.
+List: `A → B → C → D → E → C` (cycle starts at C, cycle is C-D-E).
+μ = 2 (A, B before cycle). λ = 3.
 
-Time: O(n). Space: O(1).
+```
+slow=A, fast=A.
+Iter 1: slow=B, fast=C.
+Iter 2: slow=C, fast=E.
+Iter 3: slow=D, fast=D. Meet at D!
+```
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+Meeting point m = D. Now Phase 2:
+```
+walker=A, slow=D.
+Iter 1: walker=B, slow=E.
+Iter 2: walker=C, slow=C. Match. Return C.
+```
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
+Correct — cycle starts at C. The meeting point D is different from the cycle start C, but Phase 2's math lands us at the right place.
 
 ----------------------------------------
 
-## Step 9: C++ Implementation
+## Step 7: Why This Works Intuitively
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+The elegant observation: the distance from head to cycle start (μ) equals the distance from meeting point to cycle start (traversing forward through the cycle).
+
+So starting simultaneous walkers — one from head, one from meeting point — both reach the cycle start after μ steps.
+
+It's one of those cute results where a bit of modular-arithmetic insight gives an O(1)-memory algorithm for a problem that looks like it needs a hashset.
+
+Without Floyd's: you could hash all visited nodes and return the first repeat. O(n) time and space. Floyd's gives O(1) space.
+
+----------------------------------------
+
+## Step 8: Name It
+
+This is **Floyd's tortoise-and-hare cycle detection, phase 2**. Sometimes called **"Floyd's cycle-finding algorithm"** in full.
+
+Same technique detects cycles in:
+- Linked lists (this problem).
+- Iterated functions (e.g., Pollard's rho algorithm for factoring integers).
+- State-space graphs where each state has exactly one "next."
+
+Brent's algorithm is a close cousin, sometimes faster in practice.
+
+----------------------------------------
+
+## Step 9: Complexity
+
+Time: Phase 1 is O(μ + λ). Phase 2 is O(μ). Total **O(n)**.
+Space: **O(1)** — two pointers throughout.
+
+No hashset needed.
+
+----------------------------------------
+
+## Step 10: C++ Implementation
 
 ```cpp
-struct ListNode { int val; ListNode* next; };
-ListNode* detectCycle(ListNode* h) {
-    auto s = h, f = h;
-    while (f && f->next) {
-        s = s->next; f = f->next->next;
-        if (s == f) { s = h; while (s != f) { s = s->next; f = f->next; } return s; }
+ListNode* detectCycle(ListNode* head) {
+    ListNode* slow = head;
+    ListNode* fast = head;
+
+    // Phase 1: find meeting point (or no cycle).
+    while (fast && fast->next) {
+        slow = slow->next;
+        fast = fast->next->next;
+        if (slow == fast) {
+            // Phase 2: walk from head and meeting point at equal speed.
+            ListNode* walker = head;
+            while (walker != slow) {
+                walker = walker->next;
+                slow = slow->next;
+            }
+            return walker;
+        }
     }
-    return nullptr;
+
+    return nullptr;   // no cycle
 }
 ```
 
-A few notes about the style:
+Compact. The `while (fast && fast->next)` guards against fast dereferencing null in the no-cycle case.
 
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
+One small gotcha: I reuse the variable `slow` in Phase 2 after we've found the meet point. Some prefer renaming for clarity:
+```cpp
+ListNode* meet = slow;     // clearer
+ListNode* walker = head;
+while (walker != meet) { walker = walker->next; meet = meet->next; }
+return walker;
+```
 
+Semantically identical.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 11: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Cycle length calculation.
-- Remove the cycle.
-- Multiple lists sharing nodes.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Cycle length.** Once phase 1 finds the meeting point, fix one pointer and walk the other forward until they meet again — that's the cycle length.
+- **Remove the cycle.** Find the cycle start; walk around the cycle to find the node whose `next` is the cycle start; set its next to null.
+- **Cycle in a graph (not just linked list).** Use DFS with three-color marking, or union-find for undirected.
+- **Why does Floyd's "phase 2" use head + meeting point, not head + cycle start directly?** Because we don't yet *know* the cycle start — the meeting point is the only cycle-interior node we've identified. Floyd's math bridges from meeting point to cycle start.
+- **Brent's algorithm comparison.** Brent's uses less *expected* time in practice by doubling the "teleport distance" of the fast pointer.

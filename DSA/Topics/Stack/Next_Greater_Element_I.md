@@ -6,183 +6,182 @@ https://leetcode.com/problems/next-greater-element-i/
 **Topic:**
 Stack
 
+----------------------------------------
+
+## Step 1: Understand the Two Arrays
+
+You get two arrays: `nums1` and `nums2`. `nums1` is a **subset** of `nums2`. Both contain distinct integers.
+
+For each element `x` in `nums1`:
+- Find `x` inside `nums2`.
+- Look at the elements to the **right** of `x` in `nums2`.
+- Return the first one that is **greater than** `x`.
+- If no such element exists, return -1.
+
+The final output is a list of answers, one per `nums1` element, in the same order.
+
+Example: `nums1 = [4, 1, 2]`, `nums2 = [1, 3, 4, 2]`.
+
+- For 4 in nums2: it's at index 2. To its right: [2]. Nothing greater than 4. Answer: -1.
+- For 1 in nums2: at index 0. To its right: [3, 4, 2]. First greater than 1: 3. Answer: 3.
+- For 2 in nums2: at index 3. Nothing to its right. Answer: -1.
+
+Output: `[-1, 3, -1]`.
 
 ----------------------------------------
 
-## Step 1: Understand the Problem (Beginner Friendly)
+## Step 2: The Naïve Approach
 
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Monotonic stack on nums2; map each value to its next greater.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> nums2=[1,3,4,2]. map {1→3, 3→4, 4→-1, 2→-1}. nums1=[4,1,2] → [-1,3,-1].
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
-
-----------------------------------------
-
-## Step 2: Break Down the Problem
-
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
-
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
-
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Monotonic stack on nums2; map each value to its next greater.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-You might try to scan multiple times, or use recursion to handle nested structure. A stack lets you remember just enough of the past to resolve it efficiently — especially 'next greater' or 'matching brackets' questions.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Scan nums2, maintain a decreasing stack. When a larger value appears, all smaller on stack know their next greater.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
-
-----------------------------------------
-
-## Step 4: Connect to Concept
-
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
-
-**The concept:** Monotonic stack on nums2; map each value to its next greater.
-
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever you see nested structure, matching brackets, or 'next greater element' → think Stack / Monotonic Stack.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-For each x in nums2: while stack non-empty and top<x, map[st.top()]=x, pop. Push x. Then for nums1 look up map (default -1).
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Monotonic stack + hashmap.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
-
-----------------------------------------
-
-## Step 7: Dry Run (Detailed)
-
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
-
-nums2=[1,3,4,2]. map {1→3, 3→4, 4→-1, 2→-1}. nums1=[4,1,2] → [-1,3,-1].
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
-
-----------------------------------------
-
-## Step 8: Time and Space Complexity
-
-Complexity isn't magic — it's just counting the work.
-
-Time: O(n1+n2). Space: O(n2).
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
-
-----------------------------------------
-
-## Step 9: C++ Implementation
-
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+For each query `x`, find its index in `nums2`, then scan right looking for a larger value.
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-vector<int> nextGreaterElement(vector<int>& a, vector<int>& b) {
-    unordered_map<int,int> nxt;
-    stack<int> st;
-    for (int x : b) {
-        while (!st.empty() && st.top() < x) { nxt[st.top()] = x; st.pop(); }
-        st.push(x);
+for (int x : nums1) {
+    int idx = find(x in nums2);
+    int ans = -1;
+    for (int j = idx + 1; j < nums2.size(); ++j) {
+        if (nums2[j] > x) { ans = nums2[j]; break; }
     }
-    vector<int> res;
-    for (int x : a) res.push_back(nxt.count(x) ? nxt[x] : -1);
-    return res;
+    result.push_back(ans);
 }
 ```
 
-A few notes about the style:
+Per query: O(n) to find `x`, O(n) to scan. Total: O(n1 · n2) in the worst case. For large inputs, slow.
 
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+But here's the thing — if we knew, for *every* element of `nums2`, what its next-greater element is, we could answer any query about a subset of `nums2` in O(1) (just look up from a hashmap). So the real work is computing next-greater-for-all in `nums2` efficiently.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 3: Precompute Next-Greater for Every Element of nums2
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
+Focus on `nums2 = [1, 3, 4, 2]`. Let me compute next-greater for each position:
 
-- Next Greater Element II (circular).
-- Previous greater element.
-- Next Greater Node in linked list.
+- Position 0 (value 1): look right. First greater: 3. Answer: 3.
+- Position 1 (value 3): look right. First greater: 4. Answer: 4.
+- Position 2 (value 4): look right. Only 2. Nothing greater. Answer: -1.
+- Position 3 (value 2): nothing to the right. Answer: -1.
 
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
+Naively: O(n²). But we can do O(n) with a stack.
 
----
+----------------------------------------
 
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+## Step 4: Rethink the Scan Direction
+
+Instead of "for each element, scan forward to find its next greater," flip it: **"for each new element coming in, which past elements does it resolve?"**
+
+As I walk `nums2` left to right, I maintain a "waiting list" of elements I've seen but haven't resolved yet (their next-greater not yet found).
+
+When I encounter a new value `v`, any element in the waiting list that's smaller than `v` has its answer: `v`. I resolve those and remove them from the waiting list.
+
+What stays on the waiting list? Elements larger than or equal to `v`. They still wait.
+
+The waiting list at any moment is therefore in **decreasing order** (bottom to top): larger elements at the bottom, smaller ones at top. Because we always kick out anything smaller than the newcomer — what's left can only be larger.
+
+A waiting list with "only push smaller on top" and "pop from top when a new big value arrives" is exactly a **stack maintaining decreasing order** — aka monotonic decreasing stack.
+
+----------------------------------------
+
+## Step 5: The Algorithm
+
+```
+stack = []
+ans_map = {}
+
+for v in nums2:
+    while stack and stack.top() < v:
+        x = stack.pop()
+        ans_map[x] = v
+    stack.push(v)
+
+# any elements still on the stack have no next greater
+for x in stack: ans_map[x] = -1
+
+# answer queries using the map
+return [ans_map[x] for x in nums1]
+```
+
+Each element in `nums2` is pushed once and popped at most once — total O(n2) work. For each query in `nums1`, map lookup is O(1) average. Total: O(n1 + n2).
+
+----------------------------------------
+
+## Step 6: Trace on `nums2 = [1, 3, 4, 2]`
+
+```
+stack: [], ans: {}
+
+v=1: stack empty. push. stack=[1].
+v=3: 3 > 1 (top). pop 1. ans[1]=3. push 3. stack=[3].
+v=4: 4 > 3. pop 3. ans[3]=4. push 4. stack=[4].
+v=2: 2 < 4. push. stack=[4, 2].
+
+End. Remaining on stack: 4 and 2 → ans[4]=-1, ans[2]=-1.
+```
+
+ans = {1: 3, 3: 4, 4: -1, 2: -1}.
+
+Query for `nums1 = [4, 1, 2]`: answers are `[-1, 3, -1]`. ✓
+
+----------------------------------------
+
+## Step 7: Why This Is O(n) — Amortization
+
+The inner `while` loop inside the for-loop looks like it could make things O(n²). But each element is pushed exactly once and popped at most once across the **entire** outer loop. The total number of pop operations is at most `n2`. Combined with `n2` pushes, total work is O(n2).
+
+This is the classic **amortized analysis** of monotonic stacks: per-step looks scary but total work is linear.
+
+----------------------------------------
+
+## Step 8: Name What We Built
+
+This is a **monotonic decreasing stack** — a stack maintained so its values decrease from bottom to top. The defining use case: "next greater element" problems. Flip the comparison direction for "next smaller," "previous greater," etc.
+
+Also notice: the problem's two-array setup is just dressing. The core work — computing next-greater-for-all in `nums2` — is the interesting part. `nums1` is just specifying which subset of answers to return.
+
+----------------------------------------
+
+## Step 9: Complexity
+
+Time: **O(n1 + n2)**. Each `nums2` element touched a constant number of times; each `nums1` query is an O(1) map lookup.
+
+Space: **O(n2)** for the map. The stack is bounded by `nums2` size.
+
+----------------------------------------
+
+## Step 10: C++ Implementation
+
+```cpp
+vector<int> nextGreaterElement(vector<int>& nums1, vector<int>& nums2) {
+    unordered_map<int, int> ans;
+    stack<int> st;
+
+    for (int v : nums2) {
+        while (!st.empty() && st.top() < v) {
+            ans[st.top()] = v;
+            st.pop();
+        }
+        st.push(v);
+    }
+    // anything left has no greater to the right
+    while (!st.empty()) {
+        ans[st.top()] = -1;
+        st.pop();
+    }
+
+    vector<int> result;
+    result.reserve(nums1.size());
+    for (int x : nums1) result.push_back(ans[x]);
+    return result;
+}
+```
+
+Note: since `nums1` is guaranteed to be a subset of `nums2`, we don't need a special "not found" case — every query is in the map.
+
+----------------------------------------
+
+## Step 11: Follow-up Questions
+
+- **Next Greater Element II (nums is circular — indices wrap around).** Iterate `2n` positions (`i % n`), processing each; the elements not resolved after one full pass get resolved in the second pass.
+- **Previous greater element.** Scan right-to-left with the same monotonic-stack idea.
+- **Next smaller element.** Flip the comparison (`> v` instead of `< v`).
+- **If `nums1` and `nums2` contain duplicates.** Map by index rather than by value — each element's answer is position-specific.
+- **Support updates to `nums2`.** Online problem — requires a segment tree with max queries, more complex.
+- **Answer both next-greater and previous-greater for every element.** Two passes with monotonic stacks, or a single two-pass algorithm.

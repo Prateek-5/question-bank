@@ -1,4 +1,4 @@
-# Two Sum II – Input Array Is Sorted
+# Two Sum II — Input Array Is Sorted
 
 **Problem Link:**
 https://leetcode.com/problems/two-sum-ii-input-array-is-sorted/
@@ -6,181 +6,136 @@ https://leetcode.com/problems/two-sum-ii-input-array-is-sorted/
 **Topic:**
 Two Pointers
 
+----------------------------------------
+
+## Step 1: Read the Problem Carefully
+
+Given a **sorted** 1-indexed array `numbers` and a target integer `target`, return the 1-indexed positions of two numbers in `numbers` that add up exactly to `target`.
+
+You're guaranteed exactly one solution, and you may not use the same element twice.
+
+Example: `numbers = [2, 7, 11, 15]`, `target = 9`. We need two numbers summing to 9. `2 + 7 = 9`. Indices 1 and 2. Answer: `[1, 2]`.
+
+The crucial detail — "sorted" — is the whole point of the problem. Without it, it's the regular Two Sum (solved with a hashmap).
 
 ----------------------------------------
 
-## Step 1: Understand the Problem (Beginner Friendly)
+## Step 2: What Does Sorted Buy Us?
 
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
+Without sorting, the best I know is O(n) with a hashmap. Can we do better on a sorted array? Or at least O(n) without the hashmap's space overhead?
 
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
+Let me think about what "sorted" means for pair sums. If I pick the smallest number `numbers[0]` and pair it with the largest `numbers[n-1]`, I get some sum. If that sum is larger than the target, every pair involving `numbers[n-1]` is too big (pairing with smaller first numbers gives even bigger sums... wait no, smaller first numbers give smaller sums). Hmm, let me re-think.
 
-**In plain words:** Two-pointer sum on a sorted array.
+Actually: `numbers[0] + numbers[n-1]` is neither the max nor the min of pair sums. The max pair sum is the two biggest; the min is the two smallest.
 
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
+But there's something useful here. If `numbers[0] + numbers[n-1] > target`, then `numbers[n-1]` paired with *any* element is ≥ `numbers[0] + numbers[n-1] > target`. So `numbers[n-1]` is too big to be part of the answer. We can eliminate it and look at indices `0..n-2`.
 
-> a=[2,7,11,15], target=9. l=0,r=3: 17>9→r=2. 13>9→r=1. 9=9 → {1,2}.
+Symmetrically, if the sum is too small, `numbers[0]` is too small and can be eliminated.
 
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+This is a **shrinking window** argument. Let me formalize it.
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 3: The Two-Pointer Insight
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Put two pointers, one at each end: `l = 0`, `r = n - 1`.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+- If `numbers[l] + numbers[r] == target`: done.
+- If `numbers[l] + numbers[r] < target`: we need a bigger sum. The current `l` can never make a bigger sum with any smaller `r`, and all `r'` with `r' > r` don't exist. So `l` cannot be part of the answer — move `l` right.
+- If `numbers[l] + numbers[r] > target`: symmetric. `r` cannot be part of the answer — move `r` left.
 
-So ask yourself:
+Each step eliminates one candidate endpoint. After at most `n - 1` steps, the pointers meet and we have an answer (problem guarantees one exists).
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Two-pointer sum on a sorted array.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
+This is the **two-pointer sweep** — beautifully simple once you see it.
 
 ----------------------------------------
 
-## Step 3: Build Intuition (VERY IMPORTANT)
+## Step 4: Why It Can't Miss the Answer
 
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
+Let me make the elimination argument airtight.
 
-Double loops are your first thought — and for unsorted data, often unavoidable. But when the array is sorted or the problem has a monotonic structure, two pointers sliding toward each other or in the same direction collapse the work to linear.
+**Claim:** When we advance `l`, the answer pair cannot involve the current `numbers[l]`.
 
-So how do we get smarter? Let's build the correct intuition step by step.
+*Proof:* Suppose the answer is `(l, k)` for some `k > l`. Then `numbers[l] + numbers[k] = target`. But we decided to advance `l` because `numbers[l] + numbers[r] < target`. Since `k ≤ r`, we have `numbers[k] ≤ numbers[r]` (sorted array). So `numbers[l] + numbers[k] ≤ numbers[l] + numbers[r] < target`. Contradiction.
 
-If the current sum is too small, move left pointer right to increase; if too big, move right pointer left.
+So moving `l` right doesn't discard the solution. Symmetric argument for moving `r` left.
 
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Since every step preserves the solution *and* shrinks the window, and the problem guarantees a solution exists, the pointers will meet at the answer.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 5: Trace on a Concrete Example
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+`numbers = [2, 3, 4, 7, 11, 15]`, target = 18.
 
-**The concept:** Two-pointer sum on a sorted array.
+```
+l=0, r=5: 2 + 15 = 17 < 18. l++.
+l=1, r=5: 3 + 15 = 18 = target! Return [2, 6] (1-indexed).
+```
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
+Done in 2 iterations.
 
-**Pattern recognition cue:**
+Another: `numbers = [1, 2, 3, 4, 4, 9, 56, 90]`, target = 8.
 
-**Whenever the array is sorted or the constraint is monotonic in a sliding sense → think Two Pointers.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-l=0, r=n-1. While l<r: s=a[l]+a[r]. If s==target return {l+1,r+1}; if s<target l++ else r--.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
+```
+l=0, r=7: 1 + 90 = 91 > 8. r--.
+l=0, r=6: 1 + 56 > 8. r--.
+l=0, r=5: 1 + 9 = 10 > 8. r--.
+l=0, r=4: 1 + 4 = 5 < 8. l++.
+l=1, r=4: 2 + 4 = 6 < 8. l++.
+l=2, r=4: 3 + 4 = 7 < 8. l++.
+l=3, r=4: 4 + 4 = 8! Return [4, 5].
+```
 
 ----------------------------------------
 
-## Step 6: Final Approach
+## Step 6: Complexity
 
-Now let's crystallize everything we've learned into a clean algorithm.
+Time: each iteration moves one pointer, and they meet after at most n-1 moves. **O(n)**.
+Space: two pointers. **O(1)**.
 
-Two pointers O(n).
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+No hashmap, no extra arrays. We trade O(n) extra space (in hashmap-Two-Sum) for exploiting the sorted order.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 7: Name It
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+This is the canonical **two-pointer technique on sorted data**, sometimes called the "opposite-end" or "converging" two-pointer. Any time you see "pair sum/diff/product equals X on a sorted array," your first instinct should be two pointers.
 
-a=[2,7,11,15], target=9. l=0,r=3: 17>9→r=2. 13>9→r=1. 9=9 → {1,2}.
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
-
-----------------------------------------
-
-## Step 8: Time and Space Complexity
-
-Complexity isn't magic — it's just counting the work.
-
-Time: O(n). Space: O(1).
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
+The same pattern solves:
+- 3Sum (fix one element, two-pointer the rest).
+- Container With Most Water (slightly different — pick two heights to max an area).
+- Valid Palindrome check.
+- Remove duplicates from sorted array.
 
 ----------------------------------------
 
-## Step 9: C++ Implementation
-
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+## Step 8: C++ Implementation
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-vector<int> twoSum(vector<int>& a, int t) {
-    int l = 0, r = a.size() - 1;
+vector<int> twoSum(vector<int>& numbers, int target) {
+    int l = 0, r = numbers.size() - 1;
     while (l < r) {
-        int s = a[l] + a[r];
-        if (s == t) return {l+1, r+1};
-        if (s < t) l++; else r--;
+        int sum = numbers[l] + numbers[r];
+        if (sum == target) return {l + 1, r + 1};   // 1-indexed
+        if (sum < target) l++;
+        else r--;
     }
-    return {};
+    return {};   // shouldn't reach here per problem guarantee
 }
 ```
 
-A few notes about the style:
+One gotcha: the problem asks for **1-indexed** positions. I return `l + 1` and `r + 1`. If you miss this, your answer is always off by one.
 
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Another implementation detail: watch for integer overflow in `numbers[l] + numbers[r]` if elements are large. For typical constraints, int is fine; for extreme cases, use `long long`.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 9: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- All pairs with given sum.
-- Unsorted variant (hashmap).
-- Two-sum in a BST.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Two Sum (unsorted input).** Use a hashmap — for each element, check if `target - x` has been seen. O(n) time, O(n) space.
+- **What if the array has duplicates and we want all unique pairs summing to target?** After finding a match, advance both pointers past equal values.
+- **Two Sum with distinct elements and we want the number of such pairs.** After finding a match, just count and continue.
+- **Three Sum equals target.** Sort, fix each `i`, two-pointer on the remaining range. O(n²).
+- **Two Sum in a sorted matrix.** Row-by-row two-pointer, or use the staircase trick from "Search a 2D Matrix II."
+- **Can we solve in O(log n)?** Only if the target is constrained to be a specific function of indices; in general no — we need to examine Ω(n) elements.

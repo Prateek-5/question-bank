@@ -4,174 +4,173 @@
 https://leetcode.com/problems/split-array-with-same-average/
 
 **Topic:**
-Dynamic Programming DP
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Meet-in-the-middle subset-sum with fractional target.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> nums=[1,2,3,4,5,6,7,8]. Target check across sizes 1..7.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Dynamic Programming (DP)
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Parse the Question
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Given an integer array `nums`, determine if it's possible to split it into **two non-empty** subsets `A` and `B` such that **avg(A) == avg(B)**.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Example: `nums = [1, 2, 3, 4, 5, 6, 7, 8]`. Average of all = 36 / 8 = 4.5.
 
-So ask yourself:
+Can we split into two groups each averaging 4.5?
+- {1, 4, 5, 8} averages (1+4+5+8)/4 = 18/4 = 4.5. ✓
+- {2, 3, 6, 7} averages (2+3+6+7)/4 = 18/4 = 4.5. ✓
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Meet-in-the-middle subset-sum with fractional target.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
+Return true. Another example: `nums = [3, 1]`. Can we split? {3} avg 3, {1} avg 1. Not equal. Return false.
 
 ----------------------------------------
 
-## Step 3: Build Intuition (VERY IMPORTANT)
+## Step 2: Math First
 
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
+If A and B both equal the total average, then A's sum and B's sum also equal their respective averages times their sizes. Let's call this "total avg" T.
 
-Your very first thought is often recursion. That's actually the right start — but naive recursion re-computes the same subproblems exponentially. The fix is memoization (top-down) or tabulation (bottom-up). The hard part is identifying the state that captures all we need to know about the past.
+- Total avg T = sum(nums) / n.
+- For A with size k: avg(A) = T means sum(A) = k · T = k · sum(nums) / n.
 
-So how do we get smarter? Let's build the correct intuition step by step.
+For sum(A) to be an integer, we need `k · sum(nums) / n` to be an integer — `k · sum(nums)` divisible by n.
 
-Find subset of size k with sum = k * totalSum / n. Search subsets; for large n split in halves to combine.
+This means: for each candidate size k (1 ≤ k < n), check if `k · total_sum % n == 0`. If so, compute the required subset sum `target = k · total_sum / n` and check if a **size-k subset summing to target** exists in nums.
 
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+We've reduced "split with equal averages" to "find a size-k subset summing to target, for some k."
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 3: Brute Force — Enumerate Subsets
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+For each size k and each target, enumerate subsets of size k. O(C(n, k)) per size, exponential in n. For n = 30, already 10^8 worst case.
 
-**The concept:** Meet-in-the-middle subset-sum with fractional target.
+We can use subset-sum DP with size tracking:
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
+`dp[k][s]` = true if some subset of size k sums to s.
 
-**Pattern recognition cue:**
+Process numbers one by one. For each number x:
+- For k from high to low (to avoid reuse in same pass):
+  - For s:
+    - If dp[k-1][s-x] was true: set dp[k][s] = true.
 
-**Whenever a brute-force recursion has overlapping subproblems → think DP. Identify state first, then transition.**
+O(n · k · s) = O(n³ · max_val) — feasible for moderate n.
 
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-Split nums into two halves. Compute subset sums per size from each half. For each size k, look for (sum_left, sum_right) pair with combined size k and combined sum target.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
+Alternatively, use a set-based approach: `possible_sums[k]` = set of reachable sums with exactly k elements.
 
 ----------------------------------------
 
-## Step 6: Final Approach
+## Step 4: Optimization — Meet in the Middle
 
-Now let's crystallize everything we've learned into a clean algorithm.
+For n up to 30, even O(n³) can be too much. A classic trick: split nums into two halves, enumerate subsets of each half, and combine.
 
-Meet-in-the-middle.
+Each half has ≤ 15 elements, so 2^15 = 32768 subsets per half. For each subset, record its (size, sum) pair.
 
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
+For each candidate (k, target):
+- For each (k1, s1) in first half, check if (k - k1, target - s1) is in the second half's set.
 
-**Before coding, it's worth asking:**
+Total: O(2^(n/2) · n) with hashmaps.
 
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
+For n = 30, that's ~32768 × 30 ≈ 10^6 — fast.
 
-Get those clear in your head, and the code almost writes itself.
-
+The trick is a classic **meet-in-the-middle**: split into halves to reduce exponential cost.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 5: Simpler Approach That Works for n ≤ 30
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+For the typical constraint n ≤ 30, we can sidestep meet-in-the-middle by using bitset DP:
 
-nums=[1,2,3,4,5,6,7,8]. Target check across sizes 1..7.
+`possible[k]` = a bitset where bit s is set if some size-k subset sums to s.
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+Process each number x:
+- From k = current_max down to 1:
+  - `possible[k] |= possible[k - 1] << x` (shift indicates "add x to every sum").
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
+After processing all numbers, for each k in [1, n/2] (smaller half is sufficient by symmetry), check if `possible[k].test(k · total_sum / n)` when that's an integer.
 
+Space: O(n · sum_max / 64) bits. For n = 30, sum ≤ 300,000, so ~300K bits per level, 30 levels → 10M bits = ~1.25 MB. Tight but feasible.
 
-----------------------------------------
-
-## Step 8: Time and Space Complexity
-
-Complexity isn't magic — it's just counting the work.
-
-Time: O(2^(n/2)·n). Space: O(2^(n/2)).
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
+This is the practical approach for this specific problem.
 
 ----------------------------------------
 
-## Step 9: C++ Implementation
+## Step 6: Why We Only Check k ≤ n / 2
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+If a size-k subset averages T, its complement (size n-k) also averages T. So checking all k ≤ n/2 finds the same answers as checking all k.
+
+Also, a useful early exit: if `k · total_sum % n != 0`, no valid target sum exists for this k. Skip.
+
+----------------------------------------
+
+## Step 7: Trace Briefly for `[1, 2, 3, 4, 5, 6, 7, 8]`
+
+total_sum = 36, n = 8, avg = 4.5.
+
+Check k = 1: 1 · 36 / 8 = 4.5. Not integer. Skip.
+Check k = 2: 2 · 36 / 8 = 9. Target = 9, size 2. Is there a size-2 subset summing to 9? {1,8}, {2,7}, {3,6}, {4,5}. Yes! But we need to check: does avg match total avg? avg of {1, 8} = 4.5. ✓ So answer is true.
+
+Great — we could stop at k = 2.
+
+(The problem asks for any valid split. Finding one is enough.)
+
+----------------------------------------
+
+## Step 8: Name It
+
+**Subset-sum DP with size constraint**, or a **meet-in-the-middle** approach for larger n. The overarching theme: reduce a seemingly-complex partition problem to a canonical "is there a subset with this sum and that size" check.
+
+Variants:
+- Partition Equal Subset Sum (just one size unconstrained).
+- Target Sum (counts subsets with given ±-sum).
+- K-th Largest Sum of Subsets.
+
+----------------------------------------
+
+## Step 9: Complexity
+
+Subset-sum DP: **O(n² · sum)** time, O(n · sum) space.
+Meet-in-the-middle: **O(n · 2^(n/2))** time.
+
+----------------------------------------
+
+## Step 10: C++ Implementation
+
+Bitset DP version (works for n ≤ 30, values ≤ 10000):
 
 ```cpp
-// Full implementation is lengthy. Core idea: enumerate subset sums in halves, check fractional-avg match.
-// For n<=30 brute force with memo; else MITM. See LeetCode editorial for complete code.
+bool splitArraySameAverage(vector<int>& nums) {
+    int n = nums.size();
+    int total = accumulate(nums.begin(), nums.end(), 0);
+    if (n < 2) return false;
+
+    // possible[k][s] = true if a size-k subset sums to s.
+    // Use bitset for each k.
+    vector<bitset<30001>> possible(n / 2 + 1);
+    possible[0][0] = 1;
+
+    for (int x : nums) {
+        // iterate k from high to low to avoid reusing the same number
+        for (int k = min((int)possible.size() - 1, n / 2); k >= 1; --k) {
+            possible[k] |= possible[k - 1] << x;
+        }
+    }
+
+    for (int k = 1; k <= n / 2; ++k) {
+        if ((k * total) % n != 0) continue;
+        int target = k * total / n;
+        if (possible[k][target]) return true;
+    }
+    return false;
+}
 ```
 
-A few notes about the style:
+This is a cleaner formulation. It uses bitset operations for speed.
 
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+For a more straightforward but less efficient implementation, use an unordered_set per size.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 11: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Approximate average split.
-- k-way average split.
-- Prove NP-hardness in general.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Find the actual partition.** Track parent pointers in the DP.
+- **Split into k subsets with equal average.** Much harder — generalizes to NP-hard in full generality.
+- **Average constraint with tolerance.** Approximate variants; computationally easier for specific tolerances.
+- **Preprocess to reduce equivalent elements.** Subtract the mean from everything; the problem becomes "find a subset with sum zero." Cleaner but same complexity.
+- **For larger n (say 40).** Meet-in-the-middle is the standard approach.

@@ -4,183 +4,204 @@
 https://leetcode.com/problems/number-of-digit-one/description/
 
 **Topic:**
-Number Theory Misc
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Digit-DP counting ones across positions.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> n=13. f=1: high=1,cur=3,low=0 → 2. f=10: high=0,cur=1,low=3 → 0+3+1=4. Total=6.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Number Theory / Misc (also digit DP)
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Define the Task
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Given an integer `n ≥ 0`, count the **total number of digit `1` occurrences** in the decimal representations of all integers from 0 to n, inclusive.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Example: n = 13. Numbers 0, 1, 2, ..., 13. Count of '1's:
+- 1 has one '1'.
+- 10 has one '1'.
+- 11 has two '1's.
+- 12 has one '1'.
+- 13 has one '1'.
+- Others: 0. (And 2-9: zero '1's each.)
 
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Digit-DP counting ones across positions.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-A brute-force factor check or a digit-by-digit loop is usually the first attempt. Cleverer approaches exploit modular arithmetic, parity, or digit-DP recurrences to get O(1) or O(log n) from what looks like an O(n) problem.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-For each digit position, count how many times '1' appears there among numbers 1..n by comparing the digit at that position with high and low parts.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Total: 1 + 1 + 2 + 1 + 1 = **6**.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: Brute Force — Why It Fails
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+Iterate i from 0 to n; for each, convert to string and count '1's. O(n log n).
 
-**The concept:** Digit-DP counting ones across positions.
-
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever digits, GCD, primes, or modular properties appear → check for closed-form solutions before coding loops.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+For n up to 10⁹, that's 3 × 10¹⁰ operations — too slow. Need to count mathematically.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 3: Count Digit-1 Contributions Position by Position
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+Instead of iterating over all integers, count how often digit 1 appears in each **position** (units, tens, hundreds, ...) across all numbers 1..n.
 
-For factor f from 1 upward while n >= f: high = n / (f*10); cur = (n / f) % 10; low = n % f. If cur > 1: add (high+1)*f. If cur == 1: add high*f + low + 1. Else add high*f.
+For position p (values: 1, 10, 100, ...), we count how many integers in [1, n] have a '1' at position p.
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
+Sum over positions → total count of '1's.
 
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Digit-position counting.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+This reframes the problem from O(n) (per-integer) to O(log n) (per-position).
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 4: How Many '1's in the Units Place?
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+Consider position 1 (units). In [1, n], every 10th integer has a 1 in the units place: 1, 11, 21, 31, ...
 
-n=13. f=1: high=1,cur=3,low=0 → 2. f=10: high=0,cur=1,low=3 → 0+3+1=4. Total=6.
+So count = `floor(n / 10)` complete cycles, each contributing one '1' at the units place, plus possibly one more if n's last digit is ≥ 1.
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+Slightly more precisely:
+- Let `rest = n / 10` (number of complete blocks of 10).
+- Remaining digit (n % 10): if it's 0, no partial contribution. If it's ≥ 1, one more.
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
-
-----------------------------------------
-
-## Step 8: Time and Space Complexity
-
-Complexity isn't magic — it's just counting the work.
-
-Time: O(log n). Space: O(1).
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
+So units-place 1 count = `rest + (1 if n % 10 >= 1 else 0)` — but we can write this more cleanly.
 
 ----------------------------------------
 
-## Step 9: C++ Implementation
+## Step 5: General Formula Per Position
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+For position `p` (power of 10), let:
+- `high = n / (p * 10)` (digits higher than position p)
+- `cur = (n / p) % 10` (digit at position p)
+- `low = n % p` (digits lower than position p)
+
+Number of '1's at position p = depends on `cur`:
+- If `cur == 0`: `high * p`.
+- If `cur == 1`: `high * p + low + 1`.
+- If `cur >= 2`: `(high + 1) * p`.
+
+Why? Think of which prefixes/suffixes yield a '1' at position p:
+- **Full cycles of the prefix**: every prefix value 0, 1, ..., high-1 contributes a full block of p values (all suffixes 0..p-1) with '1' at position p. That's `high * p`.
+- **The "current" prefix of value `high`**: this only contributes depending on what digits at and below position p allow.
+  - cur = 0: never hits '1' at this position (we're at digit 0 currently). No contribution.
+  - cur = 1: hits '1' for suffixes 0..low. That's `low + 1` numbers.
+  - cur ≥ 2: we've already "passed" '1' at this position — all p suffixes contribute. That's `p` numbers.
+
+Sum these per-position counts over all p.
+
+----------------------------------------
+
+## Step 6: Algorithm
+
+```
+count = 0
+p = 1
+while p <= n:
+    high = n / (p * 10)
+    cur = (n / p) % 10
+    low = n % p
+
+    if cur == 0:
+        count += high * p
+    elif cur == 1:
+        count += high * p + low + 1
+    else:
+        count += (high + 1) * p
+
+    p *= 10
+return count
+```
+
+O(log n) iterations — one per decimal digit of n.
+
+----------------------------------------
+
+## Step 7: Trace on n = 13
+
+- p = 1 (units):
+  - high = 13 / 10 = 1. cur = (13 / 1) % 10 = 3. low = 13 % 1 = 0.
+  - cur = 3 ≥ 2: add `(high + 1) * p = 2 * 1 = 2`.
+
+- p = 10 (tens):
+  - high = 13 / 100 = 0. cur = (13 / 10) % 10 = 1. low = 13 % 10 = 3.
+  - cur = 1: add `high * p + low + 1 = 0 + 3 + 1 = 4`.
+
+- p = 100: 100 > 13, stop.
+
+Total: 2 + 4 = **6**. ✓
+
+----------------------------------------
+
+## Step 8: Trace on n = 100
+
+- p = 1: high = 10, cur = 0, low = 0. cur = 0: add 10 * 1 = 10.
+- p = 10: high = 1, cur = 0, low = 0. cur = 0: add 1 * 10 = 10.
+- p = 100: high = 0, cur = 1, low = 0. cur = 1: add 0 * 100 + 0 + 1 = 1.
+- p = 1000 > 100, stop.
+
+Total: 10 + 10 + 1 = **21**.
+
+Sanity check: numbers 1..100. 1's in units: 1, 11, 21, 31, ..., 91 → 10 numbers. 1's in tens: 10, 11, ..., 19 → 10 numbers. 1 at hundreds: 100 → 1 number. Grand total = 21. ✓
+
+----------------------------------------
+
+## Step 9: Why This Formula Works
+
+Think of each integer in [1, n] as a (log n)-digit number with leading zeros. Each of the n numbers contributes to each digit position independently.
+
+For position p, we count how many of the n numbers have digit 1 at this position. The formula handles three cases:
+- Numbers with prefix strictly less than "high": they can have any suffix (0..p-1), so p numbers with '1' at position p in that block.
+- Numbers with prefix exactly "high": constrained by cur (the digit at position p for n itself) and low (trailing digits of n).
+
+Summing per position yields the total.
+
+----------------------------------------
+
+## Step 10: Name It
+
+**Digit counting formula** — a specific technique for "count occurrences of digit d from 0 to n" problems. A cornerstone of **digit DP**.
+
+Applications:
+- Count numbers in [0, n] with a given digit property.
+- Count numbers divisible by some number with digit constraints.
+- Numbers at Most N Given Digit Set (another LeetCode problem using digit DP).
+
+For more complex predicates, use generic digit DP: `f(pos, tight, ...)` recursive formulation with memoization.
+
+----------------------------------------
+
+## Step 11: Complexity
+
+Time: **O(log₁₀ n)** — one iteration per decimal digit of n.
+Space: **O(1)**.
+
+Dramatic improvement over O(n log n) brute force.
+
+----------------------------------------
+
+## Step 12: C++ Implementation
 
 ```cpp
 int countDigitOne(int n) {
-    long long res = 0, f = 1;
-    while ((long long)f <= n) {
-        long long h = n / (f * 10), cur = (n / f) % 10, low = n % f;
-        if (cur > 1) res += (h + 1) * f;
-        else if (cur == 1) res += h * f + low + 1;
-        else res += h * f;
-        f *= 10;
+    long long count = 0;
+    long long p = 1;
+    while (p <= n) {
+        long long high = n / (p * 10);
+        long long cur = (n / p) % 10;
+        long long low = n % p;
+
+        if (cur == 0)        count += high * p;
+        else if (cur == 1)   count += high * p + low + 1;
+        else                 count += (high + 1) * p;
+
+        p *= 10;
     }
-    return (int)res;
+    return (int)count;
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Use `long long` for p and count: p * 10 can overflow when p ≈ 10⁹, and total count can slightly exceed 32-bit.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 13: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
+- **Count digit k (not just 1) from 0 to n.** Generalize the formula. For digit 0, be careful about leading zeros.
+- **Count numbers with digit 1 in them (not how many times).** Different — count integers with at least one '1'. Subtract numbers with no '1'.
+- **Range [L, R] instead of [0, n].** Compute f(R) - f(L - 1).
+- **Sum of all digits from 0 to n.** Aggregate the formula across digits 0..9.
+- **Why `high * p` for cur == 0?** High cycles complete before reaching n; each cycle of p numbers (with the prefix fixed) has exactly one number with '1' at this position — no wait, let me reconsider...
 
-- Count digit d (other than 1).
-- Digit-DP for sums/XOR over ranges.
-- Count numbers with specific digit property.
+Actually, `high * p` counts contributions from complete prefix-blocks. In one such block (prefix fixed to some value < high), the digit at position p cycles through 0-9, and for each suffix (0..p-1), exactly one of those 10 cycles has '1'. So one block contributes `p` '1's. And `high` blocks contribute `high * p`. ✓
 
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Variant: count numbers with exactly k '1's in their decimal.** Use digit DP with a counter of 1's seen so far.

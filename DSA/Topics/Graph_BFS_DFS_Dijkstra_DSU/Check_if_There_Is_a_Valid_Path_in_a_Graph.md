@@ -1,184 +1,197 @@
 # Check if There Is a Valid Path in a Graph
 
 **Problem Link:**
-https://leetcode.com/problems/check-if-there-is-a-valid-path-in-a-grid/description/
+https://leetcode.com/problems/find-if-path-exists-in-graph/
 
 **Topic:**
-Graph BFS DFS Dijkstra DSU
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Union-Find connectivity test between source and destination.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> n=3, edges=[[0,1],[1,2],[2,0]], src=0, dst=2. Union 0-1, 1-2, 2-0. find(0)==find(2) → true.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Graph (BFS / DFS / Dijkstra / DSU)
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Understand the Task
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+An **undirected** graph with `n` nodes (labeled 0 to n-1) and a list of edges. Given a source `source` and destination `destination`, return true if there's a path from source to destination.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Example: `n = 3`, `edges = [[0, 1], [1, 2], [2, 0]]`, source = 0, destination = 2.
 
-So ask yourself:
+Edges form a triangle: 0-1, 1-2, 2-0. A path from 0 to 2 exists (direct edge). Return true.
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Union-Find connectivity test between source and destination.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
+Example: `n = 6`, `edges = [[0, 1], [0, 2], [3, 5], [5, 4], [4, 3]]`, source = 0, destination = 5.
 
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
+Edges split into two components: {0, 1, 2} and {3, 4, 5}. No path from 0 to 5. Return false.
 
 ----------------------------------------
 
-## Step 3: Build Intuition (VERY IMPORTANT)
+## Step 2: It's Reachability, Again
 
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
+This is a pure reachability question: can we get from source to destination following edges?
 
-A tempting first thought is to try every possible path from the start to the goal. The problem is that graphs have exponentially many paths. We need a traversal that visits each node at most a few times — that's exactly what BFS, DFS, and their weighted cousins give us.
+Three standard ways:
+1. **BFS from source.** Stop if we reach destination.
+2. **DFS from source.** Stop if we reach destination.
+3. **Union-Find.** Union all edges; check if find(source) == find(destination).
 
-So how do we get smarter? Let's build the correct intuition step by step.
-
-A valid path between two nodes exists iff they are in the same connected component. DSU answers this in near-constant time after processing all edges.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+All are O(V + E). Union-Find is nice if we're asked many such queries on the same graph; BFS/DFS is natural for a single query.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 3: BFS Approach
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+Build the adjacency list. BFS from source, marking visited. If we dequeue destination, return true. If BFS exhausts, return false.
 
-**The concept:** Union-Find connectivity test between source and destination.
+```
+adj = adjacency list from edges
+visited = [False] * n
+queue = [source]
+visited[source] = True
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
+while queue not empty:
+    u = queue.pop_front()
+    if u == destination: return True
+    for v in adj[u]:
+        if not visited[v]:
+            visited[v] = True
+            queue.push(v)
 
-**Pattern recognition cue:**
+return False
+```
 
-**Whenever nodes have relationships or connectivity matters → think Graph. 'Shortest path' without weights → BFS. With weights → Dijkstra. Just connectivity → DSU.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-Build DSU over n nodes; union each edge's endpoints. Return find(source)==find(destination).
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
+Straightforward. O(V + E).
 
 ----------------------------------------
 
-## Step 6: Final Approach
+## Step 4: Union-Find Approach
 
-Now let's crystallize everything we've learned into a clean algorithm.
+For each edge, union the two endpoints. After processing all edges, two nodes are connected iff find(u) == find(v).
 
-DSU is simplest; BFS/DFS also works in O(V+E).
+```
+dsu = DSU(n)
+for (a, b) in edges: dsu.unite(a, b)
+return dsu.find(source) == dsu.find(destination)
+```
 
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
+O((V + E) · α(n)) — essentially linear.
 
-**Before coding, it's worth asking:**
+Union-Find is preferred when:
+- We have many queries on the same graph.
+- The graph is built incrementally.
+- We need to maintain connectivity under additions.
 
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
-
-----------------------------------------
-
-## Step 7: Dry Run (Detailed)
-
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
-
-n=3, edges=[[0,1],[1,2],[2,0]], src=0, dst=2. Union 0-1, 1-2, 2-0. find(0)==find(2) → true.
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+For this single query, either works.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 5: Trace Quickly
 
-Complexity isn't magic — it's just counting the work.
+`n = 3, edges = [[0, 1], [1, 2], [2, 0]]`, source = 0, dest = 2.
 
-Time: O(V+E α). Space: O(V).
+**BFS:**
+```
+adj[0] = [1, 2], adj[1] = [0, 2], adj[2] = [0, 1].
+queue = [0]. visited[0] = true.
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+Dequeue 0. 0 != 2. Neighbors 1, 2. Set visited[1] = true, visited[2] = true. Enqueue both.
+Dequeue 1. 1 != 2. Neighbors 0 (visited), 2 (visited). Nothing new.
+Dequeue 2. 2 == dest. Return true.
+```
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+**Union-Find:**
+```
+DSU: parent = [0, 1, 2].
+Edge (0, 1): union → parent = [1, 1, 2] (or similar).
+Edge (1, 2): union → all in one component.
+Edge (2, 0): already same component.
 
+find(0) == find(2)? Yes. Return true.
+```
+
+Both approaches work. ✓
+
+----------------------------------------
+
+## Step 6: Why Union-Find Shines With Multiple Queries
+
+If we had many (source, destination) queries on the same graph, the BFS would redo work for each query — O((V + E) per query).
+
+Union-Find processes all edges once — O((V + E) · α(n)) total setup. Each subsequent query is O(α(n)). For Q queries, total is O((V + E + Q) · α(n)) — much better than O(Q · (V + E)).
+
+For a single query, the complexity is the same.
+
+----------------------------------------
+
+## Step 7: Name It
+
+**Graph reachability** — the simplest graph query. Solvable by BFS, DFS, or Union-Find. Choice depends on the setting:
+- Single-shot query on a static graph: BFS/DFS.
+- Many queries on a static graph: Union-Find precomputation.
+- Dynamic graph (edge additions): Union-Find.
+- Dynamic graph (edge deletions): neither simply; advanced techniques needed.
+
+----------------------------------------
+
+## Step 8: Complexity
+
+Both approaches: **O(V + E)** single query.
+Space: **O(V + E)** for adj list or DSU.
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+**BFS version:**
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-struct DSU { vector<int> p; DSU(int n):p(n){iota(p.begin(),p.end(),0);} int f(int x){return p[x]==x?x:p[x]=f(p[x]);} void u(int a,int b){p[f(a)]=f(b);} };
-
-bool validPath(int n, vector<vector<int>>& edges, int src, int dst) {
-    DSU d(n);
-    for (auto& e : edges) d.u(e[0], e[1]);
-    return d.f(src) == d.f(dst);
+bool validPath(int n, vector<vector<int>>& edges, int source, int destination) {
+    vector<vector<int>> adj(n);
+    for (auto& e : edges) {
+        adj[e[0]].push_back(e[1]);
+        adj[e[1]].push_back(e[0]);
+    }
+    vector<bool> visited(n, false);
+    queue<int> q;
+    q.push(source);
+    visited[source] = true;
+    while (!q.empty()) {
+        int u = q.front(); q.pop();
+        if (u == destination) return true;
+        for (int v : adj[u]) {
+            if (!visited[v]) {
+                visited[v] = true;
+                q.push(v);
+            }
+        }
+    }
+    return false;
 }
 ```
 
-A few notes about the style:
+**Union-Find version:**
 
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
+```cpp
+class DSU {
+    vector<int> parent;
+public:
+    DSU(int n) : parent(n) { iota(parent.begin(), parent.end(), 0); }
+    int find(int x) { return parent[x] == x ? x : parent[x] = find(parent[x]); }
+    void unite(int a, int b) { parent[find(a)] = find(b); }
+};
 
+bool validPath(int n, vector<vector<int>>& edges, int source, int destination) {
+    DSU dsu(n);
+    for (auto& e : edges) dsu.unite(e[0], e[1]);
+    return dsu.find(source) == dsu.find(destination);
+}
+```
+
+The Union-Find version is shorter for this problem.
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Return the actual path.
-- Shortest path (BFS).
-- Dynamic connectivity with deletions (harder).
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Shortest path (number of edges).** BFS naturally finds this.
+- **Weighted edges — cheapest path.** Dijkstra.
+- **Path with specific property (e.g., visiting certain nodes).** More complex DFS or state-search.
+- **Count paths.** Counting paths can be exponential; need DP or careful enumeration.
+- **Return the actual path.** Track parent pointers during BFS.
+- **Directed graph.** Build directed adjacency list; algorithm otherwise unchanged.

@@ -4,191 +4,174 @@
 https://leetcode.com/problems/shortest-path-in-binary-matrix/
 
 **Topic:**
-Graph BFS DFS Dijkstra DSU
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** BFS in 8-directional grid.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> grid=[[0,0,0],[1,1,0],[1,1,0]]. Path (0,0)→(0,1)→(0,2)→(1,2)→(2,2). Distance 5.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Graph (BFS / DFS / Dijkstra / DSU)
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Parse the Rules
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Given an `n × n` binary matrix (cells are 0 or 1), find the length of the shortest path from top-left `(0, 0)` to bottom-right `(n-1, n-1)`. The path must go through **only 0s** and can move in **8 directions** (up, down, left, right, and the four diagonals). Return the number of cells visited (including both endpoints), or -1 if no path exists.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Example:
+```
+0 0 0
+1 1 0
+1 1 0
+```
 
-So ask yourself:
+From (0,0) to (2,2): the only 0s are in the top row and right column. Path: (0,0) → (0,1) → (0,2) → (1,2) → (2,2) — 5 cells. Or a diagonal shortcut: (0,0) → (1,1)? But (1,1) is 1. Blocked.
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: BFS in 8-directional grid.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
+Try: (0,0) → (0,2) diagonally? Not allowed — diagonals move by 1 cell, not 2.
 
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-A tempting first thought is to try every possible path from the start to the goal. The problem is that graphs have exponentially many paths. We need a traversal that visits each node at most a few times — that's exactly what BFS, DFS, and their weighted cousins give us.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Unweighted shortest path → BFS. From (0,0), expand to 8-direction neighbors that are 0, recording distance.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+So the answer is 4 cells taking the direct 8-direction path: (0,0) → (0,1) → (1,2) → (2,2). Four cells. Let me verify each is 0: (0,0)=0, (0,1)=0, (1,2)=0, (2,2)=0. ✓ Length 4.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: What Kind of Graph Is This?
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+Each cell is a node. Each cell has up to 8 neighbors (the 8 adjacent cells in all directions). A neighbor is "reachable" if it's inside the grid and holds 0.
 
-**The concept:** BFS in 8-directional grid.
+All edges have **unit weight** (every move costs 1 cell). We want the shortest path from source to destination — classic unweighted shortest path.
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever nodes have relationships or connectivity matters → think Graph. 'Shortest path' without weights → BFS. With weights → Dijkstra. Just connectivity → DSU.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+When edges are unweighted, the ideal algorithm is **BFS**. BFS visits nodes in non-decreasing order of distance from the source, so the first time we dequeue the destination, we've found the shortest path.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 3: BFS on a Grid — Nothing Fancy
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+The algorithm:
+1. If `grid[0][0]` or `grid[n-1][n-1]` is 1, return -1 (blocked at endpoints).
+2. Start BFS from (0, 0). Distance to (0, 0) is 1 (counting it).
+3. For each dequeued cell, expand to all 8 neighbors that are in-bounds, equal to 0, and not yet visited. Mark them with distance `currentDist + 1`.
+4. When we visit (n-1, n-1), return its distance.
+5. If BFS exhausts without reaching destination, return -1.
 
-If start or end is 1 return -1. BFS from (0,0) with dist=1. Expand 8 neighbors; when reaching (n-1,n-1), return dist.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-BFS with 8 moves and grid cell marking.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+Standard. The only wrinkle specific to this problem is the 8-direction neighbor set (instead of the usual 4).
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 4: Trace Quickly
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+Grid:
+```
+0 0 0
+1 1 0
+1 1 0
+```
 
-grid=[[0,0,0],[1,1,0],[1,1,0]]. Path (0,0)→(0,1)→(0,2)→(1,2)→(2,2). Distance 5.
+n = 3. Start BFS from (0,0). dist[0][0] = 1. Queue: [(0,0)].
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+Dequeue (0,0). 8 neighbors:
+- (-1,-1), (-1,0), (-1,1), (-1,-2): out of bounds.
+- (0,-1), (0,1): (0,-1) OOB. (0,1): in bounds, 0, unvisited. Set dist=2. Push.
+- (1,-1), (1,0), (1,1): (1,-1) OOB. (1,0)=1, skip. (1,1)=1, skip.
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
+Queue: [(0,1)].
 
+Dequeue (0,1). dist=2. Neighbors of (0,1):
+- (-1,0), (-1,1), (-1,2): OOB.
+- (0,0): already visited. (0,2): 0, unvisited. Set dist=3. Push.
+- (1,0), (1,1): both 1. (1,2): 0, unvisited. Set dist=3. Push.
+
+Queue: [(0,2), (1,2)].
+
+Dequeue (0,2). Neighbors: (1,1)=1 skip. (1,2) visited. (1,3) OOB. Nothing new.
+
+Dequeue (1,2). Neighbors:
+- (0,1), (0,2), (0,3): (0,3) OOB, others visited.
+- (1,1)=1 skip. (1,3) OOB.
+- (2,1), (2,2), (2,3): (2,1)=1 skip. (2,2)=0, unvisited. Set dist=4. Push. (2,3) OOB.
+
+Destination reached! `dist[2][2] = 4`. Return 4.
+
+Matches expected. ✓
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 5: Why BFS Guarantees Shortest Path
 
-Complexity isn't magic — it's just counting the work.
+BFS explores cells in a "ripple" — first all cells at distance 1 from source, then distance 2, then 3, and so on. Because all edges have the same cost (1), the first time a cell is reached is via the shortest path.
 
-Time: O(n²). Space: O(n²).
+If we used DFS instead, we might hit the destination via a long winding route before finding the short one. DFS can still find *a* path, but not necessarily the shortest.
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+----------------------------------------
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+## Step 6: Implementation Details
 
+Two common approaches to tracking distance:
+- **Separate dist[][] matrix.** Explicit, clean, but uses extra memory.
+- **Overwrite the grid in place.** Abuse the grid: mark visited cells with a special value. Saves memory but modifies the input.
+
+I'll use the dist-matrix approach for clarity.
+
+Alternative: track the BFS level via queue-size snapshots (no dist matrix needed — increment a counter per level).
+
+----------------------------------------
+
+## Step 7: Name It
+
+We used **unweighted grid BFS with 8-directional movement**. Variants of this pattern solve:
+- Standard grid shortest paths (4-directional).
+- Snakes and Ladders.
+- Minesweeper (reveal cells).
+- Word Ladder (words as nodes, edit-distance-1 as edges).
+
+When edges have non-uniform weights, replace BFS with Dijkstra. When you need to track an additional state (like "keys collected"), expand the state space.
+
+----------------------------------------
+
+## Step 8: Complexity
+
+Time: each cell is processed at most once; each has up to 8 neighbors. **O(n²)** (where the grid is n×n, so there are n² cells).
+
+Space: **O(n²)** for the distance matrix and BFS queue.
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
-
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-int shortestPathBinaryMatrix(vector<vector<int>>& g) {
-    int n = g.size();
-    if (g[0][0] || g[n-1][n-1]) return -1;
-    queue<tuple<int,int,int>> q; q.push({0,0,1});
-    g[0][0] = 1;
-    int dr[] = {-1,-1,-1,0,0,1,1,1}, dc[] = {-1,0,1,-1,1,-1,0,1};
+int shortestPathBinaryMatrix(vector<vector<int>>& grid) {
+    int n = grid.size();
+    if (grid[0][0] != 0 || grid[n - 1][n - 1] != 0) return -1;
+
+    vector<vector<int>> dist(n, vector<int>(n, -1));
+    queue<pair<int, int>> q;
+    q.push({0, 0});
+    dist[0][0] = 1;
+
+    int dr[] = {-1, -1, -1, 0, 0, 1, 1, 1};
+    int dc[] = {-1, 0, 1, -1, 1, -1, 0, 1};
+
     while (!q.empty()) {
-        auto [r,c,d] = q.front(); q.pop();
-        if (r==n-1 && c==n-1) return d;
-        for (int k=0;k<8;k++) {
-            int nr=r+dr[k], nc=c+dc[k];
-            if (nr<0||nc<0||nr>=n||nc>=n||g[nr][nc]) continue;
-            g[nr][nc] = 1; q.push({nr,nc,d+1});
+        auto [r, c] = q.front(); q.pop();
+        if (r == n - 1 && c == n - 1) return dist[r][c];
+        for (int k = 0; k < 8; ++k) {
+            int nr = r + dr[k], nc = c + dc[k];
+            if (nr < 0 || nr >= n || nc < 0 || nc >= n) continue;
+            if (grid[nr][nc] != 0) continue;
+            if (dist[nr][nc] != -1) continue;
+            dist[nr][nc] = dist[r][c] + 1;
+            q.push({nr, nc});
         }
     }
     return -1;
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Details:
+- The 8-direction offset arrays `dr[]` and `dc[]` cover all 8 neighbors compactly.
+- We check start and end aren't blocked before starting BFS — saves effort on impossible inputs.
+- `dist[nr][nc] != -1` acts as the "visited" check; we only enqueue unvisited cells.
+- We can return early when we dequeue the destination.
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Weighted cells — Dijkstra.
-- A* with Chebyshev heuristic.
-- Multi-goal shortest path.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **4-directional movement instead of 8.** Same algorithm, use only 4 neighbors.
+- **Find the shortest path's coordinates (not just length).** Track parent pointers during BFS; reconstruct by walking back.
+- **Weighted cells (different costs to step on each).** Switch from BFS to Dijkstra with a min-heap keyed by total cost.
+- **Limited fuel / turn constraints.** State becomes (cell, fuel_left) or (cell, turn_parity).
+- **Allow teleportation between pairs of special cells.** Add teleport edges to the graph; BFS handles.
+- **Bidirectional BFS for speed.** Expand from both endpoints; meet in the middle.

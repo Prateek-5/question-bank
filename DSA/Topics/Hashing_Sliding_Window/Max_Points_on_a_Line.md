@@ -4,193 +4,220 @@
 https://leetcode.com/problems/max-points-on-a-line/
 
 **Topic:**
-Hashing Sliding Window
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** For each point, count slopes of lines to all others using hashmap with normalized slope keys.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> points=[[1,1],[2,2],[3,3]] → 3.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Hashing / Sliding Window
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Understand the Problem
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Given an array of 2D points, return the **maximum number of points that lie on the same straight line**.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Example: `points = [[1, 1], [2, 2], [3, 3]]`. All three are on the line y = x. Answer: **3**.
 
-So ask yourself:
+Example: `points = [[1, 1], [2, 2], [2, 3]]`. The first two are on y = x. (2, 3) is off that line. Best line contains 2 points. Answer: **2**.
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: For each point, count slopes of lines to all others using hashmap with normalized slope keys.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
+For n ≤ 2 points, the answer is trivially n.
 
 ----------------------------------------
 
-## Step 3: Build Intuition (VERY IMPORTANT)
+## Step 2: How Does One Line Emerge?
 
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
+Two points always determine a unique line. Three points are collinear iff they all lie on the same line, which is the line through any two of them.
 
-The default is to enumerate every subarray or substring. That's O(n²). Two techniques collapse this: prefix-sum + hashmap for counting subarrays with a property, or a sliding window whose left and right pointers advance monotonically.
+So we can fix one point (a "pivot") and consider every line that passes through it. For each such line, count how many other points also lie on it. Add 1 (for the pivot itself). Track the best.
 
-So how do we get smarter? Let's build the correct intuition step by step.
+How do we identify a line through the pivot? By its **slope**: from the pivot to any other point, compute the slope. All points sharing the same slope with the pivot are on the same line through the pivot.
 
-Pick a pivot; group other points by slope (dy/dx reduced by gcd and signed). Max count + 1 (pivot) is best through that point.
+So for each pivot `p`, count how many points share each slope with `p`. The line with the most shared-slope points is the best through `p`.
 
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
+Do this for every pivot; take the max.
 
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+O(n²): n pivots × n points to check per pivot.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 3: The Slope Trap — Use Ratios, Not Decimals
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+Slope = (y2 - y1) / (x2 - x1). As a decimal, this runs into floating-point issues: e.g., `2/6` and `1/3` are the same slope mathematically, but with floats, `2.0/6.0 = 0.3333...` and `1.0/3.0 = 0.3333...` might not be bit-identical.
 
-**The concept:** For each point, count slopes of lines to all others using hashmap with normalized slope keys.
+Also, vertical lines have infinite slope (dx = 0).
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
+**Fix: represent slope as a reduced (dy, dx) pair.** Divide both by their GCD. Normalize sign so the representation is unique.
 
-**Pattern recognition cue:**
+For two equivalent slopes:
+- (2, 6) → gcd=2 → (1, 3).
+- (1, 3) → gcd=1 → (1, 3).
+- (-1, -3) → gcd=1 → (-1, -3) → sign flip → (1, 3).
 
-**'Subarray sum equals k' or 'count of something in windows' → think Prefix Sum + HashMap or Sliding Window.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-For each i, clear map; for each j≠i compute (dx,dy), normalize by gcd and sign (dx first). Increment count[(dx,dy)]. Track global max.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
+All three produce the same canonical key. Two points share a slope iff their (dy, dx) reductions match.
 
 ----------------------------------------
 
-## Step 6: Final Approach
+## Step 4: Handle Edge Cases
 
-Now let's crystallize everything we've learned into a clean algorithm.
+**Vertical line:** dx = 0. Reduced form: (1, 0). (dy normalized to positive.)
+**Horizontal line:** dy = 0. Reduced form: (0, 1).
+**Same point as pivot (duplicate):** dx = dy = 0. Special case — these are "on every line through pivot," so they always count toward the current pivot's line count. Track duplicates separately.
 
-O(n²) with hashmap.
+For the canonicalization:
+- Compute g = gcd(|dx|, |dy|).
+- Reduce: dx /= g, dy /= g.
+- If dx < 0, flip both signs (so dx is non-negative).
+- If dx == 0 (vertical), ensure dy > 0.
 
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+After canonicalization, equivalent slopes have identical (dy, dx) pairs.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 5: Algorithm
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+```
+best = 1  # at minimum, 1 point "on a line"
 
-points=[[1,1],[2,2],[3,3]] → 3.
+for i in 0..n-1:
+    slope_count = empty hashmap
+    duplicates = 0
+    local_best = 0
+    
+    for j in 0..n-1, j != i:
+        if points[j] == points[i]:
+            duplicates++
+            continue
+        compute (dy, dx) as canonical slope from i to j
+        slope_count[(dy, dx)]++
+        local_best = max(local_best, slope_count[(dy, dx)])
+    
+    # max points on a line through pivot = (best slope count) + duplicates + 1 (for pivot)
+    best = max(best, local_best + duplicates + 1)
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+return best
+```
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+For each pivot, after counting slopes, the line through pivot has at most `local_best + duplicates + 1` points. Duplicates are on every line through pivot (they coincide with it).
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 6: Trace on `[[1, 1], [2, 2], [3, 3]]`
 
-Complexity isn't magic — it's just counting the work.
+No duplicates. n = 3.
 
-Time: O(n²). Space: O(n).
+**Pivot i = 0 (point (1, 1)):**
+- j = 1 (point (2, 2)): dx = 1, dy = 1. gcd = 1. Canonical (1, 1). slope_count[(1,1)] = 1.
+- j = 2 (point (3, 3)): dx = 2, dy = 2. gcd = 2. Canonical (1, 1). slope_count[(1,1)] = 2.
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+local_best = 2. Line through (1, 1) with slope (1, 1) has 2 + 0 + 1 = 3 points. Update best to 3.
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+**Pivot i = 1 (point (2, 2)):**
+Same analysis. Also 3.
 
+**Pivot i = 2:** 3.
+
+Final: 3. ✓
+
+Now try `[[1, 1], [2, 2], [2, 3]]`:
+
+**Pivot i = 0 (point (1, 1)):**
+- j = 1: (2, 2). dx=1, dy=1. Canonical (1, 1). Count = 1.
+- j = 2: (2, 3). dx=1, dy=2. gcd=1. Canonical (2, 1). Count = 1.
+
+local_best = 1. best = 1 + 0 + 1 = 2.
+
+**Pivot i = 1, i = 2:** symmetrical, best still 2.
+
+Final: 2. ✓
 
 ----------------------------------------
 
-## Step 9: C++ Implementation
+## Step 7: Why Canonical Slope Is Essential
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+Without it, we'd hit false negatives. Consider (1, 1), (2, 2), (3, 3), and use float slopes:
+- slope(0, 1) = 1/1 = 1.0.
+- slope(0, 2) = 2/2 = 1.0.
+
+These happen to agree. But for (1, 1) and (10^9, 10^9): slope 1/1 and slope 10^9/10^9. Both 1.0 in principle, but with certain computation orders and rounding, floats can differ.
+
+More sinister: (1, 0), (2, 0), (3, 0). All horizontal. dy/dx = 0. But a vertical line has dx = 0 → division error.
+
+The canonical-integer approach avoids all these issues.
+
+----------------------------------------
+
+## Step 8: Name It
+
+**Hashmap of canonical slopes per pivot.** The core trick:
+1. "For each pivot" — fix one point at a time and look at lines through it.
+2. "Canonical slope" — reduce (dy, dx) to a unique representation so equal slopes hash the same.
+3. "Hashmap count" — group other points by slope; max group + duplicates + pivot = line size through pivot.
+
+The technique generalizes to any collinearity or angle-based grouping problem.
+
+----------------------------------------
+
+## Step 9: Complexity
+
+Time: O(n²) pivot-point pairs; each GCD is O(log max_coord). **O(n² log max_coord)**.
+Space: O(n) for slope map per pivot (reused across pivots).
+
+For n ≤ 300, ~10^5 ops — fast.
+
+----------------------------------------
+
+## Step 10: C++ Implementation
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-int maxPoints(vector<vector<int>>& pts) {
-    int n = pts.size(), best = 0;
+int maxPoints(vector<vector<int>>& points) {
+    int n = points.size();
     if (n <= 2) return n;
+
+    int best = 1;
     for (int i = 0; i < n; ++i) {
-        map<pair<int,int>, int> cnt;
-        int localMax = 0;
-        for (int j = 0; j < n; ++j) if (i != j) {
-            int dx = pts[j][0] - pts[i][0], dy = pts[j][1] - pts[i][1];
+        map<pair<int, int>, int> slopes;
+        int duplicates = 0;
+        int localBest = 0;
+
+        for (int j = 0; j < n; ++j) {
+            if (i == j) continue;
+
+            int dx = points[j][0] - points[i][0];
+            int dy = points[j][1] - points[i][1];
+
+            if (dx == 0 && dy == 0) {
+                duplicates++;
+                continue;
+            }
+
+            // Canonicalize: reduce, ensure dx >= 0, then dy > 0 if dx == 0
             int g = __gcd(abs(dx), abs(dy));
-            if (g == 0) g = 1;
-            dx /= g; dy /= g;
+            dx /= g;
+            dy /= g;
             if (dx < 0) { dx = -dx; dy = -dy; }
             if (dx == 0 && dy < 0) dy = -dy;
-            localMax = max(localMax, ++cnt[{dx, dy}]);
+
+            slopes[{dx, dy}]++;
+            localBest = max(localBest, slopes[{dx, dy}]);
         }
-        best = max(best, localMax + 1);
+
+        best = max(best, localBest + duplicates + 1);   // +1 for pivot itself
     }
     return best;
 }
 ```
 
-A few notes about the style:
+The canonicalization in four lines:
+1. Compute `g = gcd(|dx|, |dy|)`.
+2. Divide out.
+3. If dx < 0, flip signs (ensures dx ≥ 0).
+4. If dx = 0 (vertical) and dy < 0, flip dy (ensures dy > 0).
 
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+After these steps, equivalent slopes hash identically.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 11: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Weighted points (count with weights).
-- 3D lines.
-- Cluster points forming triangles.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **3D points on a line.** Direction vectors are 3D; canonicalize a triple.
+- **Minimum lines covering all points.** Different (NP-hard in general).
+- **Collinearity with tolerance (points approximately on a line).** Use robust fitting (RANSAC).
+- **Dynamic: points arrive over time.** Maintain slope maps per pivot; update as new points arrive.
+- **Return the line itself (not just count).** Record two defining points for the winning slope.
+- **Why use GCD instead of comparing slopes as fractions?** GCD reduction gives a unique canonical form; fraction comparison still has edge cases.

@@ -4,186 +4,162 @@
 https://leetcode.com/problems/four-divisors/
 
 **Topic:**
-Number Theory Misc
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** For each n, find divisors up to sqrt; only sum if divisor count is exactly 4.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> nums=[21,4,7]. 21: divisors 1,3,7,21 → sum=32. 4: 1,2,4 → 3 divisors. 7: 2 divisors. Answer=32.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Number Theory / Misc
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Understand the Problem
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Given an integer array `nums`, find all numbers in nums that have **exactly four divisors**. Sum the divisors of those numbers. Return the grand total.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Example: `nums = [21, 4, 7]`.
+- 21: divisors are 1, 3, 7, 21. Four divisors. Sum = 32.
+- 4: divisors are 1, 2, 4. Three. Exclude.
+- 7: divisors are 1, 7. Two. Exclude.
 
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: For each n, find divisors up to sqrt; only sum if divisor count is exactly 4.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
+Total: 32.
 
 ----------------------------------------
 
-## Step 3: Build Intuition (VERY IMPORTANT)
+## Step 2: How to Count Divisors Efficiently
 
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
+For each number n, find all divisors by trial division up to sqrt(n):
+- For each i from 1 to sqrt(n), if n % i == 0:
+  - i is a divisor.
+  - n / i is also a divisor.
+  - If i ≠ n / i, they're two distinct divisors.
 
-A brute-force factor check or a digit-by-digit loop is usually the first attempt. Cleverer approaches exploit modular arithmetic, parity, or digit-DP recurrences to get O(1) or O(log n) from what looks like an O(n) problem.
+If we only care about **exactly four divisors**, we can short-circuit: stop checking as soon as we exceed 4 divisors.
 
-So how do we get smarter? Let's build the correct intuition step by step.
-
-A number with exactly 4 divisors has divisors {1, p, q, pq} for primes p≠q, or {1, p, p², p³} for prime p. Detect by enumerating up to sqrt(n).
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
-
-----------------------------------------
-
-## Step 4: Connect to Concept
-
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
-
-**The concept:** For each n, find divisors up to sqrt; only sum if divisor count is exactly 4.
-
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever digits, GCD, primes, or modular properties appear → check for closed-form solutions before coding loops.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-For each n, collect divisors ≤ sqrt(n); pair with n/d unless d*d==n. If count is 4, add sum to answer.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-sqrt scan per number.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
-
-----------------------------------------
-
-## Step 7: Dry Run (Detailed)
-
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
-
-nums=[21,4,7]. 21: divisors 1,3,7,21 → sum=32. 4: 1,2,4 → 3 divisors. 7: 2 divisors. Answer=32.
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
-
-----------------------------------------
-
-## Step 8: Time and Space Complexity
-
-Complexity isn't magic — it's just counting the work.
-
-Time: O(N·sqrt(max)). Space: O(1).
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
-
-----------------------------------------
-
-## Step 9: C++ Implementation
-
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
-
-```cpp
-#include <bits/stdc++.h>
-using namespace std;
-int sumFourDivisors(vector<int>& nums) {
-    int ans = 0;
-    for (int n : nums) {
-        int cnt = 0, sum = 0;
-        for (int i = 1; (long long)i*i <= n && cnt <= 4; ++i) if (n % i == 0) {
-            cnt++; sum += i;
-            if (i != n / i) { cnt++; sum += n / i; }
-        }
-        if (cnt == 4) ans += sum;
-    }
-    return ans;
-}
+```
+def sumIfFourDivisors(n):
+    divisors = []
+    for i in 1..sqrt(n):
+        if n % i == 0:
+            divisors.append(i)
+            if i != n // i: divisors.append(n // i)
+            if len(divisors) > 4: return 0
+    if len(divisors) == 4: return sum(divisors)
+    return 0
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+O(sqrt(n)) per number. For nums of size m with numbers up to N, total: O(m · sqrt(N)).
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 3: What Numbers Have Exactly Four Divisors?
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
+Interesting number-theory observation:
 
-- Numbers with exactly k divisors.
-- Sum of divisors sieve for many n.
-- Euler totient counting.
+A positive integer's divisor count depends on its prime factorization. If n = p^a · q^b · ..., then divisor count = (a+1)(b+1)... 
 
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
+To have exactly 4 divisors:
+- n = p³ for a prime p (divisors: 1, p, p², p³). Four divisors.
+- n = p · q for distinct primes p and q (divisors: 1, p, q, pq). Four divisors.
 
----
+These are the only two cases.
 
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+You could use this to short-circuit: check if n is p³ or pq.
+
+But the direct trial-division approach is simpler and fast enough for typical constraints.
+
+----------------------------------------
+
+## Step 4: Trace on `[21, 4, 7]`
+
+**n = 21:**
+- i = 1: 21 % 1 = 0. Divisors: 1, 21. [1, 21].
+- i = 2: 21 % 2 ≠ 0.
+- i = 3: 21 % 3 = 0. Divisors: 3, 7. [1, 21, 3, 7].
+- i = 4: 21 % 4 ≠ 0.
+- i = 5 > sqrt(21) ≈ 4.58. Stop.
+- 4 divisors. Sum = 1 + 21 + 3 + 7 = 32.
+
+**n = 4:**
+- i = 1: 4 % 1 = 0. Divisors: 1, 4. [1, 4].
+- i = 2: 4 % 2 = 0. 4 / 2 = 2 == i, so don't add twice. [1, 4, 2].
+- i = 3 > sqrt(4) = 2. Stop.
+- 3 divisors. Not 4. Return 0.
+
+**n = 7:**
+- i = 1: 7 % 1 = 0. [1, 7].
+- i = 2: 7 % 2 ≠ 0.
+- i = 3 > sqrt(7) ≈ 2.65. Stop.
+- 2 divisors. Return 0.
+
+Total: 32 + 0 + 0 = **32**. ✓
+
+----------------------------------------
+
+## Step 5: Why sqrt(n) Bound Is Sufficient
+
+Divisors come in pairs (d, n/d) with d ≤ sqrt(n) ≤ n/d. So iterating i up to sqrt(n) finds all pairs. The edge case d = sqrt(n) (when n is a perfect square) is handled by checking `i != n / i` before counting twice.
+
+So trial division up to sqrt(n) is both correct and efficient.
+
+----------------------------------------
+
+## Step 6: Name It
+
+**Divisor enumeration via trial division.** Fundamental number-theory technique. Used in:
+- Counting divisors.
+- Summing divisors (sigma function).
+- Perfect number checks.
+- Prime testing (up to sqrt).
+- Factorization (extending to prime factors).
+
+For counting, O(sqrt(n)) trial division is standard. For very large n (cryptography-scale), use Miller-Rabin primality + Pollard's rho factorization.
+
+----------------------------------------
+
+## Step 7: Complexity
+
+Time: **O(m · sqrt(max_n))**. For m = 10^4 and max_n = 10^5, that's about 10^6 · 316 ≈ 3 × 10^6 ops — fast.
+
+Space: O(1) extra per number (we can sum divisors on the fly instead of storing them).
+
+----------------------------------------
+
+## Step 8: C++ Implementation
+
+```cpp
+class Solution {
+    int sumIfFourDivisors(int n) {
+        int count = 0, sum = 0;
+        for (int i = 1; (long long)i * i <= n; ++i) {
+            if (n % i == 0) {
+                count++;
+                sum += i;
+                if (i != n / i) {
+                    count++;
+                    sum += n / i;
+                }
+                if (count > 4) return 0;   // early exit
+            }
+        }
+        return count == 4 ? sum : 0;
+    }
+
+public:
+    int sumFourDivisors(vector<int>& nums) {
+        int total = 0;
+        for (int n : nums) total += sumIfFourDivisors(n);
+        return total;
+    }
+};
+```
+
+The early exit (`count > 4 return 0`) skips numbers with many divisors quickly — useful optimization for composite-heavy inputs.
+
+`(long long)i * i <= n` avoids overflow for large n (~10^9).
+
+----------------------------------------
+
+## Step 9: Follow-up Questions
+
+- **Sum divisors for numbers with **exactly k** divisors.** Same template, different count check.
+- **Count numbers up to N with exactly 4 divisors.** Use the p³ or pq characterization + sieve of primes.
+- **Divisor sigma function σ(n).** Sum of all divisors. Same enumeration.
+- **Aliquot sum (sum of proper divisors, excluding n).** Skip n in the final sum.
+- **Perfect numbers (σ(n) = 2n).** Check σ(n) == 2n.
+- **Find the smallest number ≤ N with exactly k divisors.** Brute force or smarter search with factorization structure.

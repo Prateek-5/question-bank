@@ -1,193 +1,224 @@
 # 01 Matrix
 
 **Problem Link:**
-https://leetcode.com/problems/01-matrix/description/
+https://leetcode.com/problems/01-matrix/
 
 **Topic:**
-Graph BFS DFS Dijkstra DSU
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Multi-source BFS from all zeros simultaneously.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> mat=[[0,0,0],[0,1,0],[1,1,1]]. Zeros pushed at dist 0. BFS expands: (1,1)=1, (2,0)=1, (2,2)=1, (2,1)=2. Result matches shortest-zero distances.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Graph (BFS / DFS / Dijkstra / DSU)
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Understand the Output
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+You have a matrix of 0s and 1s. For each cell, output the **distance to the nearest 0** (using 4-directional steps).
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Example input:
+```
+0 0 0
+0 1 0
+1 1 1
+```
 
-So ask yourself:
+Cell-by-cell:
+- Row 0: all 0s, distance 0 for each. Output row: `0 0 0`.
+- Row 1: `0 ? 0`. The `1` at (1, 1) is adjacent to multiple 0s, distance 1.
+- Row 2: `1 1 1`. Distances?
+  - (2, 0): nearest 0 is (1, 0), distance 1.
+  - (2, 1): nearest 0? (1, 0) distance 2, (1, 2) distance 2, (0, 0) distance 3, etc. Nearest = 2.
+  - (2, 2): nearest 0 is (1, 2), distance 1.
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Multi-source BFS from all zeros simultaneously.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-A tempting first thought is to try every possible path from the start to the goal. The problem is that graphs have exponentially many paths. We need a traversal that visits each node at most a few times — that's exactly what BFS, DFS, and their weighted cousins give us.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Each cell's answer is the distance to the *nearest* zero. Instead of BFS from every one cell, invert it — start BFS from every zero at distance 0 and propagate outward. Each cell is first reached at its correct distance.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Output:
+```
+0 0 0
+0 1 0
+1 2 1
+```
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: Naïve Thinking
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+For each cell holding a 1, search for the nearest 0 via BFS from that cell. If the matrix is m × n with many 1s, this is O(m·n · m·n) = O((m·n)²) — far too slow.
 
-**The concept:** Multi-source BFS from all zeros simultaneously.
-
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever nodes have relationships or connectivity matters → think Graph. 'Shortest path' without weights → BFS. With weights → Dijkstra. Just connectivity → DSU.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+Clearly we need something that processes the matrix once, not once per 1-cell.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 3: Flip the Perspective
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+Instead of "for each 1, find the nearest 0," ask: "what if we start at every 0 simultaneously and spread outward?"
 
-Initialize dist[r][c] = 0 if cell is 0, else INF. Push all zeros into a queue. BFS: for the front cell, visit 4 neighbors; if neighbor's distance > current+1, update and push. BFS guarantees shortest distance in unweighted graphs.
+This is **multi-source BFS**. The insight: all 0s have distance 0. When we spread from them in lockstep, each 1-cell gets its distance from the nearest 0 — because BFS naturally visits cells in order of increasing distance, and starting from all 0s means the first time a cell is reached is the shortest distance from *any* 0.
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
+Start state: queue contains all 0-cells, each with distance 0.
+Expand: for each cell in the queue, check its 4 neighbors. If a neighbor is unvisited, set its distance to current + 1 and enqueue.
 
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Multi-source BFS gives O(n*m).
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+When done, every cell has its correct distance.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 4: Why Multi-Source BFS Is Correct
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+In standard BFS from one source, we get the shortest distance from that source. In multi-source BFS (queue seeded with multiple starting points), we get the shortest distance from **any** source — because the first wave visits all sources, and subsequent waves spread simultaneously from all frontiers.
 
-mat=[[0,0,0],[0,1,0],[1,1,1]]. Zeros pushed at dist 0. BFS expands: (1,1)=1, (2,0)=1, (2,2)=1, (2,1)=2. Result matches shortest-zero distances.
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+Formally: let f(v) = min distance from v to any source. Multi-source BFS computes exactly f.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 5: Algorithm
 
-Complexity isn't magic — it's just counting the work.
+```
+Initialize a `dist` matrix with:
+  dist[i][j] = 0 if mat[i][j] == 0
+  dist[i][j] = UNVISITED otherwise
 
-Time: O(n·m). Space: O(n·m).
+queue = [(i, j) for each cell with mat[i][j] == 0]
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+while queue is non-empty:
+    (r, c) = queue.pop()
+    for each neighbor (nr, nc) in 4 directions:
+        if in bounds and dist[nr][nc] == UNVISITED:
+            dist[nr][nc] = dist[r][c] + 1
+            queue.push((nr, nc))
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+return dist
+```
 
+Seed queue with all 0-cells; BFS outward.
 
 ----------------------------------------
 
-## Step 9: C++ Implementation
+## Step 6: Trace on the Example
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+Input:
+```
+0 0 0
+0 1 0
+1 1 1
+```
+
+Initial `dist`:
+```
+0 0 0
+0 ? 0
+? ? ?
+```
+Queue: all 0-positions. `(0,0), (0,1), (0,2), (1,0), (1,2)`.
+
+Round 1: pop each, look at neighbors.
+- (0,0): neighbors (1,0) and (0,1) are already 0. No new cells.
+  Actually wait — (1,0) has dist 0, not unvisited. OK.
+- (0,1): neighbors (0,0), (0,2), (1,1). (1,1) is unvisited, set dist=1, enqueue.
+- (0,2), (1,0), (1,2): similarly, they all try to update (1,1), but it's already set.
+  - (1,0): neighbor (2,0) unvisited. Set dist=1, enqueue.
+  - (1,2): neighbor (2,2) unvisited. Set dist=1, enqueue.
+
+Queue now: `(1,1), (2,0), (2,2)` (all with dist 1).
+
+Round 2:
+- (1,1): neighbors (0,1), (2,1), (1,0), (1,2). All visited except (2,1). Set dist(2,1) = 2, enqueue.
+- (2,0): neighbors (1,0), (2,1). (2,1) now visited. No new.
+- (2,2): neighbors (1,2), (2,1). (2,1) visited. No new.
+
+Queue now: `(2,1)`.
+
+Round 3:
+- (2,1): neighbors (1,1), (2,0), (2,2). All visited. Done.
+
+Queue empty. Final dist:
+```
+0 0 0
+0 1 0
+1 2 1
+```
+✓
+
+----------------------------------------
+
+## Step 7: Why Multi-Source Is Correct — More Intuitively
+
+Imagine you're a 0-cell (a "firefighter"), and every fire is a 1-cell. All firefighters move at 1 step per minute. When does fire at (r, c) get extinguished? When the nearest firefighter reaches it. That's the shortest Manhattan distance to any 0.
+
+Multi-source BFS simulates this race perfectly.
+
+This technique generalizes. Whenever a problem says "distance to the nearest of a set of sources," multi-source BFS is the answer.
+
+----------------------------------------
+
+## Step 8: Name It
+
+**Multi-Source BFS** (or BFS from multiple starting points). The pattern:
+1. Queue all sources at the start.
+2. BFS as usual.
+3. Result: distance from each cell to the nearest source.
+
+Variants:
+- **Rotting Oranges**: multi-source BFS where sources are rotten oranges.
+- **Walls and Gates**: multi-source BFS from gates (0 cells) to rooms.
+- **Shortest Bridge**: multi-source BFS starting from one island to find shortest path to another.
+
+Whenever you see "distance to nearest X" for multiple X's in a grid, this pattern fits.
+
+----------------------------------------
+
+## Step 9: Complexity
+
+Time: every cell is enqueued and dequeued once. **O(m · n)**.
+Space: O(m · n) for the distance matrix and the queue.
+
+Versus the naïve O((m·n)²), this is a huge win.
+
+----------------------------------------
+
+## Step 10: C++ Implementation
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
 vector<vector<int>> updateMatrix(vector<vector<int>>& mat) {
-    int n = mat.size(), m = mat[0].size();
-    vector<vector<int>> d(n, vector<int>(m, INT_MAX));
-    queue<pair<int,int>> q;
-    for (int i=0;i<n;i++) for (int j=0;j<m;j++) if (!mat[i][j]) { d[i][j]=0; q.push({i,j}); }
-    int dr[] = {-1,1,0,0}, dc[] = {0,0,-1,1};
-    while (!q.empty()) {
-        auto [r,c] = q.front(); q.pop();
-        for (int k=0;k<4;k++) {
-            int nr=r+dr[k], nc=c+dc[k];
-            if (nr<0||nc<0||nr>=n||nc>=m) continue;
-            if (d[nr][nc] > d[r][c] + 1) { d[nr][nc] = d[r][c] + 1; q.push({nr,nc}); }
+    int m = mat.size(), n = mat[0].size();
+    const int UNVISITED = INT_MAX;
+    vector<vector<int>> dist(m, vector<int>(n, UNVISITED));
+    queue<pair<int, int>> q;
+
+    // Seed queue with all 0-cells.
+    for (int r = 0; r < m; ++r) {
+        for (int c = 0; c < n; ++c) {
+            if (mat[r][c] == 0) {
+                dist[r][c] = 0;
+                q.push({r, c});
+            }
         }
     }
-    return d;
+
+    int dr[] = {-1, 1, 0, 0};
+    int dc[] = {0, 0, -1, 1};
+
+    while (!q.empty()) {
+        auto [r, c] = q.front(); q.pop();
+        for (int k = 0; k < 4; ++k) {
+            int nr = r + dr[k], nc = c + dc[k];
+            if (nr < 0 || nc < 0 || nr >= m || nc >= n) continue;
+            if (dist[nr][nc] != UNVISITED) continue;
+            dist[nr][nc] = dist[r][c] + 1;
+            q.push({nr, nc});
+        }
+    }
+
+    return dist;
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Implementation notes:
+- Use `UNVISITED = INT_MAX` as a sentinel. Only 1-cells will still hold it after initialization.
+- The `dist[nr][nc] != UNVISITED` check doubles as "visited" tracking.
+- 4-directional movement via offset arrays.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 11: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Use two-pass DP for the same problem.
-- Weighted variant with Dijkstra.
-- 3D matrix analog.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Distance to nearest specific character (not necessarily 0).** Generalize the seeding condition.
+- **8-directional distance.** Replace 4-offset arrays with 8.
+- **Weighted cells (different traversal costs).** Use Dijkstra instead of BFS.
+- **Diagonal and straight-line distances differ.** Again, use weighted BFS or Dijkstra.
+- **Huge sparse grid.** BFS works; consider hash-based visited tracking if the grid is defined lazily.
+- **Dynamic: 1s and 0s can change.** Hard problem — need incremental algorithms.

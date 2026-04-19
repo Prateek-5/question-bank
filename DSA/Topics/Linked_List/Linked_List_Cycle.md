@@ -6,179 +6,152 @@ https://leetcode.com/problems/linked-list-cycle/
 **Topic:**
 Linked List
 
+----------------------------------------
+
+## Step 1: What's the Problem?
+
+You're given the head of a singly linked list. Determine whether it contains a cycle — meaning, if you keep following `.next` pointers, do you ever revisit a node?
+
+Example of a cycle: `1 → 2 → 3 → 4 → 2 → 3 → 4 → 2 → ...` (node 4 points back to node 2).
+Example of no cycle: `1 → 2 → 3 → null`.
 
 ----------------------------------------
 
-## Step 1: Understand the Problem (Beginner Friendly)
+## Step 2: The Most Obvious Idea First
 
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Floyd's tortoise and hare — two pointers at different speeds.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> 1→2→3→4→2. fast cycles and meets slow.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
-
-----------------------------------------
-
-## Step 2: Break Down the Problem
-
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
-
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
-
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Floyd's tortoise and hare — two pointers at different speeds.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-Because linked lists don't give random access, the temptation is to copy them into arrays and work there. Sometimes that's fine; often it wastes memory. The classic trick is to use two pointers moving at different speeds or with different gaps — it lets you solve many problems in a single pass.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-If there is a cycle, a fast pointer (2 steps) will eventually lap a slow pointer (1 step) inside the cycle.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
-
-----------------------------------------
-
-## Step 4: Connect to Concept
-
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
-
-**The concept:** Floyd's tortoise and hare — two pointers at different speeds.
-
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever you need to find cycles, middles, or the k-th-from-end → think slow/fast pointers.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-slow=fast=head. While fast && fast->next: slow=slow->next; fast=fast->next->next; if they meet return true. Else false.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Two-pointer cycle detection.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
-
-----------------------------------------
-
-## Step 7: Dry Run (Detailed)
-
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
-
-1→2→3→4→2. fast cycles and meets slow.
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
-
-----------------------------------------
-
-## Step 8: Time and Space Complexity
-
-Complexity isn't magic — it's just counting the work.
-
-Time: O(n). Space: O(1).
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
-
-----------------------------------------
-
-## Step 9: C++ Implementation
-
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+As I walk the list, I could remember every node I've visited. If I ever arrive at a node I've seen before — cycle. If I reach `null` — no cycle.
 
 ```cpp
-struct ListNode { int val; ListNode* next; };
-bool hasCycle(ListNode* h) {
-    auto s = h, f = h;
-    while (f && f->next) {
-        s = s->next; f = f->next->next;
-        if (s == f) return true;
+bool hasCycle(ListNode* head) {
+    unordered_set<ListNode*> seen;
+    while (head) {
+        if (seen.count(head)) return true;
+        seen.insert(head);
+        head = head->next;
     }
     return false;
 }
 ```
 
-A few notes about the style:
+This works. Time O(n), space O(n). But the space bothers me — we're allocating a hashmap of potentially millions of pointers just to ask a yes/no question. Is there a way without extra memory?
 
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
+----------------------------------------
 
+## Step 3: Thinking Physically
+
+Imagine two people walking along the list from the head. Walker A moves one node per step. Walker B moves two nodes per step (B is faster).
+
+- **If the list has no cycle:** B will reach `null` first, and we can stop.
+- **If the list has a cycle:** once both walkers enter the cycle, they're trapped in a loop. B gains on A by exactly 1 node per step. Eventually B catches up to A, like a faster runner lapping a slower one on a circular track.
+
+This is the classic "tortoise and hare" intuition. Let me work out *why* B is guaranteed to catch A and not, say, miss them by skipping ahead.
+
+----------------------------------------
+
+## Step 4: Proving the Fast Walker Always Catches the Slow One
+
+Suppose both walkers are inside the cycle. Let the cycle length be `C`. Measure each walker's position *modulo C* (as an offset around the cycle). A's position advances by 1 mod C per step. B advances by 2 mod C per step.
+
+Now look at the gap: `(B - A) mod C` starts at some value `d` (when both first entered the cycle). Each step, A advances 1, B advances 2, so the gap grows by `(2 - 1) = 1` modulo C. So after C steps, the gap has increased by C ≡ 0, which means the gap has cycled through every value 0, 1, 2, ..., C-1 before returning. At some point in that cycle, the gap hits 0 — that's when B catches A.
+
+That's why the meeting is guaranteed. Not magic. It's modular arithmetic on the cycle.
+
+If there's no cycle, B reaches `null` first (or B's next is `null`), and we exit.
+
+----------------------------------------
+
+## Step 5: Converting to Code
+
+Two pointers, `slow` and `fast`. Both start at `head`. Each step:
+
+- Move `slow` by 1.
+- Move `fast` by 2 (which requires that `fast->next` isn't null, else we'd segfault).
+- If `slow == fast`, there's a cycle.
+- If `fast` or `fast->next` is null, we've reached the end — no cycle.
+
+```cpp
+bool hasCycle(ListNode* head) {
+    auto slow = head;
+    auto fast = head;
+    while (fast && fast->next) {
+        slow = slow->next;
+        fast = fast->next->next;
+        if (slow == fast) return true;
+    }
+    return false;
+}
+```
+
+Compare to the hashmap version: same O(n) time, but now O(1) space. We're using pointer comparisons instead of allocating memory.
+
+----------------------------------------
+
+## Step 6: Trace on a Concrete Cycle
+
+List: `3 → 2 → 0 → -4 → (back to 2)`. Indices I'll use for clarity: `A → B → C → D → B`.
+
+```
+Initial: slow = A, fast = A.
+
+Iter 1: slow = B, fast = C. Not equal.
+Iter 2: slow = C, fast = B (fast went D → B). Not equal.
+Iter 3: slow = D, fast = D. Equal! Return true.
+```
+
+Works. Now for a non-cyclic list `1 → 2 → 3 → null`:
+
+```
+Initial: slow = 1, fast = 1.
+
+Iter 1: slow = 2, fast = 3. Not equal.
+Iter 2: slow = 3, fast = null (3's next is null, fast = 3->next->next = null... wait, 3->next is null, so we can't do 3->next->next).
+```
+
+Ah, so actually in iter 2 the while condition fails first: `fast->next` is null. We exit the loop and return `false`. Correct.
+
+----------------------------------------
+
+## Step 7: Edge Cases
+
+- **Empty list (`head == null`).** The while loop doesn't execute. Return false. ✓
+- **Single node, no self-loop.** `fast = head`, `fast->next = null`. Loop fails. Return false. ✓
+- **Single node with self-loop (`head->next == head`).** `fast = head->next = head`, which is not null. Inside: `slow = head`, `fast = head->next->next = head->next = head`. `slow == fast`. Return true. ✓
+- **Two-node cycle (A → B → A).** `slow = B`, `fast = A`. Not equal. Next iter: `slow = A`, `fast = A`. Equal. Return true. ✓
+
+These edge cases are easy to get wrong with naïve pointer code, but the simple `while (fast && fast->next)` guard handles all of them.
+
+----------------------------------------
+
+## Step 8: Complexity
+
+Time: If there's a cycle, within at most ~C iterations after both pointers enter the cycle, they meet. Before entering the cycle, both pointers walk the non-cyclic prefix of length `μ`. Total: O(μ + C) = **O(n)**.
+
+Space: two pointers. **O(1)**.
+
+----------------------------------------
+
+## Step 9: C++ Implementation
+
+```cpp
+bool hasCycle(ListNode* head) {
+    auto slow = head, fast = head;
+    while (fast && fast->next) {
+        slow = slow->next;
+        fast = fast->next->next;
+        if (slow == fast) return true;
+    }
+    return false;
+}
+```
+
+This algorithm is known as **Floyd's tortoise-and-hare**. But — following our own rule — we didn't reach for it by name. We reached for it by thinking: can two walkers at different speeds detect a loop? They can, and the why-does-it-work argument is modular arithmetic on the cycle.
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Detect cycle start (Cycle II).
-- Length of the cycle.
-- Multi-cycle scenarios (impossible in singly linked lists).
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Find the node *where* the cycle begins** (Linked List Cycle II). Once slow and fast meet, reset slow to `head` and advance both by 1; they meet at the cycle entrance. The proof is another nice exercise in modular arithmetic.
+- **Cycle length.** After the meeting, keep `fast` stationary and walk `slow` until they meet again — the number of steps is the cycle length.
+- **Remove the cycle.** Find the entrance (as above), walk around the cycle until the node whose `next` is the entrance, and set that `next` to null.
+- **Why doesn't fast move 3 steps instead of 2?** It still works, but 2 is the minimum speed that guarantees meeting in one cycle traversal with the cleanest proof. More general: any speed difference ≥ 1 works.
+- **Does this work on doubly-linked lists?** Yes, same logic — we only use `->next`.

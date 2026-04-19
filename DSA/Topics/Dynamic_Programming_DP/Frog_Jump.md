@@ -4,182 +4,215 @@
 https://leetcode.com/problems/frog-jump/
 
 **Topic:**
-Dynamic Programming DP
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** DP with states (position, last-jump); transitions to k-1, k, k+1.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> stones=[0,1,3,5,6,8,12,17]. From 0 with k=0 → 1(k=1). Continue reaching 17.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Dynamic Programming (DP)
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Set Up the Scenario
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+A frog is at position 0 (the first stone). It wants to reach the last stone. Stones are at sorted positions given in `stones[]`. Between stones, there's water — the frog must land exactly on a stone.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Jump rule: if the frog's *previous jump* was of size `k`, the next jump can be `k-1`, `k`, or `k+1` (but must be ≥ 1). The frog's **first jump must be of size 1**.
 
-So ask yourself:
+Return true if the frog can reach the last stone.
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: DP with states (position, last-jump); transitions to k-1, k, k+1.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
+Example: `stones = [0, 1, 3, 5, 6, 8, 12, 17]`.
 
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
+Can the frog make it?
+- Start at 0, jump 1 → 1. (Last jump = 1.)
+- From 1, can jump 1, 2 (not 0). Options: 2 (not a stone), 3 (yes, size=2).
+- From 3, last jump was 2. Options: 1, 2, 3. Lands at 4, 5, or 6. 5 and 6 are stones.
+- Try 5 (last=2): options 1, 2, 3. Lands at 6, 7, 8. Stones: 6, 8.
+  - Try 6 (last=1): options 1, 2. Lands at 7 or 8. 8 stone (last=2).
+    - From 8, last=2: 9, 10, 11. None are stones. Fail this branch.
+  - Try 8 (last=3): options 2, 3, 4. Lands at 10, 11, 12. 12 stone (last=4).
+    - From 12, last=4: 15, 16, 17. 17 is the last stone! ✓
 
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-Your very first thought is often recursion. That's actually the right start — but naive recursion re-computes the same subproblems exponentially. The fix is memoization (top-down) or tabulation (bottom-up). The hard part is identifying the state that captures all we need to know about the past.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Frog at stone i with last jump k can jump to stones i+k-1, i+k, i+k+1. Track reachable (stone, jump size) pairs.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Yes, the frog can reach 17. Return true.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: Identify the State
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+At any moment, the frog's **state** consists of:
+- Which stone it's on (position).
+- The jump size that brought it here.
 
-**The concept:** DP with states (position, last-jump); transitions to k-1, k, k+1.
+The jump size matters because it constrains the next possible jumps. So the state is **(stone, last_jump)**, not just (stone).
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever a brute-force recursion has overlapping subproblems → think DP. Identify state first, then transition.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+If we just tracked (stone) without knowing the last jump, we couldn't decide what jumps are legal from there.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 3: Brute Force DFS
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+Try all valid jumps from the current state:
 
-Map stone → set of jump sizes that reach it. From each (stone, k), attempt to reach stone+k-1, stone+k, stone+k+1. Check if last stone is reachable.
+```
+def canReach(pos, lastJump):
+    if pos == lastStone: return True
+    for next_k in [lastJump - 1, lastJump, lastJump + 1]:
+        if next_k <= 0: continue
+        nextPos = pos + next_k
+        if nextPos is a stone:
+            if canReach(nextPos, next_k): return True
+    return False
+```
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
+Start: `canReach(0, 0)`. The initial "lastJump = 0" triggers the "first jump of size 1" via `next_k = 1` (the `lastJump - 1` = -1 is rejected, `lastJump` = 0 is rejected because ≤ 0, `lastJump + 1` = 1 is valid).
 
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
+The state space is bounded by (stones × possible jump sizes). On an n-stone array, the largest meaningful jump is ~n (can't jump farther than the length of the array). So state space is O(n²), but the naive DFS explores paths exponentially because it doesn't memoize.
 
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Memoization or BFS.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+Memoize on (pos, lastJump) and we're back to O(n²) states with O(1) transitions each → O(n²) total. That's tractable.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 4: Let's Convert the DFS Into a Clean DP
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+Make the state concrete. For each stone position, we want to know: which last-jump sizes can *reach* this stone? If that set is non-empty, this stone is reachable.
 
-stones=[0,1,3,5,6,8,12,17]. From 0 with k=0 → 1(k=1). Continue reaching 17.
+Build a map: `reachable_jumps[position]` = set of jump sizes with which the frog can arrive at `position`.
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+Initialize `reachable_jumps[0] = {0}` (frog starts at 0 with "no previous jump" — represented as 0).
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
+For each stone in order, for each jump size `k` that can reach it, try jumps `k-1, k, k+1` from it. If the landing position is a stone, add that new jump size to the landing stone's set.
 
-
-----------------------------------------
-
-## Step 8: Time and Space Complexity
-
-Complexity isn't magic — it's just counting the work.
-
-Time: O(n²). Space: O(n²).
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
+The frog reaches the last stone iff `reachable_jumps[lastStone]` is non-empty at the end.
 
 ----------------------------------------
 
-## Step 9: C++ Implementation
+## Step 5: Trace on `[0, 1, 3, 5, 6, 8, 12, 17]`
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+Use `rj` for `reachable_jumps`. Let me track it as a dict.
+
+Put stones in a set for O(1) membership check: `stoneSet = {0, 1, 3, 5, 6, 8, 12, 17}`.
+
+```
+rj[0] = {0}.
+rj[1], rj[3], ..., rj[17] = {} initially.
+
+Process stone 0 with jumps {0}:
+  k=0: next jumps = -1, 0, 1. Only 1 is valid (>=1).
+    Land at 0 + 1 = 1. Is 1 a stone? Yes. rj[1].add(1). rj[1] = {1}.
+
+Process stone 1 with jumps {1}:
+  k=1: next = 0, 1, 2. Valid: 1, 2.
+    Land at 2 — not a stone. Skip.
+    Land at 3 — stone. rj[3].add(2). rj[3] = {2}.
+
+Process stone 3 with jumps {2}:
+  k=2: next = 1, 2, 3.
+    Land at 4 — not stone.
+    Land at 5 — stone. rj[5].add(2). rj[5] = {2}.
+    Land at 6 — stone. rj[6].add(3). rj[6] = {3}.
+
+Process stone 5 with jumps {2}:
+  k=2: next 1, 2, 3.
+    Land at 6 — stone. rj[6].add(1). rj[6] = {1, 3}.
+    Land at 7 — not stone.
+    Land at 8 — stone. rj[8].add(3). rj[8] = {3}.
+
+Process stone 6 with jumps {1, 3}:
+  k=1: next 1, 2.
+    Land at 7 — skip.
+    Land at 8 — stone. rj[8].add(2). rj[8] = {2, 3}.
+  k=3: next 2, 3, 4.
+    Land at 8 — stone. rj[8].add(3). (already there)
+    Land at 9 — skip. Land at 10 — skip.
+
+Process stone 8 with jumps {2, 3}:
+  k=2: next 1, 2, 3. Lands at 9, 10, 11 — none stones.
+  k=3: next 2, 3, 4. Lands at 10, 11, 12. 12 is stone. rj[12].add(4). rj[12] = {4}.
+
+Process stone 12 with jumps {4}:
+  k=4: next 3, 4, 5. Lands at 15, 16, 17. 17 is stone. rj[17].add(5).
+
+rj[17] = {5}, non-empty. Return true. ✓
+```
+
+----------------------------------------
+
+## Step 6: Implementation Details
+
+Data structures:
+- `unordered_map<int, unordered_set<int>> rj` — position → set of last-jumps that reach here.
+- `unordered_set<int> stoneSet` — for O(1) membership check.
+
+Iterate stones in sorted order (they come sorted). For each, iterate its current jump-set (caveat: don't add to the set you're iterating). Try three candidate jumps from each.
+
+----------------------------------------
+
+## Step 7: Why It Works
+
+**Claim:** the set `rj[p]` at the end of processing is exactly the set of jump sizes that can reach stone p via some valid sequence.
+
+**Proof by induction over stones in order:** The first stone has `rj[0] = {0}` — trivially true (frog starts there). When we process a stone p, we've already processed all stones < p (sorted). For each jump size k in `rj[p]`, we try jumping from p with sizes k-1, k, k+1. If the landing is a stone q > p, we add the jump size to `rj[q]`.
+
+This exactly captures "arrive at q via a jump from p." We cover all predecessors of q because p < q and we've processed all such p.
+
+Hence `rj[q]` accumulates all valid entry jump sizes for q.
+
+----------------------------------------
+
+## Step 8: Name It
+
+This is **DP over states (position, lastJump)**. It's different from usual 1D / 2D grid DPs because the "state" has two dimensions tied together. The same technique applies to:
+- Knight's tour variations with state (position, moves_made).
+- Games where future moves depend on past moves' structure.
+- Keystroke counting problems with state machines.
+
+The general recipe: identify what *future decisions depend on* (here: the last jump) and include it in the state.
+
+----------------------------------------
+
+## Step 9: Complexity
+
+Time: For each stone, we consider up to O(n) possible jump sizes (bounded by stone positions), and for each do O(1) work. Total: **O(n²)**.
+Space: **O(n²)** worst case for `rj`.
+
+For `n = 2000`, that's 4 million operations — comfortable.
+
+----------------------------------------
+
+## Step 10: C++ Implementation
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-bool canCross(vector<int>& s) {
-    unordered_map<int, unordered_set<int>> d;
-    for (int x : s) d[x] = {};
-    d[0].insert(0);
-    for (int x : s) for (int k : d[x])
-        for (int dk : {k-1, k, k+1}) if (dk > 0 && d.count(x+dk)) d[x+dk].insert(dk);
-    return !d[s.back()].empty();
+bool canCross(vector<int>& stones) {
+    unordered_set<int> stoneSet(stones.begin(), stones.end());
+    unordered_map<int, unordered_set<int>> rj;
+    for (int s : stones) rj[s] = {};
+    rj[0] = {0};
+
+    for (int pos : stones) {
+        // Copy current set to avoid iterating while modifying (shouldn't happen, but safe)
+        vector<int> jumps(rj[pos].begin(), rj[pos].end());
+        for (int k : jumps) {
+            for (int next_k : {k - 1, k, k + 1}) {
+                if (next_k <= 0) continue;
+                int nextPos = pos + next_k;
+                if (stoneSet.count(nextPos)) {
+                    rj[nextPos].insert(next_k);
+                }
+            }
+        }
+    }
+
+    return !rj[stones.back()].empty();
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Key details:
+- We copy the current jump set to `jumps` before iterating to avoid any concern with adding to the set being iterated (though in practice we add to *later* positions, not the current one).
+- The triple "next_k in {k-1, k, k+1}" loop compactly handles the three jump options.
+- `next_k <= 0` guard rejects non-positive jumps.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 11: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Minimum number of jumps.
-- Find a valid sequence of stones.
-- Allow negative jumps (back).
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Minimum number of jumps to reach the end.** Different DP — track min jumps to reach each stone.
+- **Frog can jump backward too.** Much harder — cycles become possible.
+- **Count distinct ways to reach the end.** Switch boolean set to integer count; sum over predecessors.
+- **What if jump rule is k±2 instead of k±1?** Same structure, different transitions.
+- **Return an actual jump sequence.** Store parent pointers when updating `rj[nextPos]`; reconstruct by walking back.
+- **Stones have weights that limit the frog's jump.** Add a state dimension for cumulative weight.

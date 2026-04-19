@@ -4,180 +4,178 @@
 https://leetcode.com/problems/subarray-sum-equals-k/
 
 **Topic:**
-Hashing Sliding Window
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Prefix-sum + hashmap counting.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> nums=[1,1,1], k=2. Sums 1,2,3. ans=2.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Hashing / Sliding Window
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Understand the Problem
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Given an integer array `nums` (may contain negatives) and an integer `k`, count the number of **contiguous** subarrays whose sum equals `k`.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Example: `nums = [1, 1, 1]`, `k = 2`. Subarrays with sum 2: `[1, 1]` (indices 0-1) and `[1, 1]` (indices 1-2). Count = 2.
 
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Prefix-sum + hashmap counting.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
+Notice "contiguous" again. And the presence of negatives is important — it rules out some common tricks, as we'll see.
 
 ----------------------------------------
 
-## Step 3: Build Intuition (VERY IMPORTANT)
+## Step 2: The Brute Force and Why It's Slow
 
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-The default is to enumerate every subarray or substring. That's O(n²). Two techniques collapse this: prefix-sum + hashmap for counting subarrays with a property, or a sliding window whose left and right pointers advance monotonically.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-#subarrays ending at i with sum k equals count of previous prefix sums equal to current-k.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
-
-----------------------------------------
-
-## Step 4: Connect to Concept
-
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
-
-**The concept:** Prefix-sum + hashmap counting.
-
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**'Subarray sum equals k' or 'count of something in windows' → think Prefix Sum + HashMap or Sliding Window.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-m[0]=1; run sum; ans += m[sum-k]; ++m[sum].
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Hashmap prefix counts.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
-
-----------------------------------------
-
-## Step 7: Dry Run (Detailed)
-
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
-
-nums=[1,1,1], k=2. Sums 1,2,3. ans=2.
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
-
-----------------------------------------
-
-## Step 8: Time and Space Complexity
-
-Complexity isn't magic — it's just counting the work.
-
-Time: O(n). Space: O(n).
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
-
-----------------------------------------
-
-## Step 9: C++ Implementation
-
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+For each pair `(i, j)` with `i ≤ j`, compute the sum of `nums[i..j]` and check if it equals `k`. There are O(n²) pairs. We can compute the sum in O(1) if we extend `j` one at a time from `i`:
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-int subarraySum(vector<int>& a, int k) {
-    unordered_map<int,int> m; m[0] = 1;
-    int s = 0, ans = 0;
-    for (int x : a) { s += x; ans += m[s - k]; m[s]++; }
-    return ans;
+int count = 0;
+for (int i = 0; i < n; ++i) {
+    int s = 0;
+    for (int j = i; j < n; ++j) {
+        s += nums[j];
+        if (s == k) count++;
+    }
 }
 ```
 
-A few notes about the style:
+O(n²). For `n = 10^4` fine, for `n = 10^5` maybe borderline, for bigger — no good.
 
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+You might wonder: "What about sliding window?" Sliding window works when we can *grow* the window to increase the sum and *shrink* it to decrease. But here **the array has negatives**. Adding an element might *decrease* the sum. So growing doesn't monotonically increase, and the usual sliding-window invariant breaks. We need a different idea.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 3: Rewriting the Problem With Prefix Sums
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
+Let's define `P[0] = 0` and `P[i+1] = P[i] + nums[i]`. So `P[i]` is the sum of the first `i` elements (empty prefix gives 0).
 
-- Longest subarray sum = k.
-- Count subarrays divisible by k.
-- 2D version.
+Now the sum of the subarray `nums[l..r-1]` is exactly `P[r] - P[l]`.
 
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
+**Rephrased:** we want to count pairs `(l, r)` with `l < r` and `P[r] - P[l] = k`, which is:
 
----
+> `P[l] = P[r] - k`
 
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+So for each `r` (right endpoint), how many earlier prefix sums `P[l]` equal `P[r] - k`?
+
+This flips the problem from "subarray-sum equals k" into "how many previous prefix sums equal this specific value?" And counting occurrences of specific values is what a **hashmap** is built for.
+
+----------------------------------------
+
+## Step 4: Building the Algorithm
+
+Walk through the array, maintaining:
+
+- `sum` = running prefix sum (equivalent to `P[r]` at this moment).
+- `cnt` = a hashmap `prefix_value → how many times we've seen it before`.
+
+At each index `r`:
+
+1. Update `sum += nums[r]`.
+2. Ask: how many earlier prefix sums equal `sum - k`? Look it up in `cnt`. That's the number of valid subarrays *ending at `r`*.
+3. Record `sum` itself: increment `cnt[sum]`.
+
+The order matters — we look up *before* inserting, because we don't want the current prefix to count itself.
+
+One subtle piece: the hashmap must start with `cnt[0] = 1`. Why? Because an "empty prefix" has sum 0. If the current running sum itself equals `k`, the valid subarray is `nums[0..r]` — which corresponds to `P[l] = P[0] = 0`. Without `cnt[0] = 1` pre-seeded, we'd miss all subarrays starting from index 0.
+
+----------------------------------------
+
+## Step 5: Trace on a Concrete Example
+
+`nums = [3, 4, 7, 2, -3, 1, 4, 2]`, `k = 7`.
+
+```
+Start: sum = 0, cnt = {0: 1}, count = 0
+
+r=0, nums[0]=3:
+  sum = 3
+  need = sum - k = 3 - 7 = -4. cnt[-4] = 0. count += 0.
+  cnt[3]++. cnt = {0:1, 3:1}.
+
+r=1, nums[1]=4:
+  sum = 7
+  need = 0. cnt[0] = 1. count += 1.   ← [3,4] has sum 7.
+  cnt[7]++. cnt = {0:1, 3:1, 7:1}.
+
+r=2, nums[2]=7:
+  sum = 14
+  need = 7. cnt[7] = 1. count += 1.   ← [7] itself has sum 7.
+  cnt[14]++. cnt = {0:1, 3:1, 7:1, 14:1}.
+
+r=3, nums[3]=2:
+  sum = 16
+  need = 9. cnt[9] = 0. count += 0.
+  cnt[16]++.
+
+r=4, nums[4]=-3:
+  sum = 13
+  need = 6. cnt[6] = 0. count += 0.
+  cnt[13]++.
+
+r=5, nums[5]=1:
+  sum = 14
+  need = 7. cnt[7] = 1. count += 1.   ← [7,2,-3,1] has sum 7.
+  cnt[14]++. Now cnt[14] = 2.
+
+r=6, nums[6]=4:
+  sum = 18
+  need = 11. cnt[11] = 0. count += 0.
+  cnt[18]++.
+
+r=7, nums[7]=2:
+  sum = 20
+  need = 13. cnt[13] = 1. count += 1.   ← [2,-3,1,4,2]... wait let me check.
+                                         The prefix sum was 13 at r=4. From index 5 to 7 inclusive:
+                                         nums[5]+nums[6]+nums[7] = 1+4+2 = 7. ✓
+```
+
+Final count = **4**.
+
+Notice how `cnt[14]` reached 2. That matters when we arrive at the same prefix sum twice — each previous occurrence represents a distinct starting point, so we count them all.
+
+Notice also: the hashmap pattern is robust against negatives. We're not asking whether the sum increases monotonically — we're asking whether a specific number has been seen before.
+
+----------------------------------------
+
+## Step 6: Why This Works — The Formal Argument
+
+Every subarray `nums[l..r-1]` with sum `k` corresponds to a pair of prefix sums `P[l], P[r]` with `P[r] - P[l] = k`. For each `r` we want to count valid `l` with `l < r`.
+
+At the moment we process index `r` in the loop:
+- `sum` is exactly `P[r+1]` (if we're 0-indexed and `r` is the current index just added to the sum).
+- `cnt` holds the counts of all prefix sums `P[0], P[1], ..., P[r]` — that is, all prefix sums *before* the current one.
+
+So `cnt[sum - k]` is exactly the number of earlier prefix sums that match the condition. Correct by construction.
+
+----------------------------------------
+
+## Step 7: Complexity
+
+Time: single pass, with O(1) average hashmap operations → **O(n)**.
+
+Space: in the worst case, every prefix sum is distinct, so the hashmap can hold up to n+1 entries → **O(n)**.
+
+----------------------------------------
+
+## Step 8: C++ Implementation
+
+```cpp
+int subarraySum(vector<int>& nums, int k) {
+    unordered_map<int, int> cnt;
+    cnt[0] = 1;                      // empty prefix
+    int sum = 0, count = 0;
+    for (int x : nums) {
+        sum += x;
+        auto it = cnt.find(sum - k);
+        if (it != cnt.end()) count += it->second;
+        cnt[sum]++;
+    }
+    return count;
+}
+```
+
+Reading the code: we update `sum`, we look up how many previous prefix sums equal `sum - k`, we bump the counter of the current prefix sum. That's the whole thing.
+
+----------------------------------------
+
+## Step 9: Follow-up Questions
+
+- **All subarrays whose sum is divisible by k.** Same technique, but group prefix sums by their remainder mod `k`. `cnt[r]` = number of prefix sums with remainder `r`.
+- **Longest subarray with sum equal to k.** Instead of counting, we want the max length. Store in the hashmap the *first occurrence* of each prefix sum; on a hit, the length is `r - first_occurrence`. Only insert if the prefix sum isn't already there.
+- **Longest subarray with sum at most k.** If the array has non-negative elements, sliding window in O(n). With negatives, it's harder — sorted set of prefix sums + binary search.
+- **Count subarrays with average equal to m.** Subtract `m` from each element, then ask for subarrays with sum zero.
+- **What if the array is very large and streams in?** You can't use this technique directly since you may run out of memory; approximate sketches (count-min) help in special cases.

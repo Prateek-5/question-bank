@@ -1,191 +1,187 @@
 # Maximum Height by Stacking Cuboids
 
 **Problem Link:**
-https://leetcode.com/problems/maximum-height-by-stacking-cuboids/description/
+https://leetcode.com/problems/maximum-height-by-stacking-cuboids/
 
 **Topic:**
-Dynamic Programming DP
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Sort cuboid dimensions; find LIS-like chain maximizing height.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> cuboids=[[50,45,20],[95,37,53],[45,23,12]] → sort each and chain; answer 190.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Dynamic Programming (DP)
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Understand the Rules
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+You have `n` cuboids, each with dimensions `[width, length, height]` (they can be reordered: a cuboid is really just three numbers, any can be the "up" dimension when stacked). You stack cuboid A on top of cuboid B **only if A's width, length, and height are each ≤ B's corresponding dimensions after you decide the orientation of each**.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Return the **maximum total height** of a valid stack.
 
-So ask yourself:
+Example: `cuboids = [[50, 45, 20], [95, 37, 53], [45, 23, 12]]`.
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Sort cuboid dimensions; find LIS-like chain maximizing height.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
+By orienting and picking, you could stack them to get a total of... let me figure out the answer: 190 for this example. The explanation is non-obvious.
 
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
+First observation: each cuboid can be **rotated** freely. So for any cuboid with dims (a, b, c), we can choose which one is "height" (the up direction) and orient the other two as width and length.
 
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-Your very first thought is often recursion. That's actually the right start — but naive recursion re-computes the same subproblems exponentially. The fix is memoization (top-down) or tabulation (bottom-up). The hard part is identifying the state that captures all we need to know about the past.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Each cuboid can be rotated; sort its dims so width≤depth≤height. Then sort cuboids and use DP where dp[i] = best stack ending with cuboid i.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+The constraint for stacking X on Y is: after orienting both, every dim of X is ≤ every dim of Y.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: Simplify With Sorting
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+Here's a key observation: for each cuboid, **always sort its dimensions in non-decreasing order**. That is, for a cuboid (a, b, c), consider (min, mid, max). Why?
 
-**The concept:** Sort cuboid dimensions; find LIS-like chain maximizing height.
+Claim: for any valid stack, we can WLOG assume each cuboid is oriented with its dimensions sorted this way. Specifically, the largest dimension is the **height**, and the others are width and length. This maximizes each cuboid's contribution to total height.
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
+Proof sketch: suppose a cuboid in the optimal stack has dimensions not sorted — say, it's placed with (b, a, c) where b > a. Could we swap to (a, b, c) instead (with c still as height)? Doing so changes the cuboid's "footprint" from (b, a) to (a, b) — same set of dimensions, just swapped. Can the cuboid above still fit? The cuboid above's footprint was constrained by (b, a); now it's constrained by (a, b). But (a, b) is just a rotation of (b, a), so the cuboid above can be rotated to match. So no loss. ✓
 
-**Pattern recognition cue:**
+More crucially: can we always pick the LARGEST dimension as "height"? Yes, with a similar argument. Swapping to make the largest dim the height increases this cuboid's contribution without breaking anything above.
 
-**Whenever a brute-force recursion has overlapping subproblems → think DP. Identify state first, then transition.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+Conclusion: **sort each cuboid's dimensions; the largest is its height**.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 3: Now Sort the Cuboids Themselves
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+After sorting dimensions within each cuboid, the stacking constraint is: to stack X on Y, X.width ≤ Y.width AND X.length ≤ Y.length AND X.height ≤ Y.height (with width ≤ length ≤ height for each).
 
-For each cuboid sort its (a,b,c). Sort cuboids lexicographically. dp[i] = c[i] + max over j<i with a[j]≤a[i], b[j]≤b[i], c[j]≤c[i] of dp[j]. Answer max dp.
+Sort all cuboids by their dimension tuples (width, length, height) in ascending order. Now if we build a stack from bottom to top, we're picking an increasing subsequence of cuboids.
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
+"Increasing" means: for i < j in our picked sequence, cuboid_i fits inside cuboid_j. Or equivalently, cuboid_j goes below cuboid_i.
 
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
+Wait, the stack orientation: bottom cuboid holds everything above. So bottom's dimensions ≥ all above. If we sort ascending and pick an increasing subsequence, the last picked is the biggest — that's the bottom. Then each earlier picked (smaller) fits above the next-bigger one.
 
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Sort-then-LIS DP.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+This reduces the problem to: **Longest increasing subsequence (by cuboid dimensions)** where the "length" being maximized is actually the sum of heights.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 4: DP Similar to LIS
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+For each cuboid i (after sorting), `dp[i]` = maximum total height of a stack ending with cuboid i on top (or: cuboid i is the smallest / topmost).
 
-cuboids=[[50,45,20],[95,37,53],[45,23,12]] → sort each and chain; answer 190.
+Actually let's reverse: `dp[i]` = max height with cuboid i as the **bottom** of the stack. Then dp[i] considers all cuboids j that can sit ON cuboid i (j has all dims ≤ i) and picks the best.
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+```
+sort cuboids by (width, length, height) ascending (after per-cuboid sort)
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
+dp[i] = cuboids[i].height   # stack with just this cuboid
+for i from 0 to n-1:
+    for j from 0 to i-1:
+        if cuboids[j] can fit on cuboids[i]  # all three dims ≤
+            dp[i] = max(dp[i], dp[j] + cuboids[i].height)
 
+return max(dp)
+```
+
+Each cuboid's height contribution depends on its position as the bottom of a sub-stack.
+
+Hmm, I had it slightly off. Let me re-phrase. If cuboid i is the bottom, then everything above must be smaller. In the sorted-ascending order, things "above" in the stack come earlier (smaller cuboids). So dp[i] = i's height + max over j < i of dp[j] (where j fits on i).
+
+Yes, that's the pattern: dp[i] considers cuboid i at the bottom, extended by smaller cuboids sitting on top.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 5: Why Sorting Makes This an LIS-Variant
 
-Complexity isn't magic — it's just counting the work.
+After sorting ascending (width, length, height), if j < i in the sorted order, then cuboids[j].width ≤ cuboids[i].width automatically (by sort). But we also need length and height constraints.
 
-Time: O(n²). Space: O(n).
+For cuboid j to fit on cuboid i (with j above), we need **all three dimensions ≤**. Since j ≤ i in width (from sort), we need to additionally check length and height.
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+Some cuboids with equal widths might have different lengths/heights — those checks are still needed explicitly.
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+The DP is O(n²) — n cuboids, each checking all predecessors.
 
+----------------------------------------
+
+## Step 6: Trace on the Example
+
+`cuboids = [[50, 45, 20], [95, 37, 53], [45, 23, 12]]`.
+
+Step 1: sort each cuboid's dims ascending.
+- (50, 45, 20) → (20, 45, 50).
+- (95, 37, 53) → (37, 53, 95).
+- (45, 23, 12) → (12, 23, 45).
+
+Step 2: sort cuboids.
+- (12, 23, 45).
+- (20, 45, 50).
+- (37, 53, 95).
+
+Step 3: DP with cuboids in this order. Heights: 45, 50, 95.
+
+```
+dp[0] = 45. (just (12, 23, 45))
+dp[1] = 50 (base). Check cuboid 0: (12, 23, 45) fits on (20, 45, 50)? 12≤20, 23≤45, 45≤50. Yes. dp[1] = 45 + 50 = 95.
+dp[2] = 95 (base). Check j=0: (12, 23, 45) on (37, 53, 95)? Yes. dp[2] = max(95, 45 + 95) = 140.
+       Check j=1: (20, 45, 50) on (37, 53, 95)? 20 ≤ 37, 45 ≤ 53, 50 ≤ 95. Yes. dp[2] = max(140, 95 + 95) = 190.
+```
+
+max(dp) = 190. ✓
+
+----------------------------------------
+
+## Step 7: Name It
+
+This is a **2D/3D Longest Increasing Subsequence** variant, solved with sorting + DP. The twist:
+- Each cuboid is first normalized (sort dims).
+- All cuboids are sorted (so width order is fixed).
+- DP builds the max-height stack.
+
+Related patterns:
+- Russian Doll Envelopes (2D LIS).
+- Longest Chain in Pair Sequence.
+- Tower of Babel-style box stacking.
+
+The general technique: when the comparison is multi-dimensional, sort by one dimension first and DP on the others.
+
+----------------------------------------
+
+## Step 8: Complexity
+
+Time: **O(n²)** for the DP. Plus O(n log n) for sorting cuboids and O(1) per cuboid for internal sort. Dominated by DP.
+Space: **O(n)** for dp array.
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
-
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-int maxHeight(vector<vector<int>>& c) {
-    for (auto& v : c) sort(v.begin(), v.end());
-    sort(c.begin(), c.end());
-    int n = c.size(), best = 0;
+int maxHeight(vector<vector<int>>& cuboids) {
+    // Step 1: sort each cuboid's dimensions ascending
+    for (auto& c : cuboids) sort(c.begin(), c.end());
+
+    // Step 2: sort cuboids lexicographically (so earlier ones are "smaller")
+    sort(cuboids.begin(), cuboids.end());
+
+    int n = cuboids.size();
     vector<int> dp(n);
+    int best = 0;
     for (int i = 0; i < n; ++i) {
-        dp[i] = c[i][2];
-        for (int j = 0; j < i; ++j)
-            if (c[j][0] <= c[i][0] && c[j][1] <= c[i][1] && c[j][2] <= c[i][2])
-                dp[i] = max(dp[i], dp[j] + c[i][2]);
+        dp[i] = cuboids[i][2];   // stack with just this cuboid at bottom
+        for (int j = 0; j < i; ++j) {
+            // Can cuboids[j] sit on cuboids[i]? (j already has width ≤ i via sort, check len & height)
+            if (cuboids[j][0] <= cuboids[i][0] &&
+                cuboids[j][1] <= cuboids[i][1] &&
+                cuboids[j][2] <= cuboids[i][2]) {
+                dp[i] = max(dp[i], dp[j] + cuboids[i][2]);
+            }
+        }
         best = max(best, dp[i]);
     }
     return best;
 }
 ```
 
-A few notes about the style:
+Two key preprocessing steps:
+1. Sort dims within each cuboid (pick the biggest as height).
+2. Sort cuboids themselves lexicographically.
 
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Then standard LIS-flavored DP.
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Box stacking (3 orientations per box).
-- With weights constraint.
-- Maximize count of stacked cuboids.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Return the actual stack (list of cuboids in order).** Track parent pointers.
+- **Maximize the stack's minimum cuboid's volume instead.** Different objective; needs careful DP.
+- **Cuboids with "orientation locked" (can't rotate).** Then step 1 doesn't apply; DP directly on given orientations.
+- **Stack with weighted cuboids (different importance).** Multiply dp transitions by weights.
+- **Very large n (10^5+).** O(n²) DP too slow. Use more advanced structures like segment trees indexed by dimensions.
+- **Prove sorting-to-max-height optimality more rigorously.** The exchange argument I sketched works formally.

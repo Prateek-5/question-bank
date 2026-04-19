@@ -6,179 +6,203 @@ https://leetcode.com/problems/palindrome-linked-list/
 **Topic:**
 Linked List
 
+----------------------------------------
+
+## Step 1: State the Question
+
+Given the head of a singly linked list, return true if it reads the same forward and backward (a palindrome), false otherwise.
+
+Examples:
+- `1 → 2 → 2 → 1`: palindrome. True.
+- `1 → 2`: not palindrome. False.
+- `1`: trivially palindrome (single element). True.
+
+The challenge: the problem often asks for **O(n) time and O(1) space**. For arrays this is easy — two pointers. For linked lists, it's trickier because we don't have backward access.
 
 ----------------------------------------
 
-## Step 1: Understand the Problem (Beginner Friendly)
+## Step 2: Naïve Approaches
 
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
+**Approach A: Copy to an array, then two-pointer.** O(n) time, O(n) space. Simple:
+```cpp
+vector<int> v;
+while (head) { v.push_back(head->val); head = head->next; }
+int l = 0, r = v.size() - 1;
+while (l < r) {
+    if (v[l] != v[r]) return false;
+    l++; r--;
+}
+return true;
+```
 
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
+**Approach B: Push values onto a stack during first pass, then compare.** Same O(n) memory.
 
-**In plain words:** Find middle, reverse second half, compare halves.
+Both work. They fail the "constant space" target.
 
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
+How do we check a palindrome with O(1) memory when we can only traverse forward? The key is that the back half of a palindrome is the **reverse** of the front half. So if we could somehow walk backward through the back half while walking forward through the front, we'd compare them in O(1) extra memory.
 
-> 1→2→2→1. Middle at 2 (second). Reverse second → 1→2. Compare 1,2 with 1,2 → palindrome.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
-
-----------------------------------------
-
-## Step 2: Break Down the Problem
-
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
-
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
-
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Find middle, reverse second half, compare halves.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
+And **reversing a linked list in place** is something we can do easily. That's the clue.
 
 ----------------------------------------
 
-## Step 3: Build Intuition (VERY IMPORTANT)
+## Step 3: Plan — Reverse Half, Then Compare
 
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
+Three steps:
+1. **Find the middle** of the list (slow/fast pointer).
+2. **Reverse the second half** in place.
+3. **Compare front half with reversed back half**, walking both forward.
 
-Because linked lists don't give random access, the temptation is to copy them into arrays and work there. Sometimes that's fine; often it wastes memory. The classic trick is to use two pointers moving at different speeds or with different gaps — it lets you solve many problems in a single pass.
+If they match all the way through, palindrome. Otherwise, not.
 
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Comparing across the list with O(1) memory needs us to mirror the second half by reversing.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Optional: at the end, reverse the second half again to restore the list — respectful to callers.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 4: Let's Walk Through Each Step
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+**Step 1: Find the middle.**
+Slow/fast pointer trick: slow moves 1, fast moves 2. When fast hits the end, slow is at the middle.
 
-**The concept:** Find middle, reverse second half, compare halves.
+For odd length `1 → 2 → 3 → 4 → 5`, slow ends at 3.
+For even length `1 → 2 → 3 → 4`, slow ends at 3 (the later of the two middles). The "back half" starts at slow in both cases.
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
+**Step 2: Reverse from slow to end.**
+Standard in-place linked-list reversal. At the end of this, the original "slow" now leads a list that reads the original back half **in reverse**.
 
-**Pattern recognition cue:**
+**Step 3: Compare.**
+Have two pointers: one starting at the original head, one starting at the reversed second half's new head. Walk both forward, comparing values. If any mismatch, return false. If we finish (one hits null first), return true.
 
-**Whenever you need to find cycles, middles, or the k-th-from-end → think slow/fast pointers.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-Find middle (slow/fast). Reverse slow (second half). Walk both halves comparing values. Optionally restore the list.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
+Note: for odd-length lists, the middle value is shared — we don't need to compare it. Walking until one pointer is null handles this naturally.
 
 ----------------------------------------
 
-## Step 6: Final Approach
+## Step 5: Trace on `1 → 2 → 2 → 1`
 
-Now let's crystallize everything we've learned into a clean algorithm.
+**Step 1: Find middle.**
+- slow=1, fast=1.
+- Move: slow=2, fast=2.
+- Move: slow=2 (second), fast=1 (last). fast.next = null, stop.
+- slow ends at the second '2' (index 2).
 
-In-place O(1) memory.
+**Step 2: Reverse from slow to end.**
+Reverse `2 → 1` → `1 → 2 → null`. Now the list looks (conceptually) like:
+```
+1 → 2 → 2      (front half, unchanged)
+1 → 2          (reversed back half, starting at where slow was)
+```
 
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
+Actually the in-place reversal *does* modify pointers throughout, so the original list no longer exists as before. But the two chains — front from `head` and back from the reversed-slow — are what we walk.
 
-**Before coding, it's worth asking:**
+**Step 3: Compare.**
+- head=1, revHead=1. Match.
+- next: 2, 2. Match.
+- next: 2 (third node of original, which is the start of reversed chain). Wait, I'm getting tangled.
 
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
+Let me redo this more carefully. For `1 → 2 → 2 → 1`:
 
-Get those clear in your head, and the code almost writes itself.
+Slow ends at node 3 (the second '2', 0-indexed from head).
+Reverse starting from slow: originally `2 → 1`, reversed to `1 → 2`. New head of the reversed half is the old last node (value 1).
 
+Now walk:
+- `head` points to 1 (first node).
+- `revHead` points to 1 (originally the last node).
+- Compare 1 == 1. ✓ Move both forward.
+- head.next = 2. revHead.next = 2. Compare 2 == 2. ✓ Move both.
+- head.next = 2. revHead.next = null. Loop exits (one pointer is null).
+- Return true.
+
+Palindrome confirmed. ✓
+
+For `1 → 2 → 3 → 2`: slow ends at node 3 (the '3'), back half "3 → 2" reversed to "2 → 3". Walk: 1 vs 2. Mismatch. Return false. Correct — not a palindrome.
+
+For odd `1 → 2 → 1`: slow ends at node 2 (the middle '2'). Back half "2 → 1" reversed to "1 → 2". Walk: head=1 vs revHead=1. Match. Move to 2 vs 2. Match. Move; head=1, revHead=null (since reversed back had only 2 nodes). Exit. Return true. ✓
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 6: Why Stop When One Pointer Is Null
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+After reversal, the front half (head to slow-1) and the back half (slow to end, now reversed) may have different lengths by 1 (for odd-length lists, the middle belongs to the back half). That's fine — we compare up to the shorter length, which is the back half for even lists and the back half minus one for odd.
 
-1→2→2→1. Middle at 2 (second). Reverse second → 1→2. Compare 1,2 with 1,2 → palindrome.
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+The middle element in odd-length lists pairs with itself — always a match — so we effectively skip comparing it. This falls out naturally from "walk until one null."
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 7: Name the Technique
 
-Complexity isn't magic — it's just counting the work.
+This uses three classic linked-list tricks combined:
+1. **Slow/fast pointer** for finding the middle.
+2. **In-place linked-list reversal.**
+3. **Two-pointer comparison** walking forward.
 
-Time: O(n). Space: O(1).
+Each is a building block from basic linked-list problems. Putting them together solves this in O(n) time, O(1) space.
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+The real skill: recognizing that "back half reversed" is the structure that lets us compare without recording anything.
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+----------------------------------------
 
+## Step 8: Complexity
+
+Time: O(n) — each phase (find middle, reverse, compare) is O(n/2) = O(n).
+Space: O(1) — we rewire pointers in place; no auxiliary structures.
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
-
 ```cpp
-struct ListNode { int val; ListNode* next; };
-ListNode* rev(ListNode* h) { ListNode* p = nullptr; while (h) { auto* n = h->next; h->next = p; p = h; h = n; } return p; }
-bool isPalindrome(ListNode* h) {
-    auto s = h, f = h;
-    while (f && f->next) { s = s->next; f = f->next->next; }
-    auto r = rev(s);
-    while (r) { if (h->val != r->val) return false; h = h->next; r = r->next; }
-    return true;
-}
+class Solution {
+    ListNode* reverse(ListNode* head) {
+        ListNode* prev = nullptr;
+        while (head) {
+            ListNode* next = head->next;
+            head->next = prev;
+            prev = head;
+            head = next;
+        }
+        return prev;
+    }
+
+public:
+    bool isPalindrome(ListNode* head) {
+        // Step 1: find middle (slow ends at start of back half)
+        ListNode* slow = head;
+        ListNode* fast = head;
+        while (fast && fast->next) {
+            slow = slow->next;
+            fast = fast->next->next;
+        }
+
+        // Step 2: reverse the back half starting at slow
+        ListNode* rev = reverse(slow);
+
+        // Step 3: compare front with reversed back
+        ListNode* a = head;
+        ListNode* b = rev;
+        bool palindrome = true;
+        while (b) {   // back half is the shorter or equal; stop when we finish it
+            if (a->val != b->val) { palindrome = false; break; }
+            a = a->next;
+            b = b->next;
+        }
+
+        // Optional: restore the list by reversing back (not required for correctness)
+
+        return palindrome;
+    }
+};
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+A few details:
+- We walk `while (b)` — the reversed back half is the shorter one (for odd-length lists). Stopping there compares all meaningful pairs.
+- We could restore the list by re-reversing; omitted here since most interview problems don't test for it.
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Without modifying the list (stack-based).
-- Doubly linked list palindrome.
-- Palindromic partitions.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Doubly-linked list palindrome check.** Two pointers at both ends, walk inward. No reversal needed.
+- **Circular linked list palindrome check.** First detect and break the cycle; then apply this algorithm.
+- **Can you check without modifying the list at all?** Yes, but O(n) extra memory (copy values or use recursion).
+- **Recursive O(n) space solution.** Elegant: recurse to the end (effectively reversing via the call stack), then compare upward. Uses O(n) stack.
+- **Time complexity of the "copy and two-pointer" approach vs this one.** Both O(n) time, but constants differ — array indexing is fast, pointer chasing slower.
+- **What if the list has cycles?** Slow/fast finds the cycle meet point, not a middle. You'd handle cycles separately; for this problem, input is assumed acyclic.

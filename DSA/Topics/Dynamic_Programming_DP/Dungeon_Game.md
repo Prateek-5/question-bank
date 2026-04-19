@@ -4,183 +4,169 @@
 https://leetcode.com/problems/dungeon-game/
 
 **Topic:**
-Dynamic Programming DP
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Bottom-up min-HP DP from bottom-right.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> dungeon=[[-2,-3,3],[-5,-10,1],[10,30,-5]]. Answer=7.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Dynamic Programming (DP)
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Set the Scene
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+The knight is at the top-left of an `m × n` dungeon grid, and he needs to reach the princess at the bottom-right. He can only move **right or down**. Each cell either damages him (negative value) or heals him (positive value). He starts with some health `H`. His HP must stay **strictly greater than 0** at every moment — if it ever hits 0 or below, he's dead.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Find the **minimum starting health** such that he survives.
 
-So ask yourself:
+Example:
+```
+-2  -3   3
+-5 -10   1
+10  30  -5
+```
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Bottom-up min-HP DP from bottom-right.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
+If he starts with 7, can he make it? Let's check one path: right, right, down, down: values -2, -3, 3, 1, -5. HP = 7 → 5 → 2 → 5 → 6 → 1. Never drops to 0. He survives.
 
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
+If he starts with 6: 6 → 4 → 1 → 4 → 5 → 0. Dies at the last step.
 
+So minimum is **7**.
 
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-Your very first thought is often recursion. That's actually the right start — but naive recursion re-computes the same subproblems exponentially. The fix is memoization (top-down) or tabulation (bottom-up). The hard part is identifying the state that captures all we need to know about the past.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-We need minimum starting HP so the knight never drops to ≤0. Work backward from the princess cell where needed health = max(1, 1 - room_value).
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Let me confirm that 7 is actually optimal for *some* path, and that no other path works with less. We'd need to search or reason carefully — which is exactly what the algorithm does.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: Why This Isn't Just Minimum Path Sum
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+This feels superficially like Minimum Path Sum (same grid, same movement), but with a twist: **we don't care about total damage, we care about the worst moment**.
 
-**The concept:** Bottom-up min-HP DP from bottom-right.
+Maximizing total HP at the end isn't enough. A path that heals a lot at the start but requires -1000 HP midway is worse than a path that takes -10 damage consistently. We need to track the minimum HP experienced along the path.
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever a brute-force recursion has overlapping subproblems → think DP. Identify state first, then transition.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+So the naive "sum up cells, maximize sum" approach fails. The objective isn't additive over cells in a usable way — it's about a **running minimum** invariant.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 3: Forward Is Too Hard
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+If we try to DP forward (from start to end), we'd need to track at each cell: "what's the HP I have when I get here, given I started with some specific amount?" But we don't know what amount to start with — that's what we're solving for.
 
-dp[i][j] = max(1, min(dp[i+1][j], dp[i][j+1]) - dungeon[i][j]). Base: dp[n-1][m-1] = max(1, 1 - dungeon[n-1][m-1]).
+A forward approach would require searching over starting amounts, which is wasteful.
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
+What if we flip the question? Instead of "what's the max HP as I progress?", ask:
 
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
+> **At each cell, what's the minimum HP I need *entering* this cell in order to survive from here to the end?**
 
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Reverse DP in-place.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+This is a backward question. Answer it for the destination first, then work back to the start.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 4: Set Up the Backward DP
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+Let `need[i][j]` = minimum HP we must have when entering cell (i, j) to survive from (i, j) to the princess.
 
-dungeon=[[-2,-3,3],[-5,-10,1],[10,30,-5]]. Answer=7.
+**Base case (princess cell `(m-1, n-1)`):** After applying this cell's value, we need at least 1 HP. So the HP *before* applying is:
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+```
+need[m-1][n-1] = max(1, 1 - dungeon[m-1][n-1])
+```
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
+If the cell is +5 (heals), we just need 1 HP entering — we'll be at 6 after, but we only require to be alive. If the cell is -10, we need 1 - (-10) = 11 HP entering — we'd survive at 1.
 
+**General case:** at cell `(i, j)`, after we apply this cell's value, we need at least `min(need[i+1][j], need[i][j+1])` HP to enter the better of the two next cells. So before applying the current cell's value:
+
+```
+need[i][j] = max(1, min(need[i+1][j], need[i][j+1]) - dungeon[i][j])
+```
+
+The `max(1, ...)` ensures we never require less than 1 HP (the minimum for survival).
+
+Answer: `need[0][0]`.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 5: Trace on the Example
 
-Complexity isn't magic — it's just counting the work.
+```
+dungeon =
+  -2  -3   3
+  -5 -10   1
+  10  30  -5
+```
 
-Time: O(n·m). Space: O(n·m).
+Bottom row up, right column first:
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+`need[2][2] = max(1, 1 - (-5)) = 6`. (Need 6 HP entering the princess cell; she's at -5.)
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+`need[2][1] = max(1, need[2][2] - dungeon[2][1]) = max(1, 6 - 30) = 1`. (Healing +30 covers everything.)
 
+`need[2][0] = max(1, need[2][1] - dungeon[2][0]) = max(1, 1 - 10) = 1`. (Heal +10 plus next needs 1 → need 1 HP entering.)
+
+`need[1][2] = max(1, need[2][2] - dungeon[1][2]) = max(1, 6 - 1) = 5`.
+
+`need[1][1] = max(1, min(need[2][1], need[1][2]) - dungeon[1][1]) = max(1, min(1, 5) - (-10)) = max(1, 11) = 11`. (Need 11 HP entering because it's -10 here and next cell needs at least 1.)
+
+`need[1][0] = max(1, min(need[2][0], need[1][1]) - dungeon[1][0]) = max(1, min(1, 11) - (-5)) = max(1, 6) = 6`.
+
+`need[0][2] = max(1, need[1][2] - dungeon[0][2]) = max(1, 5 - 3) = 2`.
+
+`need[0][1] = max(1, min(need[1][1], need[0][2]) - dungeon[0][1]) = max(1, min(11, 2) - (-3)) = max(1, 5) = 5`.
+
+`need[0][0] = max(1, min(need[1][0], need[0][1]) - dungeon[0][0]) = max(1, min(6, 5) - (-2)) = max(1, 7) = 7`.
+
+Answer: **7**. ✓
+
+Notice how the backward computation naturally aggregates: each cell's answer is the minimum "future need" adjusted for its own damage/heal.
+
+----------------------------------------
+
+## Step 6: Why Backward Works
+
+Here's the structural reason. The survival constraint is "HP > 0 at all times." Written another way: "at every point along the path, remaining-cells-to-traverse must leave me alive." The "remaining cells to traverse" is a **suffix** of the path, and suffixes are natural to reason about from the end.
+
+So we compute `need[i][j]` = "minimum health to enter (i, j) such that some path from here to the end keeps HP positive throughout." That's a well-defined, local quantity that depends only on cells further along.
+
+The forward version would have to juggle the running minimum HP and the current HP simultaneously — a 2D state per cell, which is messy. Backward cleanly reduces to "what do I need to enter this cell?"
+
+----------------------------------------
+
+## Step 7: Name It
+
+This is **grid DP computed in reverse**. The key trick is identifying that the constraint (HP > 0) is best expressed as a lower bound on initial HP at each cell, and that this lower bound satisfies a recurrence looking backward from the goal.
+
+More broadly, the technique is: **when the forward direction forces a 2D state (current HP + min HP seen so far), try reversing the direction to collapse it to 1D**.
+
+----------------------------------------
+
+## Step 8: Complexity
+
+Time: each cell computed once, O(1) per cell. **O(m · n)**.
+Space: **O(m · n)** for the DP table. Can be optimized to **O(n)** by keeping just the previous row.
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
-
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-int calculateMinimumHP(vector<vector<int>>& D) {
-    int n = D.size(), m = D[0].size();
-    vector<vector<int>> dp(n+1, vector<int>(m+1, INT_MAX));
-    dp[n][m-1] = dp[n-1][m] = 1;
-    for (int i = n-1; i >= 0; --i)
-        for (int j = m-1; j >= 0; --j)
-            dp[i][j] = max(1, min(dp[i+1][j], dp[i][j+1]) - D[i][j]);
-    return dp[0][0];
+int calculateMinimumHP(vector<vector<int>>& d) {
+    int m = d.size(), n = d[0].size();
+    vector<vector<int>> need(m + 1, vector<int>(n + 1, INT_MAX));
+    // Sentinels: beyond the grid, "need" is effectively infinite,
+    // except just past the goal which we set to 1 (we need at least 1 alive).
+    need[m][n - 1] = need[m - 1][n] = 1;
+    for (int i = m - 1; i >= 0; --i) {
+        for (int j = n - 1; j >= 0; --j) {
+            int minNext = min(need[i + 1][j], need[i][j + 1]);
+            need[i][j] = max(1, minNext - d[i][j]);
+        }
+    }
+    return need[0][0];
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Key implementation detail: the sentinel row/column of size `m+1, n+1` with `INT_MAX` everywhere except `need[m][n-1] = need[m-1][n] = 1`. Those two sentinels make the princess cell compute correctly: `need[m-1][n-1] = max(1, 1 - d[m-1][n-1])` as we derived.
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- 3D variant.
-- Include power-ups that cap HP.
-- Return the path.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **What if moves include diagonals?** Add a third term to `minNext`: `need[i+1][j+1]`.
+- **What if HP can overflow an upper cap (knight maxes out at some value)?** Add a cap in the formula — `min(cap, need[i][j])`.
+- **Return the actual path.** Track which direction (down vs. right) gave the min at each cell during DP.
+- **Multiple knights cooperate (each takes a different path).** Much harder — combinatorial.
+- **What if damage can revive (negative cells make you lose, positive ones can boost beyond cap)?** The DP logic still works as long as you define sensible bounds on "alive."
+- **Why does forward DP fail here?** Because minimum HP seen along the path is a function of all cells passed, not just a local sum. A backward formulation isolates the local decision cleanly.

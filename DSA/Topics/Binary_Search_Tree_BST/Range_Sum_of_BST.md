@@ -4,182 +4,187 @@
 https://leetcode.com/problems/range-sum-of-bst/
 
 **Topic:**
-Binary Search Tree BST
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** DFS pruning using BST property.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> BST 10,5,15,3,7,_,18, L=7,R=15. 10 in range → add 10+rs(5)+rs(15). rs(5): 5<7 → rs(7)=7. rs(15)→15+rs(_)+rs(18, 18>15 →rs(left)=0)=15. Total 32.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Binary Search Tree (BST)
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Understand the Task
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Given the root of a **Binary Search Tree** and two integers `low` and `high`, return the **sum of values** of all nodes whose value is in the range [low, high] inclusive.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Example:
+```
+        10
+       /  \
+      5   15
+     / \    \
+    3   7   18
+```
+low = 7, high = 15.
 
-So ask yourself:
+Nodes with values in [7, 15]: 7, 10, 15. Sum = 32.
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: DFS pruning using BST property.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-Many people's first instinct on a tree problem is to flatten it into an array and then work there. Sometimes that works — but it throws away the structural property of BSTs that makes them special: left < node < right. The right solutions exploit that property directly.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Use BST structure to skip subtrees outside [L,R]. If current < L, only right subtree matters; if > R, only left.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Easy enough if we just traverse everything and sum matches. The question is whether we can do better.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: Naive Approach
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+Visit every node. If value is in [low, high], add to sum.
 
-**The concept:** DFS pruning using BST property.
+```
+def rangeSum(node, low, high):
+    if node is null: return 0
+    s = 0
+    if low <= node.val <= high: s += node.val
+    return s + rangeSum(node.left, low, high) + rangeSum(node.right, low, high)
+```
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
+O(n). Works on any binary tree (BST or not).
 
-**Pattern recognition cue:**
-
-**Whenever you need ordered operations (k-th smallest, range queries, predecessor/successor) → think BST.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-rangeSum(node): if null 0; if val < L return rangeSum(right); if val > R return rangeSum(left); else val + rangeSum(left) + rangeSum(right).
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
+But we have a BST here — that means **order**. Can we prune branches we don't need to visit?
 
 ----------------------------------------
 
-## Step 6: Final Approach
+## Step 3: Leverage the BST Property for Pruning
 
-Now let's crystallize everything we've learned into a clean algorithm.
+BST property: for any node with value v, everything in its **left subtree** is < v, and everything in its **right subtree** is > v.
 
-Recursive pruning.
+Now think about the current node:
+- If `node.val < low`: all values in the left subtree are also < low (strictly less than v, which is already < low). No nodes in [low, high] exist in the left subtree. **Skip left.**
+- If `node.val > high`: all values in the right subtree are > node.val > high. **Skip right.**
+- If node.val is in range: include it. Both subtrees might contain more in-range values; recurse into both.
+- Regardless of whether node is in range, we might have in-range values on the opposite side:
+  - If node.val < low: there could be values in [low, high] in the right subtree (values > node.val, possibly in range). Recurse right.
+  - If node.val > high: there could be in-range values in the left subtree. Recurse left.
+  - If in range: recurse both.
 
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
+So the refined algorithm:
+```
+def rangeSum(node, low, high):
+    if node is null: return 0
+    if node.val < low:  return rangeSum(node.right, low, high)
+    if node.val > high: return rangeSum(node.left,  low, high)
+    # in range
+    return node.val + rangeSum(node.left, low, high) + rangeSum(node.right, low, high)
+```
 
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
-
-----------------------------------------
-
-## Step 7: Dry Run (Detailed)
-
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
-
-BST 10,5,15,3,7,_,18, L=7,R=15. 10 in range → add 10+rs(5)+rs(15). rs(5): 5<7 → rs(7)=7. rs(15)→15+rs(_)+rs(18, 18>15 →rs(left)=0)=15. Total 32.
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+Each case makes exactly one or two recursive calls — the ones that **might** contain in-range values. The pruned subtrees are guaranteed to contain nothing useful, so skipping them is safe.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 4: Trace on the Example
 
-Complexity isn't magic — it's just counting the work.
+Tree (same as above), low=7, high=15.
 
-Time: O(n) worst, O(h+k) with skew. Space: O(h).
+```
+rangeSum(10):
+  10 in [7, 15]. Include 10. Recurse both.
+  rangeSum(5):
+    5 < 7. Skip left. Recurse right only.
+    rangeSum(7):
+      7 in [7, 15]. Include 7. Recurse both (but 7 has no children).
+      Sub-recursions on null return 0.
+      Return 7.
+    Return 7.
+  rangeSum(15):
+    15 in [7, 15]. Include 15. Recurse both.
+    rangeSum(null left). Return 0.
+    rangeSum(18):
+      18 > 15. Skip right. Recurse left only.
+      rangeSum(null). Return 0.
+      Return 0.
+    Return 15 + 0 + 0 = 15.
+  Return 10 + 7 + 15 = 32.
+```
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+Result: **32**. ✓
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+Notice how we never visited nodes 3 and 18 (beyond confirming their positions). Node 3 is in the left subtree of 5, but we pruned it. Node 18 was visited but contributed nothing because its only meaningful path (left) leads to null.
 
+For a balanced BST where the range is narrow, pruning skips most nodes.
 
 ----------------------------------------
 
-## Step 9: C++ Implementation
+## Step 5: Why Pruning Is Safe
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+**Claim:** if `node.val < low`, nothing in the left subtree is ≥ low.
+
+**Proof:** BST property says everything in the left subtree is < node.val. And node.val < low. So everything in the left subtree is < low. None are in range. ✓
+
+Symmetric argument for `node.val > high`.
+
+This is the structural reason BSTs are more efficient than unsorted trees for range queries: we can discard entire branches based on a single comparison.
+
+----------------------------------------
+
+## Step 6: Complexity
+
+Worst case (e.g., range covers everything): **O(n)** — same as naive.
+
+Best/common case: when the range is narrow, we touch only **O(log n + k)** nodes (k = nodes in range) for balanced trees.
+
+Space: O(h) for recursion stack, where h = tree height.
+
+----------------------------------------
+
+## Step 7: Name It
+
+This is **BST range query with pruning**. The technique generalizes:
+- Count of nodes in range: same pruning, return 1 instead of node.val.
+- Smallest in range: same pruning, return first in-range value encountered via in-order traversal.
+- Product in range: swap sum for product.
+
+The BST property lets every range query operation leverage the "discard entire subtree" trick. This is what makes balanced BSTs (like std::set and std::map) fast for range operations.
+
+----------------------------------------
+
+## Step 8: C++ Implementation
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-struct TreeNode { int val; TreeNode *left,*right; };
-
-int rangeSumBST(TreeNode* r, int L, int R) {
-    if (!r) return 0;
-    if (r->val < L) return rangeSumBST(r->right, L, R);
-    if (r->val > R) return rangeSumBST(r->left, L, R);
-    return r->val + rangeSumBST(r->left, L, R) + rangeSumBST(r->right, L, R);
+int rangeSumBST(TreeNode* root, int low, int high) {
+    if (!root) return 0;
+    if (root->val < low) return rangeSumBST(root->right, low, high);
+    if (root->val > high) return rangeSumBST(root->left, low, high);
+    return root->val + rangeSumBST(root->left, low, high) + rangeSumBST(root->right, low, high);
 }
 ```
 
-A few notes about the style:
+Six lines. The three cases directly implement the pruning.
 
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
+Iterative version with a stack:
 
+```cpp
+int rangeSumBST(TreeNode* root, int low, int high) {
+    int sum = 0;
+    stack<TreeNode*> stk;
+    if (root) stk.push(root);
+    while (!stk.empty()) {
+        TreeNode* node = stk.top(); stk.pop();
+        if (!node) continue;
+        if (node->val < low) {
+            if (node->right) stk.push(node->right);
+        } else if (node->val > high) {
+            if (node->left) stk.push(node->left);
+        } else {
+            sum += node->val;
+            if (node->left) stk.push(node->left);
+            if (node->right) stk.push(node->right);
+        }
+    }
+    return sum;
+}
+```
+
+Useful when recursion depth could be large. Same pruning logic.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 9: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Count nodes in range.
-- Range sum with frequent updates — augmented BST.
-- K-th element in range.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Count nodes in range instead of summing.** Return 1 instead of node.val; same algorithm.
+- **List nodes in range, sorted.** Do an in-order traversal with pruning; collect in-range values.
+- **Find k-th smallest value in range.** In-order with pruning and a counter.
+- **Range sum in an augmented BST with subtree-sum cache.** Each node stores `subtree_sum`; range sum computed in O(log² n) via predecessor/successor arithmetic.
+- **If we allow duplicates, does the algorithm still work?** Yes — duplicates in BST are typically placed consistently (say, right subtree), and the comparisons still correctly prune.
+- **What about non-BST trees?** The pruning relies on BST property. Without it, we must traverse everything (O(n)).

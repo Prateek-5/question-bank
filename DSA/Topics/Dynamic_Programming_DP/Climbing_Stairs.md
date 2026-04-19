@@ -4,177 +4,163 @@
 https://leetcode.com/problems/climbing-stairs/
 
 **Topic:**
-Dynamic Programming DP
-
+Dynamic Programming (DP)
 
 ----------------------------------------
 
 ## Step 1: Understand the Problem (Beginner Friendly)
 
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
+There's a staircase with `n` steps. At each move you can climb either 1 step or 2 steps. You want to count **how many distinct ways** there are to reach the top.
 
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
+Before trying any algorithm, let's just think about what "a way" means. A "way" is a sequence of moves. For `n = 3`, a sequence like `1 + 1 + 1` is one way. `1 + 2` is another. `2 + 1` is a third. We're not minimizing anything, we're not asking for the fastest path — we're counting sequences.
 
-**In plain words:** Fibonacci recurrence f(n) = f(n-1) + f(n-2).
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> n=4: 1,2,3,5 → 5 ways.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+That's the entire problem. No tricks hidden in the phrasing. Our job is: given `n`, return the count of distinct step-sequences whose sum is `n` where each step is 1 or 2.
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 2: Let's Just Try Small Cases
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+When a counting problem looks abstract, the best move is to stop thinking about algorithms and start **counting by hand** for tiny inputs. The answer often reveals itself before we write a single line of code.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+**n = 1:** Only one way — take a single 1-step. Count = **1**.
 
-So ask yourself:
+**n = 2:** Two ways — `1+1`, or `2`. Count = **2**.
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Fibonacci recurrence f(n) = f(n-1) + f(n-2).
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
+**n = 3:** Let me list them carefully.
+- `1+1+1`
+- `1+2`
+- `2+1`
 
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
+That's three. Count = **3**.
 
+**n = 4:** Let me be really careful here.
+- `1+1+1+1`
+- `1+1+2`
+- `1+2+1`
+- `2+1+1`
+- `2+2`
 
-----------------------------------------
+Count = **5**.
 
-## Step 3: Build Intuition (VERY IMPORTANT)
+**n = 5:** Same drill.
+- `1+1+1+1+1`
+- `1+1+1+2`, `1+1+2+1`, `1+2+1+1`, `2+1+1+1` — that's four.
+- `1+2+2`, `2+1+2`, `2+2+1` — three.
 
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
+Total = 1 + 4 + 3 = **8**.
 
-Your very first thought is often recursion. That's actually the right start — but naive recursion re-computes the same subproblems exponentially. The fix is memoization (top-down) or tabulation (bottom-up). The hard part is identifying the state that captures all we need to know about the past.
+So the sequence we've computed is: `1, 2, 3, 5, 8, ...`
 
-So how do we get smarter? Let's build the correct intuition step by step.
-
-To reach step n you come from step n-1 (one step) or n-2 (two steps). Ways combine additively.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Pause and look at that sequence.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 3: What Do We Notice?
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+Stare at `1, 2, 3, 5, 8` for a moment.
 
-**The concept:** Fibonacci recurrence f(n) = f(n-1) + f(n-2).
+- `3 = 2 + 1`
+- `5 = 3 + 2`
+- `8 = 5 + 3`
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
+Each number is the sum of the two before it. That's a recurrence staring us in the face:
 
-**Pattern recognition cue:**
+```
+ways(n) = ways(n-1) + ways(n-2)
+```
 
-**Whenever a brute-force recursion has overlapping subproblems → think DP. Identify state first, then transition.**
+Now — and this is the important part — **why** should this be true? Patterns are nice, but we want to *understand* the pattern, not just observe it. Otherwise we'd never trust it for larger `n`.
 
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
+Here's the reasoning: suppose you're standing at step `n`. How did you get there? Two options, no more, no less:
 
+1. Your very last move was a **1-step**, meaning you were previously at step `n-1`.
+2. Your very last move was a **2-step**, meaning you were previously at step `n-2`.
 
-----------------------------------------
+Those two options don't overlap (the last move is different in each) and together they cover every possible way to have arrived at step `n`. So the total number of ways to be at step `n` equals the number of ways to be at step `n-1` (and then take a 1-step) plus the number of ways to be at step `n-2` (and then take a 2-step).
 
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-Rolling variables a=1, b=1; loop n times: c=a+b; a=b; b=c.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
+That's the derivation. The pattern isn't a coincidence — it comes directly from "how did I take my last step?".
 
 ----------------------------------------
 
-## Step 6: Final Approach
+## Step 4: Naming What We've Found
 
-Now let's crystallize everything we've learned into a clean algorithm.
+Now we can name it: the sequence `1, 2, 3, 5, 8, 13, ...` is the **Fibonacci sequence** (shifted by one position from the usual mathematical definition). And the recurrence `f(n) = f(n-1) + f(n-2)` is the textbook definition of **Dynamic Programming**: the answer at state `n` depends only on a few smaller states.
 
-O(n) DP with O(1) space.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+But notice — we didn't *start* with "this is DP" or "this is Fibonacci". We started by listing small cases, saw the pattern, and reasoned *why* it must be true. The name came last, and it barely matters. What matters is the recurrence.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 5: From Recurrence to Code
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+We have `f(n) = f(n-1) + f(n-2)` with `f(1) = 1` and `f(2) = 2`. The most natural first attempt is recursion:
 
-n=4: 1,2,3,5 → 5 ways.
+```cpp
+int ways(int n) {
+    if (n == 1) return 1;
+    if (n == 2) return 2;
+    return ways(n-1) + ways(n-2);
+}
+```
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+This works for small `n`, but let's think about what it does for `n = 5`:
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
+- `ways(5)` calls `ways(4)` and `ways(3)`.
+- `ways(4)` calls `ways(3)` and `ways(2)`.
+- `ways(3)` gets called **twice** — once from `ways(5)`, once from `ways(4)`.
 
+And for `n = 40`, `ways(3)` is called billions of times. The recursion re-solves the same subproblems exponentially. Any beginner writing this would watch their program hang and think "something's wrong with my computer".
 
-----------------------------------------
-
-## Step 8: Time and Space Complexity
-
-Complexity isn't magic — it's just counting the work.
-
-Time: O(n). Space: O(1).
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
-
-----------------------------------------
-
-## Step 9: C++ Implementation
-
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+The fix is almost silly: **remember** each answer the first time we compute it. That's memoization. Or, even simpler — since we only ever need the previous two values, we don't need an array at all. Just two variables, rolling forward.
 
 ```cpp
 int climbStairs(int n) {
-    int a = 1, b = 1;
-    for (int i = 2; i <= n; ++i) { int c = a + b; a = b; b = c; }
+    if (n <= 2) return n;
+    int a = 1, b = 2;               // a = ways(1), b = ways(2)
+    for (int i = 3; i <= n; ++i) {
+        int c = a + b;              // ways(i) = ways(i-1) + ways(i-2)
+        a = b;
+        b = c;
+    }
     return b;
 }
 ```
 
-A few notes about the style:
+----------------------------------------
 
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
+## Step 6: Dry Run for n = 5
 
+Let me trace this to make sure it's right.
+
+```
+Start: a = 1 (ways(1)), b = 2 (ways(2))
+
+i = 3: c = 1 + 2 = 3. Shift: a = 2, b = 3.
+i = 4: c = 2 + 3 = 5. Shift: a = 3, b = 5.
+i = 5: c = 3 + 5 = 8. Shift: a = 5, b = 8.
+
+Return b = 8.
+```
+
+Compare to our hand-count for `n = 5`: we found 8 sequences. They match. That's our validation.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 7: Complexity
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
+Time: we loop from 3 to n, doing O(1) work per iteration. That's **O(n)**.
 
-- k-step climbing (DP over k).
-- Cost at each step (Min Cost Climbing).
-- Matrix exponentiation for large n.
+Space: we use three integer variables. That's **O(1)**.
 
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
+The recursive version with memoization would be O(n) time and O(n) space. The rolling-variable version trims space to constant because we only need the last two values.
 
----
+A math-olympiad trick: since we're computing Fibonacci numbers, we can actually do this in O(log n) using matrix exponentiation. For `n ≤ 10^18`, that matters. For typical interview constraints, O(n) is fine.
 
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+----------------------------------------
+
+## Step 8: Follow-up Questions
+
+- **What if the allowed step sizes are {1, 2, 3}?** The recurrence becomes `f(n) = f(n-1) + f(n-2) + f(n-3)`. Same derivation, one extra term.
+- **What if each step has a cost and you want the minimum cost to reach the top?** That's Min Cost Climbing Stairs — same structure, but replace "add" with "min of + cost".
+- **What if some steps are broken and can't be used?** Set `f(broken) = 0`; the recurrence handles the rest.
+- **What if you can take up to `k` steps?** `f(n) = f(n-1) + f(n-2) + ... + f(n-k)`, which is a sliding-window sum — O(n) with a running total.
+- **n up to 10^18?** Matrix exponentiation of the Fibonacci transition `[[1,1],[1,0]]` in O(log n).

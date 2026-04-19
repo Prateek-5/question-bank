@@ -4,182 +4,213 @@
 https://leetcode.com/problems/partition-equal-subset-sum/
 
 **Topic:**
-Dynamic Programming DP
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** 0/1 subset-sum DP target = total/2.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> nums=[1,5,11,5]. sum=22, target=11. Reachable includes 11 → true.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Dynamic Programming (DP)
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: What Does Partition Actually Mean?
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Given an array of positive integers, decide whether it can be split into two groups **with equal sums**. Return true or false.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Example: `[1, 5, 11, 5]`. Sum is 22. Can we get two groups each summing to 11? Yes — `{11}` alone vs. `{1, 5, 5}`. Return **true**.
 
-So ask yourself:
+`[1, 2, 3, 5]`. Sum is 11. Half would be 5.5 — not even an integer. So splitting into two equal-sum groups is impossible. Return **false**.
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: 0/1 subset-sum DP target = total/2.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
+Important: "two groups" means every element goes in exactly one group. Nothing can be left out.
 
 ----------------------------------------
 
-## Step 3: Build Intuition (VERY IMPORTANT)
+## Step 2: A Free Early Exit
 
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
+If the total sum is odd, we can stop immediately — there's no way to split an odd integer into two equal halves. So assume from now on that `total = 2T` for some integer T.
 
-Your very first thought is often recursion. That's actually the right start — but naive recursion re-computes the same subproblems exponentially. The fix is memoization (top-down) or tabulation (bottom-up). The hard part is identifying the state that captures all we need to know about the past.
+Now the question reduces to: **is there any subset summing to exactly T?**
 
-So how do we get smarter? Let's build the correct intuition step by step.
+If yes, that subset is one group, and its complement (the rest of the array) is the other. They each sum to T. Partition possible.
 
-Can we pick a subset that sums to half the total? If total is odd, impossible; else boolean DP on reachable sums.
+If no subset sums to T, no partition is possible.
 
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+So the new problem is: **subset-sum-equals-T**. Let me focus on that.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 3: Try the Subset-Sum Question by Hand
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+`nums = [1, 5, 11, 5]`, T = 11. Can I pick some subset summing to 11?
 
-**The concept:** 0/1 subset-sum DP target = total/2.
+Let me enumerate subsets and their sums:
+- `{}` → 0
+- `{1}` → 1
+- `{5}` → 5
+- `{11}` → 11 ✓ (found it!)
+- ... more subsets exist but we already have one.
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
+Yes, so partition is possible. ✓
 
-**Pattern recognition cue:**
-
-**Whenever a brute-force recursion has overlapping subproblems → think DP. Identify state first, then transition.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-target = sum/2. dp bitset of size target+1; dp[0]=true. For each num: dp |= dp << num. Return dp[target].
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
+`nums = [1, 5, 5, 3]`, total = 14, T = 7. Subsets summing to 7?
+- `{1}` → 1, `{5}` → 5, `{3}` → 3, `{5,3}` → 8, `{1,3,5}` → 9, `{1,5}` → 6, `{5,5}` → 10, ...
+- No subset sums to exactly 7. So partition is not possible.
 
 ----------------------------------------
 
-## Step 6: Final Approach
+## Step 4: The Brute Force Is Exponential
 
-Now let's crystallize everything we've learned into a clean algorithm.
+For n items, there are 2^n subsets. For n = 20, that's about a million — borderline okay. For n = 200, it's 10^60 — impossible.
 
-Bitset DP.
+Why is it so wasteful? Because most of those subsets are being re-computed piecewise. If I ask "what sums can I form using the first 3 elements?" and get `{0, 1, 5, 6, 11, 12, 16, 17}`, then adding a 4th element of value `5` means each reachable sum is still reachable (skip the new item) or can be increased by 5 (take it). That's all — no need to re-enumerate all 16 subsets of size 4.
 
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+So the question becomes: can I just track the set of **reachable sums** as I process elements one at a time?
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 5: The Boolean Table Approach
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+Let `dp[i][s] = true` if some subset of the first `i` elements sums to `s`.
 
-nums=[1,5,11,5]. sum=22, target=11. Reachable includes 11 → true.
+Transitions:
+- **Skip element i:** `dp[i][s] = dp[i-1][s]`.
+- **Take element i (if `nums[i-1] <= s`):** `dp[i][s] = dp[i][s] OR dp[i-1][s - nums[i-1]]`.
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+Base cases:
+- `dp[0][0] = true` (empty subset sums to 0).
+- `dp[0][s] = false` for `s > 0`.
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
+Goal: `dp[n][T]`.
 
+Let me build the table for `nums = [1, 5, 11, 5]`, T = 11. I'll show only the reachable sums per row (implicitly, un-shown sums are false):
+
+```
+Row 0 (no items):         {0}
+Row 1 (considered 1):      {0, 1}
+Row 2 (considered 5 more): {0, 1, 5, 6}
+Row 3 (considered 11):     {0, 1, 5, 6, 11, 12, 16, 17}
+                           ↑ 11 is reachable — we can stop early!
+```
+
+So `dp[3][11] = true`. Answer: partition is possible.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 6: 1D Space Optimization
 
-Complexity isn't magic — it's just counting the work.
+Each row depends only on the previous row. So we can use a single 1D boolean array of size `T+1`, updating it in place.
 
-Time: O(n·target/64). Space: O(target/64).
+But we have to be careful about direction. If we iterate `s` from 0 upward while updating, `dp[s]` uses `dp[s - num]` — which might have *already* been updated this same iteration, letting us "use the same item twice." Not what we want.
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
-
-----------------------------------------
-
-## Step 9: C++ Implementation
-
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+To fix: iterate `s` **downward**, from T to `num`. That way, when we read `dp[s - num]`, it's still from the previous row.
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-bool canPartition(vector<int>& a) {
-    int s = accumulate(a.begin(), a.end(), 0);
-    if (s & 1) return false;
-    int t = s / 2;
-    bitset<10001> dp; dp[0] = 1;
-    for (int x : a) dp |= dp << x;
-    return dp[t];
+vector<bool> dp(T + 1, false);
+dp[0] = true;
+for (int x : nums) {
+    for (int s = T; s >= x; --s) {
+        dp[s] = dp[s] || dp[s - x];
+    }
+}
+return dp[T];
+```
+
+Let me trace this on `nums = [1, 5, 11, 5]`, T = 11.
+
+```
+Initial dp: [T, F, F, F, F, F, F, F, F, F, F, F]   (indices 0..11)
+
+Process 1 (s from 11 down to 1):
+  dp[1] |= dp[0] → dp[1] = T.
+  Others unchanged.
+  dp: [T, T, F, F, F, F, F, F, F, F, F, F]
+
+Process 5 (s from 11 down to 5):
+  dp[11] |= dp[6] = F → F.
+  ...
+  dp[6] |= dp[1] = T → T.
+  dp[5] |= dp[0] = T → T.
+  dp: [T, T, F, F, F, T, T, F, F, F, F, F]
+
+Process 11 (s from 11 down to 11):
+  dp[11] |= dp[0] = T → T.
+  dp: [T, T, F, F, F, T, T, F, F, F, F, T]
+
+At this point dp[11] is true — we could stop. Process 5 (redundant but trace anyway):
+  dp[11] |= dp[6] = T → still T.
+  dp[10] |= dp[5] = T → T.
+  dp[6] |= dp[1] = T → still T.
+  dp[5] |= dp[0] = T → still T.
+```
+
+`dp[11]` is true at the end → partition possible. ✓
+
+----------------------------------------
+
+## Step 7: Name What We Found
+
+This is a classic **subset-sum DP**. It's often phrased as a "0/1 knapsack" variant where each item has weight equal to value. The recurrence `dp[s] = dp[s] OR dp[s - x]` iterated over items is the bread-and-butter pattern.
+
+The trick of iterating `s` downward is also the defining move for **0/1 knapsack** (each item used at most once) vs. upward for **unbounded knapsack** (each item unlimited). Memorizing the direction isn't the point — *understanding why it prevents double-use* is.
+
+----------------------------------------
+
+## Step 8: The Bitset Speed-Up (Optional but Cool)
+
+Once you're comfortable with the boolean DP, there's a trick that speeds it up by ~64x in practice.
+
+Represent the entire row as a bit: bit `s` is 1 iff sum `s` is reachable. Now what does "take element `x`" look like on a bitset?
+
+Every reachable sum `s` should have `s + x` also become reachable. Shifting the bitset left by `x` positions moves every "1-bit" at position `s` to position `s + x`. That's exactly "everything reachable before is now also reachable `x` higher."
+
+So the recurrence `dp = dp | (dp << x)` does both things at once: keep the previous row, plus add all shifted sums.
+
+```cpp
+bitset<10001> dp;      // assumes T <= 10000
+dp[0] = 1;
+for (int x : nums) dp |= (dp << x);
+return dp[T];
+```
+
+Same algorithm, but the bitset lets the hardware OR 64 bits at a time. Blazingly fast in practice.
+
+Note: understanding the boolean version is essential; the bitset is a micro-optimization of the same idea.
+
+----------------------------------------
+
+## Step 9: Complexity
+
+Boolean DP: time **O(n·T)**, space **O(T)**.
+Bitset DP: time **O(n·T / 64)** due to hardware parallelism, space **O(T/64)** bits.
+
+For the typical LeetCode constraint (sum up to 20000), both are fast enough. The bitset just runs faster.
+
+----------------------------------------
+
+## Step 10: C++ Implementation
+
+```cpp
+bool canPartition(vector<int>& nums) {
+    int sum = accumulate(nums.begin(), nums.end(), 0);
+    if (sum & 1) return false;              // odd sum — immediate fail
+    int target = sum / 2;
+
+    vector<bool> dp(target + 1, false);
+    dp[0] = true;
+    for (int x : nums) {
+        for (int s = target; s >= x; --s) {
+            dp[s] = dp[s] || dp[s - x];
+        }
+    }
+    return dp[target];
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+The two key ingredients:
+- Sum check for the quick odd-reject.
+- Downward iteration of `s` to ensure each element is used at most once per item.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 11: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- k-partition into equal sums.
-- Minimum difference between two subsets.
-- Count subsets summing to target.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Minimum difference between two subsets (not necessarily equal).** Compute all reachable sums `s` up to `total/2`. The answer is `total - 2 * max(reachable s ≤ total/2)`.
+- **Find the actual partition (two concrete subsets).** Track parent pointers during DP, then walk back.
+- **What if numbers can be negative?** The target could also be negative. Shift the index range to accommodate.
+- **Partition into K equal subsets.** NP-hard in general. Bitmask DP with memoization works for small N; branch-and-bound with smart pruning helps in practice.
+- **Count the number of distinct subsets summing to target.** Integer DP instead of boolean: `dp[s] += dp[s - x]`, still iterate `s` downward.

@@ -6,181 +6,117 @@ https://leetcode.com/problems/maximum-number-of-words-found-in-sentences/
 **Topic:**
 Arrays and Matrices
 
+----------------------------------------
+
+## Step 1: The Setup
+
+You're given an array of strings `sentences`. Each string is a **sentence** — one or more words separated by single spaces, with no leading or trailing whitespace. Return the **maximum number of words** in any one sentence.
+
+Example: `["alice and bob love leetcode", "i think so too", "this is great thanks very much"]`.
+- First: 5 words.
+- Second: 4 words.
+- Third: 6 words.
+- Answer: **6**.
 
 ----------------------------------------
 
-## Step 1: Understand the Problem (Beginner Friendly)
+## Step 2: How to Count Words?
 
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
+The obvious approach: split each sentence on spaces and count the pieces. Works, but creates throwaway arrays of strings.
 
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
+Is there a cheaper way? Yes — exploit the structure the problem guarantees.
 
-**In plain words:** Count spaces per sentence, add 1, track max.
+Since words are separated by **single spaces**, with no doubles, no leading/trailing spaces, the relationship between **spaces** and **words** is tight:
 
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
+```
+number of words = number of spaces + 1
+```
 
-> sentences=['alice a b','hello world']. 2+1=3, 1+1=2. max=3.
+A sentence with k spaces has k+1 words. "hello world" → 1 space, 2 words. "a" → 0 spaces, 1 word.
 
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
-
-----------------------------------------
-
-## Step 2: Break Down the Problem
-
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
-
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
-
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Count spaces per sentence, add 1, track max.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
+So we just **count spaces** in each string — no splitting, no allocations.
 
 ----------------------------------------
 
-## Step 3: Build Intuition (VERY IMPORTANT)
+## Step 3: Algorithm
 
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
+```
+best = 0
+for s in sentences:
+    spaces = count of ' ' in s
+    best = max(best, spaces + 1)
+return best
+```
 
-Your first instinct is often a straightforward double loop over rows and columns. That's O(n·m), which is sometimes fine. When it isn't, look for contribution counting — asking 'for each element, how many sub-ranges include it?' — or look for patterns along diagonals, spirals, or boundaries.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Word count in a space-separated string = number of spaces + 1.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Linear in the total length of all sentences. Can't do better — we must at least look at each character to know whether it's a space.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 4: Trace
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+`sentences = ["please wait", "continue to fight", "continue to win"]`.
 
-**The concept:** Count spaces per sentence, add 1, track max.
+- "please wait": 1 space → 2 words.
+- "continue to fight": 2 spaces → 3 words.
+- "continue to win": 2 spaces → 3 words.
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever the problem is about rows, columns, diagonals, or all sub-rectangles → think contribution counting or per-row/col precomputation.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+Best = **3**. ✓
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 5: Why Not Split?
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+`split(" ")` would also give the right answer. For each sentence of length L, it allocates an array of O(L / avg_word_length) strings. For large inputs, that's a lot of memory pressure and GC (in languages with it) or extra string objects (in C++).
 
-For each sentence count spaces and compare to max.
+Counting spaces is O(L) time and O(1) extra space per sentence — the minimal work.
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
+For this problem size (≤100 sentences, ≤100 chars each), either approach is fine. But the space-count idiom is a useful habit for string problems.
 
 ----------------------------------------
 
-## Step 6: Final Approach
+## Step 6: Name It
 
-Now let's crystallize everything we've learned into a clean algorithm.
+This isn't really a named algorithm — it's a **structural invariant**: *delimiter count + 1 = token count*, valid when delimiters are single and no leading/trailing ones exist.
 
-Linear scan.
+Relatives:
+- Count CSV fields by counting commas.
+- Count lines by counting `\n`.
+- Count path components by counting `/` (with care around root/trailing slashes).
 
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+Whenever the delimiter structure is rigidly specified, counting delimiters beats tokenizing.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 7: Complexity
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
-
-sentences=['alice a b','hello world']. 2+1=3, 1+1=2. max=3.
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+Time: **O(total characters across all sentences)**.
+Space: **O(1)** extra.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
-
-Complexity isn't magic — it's just counting the work.
-
-Time: O(total chars). Space: O(1).
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
-
-----------------------------------------
-
-## Step 9: C++ Implementation
-
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+## Step 8: C++ Implementation
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-int mostWordsFound(vector<string>& s) {
+int mostWordsFound(vector<string>& sentences) {
     int best = 0;
-    for (auto& x : s) {
-        int c = 1;
-        for (char ch : x) if (ch == ' ') c++;
-        best = max(best, c);
+    for (const string& s : sentences) {
+        int spaces = 0;
+        for (char c : s) if (c == ' ') spaces++;
+        best = max(best, spaces + 1);
     }
     return best;
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+A single pass per sentence; no extra allocations. One could also use `count(s.begin(), s.end(), ' ')` from `<algorithm>` for conciseness.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 9: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Using stringstream per sentence.
-- Ignore consecutive spaces.
-- Unicode word boundaries.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Multiple spaces between words.** Split on whitespace runs, or count transitions (space → non-space) — each transition begins a new word.
+- **Leading/trailing spaces.** Trim first, or count transitions.
+- **Unicode whitespace (tabs, non-breaking spaces).** Use a whitespace predicate, not a literal space comparison.
+- **Return the longest sentence itself, not just its word count.** Track the argmax.
+- **Average word count across sentences.** Sum and divide.
+- **Why is `spaces + 1` valid even if a sentence is a single word (no spaces)?** Because 0 spaces → 1 word, and the formula handles it naturally.

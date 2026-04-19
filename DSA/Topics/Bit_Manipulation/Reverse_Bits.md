@@ -6,175 +6,179 @@ https://leetcode.com/problems/reverse-bits/
 **Topic:**
 Bit Manipulation
 
+----------------------------------------
+
+## Step 1: What Does "Reverse Bits" Mean?
+
+Given a 32-bit unsigned integer, reverse its binary representation. Bit 0 becomes bit 31, bit 1 becomes bit 30, etc.
+
+Example: `n = 43261596` (binary `00000010100101000001111010011100`).
+
+Reversed: `00111001011110000010100101000000` = `964176192`.
+
+The leftmost bit of the input becomes the rightmost bit of the output, and vice versa. We're treating n as a fixed-width 32-bit string and reversing it.
 
 ----------------------------------------
 
-## Step 1: Understand the Problem (Beginner Friendly)
+## Step 2: Bit-by-Bit Approach
 
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
+The straightforward method: peel off bits from the input one at a time and attach them to the output in reverse order.
 
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
+```
+result = 0
+for _ in range(32):
+    result = (result << 1) | (n & 1)   # shift result left, append the last bit of n
+    n >>= 1                              # move to next bit of n
+return result
+```
 
-**In plain words:** Bit-by-bit reversal or swap-and-shift.
+Reading this: at each iteration, the rightmost bit of `n` (via `n & 1`) becomes the new rightmost bit of `result` (via the OR). Then we shift `result` one bit left for the next iteration, placing that new bit into position.
 
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
+Wait — we shift `result` left *before* appending? Let me re-read the loop.
 
-> n=43261596 (0000 0010 1001 0100 0001 1110 1001 1100) → reversed = 964176192.
+```
+result << 1: makes room by shifting result left.
+OR with n&1: place the new bit into the freshly-made rightmost slot.
+```
 
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
+So after one iteration, result has 1 meaningful bit. After 2, it has 2. After 32, result holds all 32 bits in reversed order.
 
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
+Trace for n = 5 (binary 101, on 4 bits for simplicity, reversed = 1010 = 10):
 
+Actually let me just trace on a small example. n = 5 = 0b00000101 (8-bit). Expected reverse: 0b10100000 = 160.
 
-----------------------------------------
+```
+result = 0.
+Iter 0: n & 1 = 1. result = (0 << 1) | 1 = 1. n = 2 (0b10).
+Iter 1: n & 1 = 0. result = (1 << 1) | 0 = 2 (0b10). n = 1.
+Iter 2: n & 1 = 1. result = (2 << 1) | 1 = 5 (0b101). n = 0.
+Iter 3: n & 1 = 0. result = (5 << 1) | 0 = 10 (0b1010). n = 0.
+Iter 4..7: n = 0, so n & 1 = 0. Each iteration shifts result left:
+  result = 20 (0b10100), 40 (0b101000), 80 (0b1010000), 160 (0b10100000).
+```
 
-## Step 2: Break Down the Problem
+Final result = 160. ✓
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
-
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
-
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Bit-by-bit reversal or swap-and-shift.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-An ordinary arithmetic or counting approach can work, but bit-level manipulation often gives constant-time elegance. Watch for parity, XOR cancellation, and bitmask enumeration.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Read LSB of n, set it as the MSB of result. Shift both appropriately.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+O(32) = O(1) operations. Done.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 3: Why Shift-Left on result and Shift-Right on n
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+Mental model: we're reading n's bits from least significant to most significant, and writing result's bits from most significant to least significant.
 
-**The concept:** Bit-by-bit reversal or swap-and-shift.
+- n is read LSB-first via `n & 1` and `n >>= 1`.
+- Result is written LSB-first via appending new bits at the rightmost position; since we shift result left each iteration, older bits move "up" to more significant positions.
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever you see XOR, powers of two, subsets of ≤ 20 items → think Bitmask / Bit Tricks.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+After 32 iterations, the first bit we read (n's original LSB) ends up at the top of result (its MSB). Perfect reversal.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 4: SWAR — Parallel Bit Reversal
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+There's a cool divide-and-conquer approach that reverses in O(log bits) = O(5) ops for 32-bit:
 
-For 32 bits: r = (r << 1) | (n & 1); n >>= 1.
+```
+n = (n >> 16) | (n << 16);                       // swap 16-bit halves
+n = ((n & 0xff00ff00) >> 8) | ((n & 0x00ff00ff) << 8);  // swap bytes within 16-bit halves
+n = ((n & 0xf0f0f0f0) >> 4) | ((n & 0x0f0f0f0f) << 4);  // swap nibbles
+n = ((n & 0xcccccccc) >> 2) | ((n & 0x33333333) << 2);  // swap bit pairs
+n = ((n & 0xaaaaaaaa) >> 1) | ((n & 0x55555555) << 1);  // swap single bits
+```
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
+Each step swaps progressively-smaller groups of bits:
+- Step 1: swap the top 16 bits with the bottom 16.
+- Step 2: swap bytes within each 16-bit half.
+- Step 3: swap nibbles within each byte.
+- Step 4: swap 2-bit groups within each nibble.
+- Step 5: swap single bits within each pair.
 
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
+After all 5 steps, the bits are fully reversed.
 
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Loop 32 iterations.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+This is classic **SWAR** ("SIMD Within A Register"): parallel bit manipulation using masks and shifts. Super fast in practice, just a few ops.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 5: Choose Your Approach
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+Both are O(1) for 32-bit ints (since the bit width is fixed). The bit-by-bit loop is more readable; the SWAR version is slightly faster but trickier.
 
-n=43261596 (0000 0010 1001 0100 0001 1110 1001 1100) → reversed = 964176192.
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+For interview, the bit-by-bit version is usually preferred — it's clear, concise, and correct. Mention SWAR if the interviewer seems to want more depth.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 6: Cached / Lookup Table Approach
 
-Complexity isn't magic — it's just counting the work.
+A third option: precompute the reversal of every 8-bit value (256 entries). To reverse a 32-bit value, split into four bytes, look up each reversal, and stitch in reverse byte order.
 
-Time: O(32). Space: O(1).
+```
+byte[4] = precomputed reversals
+result = (byte[n & 0xff] << 24)
+       | (byte[(n >> 8) & 0xff] << 16)
+       | (byte[(n >> 16) & 0xff] << 8)
+       | (byte[(n >> 24) & 0xff])
+```
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+4 lookups + bit manipulation. Very fast if you'll call `reverseBits` many times — the precomputation amortizes over calls.
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+For a single call, the overhead of building the table isn't worth it.
 
+----------------------------------------
+
+## Step 7: Name the Techniques
+
+- **Bit-by-bit loop**: direct, O(bits).
+- **SWAR (parallel bit swap)**: log(bits) ops, hardware-friendly.
+- **Lookup table**: O(1) per call after O(constant) preprocessing.
+
+For problem classes like this, knowing all three flavors marks you as someone who's seriously looked at bit manipulation.
+
+----------------------------------------
+
+## Step 8: Complexity
+
+Time: **O(32)** = O(1). SWAR is O(5) ops, lookup is O(4) lookups.
+Space: **O(1)**.
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+**Bit-by-bit (clean, preferred):**
 
 ```cpp
-unsigned reverseBits(unsigned n) {
-    unsigned r = 0;
-    for (int i = 0; i < 32; ++i) { r = (r << 1) | (n & 1); n >>= 1; }
-    return r;
+uint32_t reverseBits(uint32_t n) {
+    uint32_t result = 0;
+    for (int i = 0; i < 32; ++i) {
+        result = (result << 1) | (n & 1);
+        n >>= 1;
+    }
+    return result;
 }
 ```
 
-A few notes about the style:
+**SWAR (fast):**
 
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
+```cpp
+uint32_t reverseBits(uint32_t n) {
+    n = (n >> 16) | (n << 16);
+    n = ((n & 0xff00ff00) >> 8) | ((n & 0x00ff00ff) << 8);
+    n = ((n & 0xf0f0f0f0) >> 4) | ((n & 0x0f0f0f0f) << 4);
+    n = ((n & 0xcccccccc) >> 2) | ((n & 0x33333333) << 2);
+    n = ((n & 0xaaaaaaaa) >> 1) | ((n & 0x55555555) << 1);
+    return n;
+}
+```
 
+Both return the same value; pick based on readability vs. speed preference.
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Parallel reversal via SWAR.
-- Reverse k-bit integer.
-- Cache repeated reversals with byte-lookup.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Reverse 64-bit integer.** Same patterns, loop to 64 or extend SWAR with one more level.
+- **Reverse bits within a byte.** One SWAR operation or small lookup.
+- **Reverse bits but preserve the sign bit.** For signed integers; reverse lower 31 bits, leave MSB alone.
+- **Reverse the bits of each byte independently.** Apply SWAR within byte boundaries.
+- **If reverseBits is called frequently, how do we optimize?** Cache the 8-bit reversal table.
+- **Why does SWAR use those specific masks?** The masks (0xff00ff00, etc.) isolate alternating groups of bits, letting us swap halves, quarters, etc., in parallel.

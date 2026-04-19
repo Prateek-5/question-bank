@@ -4,189 +4,239 @@
 https://leetcode.com/problems/spiral-matrix-ii/
 
 **Topic:**
-Arrays and Matrices
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Fill n×n matrix by spiraling boundaries inward.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> n=3 → [[1,2,3],[8,9,4],[7,6,5]].
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Arrays & Matrices
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: What Does the Output Look Like?
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Given an integer n, produce an `n × n` matrix filled with numbers `1` through `n²` arranged in a **spiral pattern** starting at top-left, moving right, then down, then left, then up, repeatedly — shrinking inward.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+For n = 3:
+```
+1 2 3
+8 9 4
+7 6 5
+```
 
-So ask yourself:
+Trace the numbers 1..9 in order on the grid: 1 at (0,0), 2 at (0,1), 3 at (0,2) — that's "right along the top row." Then 4 at (1,2), 5 at (2,2) — "down the right column." Then 6 at (2,1), 7 at (2,0) — "left along the bottom row." Then 8 at (1,0) — "up the left column." Finally 9 at (1,1) — the center.
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Fill n×n matrix by spiraling boundaries inward.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
+For n = 4:
+```
+ 1  2  3  4
+12 13 14  5
+11 16 15  6
+10  9  8  7
+```
 
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-Your first instinct is often a straightforward double loop over rows and columns. That's O(n·m), which is sometimes fine. When it isn't, look for contribution counting — asking 'for each element, how many sub-ranges include it?' — or look for patterns along diagonals, spirals, or boundaries.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Simulate walking in a spiral: right, down, left, up, shrinking boundaries each loop.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Same spiral shape, scaled up.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: Structure of a Spiral
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+A spiral visits the perimeter of the matrix, then shrinks inward to the perimeter of an (n-2) × (n-2) matrix, and so on. On each "layer" we walk right, down, left, up — four segments per layer (the last layer might have fewer segments if it's 1x1 or 1xn or nx1).
 
-**The concept:** Fill n×n matrix by spiraling boundaries inward.
-
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever the problem is about rows, columns, diagonals, or all sub-rectangles → think contribution counting or per-row/col precomputation.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+Tracking a spiral requires keeping track of **which direction we're facing** and **when to turn**.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 3: Two Natural Approaches
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+**Approach A: Boundary shrinking.** Maintain four pointers: top, bottom, left, right. Each "loop iteration" fills one full rectangle perimeter and then shrinks boundaries.
 
-Maintain top, bottom, left, right bounds. Alternate filling row/column, then shrink the used boundary.
+**Approach B: Direction vector + turn rule.** Maintain a position (r, c) and a direction (dr, dc). At each step, try to advance in the current direction. If the next cell is out of bounds or already filled, turn clockwise.
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
+Both work. B is slightly more elegant — it's fewer explicit loops and generalizes naturally to non-square spirals. A is more direct — easier to trace by eye.
 
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Four-direction simulation.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+I'll go with B because the "turn when you hit a wall or filled cell" rule is a fun pattern.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 4: Direction Cycling
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+The four directions in clockwise order: right, down, left, up. As (dr, dc) pairs:
+- Right: (0, 1)
+- Down: (1, 0)
+- Left: (0, -1)
+- Up: (-1, 0)
 
-n=3 → [[1,2,3],[8,9,4],[7,6,5]].
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
-
-----------------------------------------
-
-## Step 8: Time and Space Complexity
-
-Complexity isn't magic — it's just counting the work.
-
-Time: O(n²). Space: O(n²) for output.
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
+When we turn clockwise, the next direction follows the cycle. Keeping an index `dir = 0..3` and using `dir = (dir + 1) % 4` advances through the cycle.
 
 ----------------------------------------
 
-## Step 9: C++ Implementation
+## Step 5: The Algorithm
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+```
+mat = n × n zero matrix
+r, c = 0, 0
+dir = 0   # start facing right
+directions = [(0,1), (1,0), (0,-1), (-1,0)]
+
+for num in 1..n²:
+    mat[r][c] = num
+    nr, nc = r + dr[dir], c + dc[dir]
+    # turn if next cell is out-of-bounds or already filled
+    if nr < 0 or nr >= n or nc < 0 or nc >= n or mat[nr][nc] != 0:
+        dir = (dir + 1) % 4
+        nr, nc = r + dr[dir], c + dc[dir]
+    r, c = nr, nc
+
+return mat
+```
+
+Each iteration places one number, then decides the next cell. The turn rule "if out of bounds or already filled, rotate clockwise" naturally traces the spiral because:
+- Along a straight run, the next cell is in-bounds and empty — keep going.
+- At a corner, continuing straight would either leave the grid or hit a previously filled cell — turn.
+
+Notice that after filling `n²` numbers, the matrix is complete. We don't need to worry about the "next cell" being invalid after the last placement, because the loop ends.
+
+----------------------------------------
+
+## Step 6: Trace for n = 3
+
+Initial mat all zeros. Position (0, 0). Direction 0 (right).
+
+```
+num=1: mat[0][0]=1.
+  Next: (0,1). In bounds, mat[0][1]=0. Keep direction.
+  r,c=0,1.
+
+num=2: mat[0][1]=2.
+  Next: (0,2). In bounds, empty. r,c=0,2.
+
+num=3: mat[0][2]=3.
+  Next: (0,3). Out of bounds. Turn. dir=1 (down).
+  New next: (1,2). In bounds, empty. r,c=1,2.
+
+num=4: mat[1][2]=4.
+  Next: (2,2). In bounds, empty. r,c=2,2.
+
+num=5: mat[2][2]=5.
+  Next: (3,2). OOB. Turn. dir=2 (left).
+  New next: (2,1). In bounds, empty. r,c=2,1.
+
+num=6: mat[2][1]=6.
+  Next: (2,0). In bounds, empty. r,c=2,0.
+
+num=7: mat[2][0]=7.
+  Next: (2,-1). OOB. Turn. dir=3 (up).
+  New next: (1,0). In bounds, empty. r,c=1,0.
+
+num=8: mat[1][0]=8.
+  Next: (0,0). mat[0][0]=1 (filled). Turn. dir=0 (right).
+  New next: (1,1). In bounds, empty. r,c=1,1.
+
+num=9: mat[1][1]=9.
+  (loop ends — we've placed all 9)
+```
+
+Final:
+```
+1 2 3
+8 9 4
+7 6 5
+```
+
+✓ Matches.
+
+Notice the turn at num=8: the "out of bounds" check wasn't the issue; it was the "already filled" check (cell (0,0) has 1).
+
+----------------------------------------
+
+## Step 7: Why Both Turn Conditions Matter
+
+If we only turned on out-of-bounds, we'd fail at num=8 → (0,0): (0,0) is in bounds, so we'd happily overwrite it with 8. Wrong.
+
+If we only turned on "already filled," we'd fail at num=3 → (0,3): (0,3) is out of bounds, not "filled," so we wouldn't turn and we'd try to write to a bad index (segfault).
+
+Both conditions together correctly implement "turn whenever we can't go straight."
+
+----------------------------------------
+
+## Step 8: Boundary-Shrinking Alternative
+
+The other approach — tracking four boundaries (top, bottom, left, right) — avoids the "already filled" check entirely:
+
+```
+top, bottom, left, right = 0, n-1, 0, n-1
+num = 1
+while top <= bottom and left <= right:
+    for c in left..right: mat[top][c] = num++; top++
+    for r in top..bottom: mat[r][right] = num++; right--
+    if top <= bottom:
+        for c in right..left step -1: mat[bottom][c] = num++; bottom--
+    if left <= right:
+        for r in bottom..top step -1: mat[r][left] = num++; left++
+```
+
+Four inner loops per layer. The `if` guards at the bottom-left and left-up segments handle the case where the inner rectangle degenerates (e.g., for odd n, a single middle cell).
+
+Both versions are ~15 lines. The direction-vector version is slightly more flexible if you ever need non-rectangular spirals (hexagonal, etc.).
+
+----------------------------------------
+
+## Step 9: Complexity
+
+Time: we place exactly `n²` numbers with O(1) work each. **O(n²)**.
+Space: **O(n²)** for the output matrix (unavoidable — that's what we're producing).
+
+----------------------------------------
+
+## Step 10: C++ Implementation — Boundary-Shrinking Version
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
 vector<vector<int>> generateMatrix(int n) {
-    vector<vector<int>> m(n, vector<int>(n, 0));
-    int t = 0, b = n-1, l = 0, r = n-1, x = 1;
-    while (t <= b && l <= r) {
-        for (int j = l; j <= r; ++j) m[t][j] = x++;
-        t++;
-        for (int i = t; i <= b; ++i) m[i][r] = x++;
-        r--;
-        if (t <= b) for (int j = r; j >= l; --j) m[b][j] = x++;
-        b--;
-        if (l <= r) for (int i = b; i >= t; --i) m[i][l] = x++;
-        l++;
+    vector<vector<int>> mat(n, vector<int>(n, 0));
+    int top = 0, bottom = n - 1, left = 0, right = n - 1;
+    int num = 1;
+    while (top <= bottom && left <= right) {
+        for (int c = left; c <= right; ++c) mat[top][c] = num++;
+        top++;
+        for (int r = top; r <= bottom; ++r) mat[r][right] = num++;
+        right--;
+        if (top <= bottom) {
+            for (int c = right; c >= left; --c) mat[bottom][c] = num++;
+            bottom--;
+        }
+        if (left <= right) {
+            for (int r = bottom; r >= top; --r) mat[r][left] = num++;
+            left++;
+        }
     }
-    return m;
+    return mat;
 }
 ```
 
-A few notes about the style:
+Direction-vector version (for comparison):
 
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+```cpp
+vector<vector<int>> generateMatrix(int n) {
+    vector<vector<int>> mat(n, vector<int>(n, 0));
+    int dr[] = {0, 1, 0, -1};
+    int dc[] = {1, 0, -1, 0};
+    int r = 0, c = 0, dir = 0;
+    for (int num = 1; num <= n * n; ++num) {
+        mat[r][c] = num;
+        int nr = r + dr[dir], nc = c + dc[dir];
+        if (nr < 0 || nr >= n || nc < 0 || nc >= n || mat[nr][nc] != 0) {
+            dir = (dir + 1) % 4;
+            nr = r + dr[dir];
+            nc = c + dc[dir];
+        }
+        r = nr; c = nc;
+    }
+    return mat;
+}
+```
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 11: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Spiral Matrix I (read instead of fill).
-- Rectangular spiral.
-- Diagonal/zigzag fill.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Spiral Matrix I (read a spiral from an existing matrix).** Same traversal pattern, but read instead of write.
+- **Rectangular (non-square) spiral, m × n.** Both approaches adapt — the boundary version just uses different bounds.
+- **Spiral starting from the center and going out.** Reverse the order or trace inward-to-outward.
+- **Diagonal or zigzag traversals.** Different direction patterns; similar structural tricks.
+- **3D spiral (through a cube).** Multidimensional extension; direction-vector approach generalizes more cleanly.
+- **Fill with a custom sequence rather than 1..n².** Replace `num++` with your sequence generator.

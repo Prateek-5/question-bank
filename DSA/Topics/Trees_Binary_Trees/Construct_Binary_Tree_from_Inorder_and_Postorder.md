@@ -4,195 +4,243 @@
 https://leetcode.com/problems/construct-binary-tree-from-inorder-and-postorder-traversal/
 
 **Topic:**
-Trees Binary Trees
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Postorder's last element is root; split inorder around it.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> in=[9,3,15,20,7], post=[9,15,7,20,3]. root=3, split at 1. Right in [15,20,7] root=20, etc.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Trees / Binary Trees
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Recap the Traversal Orders
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Two standard binary tree traversals:
+- **Inorder**: left subtree, then root, then right subtree.
+- **Postorder**: left subtree, then right subtree, then root.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Given the inorder and postorder sequences (both containing the same set of node values), reconstruct the original tree.
 
-So ask yourself:
+Example:
+```
+inorder  = [9, 3, 15, 20, 7]
+postorder = [9, 15, 7, 20, 3]
+```
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Postorder's last element is root; split inorder around it.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
+The original tree should be:
+```
+    3
+   / \
+  9  20
+     / \
+    15  7
+```
 
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
+Let me verify:
+- Inorder: 9, then 3, then (15, 20, 7 with 15 left, 20 root, 7 right) → 9, 3, 15, 20, 7. ✓
+- Postorder: 9, then (15, 7, 20) then 3 → 9, 15, 7, 20, 3. ✓
 
+So the tree matches.
 
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-A natural first instinct is to traverse the tree many times — once per query, once per property. That works, but it usually does too much. A single recursive traversal can often compute everything post-order with the child results combined at each node.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Similar to preorder+inorder but process postorder right-to-left (building right subtree first).
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Problem guarantees all values are distinct.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: Extract Information From Each Sequence
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+Two key observations:
 
-**The concept:** Postorder's last element is root; split inorder around it.
+**Postorder's last element is always the root.**
+Because postorder is "left, right, root," the very last thing visited is the root of the tree (or the root of whichever subtree we're constructing).
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
+For our example, postorder ends with 3 → 3 is the root. ✓
 
-**Pattern recognition cue:**
+**Inorder tells us which values are on the left vs right of any root.**
+In inorder, everything to the left of the root's position is in the left subtree; everything to the right is in the right subtree.
 
-**Whenever data is hierarchical or you can compute something per-subtree → think Binary Tree DFS.**
+For root 3, find its position in inorder: index 1. Left subtree values = [9]. Right subtree values = [15, 20, 7].
 
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-Map inorder value→index. Use postorder pointer p from end. In build(lo, hi): v=post[p--]; root=v; build right first (idx+1..hi) then left (lo..idx-1).
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
+Putting these together:
+1. Find the root (last of postorder).
+2. Locate root in inorder to split into left/right subtree value sets.
+3. Recursively build left and right subtrees from their respective portions of inorder and postorder.
 
 ----------------------------------------
 
-## Step 6: Final Approach
+## Step 3: Determining Subtree Slices
 
-Now let's crystallize everything we've learned into a clean algorithm.
+If left subtree has `L` nodes, then in postorder:
+- The first L elements are the left subtree's postorder.
+- The next (total-L-1) elements are the right subtree's postorder.
+- The last element is the root.
 
-Recursive with postorder pointer and hashmap.
+In inorder:
+- The first L elements (before root) are the left subtree's inorder.
+- The elements after the root's position are the right subtree's inorder.
 
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
+L is determined by the root's position in inorder.
 
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
-
-----------------------------------------
-
-## Step 7: Dry Run (Detailed)
-
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
-
-in=[9,3,15,20,7], post=[9,15,7,20,3]. root=3, split at 1. Right in [15,20,7] root=20, etc.
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+For our example:
+- Root = 3, at inorder position 1. So L = 1 (one element to the left: [9]).
+- Left inorder: [9]. Left postorder: first 1 = [9].
+- Right inorder: [15, 20, 7]. Right postorder: next 3 = [15, 7, 20].
+- Recurse.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 4: Recursive Algorithm
 
-Complexity isn't magic — it's just counting the work.
+```
+build(inorder[], postorder[]):
+    if inorder is empty: return null
+    rootVal = postorder[last]
+    rootPos = index of rootVal in inorder
+    L = rootPos
+    leftIn  = inorder[0..L-1]
+    rightIn = inorder[L+1..]
+    leftPost  = postorder[0..L-1]
+    rightPost = postorder[L..second-to-last]
+    root = new Node(rootVal)
+    root.left  = build(leftIn, leftPost)
+    root.right = build(rightIn, rightPost)
+    return root
+```
 
-Time: O(n). Space: O(n).
+Direct but uses sub-arrays at each step (memory inefficient). Better: pass index ranges into the original arrays.
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+```
+build(inStart, inEnd, postStart, postEnd):
+    if inStart > inEnd: return null
+    rootVal = postorder[postEnd]
+    rootPos = position of rootVal in inorder (lookup by hashmap)
+    L = rootPos - inStart
+    root = new Node(rootVal)
+    root.left  = build(inStart, rootPos - 1, postStart, postStart + L - 1)
+    root.right = build(rootPos + 1, inEnd, postStart + L, postEnd - 1)
+    return root
+```
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+A precomputed hashmap `inorderIndex` maps values to positions in inorder in O(1).
 
+----------------------------------------
+
+## Step 5: Trace on the Example
+
+`inorder = [9, 3, 15, 20, 7]`, `postorder = [9, 15, 7, 20, 3]`.
+Hashmap: `{9:0, 3:1, 15:2, 20:3, 7:4}`.
+
+```
+build(inStart=0, inEnd=4, postStart=0, postEnd=4):
+  rootVal = postorder[4] = 3.
+  rootPos = 1. L = 1 - 0 = 1.
+  root = Node(3).
+  root.left = build(0, 0, 0, 0):
+    rootVal = postorder[0] = 9.
+    rootPos = 0. L = 0.
+    root = Node(9).
+    root.left = build(0, -1, 0, -1) → null.
+    root.right = build(1, 0, 1, 0) → null (inStart > inEnd).
+    return Node(9).
+  root.right = build(2, 4, 1, 3):
+    rootVal = postorder[3] = 20.
+    rootPos = 3. L = 3 - 2 = 1.
+    root = Node(20).
+    root.left = build(2, 2, 1, 1):
+      rootVal = postorder[1] = 15.
+      rootPos = 2. L = 0.
+      Node(15) with null children.
+    root.right = build(4, 4, 2, 2):
+      rootVal = postorder[2] = 7.
+      Node(7) with null children.
+    return Node(20).
+  return Node(3).
+```
+
+Tree structure:
+```
+    3
+   / \
+  9  20
+     / \
+    15  7
+```
+
+✓
+
+----------------------------------------
+
+## Step 6: Why This Produces a Unique Tree
+
+**Claim:** inorder + postorder (with distinct values) uniquely determines the tree.
+
+**Proof sketch:** The root is fixed (last of postorder). The split at root's position in inorder fixes which values go in each subtree. Recursing, each subtree's root is determined analogously. By induction, the whole tree is uniquely reconstructed.
+
+Note that without **distinct values**, the recursion could pick the wrong position for the root in inorder (if the root's value appears multiple times). Most problems assume distinctness to avoid this.
+
+Also note: preorder + postorder is **not** enough to uniquely determine a general binary tree (they can leave ambiguity about which child is left vs right when a node has only one child). Inorder is essential for uniqueness.
+
+----------------------------------------
+
+## Step 7: Name It
+
+This is **divide-and-conquer tree reconstruction**. The same pattern applies:
+- Preorder + inorder → recursively: first of preorder is root, split inorder.
+- Inorder + postorder → this problem.
+- Preorder + postorder → non-unique in general.
+- Level-order + inorder → works, a bit trickier to slice level-order.
+
+The key insight is always: **one traversal tells you the root; inorder tells you the split**.
+
+----------------------------------------
+
+## Step 8: Complexity
+
+With precomputed hashmap for inorder lookups:
+- Each node is processed once, O(1) per node (one hashmap lookup, one allocation).
+- **O(n)** total time.
+
+Without hashmap: O(n²) from linear searches in inorder.
+
+Space: O(n) for hashmap + O(h) for recursion = **O(n)**.
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
-
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-struct TreeNode { int val; TreeNode *left,*right; TreeNode(int x):val(x),left(nullptr),right(nullptr){} };
+class Solution {
+    unordered_map<int, int> inorderIndex;
+    vector<int> postorder;
+    int postPos;
 
-class Sol {
-    unordered_map<int,int> idx;
-    vector<int> post;
-    int p;
-    TreeNode* build(int lo, int hi) {
-        if (lo > hi) return nullptr;
-        int v = post[p--];
-        auto* n = new TreeNode(v);
-        n->right = build(idx[v]+1, hi);
-        n->left = build(lo, idx[v]-1);
-        return n;
+    TreeNode* build(int inStart, int inEnd) {
+        if (inStart > inEnd) return nullptr;
+        int rootVal = postorder[postPos--];
+        TreeNode* root = new TreeNode(rootVal);
+        int rootPos = inorderIndex[rootVal];
+
+        // Order matters: process right subtree first because postorder is read backward
+        root->right = build(rootPos + 1, inEnd);
+        root->left = build(inStart, rootPos - 1);
+        return root;
     }
+
 public:
-    TreeNode* buildTree(vector<int>& inorder, vector<int>& postorder) {
-        post = postorder; p = post.size() - 1;
-        for (int i = 0; i < (int)inorder.size(); ++i) idx[inorder[i]] = i;
-        return build(0, inorder.size()-1);
+    TreeNode* buildTree(vector<int>& inorder, vector<int>& post) {
+        postorder = post;
+        postPos = post.size() - 1;
+        for (int i = 0; i < (int)inorder.size(); ++i) inorderIndex[inorder[i]] = i;
+        return build(0, inorder.size() - 1);
     }
 };
 ```
 
-A few notes about the style:
+**Critical detail:** we process the **right subtree first**. Why? Because postorder is "left, right, root." Reading postorder from the end backward gives: root, right-root, left-root, etc. The right subtree's root comes before the left's (when read backward). So we consume `post[postPos]` and assign it as right-subtree-root first, then left.
 
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Getting this order wrong produces mirrored trees — a subtle bug. Think of it as: the "postPos" counter moves right → left in the postorder array, so build the right subtree before the left.
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Build from pre+post (ambiguous).
-- Check that arrays are valid traversals.
-- Serialize the reconstructed tree.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Preorder + inorder reconstruction.** Similar structure, but first of preorder is root; process **left subtree first** (since preorder is "root, left, right" — reading from start forward gives left's root next).
+- **Handle duplicates in values.** Use indices alongside values; pick the correct instance via context.
+- **Avoid allocating subarrays.** We already passed indices instead of copies. Explicit wins.
+- **Iterative reconstruction.** Use a stack simulating the recursion. Tricky but possible.
+- **Serialize-and-deserialize a tree.** Different problem; use preorder with null markers.
+- **What if one traversal is given but the other isn't?** A single traversal (even with null markers in preorder) can uniquely identify the tree, but the reconstruction logic differs.

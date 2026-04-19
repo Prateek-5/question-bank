@@ -4,182 +4,209 @@
 https://leetcode.com/problems/invert-binary-tree/
 
 **Topic:**
-Trees Binary Trees
+Trees / Binary Trees
+
+----------------------------------------
+
+## Step 1: What Does "Invert" Mean?
+
+"Invert" means produce the **mirror image** of the tree. Every node's left subtree becomes its right subtree, and vice versa.
+
+Example:
+
+Before:
+```
+        4
+       / \
+      2   7
+     / \ / \
+    1  3 6  9
+```
+
+After:
+```
+        4
+       / \
+      7   2
+     / \ / \
+    9  6 3  1
+```
+
+It's as if the tree were reflected across a vertical line through the root.
+
+----------------------------------------
+
+## Step 2: Small Cases to Build Feel
+
+**Empty tree:** the inverted version is also empty. Nothing to do.
+
+**Single node:** inverting a single node yields the same single node. Nothing to do.
+
+**Two nodes, `1 → 2 (left only)`:**
+```
+  1         1
+ /    →      \
+2             2
+```
+After inverting, the left child should become the right child. `1.right = 1.left; 1.left = null`.
+
+**Three nodes, full tree `1 / 2, 3`:**
+```
+  1         1
+ / \   →   / \
+2   3     3   2
+```
+We swap `1.left` and `1.right`.
+
+The first thing I notice: at the root, we need to **swap children**. Is that enough? For this three-node example, yes, because the children are leaves. For larger trees, we also have to invert everything deeper — each internal node needs its children swapped too.
+
+----------------------------------------
+
+## Step 3: The Recursive Insight
+
+The tree is defined recursively: a node and two subtrees. To invert the whole tree, we need to:
+
+1. Swap the root's children.
+2. Invert the left subtree (which is the old right subtree after the swap).
+3. Invert the right subtree.
+
+The order of steps 1, 2, 3 doesn't matter much, because the swap is just a pointer reassignment, and inverting a subtree is independent of its sibling. So this works:
+
+```
+invert(node):
+    if node is null: return null
+    left_inverted  = invert(node.left)
+    right_inverted = invert(node.right)
+    node.left  = right_inverted
+    node.right = left_inverted
+    return node
+```
+
+Or equivalently, do the swap first then recurse — same result.
+
+Let me verify with the small tree `1 / 2, 3`:
+
+```
+invert(1):
+  invert(2): no children, returns 2.
+  invert(3): no children, returns 3.
+  node.left = 3, node.right = 2.
+```
+
+Tree becomes `1 / 3, 2`. ✓
+
+And for the big example:
+
+```
+invert(4):
+  invert(2):
+    invert(1) → 1
+    invert(3) → 3
+    2.left = 3, 2.right = 1.
+    return 2.
+  invert(7):
+    invert(6) → 6
+    invert(9) → 9
+    7.left = 9, 7.right = 6.
+    return 7.
+  4.left = 7, 4.right = 2.
+  return 4.
+```
+
+Final:
+```
+        4
+       / \
+      7   2
+     / \ / \
+    9  6 3  1
+```
+
 
 
 ----------------------------------------
 
-## Step 1: Understand the Problem (Beginner Friendly)
+## Step 4: Why It Works — Structural Induction
 
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
+**Claim:** the above `invert` correctly mirrors any binary tree.
 
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
+**Base case:** `invert(null)` returns null — a null tree is its own mirror.
 
-**In plain words:** Recursively swap left and right at every node.
+**Inductive step:** assume `invert` correctly mirrors any smaller tree (both subtrees of the current node). Then the mirror of a tree rooted at `node` is a tree where:
+- The left subtree is the mirror of the old right subtree.
+- The right subtree is the mirror of the old left subtree.
 
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> Tree 4,2,7,1,3,6,9. Swap becomes 4,7,2,9,6,3,1.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Our code computes `invert(node.right)` → mirror of old right, places it at `node.left`. Symmetric for the other side. Matches the definition of mirror. ✓
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 5: A One-Liner Version
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
-
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
-
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Recursively swap left and right at every node.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-A natural first instinct is to traverse the tree many times — once per query, once per property. That works, but it usually does too much. A single recursive traversal can often compute everything post-order with the child results combined at each node.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Mirroring the tree means left↔right swap at each node. Apply recursively in any order.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
-
-----------------------------------------
-
-## Step 4: Connect to Concept
-
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
-
-**The concept:** Recursively swap left and right at every node.
-
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever data is hierarchical or you can compute something per-subtree → think Binary Tree DFS.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-invert(node): if null return null; swap node->left and node->right; recurse on both. Return node.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Recursion or BFS iterative swap.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
-
-----------------------------------------
-
-## Step 7: Dry Run (Detailed)
-
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
-
-Tree 4,2,7,1,3,6,9. Swap becomes 4,7,2,9,6,3,1.
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
-
-----------------------------------------
-
-## Step 8: Time and Space Complexity
-
-Complexity isn't magic — it's just counting the work.
-
-Time: O(n). Space: O(h).
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
-
-----------------------------------------
-
-## Step 9: C++ Implementation
-
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+We can simplify by swapping before recursion:
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-struct TreeNode { int val; TreeNode *left,*right; };
-
 TreeNode* invertTree(TreeNode* root) {
     if (!root) return nullptr;
     swap(root->left, root->right);
-    invertTree(root->left); invertTree(root->right);
+    invertTree(root->left);
+    invertTree(root->right);
     return root;
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+The `swap` runs first, then the children (now in their new positions) are recursively inverted. Same effect, slightly shorter.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 6: Iterative Alternative via BFS
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
+If the tree is very tall (skewed), recursion might overflow the stack. Use BFS instead:
 
-- Invert only specific levels.
-- Check if a tree equals its mirror.
-- Convert tree to its mirror iteratively.
+```cpp
+TreeNode* invertTree(TreeNode* root) {
+    if (!root) return nullptr;
+    queue<TreeNode*> q;
+    q.push(root);
+    while (!q.empty()) {
+        auto* n = q.front(); q.pop();
+        swap(n->left, n->right);
+        if (n->left) q.push(n->left);
+        if (n->right) q.push(n->right);
+    }
+    return root;
+}
+```
 
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
+Same outcome. The order of visits changes (level-by-level instead of depth-first), but since every node's swap is local and independent, the final tree is identical.
 
----
+----------------------------------------
 
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+## Step 7: Complexity
+
+Time: each node is visited once and its children are swapped in O(1). **O(n)**.
+
+Space: recursive version uses O(h) stack, where h is the tree's height (O(log n) balanced, O(n) skewed). Iterative BFS uses O(w) queue space where w is the max level width.
+
+----------------------------------------
+
+## Step 8: C++ Implementation
+
+```cpp
+TreeNode* invertTree(TreeNode* root) {
+    if (!root) return nullptr;
+    swap(root->left, root->right);
+    invertTree(root->left);
+    invertTree(root->right);
+    return root;
+}
+```
+
+----------------------------------------
+
+## Step 9: Follow-up Questions
+
+- **Check whether a tree equals its own mirror (symmetric tree).** Two recursive calls that walk one tree and its mirror in sync, comparing values at each pair of nodes.
+- **Invert only the subtree rooted at a specific node.** Find the node, invert from there.
+- **Produce a new inverted tree without modifying the original.** Allocate new nodes in the recursion — return `new TreeNode(val, invert(right), invert(left))`.
+- **Invert in constant memory (no recursion, no queue).** Morris-like traversal — possible but fiddly; rarely asked.
+- **N-ary tree inversion.** Reverse the children array at each node, then recurse.

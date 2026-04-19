@@ -4,191 +4,282 @@
 https://leetcode.com/problems/path-sum-iii/
 
 **Topic:**
-Trees Binary Trees
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Prefix-sum counts on paths — path-sum between any two nodes equals targetSum.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> Tree 10,5,-3,..., target=8. Count prefixes — multiple paths e.g. 5→3 sums 8, 5→2→1 sums 8. Total 3 paths.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Trees / Binary Trees
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Understand the New Twist
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+This is **not** the same as Path Sum I or II.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+- **Path Sum I/II**: root-to-leaf paths with sum equal to target.
+- **Path Sum III**: **any** path (can start and end at any nodes) where the sum equals target, as long as it goes strictly **top to bottom** (from an ancestor to one of its descendants).
 
-So ask yourself:
+Count the number of such paths.
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Prefix-sum counts on paths — path-sum between any two nodes equals targetSum.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
+Example:
+```
+         10
+        /  \
+       5   -3
+      / \    \
+     3   2   11
+    / \   \
+   3  -2   1
+```
+targetSum = 8.
 
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
+Valid paths with sum 8:
+- `5 → 3`: 5+3=8. ✓
+- `5 → 2 → 1`: 5+2+1=8. ✓
+- `-3 → 11`: -3+11=8. ✓
 
+Count = **3**.
 
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-A natural first instinct is to traverse the tree many times — once per query, once per property. That works, but it usually does too much. A single recursive traversal can often compute everything post-order with the child results combined at each node.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Paths don't need to start at root. Maintain a running prefix sum from root to current; any prefix that differs from current by targetSum defines a valid path ending at current.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Notice these paths don't need to start at the root or end at a leaf. Any ancestor-descendant path works.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: The Brute Force
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+For each node in the tree, treat it as a potential **starting node** of a path, and DFS downward counting paths with the given sum. That's O(n²) if we do a full DFS from every node.
 
-**The concept:** Prefix-sum counts on paths — path-sum between any two nodes equals targetSum.
+```
+def countPaths(root, target):
+    if root is null: return 0
+    return (pathsFrom(root, target)
+            + countPaths(root.left, target)
+            + countPaths(root.right, target))
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
+def pathsFrom(node, target):
+    if node is null: return 0
+    count = 0
+    if node.val == target: count += 1
+    count += pathsFrom(node.left, target - node.val)
+    count += pathsFrom(node.right, target - node.val)
+    return count
+```
 
-**Pattern recognition cue:**
+Works correctly but re-visits descendants many times. For a balanced tree, O(n log n); worst case (skewed), O(n²).
 
-**Whenever data is hierarchical or you can compute something per-subtree → think Binary Tree DFS.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-DFS from root. Keep a map: prefixSum → count. On entering node, cur+=node.val. Add count[cur-target] to answer. Increment count[cur]. Recurse. On exit, decrement count[cur].
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
+We can do better with a clever observation.
 
 ----------------------------------------
 
-## Step 6: Final Approach
+## Step 3: Prefix Sums on a Path
 
-Now let's crystallize everything we've learned into a clean algorithm.
+Here's a beautiful reuse of a classic array technique.
 
-Prefix-sum + hashmap, DFS backtrack.
+Consider the **prefix sums along the root-to-current-node path**. If we're at some node v, the prefix sum is the sum of values from the root down to v.
 
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
+Now consider any path from ancestor `u` to descendant `v`. Its sum equals:
+```
+sum(u → v) = prefixSum(v) - prefixSum(parent of u)
+```
 
-**Before coding, it's worth asking:**
+(Because adding `parent of u`'s prefix to the path `u → v` gives `root → v`, which is `prefixSum(v)`. Subtract the former to isolate the latter.)
 
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
+We want paths with sum == target:
+```
+target = prefixSum(v) - prefixSumAtSomeAncestor
+prefixSumAtSomeAncestor = prefixSum(v) - target
+```
 
-Get those clear in your head, and the code almost writes itself.
+So as we DFS from root, at each node v we count how many ancestor prefix sums equal `prefixSum(v) - target`. That count is the number of target-sum paths ending at v.
 
-
-----------------------------------------
-
-## Step 7: Dry Run (Detailed)
-
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
-
-Tree 10,5,-3,..., target=8. Count prefixes — multiple paths e.g. 5→3 sums 8, 5→2→1 sums 8. Total 3 paths.
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+This is exactly the **subarray sum equals k** technique, but on a tree path instead of an array!
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 4: The Algorithm
 
-Complexity isn't magic — it's just counting the work.
+Walk the tree DFS. Maintain a hashmap `prefixCount` mapping prefix sums (along the current root-to-node path) to their occurrence counts.
 
-Time: O(n). Space: O(n).
+```
+dfs(node, currentSum):
+    if node is null: return 0
+    currentSum += node.val
+    
+    # count paths ending at `node` with sum == target
+    count = prefixCount.get(currentSum - target, 0)
+    
+    # register current prefix sum for descendants to use
+    prefixCount[currentSum] += 1
+    
+    # recurse
+    count += dfs(node.left, currentSum)
+    count += dfs(node.right, currentSum)
+    
+    # backtrack: remove current prefix from map before returning
+    prefixCount[currentSum] -= 1
+    
+    return count
+```
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+Initial call: `prefixCount = {0: 1}` (empty prefix has sum 0, needed so paths starting at root are counted), then `dfs(root, 0)`.
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+The **backtrack step** (decrementing when leaving) is critical. Without it, a prefix from one branch would pollute counts in a sibling branch.
 
+----------------------------------------
+
+## Step 5: Trace on the Example
+
+Tree (again):
+```
+         10
+        /  \
+       5   -3
+      / \    \
+     3   2   11
+    / \   \
+   3  -2   1
+```
+target = 8.
+
+I'll track `(node, currentSum)` and the `prefixCount` map. Initial `prefixCount = {0: 1}`.
+
+```
+dfs(10, 0):
+  currentSum = 10.
+  need prefix = 10 - 8 = 2. prefixCount.get(2, 0) = 0. count = 0.
+  prefixCount[10] += 1 → {0:1, 10:1}.
+  
+  dfs(5, 10):
+    currentSum = 15.
+    need 7. not in map. count = 0.
+    prefixCount[15]++ → {0:1, 10:1, 15:1}.
+    
+    dfs(3, 15):
+      currentSum = 18.
+      need 10. prefixCount[10] = 1. count = 1.  ← one path
+      prefixCount[18]++.
+      
+      dfs(3, 18):  (left child, value 3)
+        currentSum = 21.
+        need 13. Not in map. count = 0.
+        prefixCount[21]++.
+        children null, return 0.
+        prefixCount[21]-- (backtrack).
+      
+      dfs(-2, 18):
+        currentSum = 16.
+        need 8. Not in map. count = 0.
+        (similar backtrack.)
+      
+      prefixCount[18]-- (backtrack).
+      returns 1 (from this node).
+    
+    dfs(2, 15):
+      currentSum = 17.
+      need 9. Not in map. count = 0.
+      prefixCount[17]++.
+      
+      dfs(1, 17):
+        currentSum = 18.
+        need 10. prefixCount[10] = 1. count = 1.  ← another path (5→2→1)
+        ... 
+      prefixCount[17]-- (backtrack).
+    
+    prefixCount[15]--.
+    returns 1 + 1 = 2 (from left subtree).
+  
+  dfs(-3, 10):
+    currentSum = 7.
+    need -1. Not in map. count = 0.
+    prefixCount[7]++.
+    
+    dfs(11, 7):
+      currentSum = 18.
+      need 10. prefixCount[10] = 1. count = 1.  ← third path (-3→11)
+    prefixCount[7]--.
+    returns 1.
+  
+  prefixCount[10]--.
+  returns 0 + 2 + 1 = 3.
+```
+
+Total paths = **3**. ✓
+
+The prefix-sum trick let us compute the count in a single DFS without the O(n²) nested traversals.
+
+----------------------------------------
+
+## Step 6: Why the Backtrack Is Crucial
+
+When we leave a node (the recursive DFS returns), we decrement `prefixCount[currentSum]`. This removes the current prefix sum from the map so it doesn't affect sibling subtrees.
+
+If we forgot to decrement: when processing the right subtree of a node, prefix sums from the left subtree would still be in the map. We'd count nonexistent "paths" — a path can't start in the left subtree and end in the right, since it must be ancestor-descendant.
+
+The backtrack keeps the map **path-relative** — it only ever reflects prefix sums along the current root-to-node path.
+
+----------------------------------------
+
+## Step 7: Name It
+
+**Prefix sum with hashmap**, applied to a tree path. This is a direct cousin of "Subarray Sum Equals K" — the same key trick, just with recursion-plus-backtracking replacing the linear scan.
+
+This pattern is a favorite for any problem that says "count paths/subarrays with property X" — when X is "sum equals k," prefix sums plus hashmap almost always win.
+
+----------------------------------------
+
+## Step 8: Complexity
+
+Time: each node is visited once. At each node, we do O(1) hashmap operations. **O(n)**.
+Space: O(h) for the recursion stack + O(n) for the hashmap (at worst). **O(n)**.
+
+Down from O(n²) brute force. The prefix-sum-plus-hashmap idiom really pays off here.
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
-
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-struct TreeNode { int val; TreeNode *left,*right; };
+class Solution {
+    unordered_map<long long, int> prefixCount;
+    int target;
+    int count;
 
-class Sol {
-    unordered_map<long long,int> cnt;
-    long long target;
-    int ans = 0;
-    void dfs(TreeNode* r, long long cur) {
-        if (!r) return;
-        cur += r->val;
-        ans += cnt[cur - target];
-        cnt[cur]++;
-        dfs(r->left, cur); dfs(r->right, cur);
-        cnt[cur]--;
+    void dfs(TreeNode* node, long long currentSum) {
+        if (!node) return;
+        currentSum += node->val;
+
+        // count ancestors with prefix == currentSum - target
+        auto it = prefixCount.find(currentSum - target);
+        if (it != prefixCount.end()) count += it->second;
+
+        // register current prefix for descendants
+        prefixCount[currentSum]++;
+
+        dfs(node->left, currentSum);
+        dfs(node->right, currentSum);
+
+        // backtrack
+        prefixCount[currentSum]--;
     }
+
 public:
-    int pathSum(TreeNode* root, int t) { target = t; cnt[0] = 1; dfs(root, 0); return ans; }
+    int pathSum(TreeNode* root, int targetSum) {
+        target = targetSum;
+        count = 0;
+        prefixCount[0] = 1;       // empty prefix for root-starting paths
+        dfs(root, 0);
+        return count;
+    }
 };
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Implementation details:
+- Use `long long` for prefix sums to avoid overflow if the tree is deep and values large.
+- `prefixCount[0] = 1` is the "sentinel" for paths starting at the root. Omitting it misses those cases.
+- The backtrack step is the pair to the "increment" step — strict discipline.
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Paths must have length ≥ k.
-- Paths with sum in a range.
-- Paths between arbitrary nodes (not just descending).
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Any path, not just ancestor-descendant (can also go across via LCA).** Different problem; usually needs a more involved LCA-based DP.
+- **Longest path with target sum (not count).** Adjust the hashmap to track earliest occurrence of each prefix; compute length as depth difference.
+- **Paths with sum in a range [lo, hi].** Harder; hashmap on prefix sum doesn't directly give range queries. Use a sorted multiset.
+- **Paths with weighted edges (not node values).** Adjust the prefix sum accumulation accordingly.
+- **2D extension: grid paths with sum = target.** Totally different — uses prefix sums on the grid.
+- **Why not store prefix sums as an array along the path?** The hashmap gives O(1) lookup; an array-and-scan would be O(depth) per lookup, bringing us back toward O(n²).

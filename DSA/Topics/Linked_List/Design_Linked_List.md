@@ -6,196 +6,231 @@ https://leetcode.com/problems/design-linked-list/
 **Topic:**
 Linked List
 
+----------------------------------------
+
+## Step 1: Read the Spec
+
+Design a class `MyLinkedList` (singly or doubly) that supports:
+- `get(index)`: return the value at the given index. -1 if out of bounds.
+- `addAtHead(val)`: insert at the beginning.
+- `addAtTail(val)`: insert at the end.
+- `addAtIndex(index, val)`: insert at the given index. If index == size, insert at tail. If index > size, do nothing.
+- `deleteAtIndex(index)`: delete the node at the given index if valid.
+
+Design choices:
+- **Singly vs doubly linked.** Doubly enables backward traversal but costs more memory.
+- **With or without sentinel nodes** (dummy head/tail). Sentinels simplify edge cases.
+
+I'll go with a **singly linked list with a dummy head**. The dummy head eliminates special cases for head operations.
 
 ----------------------------------------
 
-## Step 1: Understand the Problem (Beginner Friendly)
+## Step 2: Why a Dummy Head Helps
 
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
+Every operation that involves insertion or deletion at the head has special cases in a raw singly linked list: updating the head pointer itself. With a dummy head:
 
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
+- `addAtHead` becomes just "insert after dummy."
+- `deleteAtIndex(0)` becomes "delete after dummy."
+- No null checks for "is this the head?"
 
-**In plain words:** Implement standard operations on a singly linked list.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> Add 1, add 3, addAtIndex(1,2), get(1)=2, deleteAtIndex(1), get(1)=3.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+The tradeoff: one extra node always exists. Worth it.
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
-
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
-
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
-
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Implement standard operations on a singly linked list.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-Because linked lists don't give random access, the temptation is to copy them into arrays and work there. Sometimes that's fine; often it wastes memory. The classic trick is to use two pointers moving at different speeds or with different gaps — it lets you solve many problems in a single pass.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Build a class with head pointer (often with dummy) supporting get/addAtHead/addAtTail/addAtIndex/deleteAtIndex.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
-
-----------------------------------------
-
-## Step 4: Connect to Concept
-
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
-
-**The concept:** Implement standard operations on a singly linked list.
-
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever you need to find cycles, middles, or the k-th-from-end → think slow/fast pointers.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-Keep size and dummy head. For index ops, walk dummy next k times. For delete unlink. For add create node and splice.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Dummy-head linked list class.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
-
-----------------------------------------
-
-## Step 7: Dry Run (Detailed)
-
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
-
-Add 1, add 3, addAtIndex(1,2), get(1)=2, deleteAtIndex(1), get(1)=3.
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
-
-----------------------------------------
-
-## Step 8: Time and Space Complexity
-
-Complexity isn't magic — it's just counting the work.
-
-Each op O(n) worst.
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
-
-----------------------------------------
-
-## Step 9: C++ Implementation
-
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+## Step 3: Data Members
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
 class MyLinkedList {
-    struct N { int v; N* n; N(int x):v(x),n(nullptr){} };
-    N* dummy; int sz;
+    struct Node {
+        int val;
+        Node* next;
+        Node(int v) : val(v), next(nullptr) {}
+    };
+    Node* dummy;   // always present; dummy->next is the real head
+    int size;
 public:
-    MyLinkedList(): dummy(new N(0)), sz(0) {}
-    int get(int i) {
-        if (i < 0 || i >= sz) return -1;
-        N* c = dummy->n;
-        while (i--) c = c->n;
-        return c->v;
+    MyLinkedList() : dummy(new Node(-1)), size(0) {}
+    // ...
+};
+```
+
+`dummy->next` points to the actual first real node. `size` tracks the count of real nodes (excluding dummy).
+
+----------------------------------------
+
+## Step 4: Implement Each Operation
+
+**get(index):**
+- If index out of range, return -1.
+- Walk from dummy, step `index + 1` times (past dummy, then `index` more).
+- Return that node's value.
+
+**addAtHead(val):**
+- Insert after dummy. Equivalent to `addAtIndex(0, val)`.
+
+**addAtTail(val):**
+- Walk to the last node (dummy + size steps), then insert after.
+- Equivalent to `addAtIndex(size, val)`.
+
+**addAtIndex(index, val):**
+- If index < 0 or index > size, do nothing.
+- Walk to the node at position `index - 1` (the one before where we want to insert). For index = 0, that's dummy.
+- Insert new node between that node and its current next.
+
+**deleteAtIndex(index):**
+- If index out of range, do nothing.
+- Walk to position `index - 1`. Splice out the node at index.
+
+In all cases, the "walking" is done from the dummy head.
+
+----------------------------------------
+
+## Step 5: The Walk Helper
+
+A common helper `nodeBefore(i)` returns a pointer to the node just before position i. That's the node we modify for insertion/deletion at position i.
+
+```cpp
+Node* nodeBefore(int i) {
+    // Precondition: 0 <= i <= size
+    Node* cur = dummy;
+    for (int k = 0; k < i; ++k) cur = cur->next;
+    return cur;
+}
+```
+
+If `i == 0`, returns `dummy` (nothing before position 0 except the dummy). If `i == size`, returns the last real node.
+
+With this helper, the operations become almost trivial.
+
+----------------------------------------
+
+## Step 6: Putting It All Together
+
+```cpp
+class MyLinkedList {
+    struct Node {
+        int val;
+        Node* next;
+        Node(int v) : val(v), next(nullptr) {}
+    };
+    Node* dummy;
+    int size;
+
+    Node* nodeBefore(int i) {
+        Node* cur = dummy;
+        for (int k = 0; k < i; ++k) cur = cur->next;
+        return cur;
     }
-    void addAtIndex(int i, int v) {
-        if (i < 0 || i > sz) return;
-        N* p = dummy; while (i--) p = p->n;
-        N* n = new N(v); n->n = p->n; p->n = n; sz++;
+
+public:
+    MyLinkedList() : dummy(new Node(-1)), size(0) {}
+
+    int get(int index) {
+        if (index < 0 || index >= size) return -1;
+        Node* before = nodeBefore(index);
+        return before->next->val;
     }
-    void addAtHead(int v) { addAtIndex(0, v); }
-    void addAtTail(int v) { addAtIndex(sz, v); }
-    void deleteAtIndex(int i) {
-        if (i < 0 || i >= sz) return;
-        N* p = dummy; while (i--) p = p->n;
-        N* t = p->n; p->n = t->n; delete t; sz--;
+
+    void addAtHead(int val) { addAtIndex(0, val); }
+    void addAtTail(int val) { addAtIndex(size, val); }
+
+    void addAtIndex(int index, int val) {
+        if (index < 0 || index > size) return;
+        Node* before = nodeBefore(index);
+        Node* newNode = new Node(val);
+        newNode->next = before->next;
+        before->next = newNode;
+        size++;
+    }
+
+    void deleteAtIndex(int index) {
+        if (index < 0 || index >= size) return;
+        Node* before = nodeBefore(index);
+        Node* target = before->next;
+        before->next = target->next;
+        delete target;
+        size--;
     }
 };
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Each operation:
+- Bounds check the index.
+- Walk to the "node before" the target position.
+- Splice in/out.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 7: Trace a Quick Example
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
+Operations:
+1. `addAtHead(1)`: list becomes `[1]`.
+2. `addAtTail(3)`: `[1, 3]`.
+3. `addAtIndex(1, 2)`: `[1, 2, 3]`.
+4. `get(1)`: returns 2.
+5. `deleteAtIndex(1)`: `[1, 3]`.
+6. `get(1)`: returns 3.
 
-- Doubly linked list implementation.
-- Skip-list (random levels).
-- Concurrent linked list.
+Let me trace step 3 in detail. Current list: dummy → 1 → 3, size=2.
 
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
+`addAtIndex(1, 2)`:
+- Index 1 in range [0, 2], OK.
+- `nodeBefore(1)` walks: cur=dummy, k=0: cur = dummy->next = Node(1). Return Node(1).
+- `newNode = Node(2)`.
+- `newNode->next = cur->next = Node(3)`.
+- `cur->next = newNode`.
+- size = 3.
 
----
+List: dummy → 1 → 2 → 3.
 
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+Step 5, `deleteAtIndex(1)`:
+- `nodeBefore(1)` returns Node(1).
+- target = Node(1)->next = Node(2).
+- Node(1)->next = Node(2)->next = Node(3).
+- Delete Node(2). size = 2.
+
+List: dummy → 1 → 3.
+
+----------------------------------------
+
+## Step 8: Complexity
+
+Each operation: **O(n)** worst case (walking to the right index). The "walk" dominates.
+
+Space: O(n) for n nodes.
+
+Note: `addAtHead` is O(1) (index 0, walk just to dummy). `addAtTail` is O(n) because we must walk to the end. A **tail pointer** would make `addAtTail` O(1) too, at the cost of more code.
+
+----------------------------------------
+
+## Step 9: Name It
+
+This is a **standard linked-list data structure**, implemented from scratch. Design techniques at play:
+- **Sentinel / dummy head** to eliminate edge cases.
+- **Explicit size** to enable O(1) bounds checks and `addAtTail` parameterization.
+- **Generic "walk-to-position" helper** to deduplicate index arithmetic.
+
+Real-world C++ `std::list` is doubly-linked with sentinels for O(1) tail access. For interview, this simpler version is fine.
+
+----------------------------------------
+
+## Step 10: Complexity Summary
+
+| Operation | Time |
+|---|---|
+| get | O(n) |
+| addAtHead | O(1) |
+| addAtTail | O(n) |
+| addAtIndex | O(n) |
+| deleteAtIndex | O(n) |
+
+----------------------------------------
+
+## Step 11: Follow-up Questions
+
+- **Doubly-linked version.** Each node has a `prev` pointer. Enables O(1) deletion given a node, and O(1) tail access (with tail pointer).
+- **Add a tail pointer to make addAtTail O(1).** Update tail on every modification.
+- **Thread-safe version.** Add locks or use lock-free concurrent linked lists.
+- **Handle memory carefully.** Delete nodes on `deleteAtIndex`. In the destructor, delete all remaining.
+- **Generic templated version (any value type).** Templatize `Node` and the class.
+- **Skip list variant.** O(log n) operations on average with probabilistic structure.

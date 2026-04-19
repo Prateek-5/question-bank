@@ -4,186 +4,200 @@
 https://leetcode.com/problems/binary-tree-inorder-traversal/
 
 **Topic:**
-Trees Binary Trees
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Stack-based inorder: walk left, pop, go right.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> Tree 1,_,2,3. cur=1, push [1]. cur=null. pop 1→visit. cur=2. push [2,3]. pop 3→visit. pop 2→visit. Result [1,3,2].
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Trees / Binary Trees
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: What's Inorder Traversal?
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Given a binary tree, return its in-order traversal: visit the left subtree, then the current node, then the right subtree.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+For:
+```
+    1
+     \
+      2
+     /
+    3
+```
 
-So ask yourself:
+Inorder:
+- Start at 1. Left subtree empty. Visit 1.
+- Right subtree: node 2.
+  - Left subtree of 2: node 3.
+    - Left of 3: empty. Visit 3.
+    - Right of 3: empty.
+  - Visit 2.
+  - Right of 2: empty.
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Stack-based inorder: walk left, pop, go right.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
+Output: `[1, 3, 2]`.
 
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-A natural first instinct is to traverse the tree many times — once per query, once per property. That works, but it usually does too much. A single recursive traversal can often compute everything post-order with the child results combined at each node.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Simulate recursion explicitly using a stack. Push left children until null; pop and visit; then move to right child.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
-
-----------------------------------------
-
-## Step 4: Connect to Concept
-
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
-
-**The concept:** Stack-based inorder: walk left, pop, go right.
-
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever data is hierarchical or you can compute something per-subtree → think Binary Tree DFS.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-cur = root. While cur or stack non-empty: push all left descendants of cur; pop, record value, set cur = popped->right.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Explicit stack.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
-
-----------------------------------------
-
-## Step 7: Dry Run (Detailed)
-
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
-
-Tree 1,_,2,3. cur=1, push [1]. cur=null. pop 1→visit. cur=2. push [2,3]. pop 3→visit. pop 2→visit. Result [1,3,2].
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
-
-----------------------------------------
-
-## Step 8: Time and Space Complexity
-
-Complexity isn't magic — it's just counting the work.
-
-Time: O(n). Space: O(h).
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
-
-----------------------------------------
-
-## Step 9: C++ Implementation
-
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
-
+The **recursive** version is trivial:
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-struct TreeNode { int val; TreeNode *left,*right; };
-
-vector<int> inorderIter(TreeNode* root) {
-    vector<int> res; stack<TreeNode*> st; auto* cur = root;
-    while (cur || !st.empty()) {
-        while (cur) { st.push(cur); cur = cur->left; }
-        cur = st.top(); st.pop();
-        res.push_back(cur->val);
-        cur = cur->right;
-    }
-    return res;
+void inorder(TreeNode* n, vector<int>& out) {
+    if (!n) return;
+    inorder(n->left, out);
+    out.push_back(n->val);
+    inorder(n->right, out);
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+But the problem asks for an **iterative** version. Why? Iterative avoids the call stack; it's safer for very deep trees (recursion could stack-overflow). And it's a classic interview litmus test for understanding how recursion actually works.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 2: What Does Recursion Do Internally?
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
+The recursive function implicitly uses the **call stack** to remember "where to return to." When `inorder(n->left, out)` is called, the function's state (including `n`) is pushed onto the call stack. When it finishes, we return to the line `out.push_back(n->val)`.
 
-- Morris traversal for O(1) space.
-- Iterative preorder and postorder.
-- Handle threaded binary trees.
+To mimic this without actual recursion, we build our own **explicit stack** that tracks pending nodes — nodes we've partially processed (walked into their left subtree) but haven't yet "visited" (printed) or processed their right subtree.
 
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
+----------------------------------------
 
----
+## Step 3: Plan the Iterative Version
 
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+Here's the insight. At any point in the traversal, we're "in the middle of processing" some sequence of ancestors. Their left subtrees have been fully explored; we're about to visit them (or we've visited them and are heading into their right subtrees).
+
+At each step:
+- If there's a node `cur`, go left: push `cur` onto the stack, move to `cur->left`.
+- If `cur` is null, we've run out of left-descent. Pop the top of the stack (that's the next node to visit), record its value, and go right.
+
+This matches the recursive pattern:
+- "Go left" = recurse into left subtree (simulated by pushing the current node).
+- "Visit" = process the popped node.
+- "Go right" = recurse into right subtree.
+
+----------------------------------------
+
+## Step 4: The Algorithm
+
+```
+stack = []
+cur = root
+result = []
+
+while cur or stack is not empty:
+    # go as far left as possible
+    while cur:
+        stack.push(cur)
+        cur = cur.left
+    # cur is null; pop and visit
+    cur = stack.pop()
+    result.append(cur.val)
+    # move to right subtree
+    cur = cur.right
+
+return result
+```
+
+Two nested loops. The inner loop dives left; the outer "pop and go right" is the visit-and-advance step.
+
+----------------------------------------
+
+## Step 5: Trace on the Example
+
+Tree:
+```
+    1
+     \
+      2
+     /
+    3
+```
+
+```
+stack = [], cur = 1, result = [].
+
+Outer iter 1:
+  Inner: cur=1 non-null. Push. cur = 1.left = null.
+         Inner exits (cur null).
+  Pop 1. result = [1]. cur = 1.right = 2.
+
+Outer iter 2:
+  Inner: cur=2. Push. cur = 2.left = 3.
+         cur=3. Push. cur = 3.left = null.
+  Pop 3. result = [1, 3]. cur = 3.right = null.
+
+Outer iter 3 (stack has 2):
+  Inner: cur null, skip.
+  Pop 2. result = [1, 3, 2]. cur = 2.right = null.
+
+Outer iter 4: cur=null, stack empty. Exit.
+```
+
+Output: `[1, 3, 2]`. ✓
+
+----------------------------------------
+
+## Step 6: Why the Stack Tracks Exactly What Recursion Does
+
+In the recursive version, when we call `inorder(n->left, out)`, we're pausing at node `n` — we'll come back and execute `out.push_back(n->val)` next. The call stack remembers `n`.
+
+In the iterative version, we explicitly push `n` onto the stack before descending. When the inner loop stops (we've hit a null left child), we pop — that's the node we paused at, time to visit.
+
+The two loops mirror this exactly:
+- **Inner loop** = "recurse into left subtree as deep as possible, pushing each node we pass."
+- **Pop and visit** = "return from the leftmost-null recursion, visit the paused node."
+- **Move to right** = "recurse into right subtree."
+
+----------------------------------------
+
+## Step 7: Alternative — Morris Traversal (O(1) Space)
+
+There's a clever method called **Morris traversal** that does in-order without any stack *or* recursion, using **threaded pointers**: temporarily modify `rightmost.right` of each left subtree to point to the current node, so we can find our way back.
+
+Morris is O(n) time, O(1) space, but mutates the tree during traversal (restoring it at the end). Worth knowing for memory-constrained scenarios; overkill for most interview answers.
+
+Most interviewers prefer the stack-based iterative version for its clarity and general applicability.
+
+----------------------------------------
+
+## Step 8: Name It
+
+This is the classic **stack-based iterative in-order traversal** — a foundational pattern. Once you understand it for in-order, similar ideas apply to:
+- **Iterative preorder:** push right then left; pop and visit immediately.
+- **Iterative postorder:** two stacks, or one stack with tracking flags.
+- **BST iterator:** reuse this exact structure, pausing between `next()` calls.
+- **Threaded trees / Morris traversal:** avoids the stack entirely.
+
+----------------------------------------
+
+## Step 9: Complexity
+
+Time: each node is pushed and popped exactly once. **O(n)**.
+Space: the stack holds at most `h` nodes, where h is the tree's height. **O(h)**. For balanced trees O(log n); worst case O(n).
+
+----------------------------------------
+
+## Step 10: C++ Implementation
+
+```cpp
+vector<int> inorderTraversal(TreeNode* root) {
+    vector<int> result;
+    stack<TreeNode*> st;
+    TreeNode* cur = root;
+    while (cur || !st.empty()) {
+        while (cur) {
+            st.push(cur);
+            cur = cur->left;
+        }
+        cur = st.top(); st.pop();
+        result.push_back(cur->val);
+        cur = cur->right;
+    }
+    return result;
+}
+```
+
+The whole thing is 11 lines. The key invariant: between loop iterations, every node in the stack is "waiting to be visited" — its left subtree is done (or currently being explored), and its right subtree hasn't been touched yet.
+
+----------------------------------------
+
+## Step 11: Follow-up Questions
+
+- **Iterative preorder traversal.** Push root; pop, visit, push right then left (so left is popped next).
+- **Iterative postorder traversal.** Harder — use two stacks (one builds reverse postorder, the other reverses it), or track "last visited" to decide when to pop a node.
+- **Morris in-order (O(1) space).** Temporarily thread right-pointers; un-thread when done.
+- **Inorder of a BST with early termination (like "find k-th smallest").** Same structure; break out when a counter reaches k.
+- **Concurrent inorder iteration.** Use the BST Iterator pattern with state encapsulated in an object.
+- **Why the inner while (go-left) loop?** Because in-order requires visiting left first. "Go all the way left before visiting" mirrors recursion's behavior.

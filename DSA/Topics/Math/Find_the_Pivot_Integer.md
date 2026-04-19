@@ -6,176 +6,182 @@ https://leetcode.com/problems/find-the-pivot-integer/
 **Topic:**
 Math
 
+----------------------------------------
+
+## Step 1: Understand the Definition
+
+Given a positive integer `n`, find an integer `x` (with `1 ≤ x ≤ n`) such that:
+
+- Sum of integers from 1 to x == Sum of integers from x to n.
+
+Return x if it exists, else -1.
+
+Example: n = 8.
+
+Try x = 6. Sum(1..6) = 21. Sum(6..8) = 6+7+8 = 21. ✓ Return 6.
+
+Example: n = 1. Sum(1..1) = 1. Sum(1..1) = 1. ✓ Return 1.
+
+Example: n = 4. Sum(1..x) == Sum(x..4) for some x?
+- x=1: 1 vs 1+2+3+4=10. No.
+- x=2: 1+2=3 vs 2+3+4=9. No.
+- x=3: 1+2+3=6 vs 3+4=7. No.
+- x=4: 10 vs 4. No.
+Return -1.
 
 ----------------------------------------
 
-## Step 1: Understand the Problem (Beginner Friendly)
+## Step 2: Brute-Force Linear Search
 
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
+For each x from 1 to n, compute both sums and compare.
 
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
+```
+for x in 1..n:
+    left = sum(1..x) = x * (x + 1) / 2
+    right = sum(x..n) = n * (n + 1) / 2 - (x - 1) * x / 2
+    if left == right: return x
+return -1
+```
 
-**In plain words:** Prefix-sum equation: sum(1..x) = sum(x..n).
+O(n) with constant-time sum formulas (arithmetic series). Good enough.
 
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> n=8. S=36. sqrt(36)=6 → return 6. Verify: 1+...+6=21, 6+7+8=21. ✓
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
-
-----------------------------------------
-
-## Step 2: Break Down the Problem
-
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
-
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
-
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Prefix-sum equation: sum(1..x) = sum(x..n).
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
+But there's a neat closed-form: we can derive x directly.
 
 ----------------------------------------
 
-## Step 3: Build Intuition (VERY IMPORTANT)
+## Step 3: Deriving the Closed Form
 
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
+Set the sums equal:
 
-When you see an arithmetic puzzle, there's a temptation to simulate it step by step. That's honest, and often correct — but it's worth asking first: is there a closed-form shortcut? Mathematical invariants and modular arithmetic frequently collapse a loop into an O(1) formula.
+```
+x(x+1)/2 = n(n+1)/2 - (x-1)x/2 + x
+```
 
-So how do we get smarter? Let's build the correct intuition step by step.
+Wait, let me be careful. Sum(1..x) = x(x+1)/2. Sum(x..n) = Sum(1..n) - Sum(1..x-1) = n(n+1)/2 - (x-1)x/2.
 
-Both sides share x once. We need x(x+1)/2 = (n(n+1) - x(x-1))/2. Solving gives x = sqrt(n(n+1)/2). Check if the square root is an integer.
+Setting Sum(1..x) == Sum(x..n):
+```
+x(x+1)/2 = n(n+1)/2 - (x-1)x/2
+```
 
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
+Multiply both sides by 2:
+```
+x(x+1) = n(n+1) - (x-1)x
+x(x+1) + (x-1)x = n(n+1)
+x[(x+1) + (x-1)] = n(n+1)
+x · 2x = n(n+1)
+2x² = n(n+1)
+x² = n(n+1)/2
+x = sqrt(n(n+1)/2)
+```
 
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
+So the pivot exists iff n(n+1)/2 is a **perfect square**. If yes, x is its square root.
 
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
+Example: n = 8. n(n+1)/2 = 36. sqrt(36) = 6. Integer ✓. Return 6.
 
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
+n = 4. n(n+1)/2 = 10. sqrt(10) ≈ 3.16. Not integer. Return -1.
 
-
-----------------------------------------
-
-## Step 4: Connect to Concept
-
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
-
-**The concept:** Prefix-sum equation: sum(1..x) = sum(x..n).
-
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever you see digits, divisibility, primes, or modular structure → think Math/Number Theory.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+n = 1. 1·2/2 = 1. sqrt(1) = 1. Return 1.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 4: O(1) Solution
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+```
+def pivotInteger(n):
+    S = n * (n + 1) // 2
+    x = int(sqrt(S))
+    if x * x == S: return x
+    return -1
+```
 
-Compute S = n*(n+1)/2. We need x² = S, so check if round(sqrt(S))² == S. If yes return that x, else -1.
+Compute the total sum, take integer square root, verify it's exact.
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Closed-form derivation; O(1) with a single sqrt check.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+Be careful with floating-point sqrt for large n: rounding could give x or x ± 1. Use `round()` and check, or use integer sqrt.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 5: Trace
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+n = 8: S = 36. sqrt(36) = 6.0. 6 × 6 = 36. ✓ Return 6.
 
-n=8. S=36. sqrt(36)=6 → return 6. Verify: 1+...+6=21, 6+7+8=21. ✓
+n = 4: S = 10. sqrt(10) ≈ 3.162. int(3.162) = 3. 3 × 3 = 9 ≠ 10. Return -1.
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+n = 1: S = 1. sqrt(1) = 1. 1 × 1 = 1. Return 1.
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
+n = 49: S = 49·50/2 = 1225. sqrt(1225) = 35. 35² = 1225. Return 35.
 
+Let me verify: Sum(1..35) = 35·36/2 = 630. Sum(35..49) = 630 (since Sum(1..49) = 1225, and 1225 - 629 = 596... wait something's off). 
 
-----------------------------------------
+Actually Sum(1..49) = 1225. Sum(1..34) = 34·35/2 = 595. Sum(35..49) = 1225 - 595 = 630. ✓ And Sum(1..35) = 630. ✓
 
-## Step 8: Time and Space Complexity
-
-Complexity isn't magic — it's just counting the work.
-
-O(1).
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
+n = 49, pivot = 35.
 
 ----------------------------------------
 
-## Step 9: C++ Implementation
+## Step 6: Name It
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+**Closed-form solution via equation manipulation.** The problem's setup is algorithmic ("find x such that..."), but algebra collapses it to O(1).
+
+The trick: equate the two sums, use arithmetic-series formulas, solve for x.
+
+Related:
+- Perfect square identification.
+- Arithmetic series manipulation.
+- Number Theory problems that reduce to "is N a perfect square?"
+
+----------------------------------------
+
+## Step 7: Complexity
+
+Brute force: O(n).
+Closed form: **O(1)** (ignoring sqrt cost).
+Space: O(1).
+
+----------------------------------------
+
+## Step 8: C++ Implementation
+
+**Closed form:**
 
 ```cpp
-#include <cmath>
 int pivotInteger(int n) {
-    int S = n * (n + 1) / 2;
-    int x = (int)sqrt((double)S);
-    return x * x == S ? x : -1;
+    int total = n * (n + 1) / 2;
+    int x = (int)sqrt(total);
+    // Check nearby candidates to handle floating-point imprecision
+    for (int candidate : {x - 1, x, x + 1}) {
+        if (candidate > 0 && candidate * candidate == total) return candidate;
+    }
+    return -1;
 }
 ```
 
-A few notes about the style:
+The `{x - 1, x, x + 1}` check guards against `sqrt` rounding. For small n, `sqrt` is accurate; for larger n, it's good practice.
 
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
+**Brute force (if preferred for simplicity):**
 
+```cpp
+int pivotInteger(int n) {
+    int totalSum = n * (n + 1) / 2;
+    int leftSum = 0;
+    for (int x = 1; x <= n; ++x) {
+        leftSum += x;
+        int rightSum = totalSum - leftSum + x;   // includes x in both
+        if (leftSum == rightSum) return x;
+    }
+    return -1;
+}
+```
+
+O(n) but straightforward.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 9: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Weighted pivot where elements are arbitrary.
-- Pivot in a generic array — use prefix sums.
-- Multiple pivots counting problem.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Pivot with a different definition** (e.g., sum(1..x) == sum(x+1..n), excluding x). Derive a new equation.
+- **Find all pivots (if multiple exist).** They can't exist for the same n — the equation has at most one positive solution.
+- **Generalize to any arithmetic sequence, not just 1..n.** Sum formulas change; derivation analogous.
+- **Why does this require n(n+1)/2 to be a perfect square?** Because x² = n(n+1)/2 must yield integer x.
+- **Smallest n for which a pivot exists.** n = 1 (pivot = 1). Next n with pivot exists iff n(n+1)/2 is square. Sequence: 1, 8, 49, 288, 1681, ... (related to Pell's equation).
+- **Algorithmic variant: find smallest k such that sum up to k > total/2.** Related but different; use binary search.

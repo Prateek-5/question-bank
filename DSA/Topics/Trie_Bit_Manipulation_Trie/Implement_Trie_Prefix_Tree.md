@@ -4,194 +4,224 @@
 https://leetcode.com/problems/implement-trie-prefix-tree/
 
 **Topic:**
-Trie Bit Manipulation Trie
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** 26-ary tree nodes; insert, search, startsWith operations.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> Insert 'apple'. Search 'apple'→true. Search 'app'→false. startsWith 'app'→true.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Trie / Bit Manipulation Trie
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: What's a Trie?
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Design a data structure supporting:
+- `insert(word)`: add word to the trie.
+- `search(word)`: return true if word is in the trie.
+- `startsWith(prefix)`: return true if any word starts with the prefix.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Words are lowercase letters only.
 
-So ask yourself:
+Think of a trie as a **branching tree** where each edge is labeled with a character. Traversing from root along the edges spells out words.
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: 26-ary tree nodes; insert, search, startsWith operations.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
+Example after inserting "apple", "app", "bat":
 
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
+```
+       (root)
+      /      \
+    a          b
+    |          |
+    p          a
+    |          |
+    p*         t*
+    |
+    l
+    |
+    e*
+```
 
+`*` marks nodes where a word ends.
 
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-You might try hashing every word or running regex matches. For prefix queries that's overkill — tries share prefixes so matching a new query touches only relevant nodes. For XOR problems, a binary trie lets you greedily chase the opposite bit at each level.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Each node represents a prefix; children map letters to next nodes. Marked isEnd distinguishes word endings.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+`search("apple")` traverses a-p-p-l-e, ends at a '*' node. True.
+`search("app")` traverses a-p-p, ends at a '*' node. True.
+`search("appl")` traverses a-p-p-l, ends at a non-* node. False.
+`startsWith("appl")` traverses a-p-p-l, ends somewhere valid. True.
+`startsWith("cap")` can't start with 'c' (no 'c' child at root). False.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: Data Structure Design
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+Each trie node has:
+- **Children**: for each possible next letter, either null or another node. Since we have 26 lowercase letters, a fixed-size array `children[26]` works.
+- **End-of-word marker**: boolean `isEnd` — true if a word ends at this node.
 
-**The concept:** 26-ary tree nodes; insert, search, startsWith operations.
-
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever you see prefix queries, dictionary lookups, or max-XOR → think Trie.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+Root is a special node with no character label.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 3: Insert
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+Traverse character by character. If the child for the current letter doesn't exist, create it. After processing all letters, mark the current node as end-of-word.
 
-Each operation walks the tree creating (insert) or following (search/startsWith) child links by character.
+```
+def insert(word):
+    cur = root
+    for ch in word:
+        if cur.children[ch] is null:
+            cur.children[ch] = new Node()
+        cur = cur.children[ch]
+    cur.isEnd = True
+```
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Fixed-size array per node for simplicity.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+O(|word|).
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 4: Search
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+Similar to insert, but don't create missing children — return false if missing. At the end, check `isEnd`.
 
-Insert 'apple'. Search 'apple'→true. Search 'app'→false. startsWith 'app'→true.
+```
+def search(word):
+    cur = root
+    for ch in word:
+        if cur.children[ch] is null: return False
+        cur = cur.children[ch]
+    return cur.isEnd
+```
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
-
-----------------------------------------
-
-## Step 8: Time and Space Complexity
-
-Complexity isn't magic — it's just counting the work.
-
-Each op O(L).
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
+O(|word|).
 
 ----------------------------------------
 
-## Step 9: C++ Implementation
+## Step 5: startsWith
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+Almost identical to search, but we don't require the final node to be end-of-word. Just need to traverse the full prefix successfully.
+
+```
+def startsWith(prefix):
+    cur = root
+    for ch in prefix:
+        if cur.children[ch] is null: return False
+        cur = cur.children[ch]
+    return True
+```
+
+Same walk as search, just without the `isEnd` check.
+
+----------------------------------------
+
+## Step 6: Trace Insert → Search → startsWith
+
+Insert "apple":
+- Start at root. No 'a' child. Create. Move to 'a'.
+- No 'p' child. Create. Move to 'p'.
+- No 'p' child. Create. Move to 'p'.
+- No 'l' child. Create. Move to 'l'.
+- No 'e' child. Create. Move to 'e'.
+- Mark 'e' node as isEnd.
+
+Insert "app":
+- 'a' exists. Move.
+- 'p' exists. Move.
+- 'p' exists. Move.
+- Mark second 'p' node as isEnd.
+
+Now:
+- search("app"): traverse a-p-p, reach the second 'p' node, isEnd = true. Return true. ✓
+- search("appl"): traverse a-p-p-l, reach 'l' node, isEnd = false. Return false. ✓
+- startsWith("app"): traverse a-p-p, success. Return true. ✓
+- search("apply"): traverse a-p-p-l, then look for 'y' child of 'l'. Doesn't exist. Return false. ✓
+
+----------------------------------------
+
+## Step 7: Why a Trie Over a Hashset?
+
+For simple `search(word)`, a hashset of words is O(|word|) too — just as fast.
+
+For `startsWith(prefix)`, a hashset would need O(n·|prefix|) in the worst case (check every stored word). A trie does it in O(|prefix|).
+
+**Tries excel at prefix operations.** If your workload includes:
+- Autocomplete.
+- Spell-check (find close words).
+- Longest common prefix.
+- Multi-word lookups.
+
+...then a trie's pointer-based structure pays off.
+
+----------------------------------------
+
+## Step 8: Memory Considerations
+
+Each node has 26 pointers (for lowercase). Many will be null. Memory footprint can be substantial for large dictionaries.
+
+Alternatives:
+- **Hashmap children**: only store used letters. Slower per-access but memory-efficient for sparse tries.
+- **Compressed trie (radix tree)**: merge chains of single-child nodes into multi-character edges. Significantly faster in practice.
+
+For interviews, the 26-pointer array is standard and usually accepted.
+
+----------------------------------------
+
+## Step 9: Complexity
+
+Insert: **O(|word|)**.
+Search: **O(|word|)**.
+startsWith: **O(|prefix|)**.
+Space: O(total characters × 26) pointer capacity.
+
+----------------------------------------
+
+## Step 10: C++ Implementation
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
 class Trie {
-    struct N { N* c[26] = {}; bool end = false; };
-    N* root = new N();
+    struct Node {
+        Node* children[26] = {nullptr};
+        bool isEnd = false;
+    };
+    Node* root;
+
 public:
-    void insert(string w) {
-        auto* n = root;
-        for (char ch : w) { if (!n->c[ch-'a']) n->c[ch-'a'] = new N(); n = n->c[ch-'a']; }
-        n->end = true;
+    Trie() : root(new Node()) {}
+
+    void insert(string word) {
+        Node* cur = root;
+        for (char ch : word) {
+            int idx = ch - 'a';
+            if (!cur->children[idx]) cur->children[idx] = new Node();
+            cur = cur->children[idx];
+        }
+        cur->isEnd = true;
     }
-    bool search(string w) {
-        auto* n = root;
-        for (char ch : w) { n = n->c[ch-'a']; if (!n) return false; }
-        return n->end;
+
+    bool search(string word) {
+        Node* cur = traverse(word);
+        return cur && cur->isEnd;
     }
-    bool startsWith(string p) {
-        auto* n = root;
-        for (char ch : p) { n = n->c[ch-'a']; if (!n) return false; }
-        return true;
+
+    bool startsWith(string prefix) {
+        return traverse(prefix) != nullptr;
+    }
+
+private:
+    Node* traverse(const string& s) {
+        Node* cur = root;
+        for (char ch : s) {
+            int idx = ch - 'a';
+            if (!cur->children[idx]) return nullptr;
+            cur = cur->children[idx];
+        }
+        return cur;
     }
 };
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+`traverse` is a shared helper. `search` adds the `isEnd` check; `startsWith` is satisfied by non-null traversal result.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 11: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Memory-efficient Trie (unordered_map children).
-- Compressed Trie / Radix Tree.
-- Persistent Trie.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Support word deletion.** Adds complexity — need to carefully unmark isEnd and potentially remove empty subtries.
+- **Case-sensitive support.** Expand children array to 52 (or use a hashmap).
+- **Unicode support.** Use `unordered_map<char, Node*>` children.
+- **Autocomplete: return all words with a given prefix.** DFS from the prefix's endpoint to collect all isEnd paths.
+- **Count words with a prefix.** Store a word-count at each node (incremented on insert).
+- **Longest common prefix of all stored words.** Walk down while each node has exactly 1 child and isn't isEnd.

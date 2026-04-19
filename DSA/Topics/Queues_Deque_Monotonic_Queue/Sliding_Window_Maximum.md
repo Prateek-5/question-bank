@@ -4,185 +4,201 @@
 https://leetcode.com/problems/sliding-window-maximum/
 
 **Topic:**
-Queues Deque Monotonic Queue
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Monotonic decreasing deque of indices.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> nums=[1,3,-1,-3,5,3,6,7], k=3. Maxes: [3,3,5,5,6,7].
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Queues / Deque / Monotonic Queue
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Understand the Problem
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+You have an array `nums` and a window size `k`. The window slides from left to right, one position at a time, and you need the **maximum inside the window** at every position.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Example: `nums = [1, 3, -1, -3, 5, 3, 6, 7]`, `k = 3`. Windows and their maxes:
 
-So ask yourself:
+```
+[1, 3, -1]             → 3
+   [3, -1, -3]         → 3
+       [-1, -3, 5]     → 5
+           [-3, 5, 3]  → 5
+               [5, 3, 6] → 6
+                  [3, 6, 7] → 7
+```
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Monotonic decreasing deque of indices.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
+Output: `[3, 3, 5, 5, 6, 7]`.
 
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-A nested loop over each window is the obvious approach. But each element enters and leaves the window exactly once, so a deque that maintains only 'useful' candidates gives us the answer in amortized O(1) per position.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Deque holds indices in decreasing value order. Front is current window max. Pop back smaller values to maintain order; pop front when out of window.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+There are `n - k + 1` windows, and we need the max of each.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: The Brute-Force Baseline
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
-
-**The concept:** Monotonic decreasing deque of indices.
-
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever you need sliding window max/min in O(n) → think Monotonic Deque.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-For each i: remove front if index <= i-k. While back's value <= nums[i]: pop back. Push i. If i>=k-1, record deque front value.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Monotonic deque.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
-
-----------------------------------------
-
-## Step 7: Dry Run (Detailed)
-
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
-
-nums=[1,3,-1,-3,5,3,6,7], k=3. Maxes: [3,3,5,5,6,7].
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
-
-----------------------------------------
-
-## Step 8: Time and Space Complexity
-
-Complexity isn't magic — it's just counting the work.
-
-Time: O(n). Space: O(k).
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
-
-----------------------------------------
-
-## Step 9: C++ Implementation
-
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+For each window, scan all `k` elements to find the max.
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-vector<int> maxSlidingWindow(vector<int>& a, int k) {
+for (int i = 0; i <= n - k; ++i) {
+    int best = nums[i];
+    for (int j = i + 1; j < i + k; ++j) best = max(best, nums[j]);
+    result.push_back(best);
+}
+```
+
+O(n · k). For `n = 10^5` and `k = 10^4`, that's 10^9 — way too slow.
+
+The obvious waste: when the window slides by one, we recompute the max from scratch. But we already know a lot about the window — we just dropped one element on the left and added one on the right. Most of the window is the same. Can we exploit that?
+
+----------------------------------------
+
+## Step 3: What Would It Take to Update Max in O(1)?
+
+If the *new* element on the right is larger than the current max, the new max is the new element. Easy.
+
+If the new element is smaller, and the *dropped* element was the max, we have to find the new max — which could be anywhere in the window.
+
+If the new element is smaller and the dropped element was *not* the max, the max stays the same. Also easy, but we still don't know this without checking.
+
+So the hard case is: "the max of the window was the one we're dropping." Then we need a next-best candidate.
+
+Hmm — what if we kept a *sorted* list of candidates? Or better, what if we maintained, at all times, only the elements that *could possibly* be the max of some future window?
+
+----------------------------------------
+
+## Step 4: Which Elements Can Possibly Be Max Later?
+
+Here's a sharp observation. Consider two indices `i < j` both inside the window. If `nums[i] <= nums[j]`, then `nums[i]` can **never** be the max of any future window — because `nums[j]` is larger, sits inside the same window, and will remain inside every window that still contains `nums[i]` (since `j > i`, if `i` is still in a future window, so is `j`).
+
+So whenever a newer, bigger number arrives, all older-and-smaller numbers become **irrelevant**. We can discard them.
+
+This means: the set of "still-useful" elements, ordered by index, forms a **strictly decreasing sequence of values**. (Any time a larger value entered, smaller older values were kicked out; so what remains is a decreasing staircase.)
+
+Also, whenever the left end of the window passes an index, that element's usefulness ends too. We pop it from the left if it's still there.
+
+----------------------------------------
+
+## Step 5: The Data Structure We Need
+
+We want:
+
+- Insert a new index `i` on the right, possibly kicking out older smaller values.
+- Remove an old index from the left when it falls out of the window.
+- Answer "what's the max of the current window?" — that's the index at the left (front) of our structure.
+
+Both ends. Both O(1). That's a **deque**.
+
+Specifically, a **monotonic decreasing deque** of indices, where the front index always points to the current window's maximum.
+
+----------------------------------------
+
+## Step 6: The Algorithm in Concrete Steps
+
+For each `i` from 0 to n-1:
+
+1. **Remove outdated front.** If the front index `≤ i - k`, it's out of the window — pop it.
+2. **Maintain monotonicity at the back.** While the deque is non-empty and `nums[dq.back()] ≤ nums[i]`, pop the back (those elements are now irrelevant).
+3. **Insert i at the back.**
+4. **Record answer** if `i >= k - 1`: the front's value is the window max.
+
+----------------------------------------
+
+## Step 7: Trace on `[1, 3, -1, -3, 5, 3, 6, 7]` with k=3
+
+I'll show the deque (as a list of indices) with their values in parentheses for clarity.
+
+```
+i=0 (val=1):
+  front stale? dq empty.
+  back ≤ 1? no (empty).
+  push 0. dq = [0(1)].
+  i < k-1, no output.
+
+i=1 (val=3):
+  front stale? no.
+  nums[back=0]=1 ≤ 3? yes. pop 0. dq = [].
+  push 1. dq = [1(3)].
+  i < k-1.
+
+i=2 (val=-1):
+  front stale? dq.front=1 ≤ 2-3=-1? no.
+  nums[back=1]=3 ≤ -1? no.
+  push 2. dq = [1(3), 2(-1)].
+  i=2=k-1, output nums[dq.front]=3.  → output: [3]
+
+i=3 (val=-3):
+  front stale? dq.front=1 ≤ 3-3=0? yes. pop 1. dq = [2(-1)].
+  nums[back=2]=-1 ≤ -3? no.
+  push 3. dq = [2(-1), 3(-3)].
+  output 3.  → [3, 3]
+
+Wait, the output should be 3 here? No wait, I have front=2, nums[2]=-1.
+Let me redo. Actually at i=3 the window is indices [1,2,3] = [3,-1,-3]. Max is 3, at index 1. But I just popped index 1 because 1 ≤ 3-3=0. Hmm, is index 1 inside the window?
+
+Window at i=3 is [i-k+1 .. i] = [1 .. 3]. So index 1 is inside. But my stale-front check said "front ≤ i - k = 0", which evicts indices 0 and below. Index 1 is not ≤ 0. I made an arithmetic error above — let me redo.
+
+i=3: i-k = 0. Is dq.front=1 ≤ 0? No, 1 > 0. Don't pop.
+```
+
+Let me restart the trace more carefully.
+
+```
+i=0 (v=1): dq=[], push 0. dq=[0(1)]. i<k-1.
+i=1 (v=3): back val=1 ≤ 3 → pop. dq=[]. push 1. dq=[1(3)]. i<k-1.
+i=2 (v=-1): back val=3 ≤ -1? no. push. dq=[1(3), 2(-1)]. i=k-1, out=3.
+i=3 (v=-3): front=1 ≤ i-k=0? 1>0 → no pop. back val=-1 ≤ -3? no. push. dq=[1, 2, 3]. out=3.
+i=4 (v=5): front=1 ≤ i-k=1? 1≤1 yes → pop front. dq=[2, 3]. back val=-3 ≤ 5 → pop. dq=[2]. back val=-1 ≤ 5 → pop. dq=[]. push 4. dq=[4(5)]. out=5.
+i=5 (v=3): front=4 ≤ 2? no. back val=5 ≤ 3? no. push. dq=[4, 5]. out=5.
+i=6 (v=6): front=4 ≤ 3? no. back val=3 ≤ 6 → pop. dq=[4]. back val=5 ≤ 6 → pop. dq=[]. push 6. dq=[6(6)]. out=6.
+i=7 (v=7): front=6 ≤ 4? no. back val=6 ≤ 7 → pop. dq=[]. push 7. dq=[7(7)]. out=7.
+```
+
+Output: `[3, 3, 5, 5, 6, 7]`. ✓
+
+The inner "while" loop looks like it could make things quadratic, but each index is pushed exactly once and popped at most once over the entire run. Amortized O(1) per step, O(n) total.
+
+----------------------------------------
+
+## Step 8: Invariants
+
+- The deque holds indices currently "alive" in the window. ("Alive" = not stale and not dominated by a larger newer value.)
+- Their *values* are strictly decreasing from front to back.
+- The front index is always the maximum of the current window.
+
+Both invariants follow directly from the push/pop rules.
+
+----------------------------------------
+
+## Step 9: Complexity
+
+Time: each index enters and leaves the deque at most once → amortized O(1) per step → **O(n)**.
+Space: the deque holds at most k indices → **O(k)**.
+
+Went from O(n·k) brute force to O(n). The key leverage: recognizing which past elements can never be the answer again, and discarding them eagerly.
+
+----------------------------------------
+
+## Step 10: C++ Implementation
+
+```cpp
+vector<int> maxSlidingWindow(vector<int>& nums, int k) {
     deque<int> dq;
     vector<int> res;
-    for (int i = 0; i < (int)a.size(); ++i) {
+    for (int i = 0; i < (int)nums.size(); ++i) {
+        // remove stale front (outside window)
         if (!dq.empty() && dq.front() <= i - k) dq.pop_front();
-        while (!dq.empty() && a[dq.back()] <= a[i]) dq.pop_back();
+        // maintain decreasing order: kick out smaller-or-equal at back
+        while (!dq.empty() && nums[dq.back()] <= nums[i]) dq.pop_back();
         dq.push_back(i);
-        if (i >= k - 1) res.push_back(a[dq.front()]);
+        if (i >= k - 1) res.push_back(nums[dq.front()]);
     }
     return res;
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+A small implementation habit: store **indices**, not values. Values alone lose the position information needed to evict stale entries. It's a common beginner mistake to store pairs or just values and then struggle to detect staleness.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 11: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Sliding window minimum.
-- Sliding window median (two heaps).
-- First negative in window.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Sliding window minimum.** Same pattern, but flip the comparison — maintain an increasing deque.
+- **Median in a sliding window.** Much harder; requires two balanced multisets (analogous to the two-heap median technique).
+- **Variable-size window max (window changes size as it slides).** Same deque works as long as the "stale front" condition is updated to reflect the new window boundary.
+- **What if the input is a stream and you can't access arbitrary indices?** The deque still works — you process elements in order, one at a time.
+- **First negative number in each window.** Same structure — maintain a deque of indices of negative values; remove stale ones; the front is the answer.

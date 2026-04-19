@@ -4,179 +4,180 @@
 https://leetcode.com/problems/implement-rand10-using-rand7/description/
 
 **Topic:**
-Number Theory Misc
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Rejection sampling from a uniform 49-sample space.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> Expected rejection chance 9/49. On accept, value 1..10 uniform.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Number Theory / Misc (also randomization)
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: What's Given
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+`rand7()` is a black-box function returning a **uniformly random integer in {1, 2, 3, 4, 5, 6, 7}**.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Build `rand10()` that returns a uniformly random integer in {1, 2, ..., 10}, using only `rand7()` internally.
 
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Rejection sampling from a uniform 49-sample space.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
+Minimize the expected number of `rand7()` calls.
 
 ----------------------------------------
 
-## Step 3: Build Intuition (VERY IMPORTANT)
+## Step 2: First Instinct — Scale Up
 
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
+Can we just do `(rand7() - 1) * 10 / 7 + 1`? No — that's not uniform. Some values in {1..10} appear more often than others due to non-divisibility.
 
-A brute-force factor check or a digit-by-digit loop is usually the first attempt. Cleverer approaches exploit modular arithmetic, parity, or digit-DP recurrences to get O(1) or O(log n) from what looks like an O(n) problem.
+Similarly, `rand7() + rand7()` gives a distribution peaked at 8 (not uniform on {2..14}).
 
-So how do we get smarter? Let's build the correct intuition step by step.
-
-rand7()·7+rand7() generates uniform [1..49]. Keep only 1..40 for uniform [1..10] via mod.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Uniform-from-biased sources require care.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 3: The Core Technique — Rejection Sampling
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+Key idea: generate a value uniformly over some larger set that's a multiple of 10, then map into {1..10}.
 
-**The concept:** Rejection sampling from a uniform 49-sample space.
+Two rand7() calls give 7 × 7 = **49 equally likely outcomes** when we pair them. Enumerate: `value = (rand7() - 1) * 7 + rand7()`, producing uniform 1..49.
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
+49 isn't a multiple of 10, but 40 is. Use rejection sampling:
+- If `value ≤ 40`: return `((value - 1) % 10) + 1`.
+- If `value > 40`: reject and try again.
 
-**Pattern recognition cue:**
-
-**Whenever digits, GCD, primes, or modular properties appear → check for closed-form solutions before coding loops.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+This gives uniform {1..10} because within the accepted range 1..40, each of the 10 possible return values corresponds to exactly 4 pre-images. Uniformity preserved.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 4: Why Rejection Works
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+When we reject, we retry from scratch. The distribution of the accepted outcome is uniform over the accepted set (1..40), and our mapping (value mod 10) is a balanced 4-to-1 function onto {1..10}. So each result in {1..10} has probability 4/40 = 1/10.
 
-Loop: x = (rand7()-1)*7 + rand7() ∈ [1,49]. If x <= 40, return 1 + (x-1)%10.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
+Rejection doesn't bias the output — it just extends the expected runtime.
 
 ----------------------------------------
 
-## Step 6: Final Approach
+## Step 5: Algorithm
 
-Now let's crystallize everything we've learned into a clean algorithm.
+```
+def rand10():
+    while True:
+        a = rand7()
+        b = rand7()
+        value = (a - 1) * 7 + b   # uniform 1..49
+        if value <= 40:
+            return ((value - 1) % 10) + 1
+        # else retry
+```
 
-Rejection sampling.
+Each iteration makes 2 `rand7()` calls. Probability of acceptance = 40/49.
 
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
+Expected iterations = 1 / (40/49) = 49/40 ≈ 1.225.
 
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
-
-----------------------------------------
-
-## Step 7: Dry Run (Detailed)
-
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
-
-Expected rejection chance 9/49. On accept, value 1..10 uniform.
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+Expected `rand7()` calls per `rand10()` = 2 × 1.225 = **2.45**.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 6: Can We Do Better? (Optimization via Reusing Rejected Values)
 
-Complexity isn't magic — it's just counting the work.
+When value ∈ {41..49}, we rejected 9 possible values — that's uniform over 9 outcomes. We can use them:
+- Map 41..49 to 1..9 by subtracting 40.
+- Now generate another rand7() and form a 9 × 7 = **63 uniform outcomes**, take mod 60, etc.
 
-Expected O(1) samples.
+This cascades: squeeze every bit of entropy from rejects. Reduces expected calls to ~2.2.
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
+The simple version (2.45) is usually enough for interviews.
 
 ----------------------------------------
 
-## Step 9: C++ Implementation
+## Step 7: Trace
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+Imagine rand7() returns: 3, 5. Then value = (3-1)*7 + 5 = 19. 19 ≤ 40, accept. Result = ((19-1) % 10) + 1 = 8 + 1 = **9**.
+
+Another run: rand7() returns 6, 5. value = (6-1)*7 + 5 = 40. Accept. Result = ((40-1) % 10) + 1 = 9 + 1 = **10**.
+
+Another: rand7() returns 7, 6. value = (7-1)*7 + 6 = 48. 48 > 40, reject. Retry.
+
+----------------------------------------
+
+## Step 8: Why Multiplication by (7 - 1)?
+
+We use `(rand7() - 1) * 7 + rand7()`:
+- `rand7() - 1` gives 0..6 (7 choices) — the "high digit" in base 7.
+- Second `rand7()` gives 1..7 — the "low digit."
+- Their combination gives 49 distinct pairs, mapping 1-to-1 onto 1..49.
+
+Think of this as **base-7 composition**: we're building a 2-digit base-7 number plus 1. Guarantees uniformity when both rand7()s are independent.
+
+----------------------------------------
+
+## Step 9: Name It
+
+**Rejection sampling from a larger uniform space.** Universal technique:
+- Generate uniform on {1..M} where M > N and M is a multiple of N.
+- Accept with probability ≤ M' / M where M' is the largest multiple of N ≤ M.
+- Reject otherwise.
+
+Related problems:
+- rand_m from rand_n where gcd logic matters.
+- Random point in a unit disk (sample in square, reject outside).
+- Shuffle algorithms using biased sources.
+
+The key insight: **you can't scale a random variable, but you can reject samples**.
+
+----------------------------------------
+
+## Step 10: Complexity
+
+Expected time: **O(1)** per rand10() — ~2.45 rand7() calls on average.
+Worst case: unbounded (probabilistic). In practice, the chance of many retries is astronomically small.
+
+Space: O(1).
+
+----------------------------------------
+
+## Step 11: C++ Implementation
 
 ```cpp
-int rand7();
 int rand10() {
     while (true) {
-        int x = (rand7() - 1) * 7 + rand7();
-        if (x <= 40) return 1 + (x - 1) % 10;
+        int a = rand7();   // 1..7
+        int b = rand7();   // 1..7
+        int value = (a - 1) * 7 + b;   // 1..49
+        if (value <= 40) {
+            return ((value - 1) % 10) + 1;
+        }
     }
 }
 ```
 
-A few notes about the style:
+The `while (true)` with a probabilistic `return` is idiomatic for rejection sampling.
 
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
+## Step 12: Optimized C++ (Reuse Rejects)
 
+```cpp
+int rand10() {
+    while (true) {
+        int a = rand7(), b = rand7();
+        int v1 = (a - 1) * 7 + b;
+        if (v1 <= 40) return ((v1 - 1) % 10) + 1;
+
+        // v1 in 41..49 → subtract 40 to get 1..9
+        int c = rand7();
+        int v2 = (v1 - 41) * 7 + c;   // 1..63
+        if (v2 <= 60) return ((v2 - 1) % 10) + 1;
+
+        // v2 in 61..63 → subtract 60 to get 1..3
+        int d = rand7();
+        int v3 = (v2 - 61) * 7 + d;   // 1..21
+        if (v3 <= 20) return ((v3 - 1) % 10) + 1;
+        // Else start over with 3 rand7() calls spent but no result.
+    }
+}
+```
+
+Each cascade reduces the rejection probability further.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 13: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Generate rand(n) using rand(m).
-- Minimize expected calls.
-- Rand10 from rand2 (binary expansion).
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **rand_n from rand_m where n > m.** Combine more calls: k calls give m^k outcomes. Pick the largest multiple of n ≤ m^k.
+- **rand_n from rand_m where gcd(m, n) > 1.** Possible but more complex to derive; similar rejection principle.
+- **Without rejection (deterministic bounded time).** Impossible in general — some bias is inevitable when sampling from a non-divisible source.
+- **Use bits from rand7().** rand7() has ~log2(7) ≈ 2.807 bits of entropy each. For rand10() (log2 10 ≈ 3.32), we need ~1.18 rand7() calls' worth of bits — so ~2 calls is near-optimal.
+- **Expected number of calls for large n.** Approaches log2(n) / log2(m) for rand_n from rand_m.
+- **Why not (rand7() + rand7()) % 10 + 1?** That's biased — sums are not uniform.

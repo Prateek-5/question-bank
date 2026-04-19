@@ -4,186 +4,204 @@
 https://leetcode.com/problems/count-primes/
 
 **Topic:**
-Graph BFS DFS Dijkstra DSU
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Sieve of Eratosthenes.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> n=10. i=2: mark 4,6,8. i=3: mark 9. Unmarked 2..9: 2,3,5,7 → 4 primes.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Graph (BFS / DFS / Dijkstra / DSU)
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: What's the Ask?
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Given an integer n, count the number of primes **strictly less than n**. That is, count primes in the range `[2, n-1]`.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
-
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Sieve of Eratosthenes.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
+Examples:
+- n = 10: primes < 10 are 2, 3, 5, 7. Count = **4**.
+- n = 0 or n = 1: no primes < 1. Count = 0.
+- n = 2: no primes < 2. Count = 0.
+- n = 3: 2 is prime. Count = 1.
 
 ----------------------------------------
 
-## Step 3: Build Intuition (VERY IMPORTANT)
+## Step 2: Naïve Approach
 
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
+For each integer from 2 to n-1, check if it's prime. Primality check by trial division up to sqrt: for i, check divisibility by 2, 3, ..., up to sqrt(i).
 
-A tempting first thought is to try every possible path from the start to the goal. The problem is that graphs have exponentially many paths. We need a traversal that visits each node at most a few times — that's exactly what BFS, DFS, and their weighted cousins give us.
+```
+count = 0
+for i in 2..n-1:
+    if is_prime(i): count++
+return count
+```
 
-So how do we get smarter? Let's build the correct intuition step by step.
+Each primality check: O(√i). Sum over i up to n: O(n√n). For n = 10^6, that's about 10^9 — slow.
 
-Start from 2; for each prime, mark its multiples composite. What remains unmarked below n are primes.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Can we be smarter by checking many numbers at once?
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 3: The Sieve of Eratosthenes Idea
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+Instead of testing each number independently, **mark composites**. Start with all numbers 2..n-1 as "possibly prime." Then:
 
-**The concept:** Sieve of Eratosthenes.
+- 2 is prime. Mark all multiples of 2 greater than 2 as composite: 4, 6, 8, ...
+- 3 is prime (still unmarked). Mark multiples: 6, 9, 12, ... (6 already marked, but that's fine).
+- 4 is marked — skip.
+- 5 is unmarked — prime. Mark 10, 15, 20, ...
+- 6 marked — skip.
+- 7 unmarked — prime. Mark 14, 21, ...
+- ...
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
+When we reach some number not yet marked, it must be prime — because if it had a divisor < itself, that divisor would be prime (or have prime factors) and we'd have already marked the number through that prime's multiples.
 
-**Pattern recognition cue:**
+After this process, count the unmarked numbers in [2, n-1] — those are the primes.
 
-**Whenever nodes have relationships or connectivity matters → think Graph. 'Shortest path' without weights → BFS. With weights → Dijkstra. Just connectivity → DSU.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-Create isComposite[n] = false. For i from 2 to sqrt(n): if !isComposite[i], mark i*i, i*i+i, ... up to n-1. Count unmarked indices from 2..n-1.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
+This is the classical **Sieve of Eratosthenes**.
 
 ----------------------------------------
 
-## Step 6: Final Approach
+## Step 4: Why We Only Need to Sieve Up to sqrt(n)
 
-Now let's crystallize everything we've learned into a clean algorithm.
+Here's an optimization. We only need to mark multiples starting from primes up to sqrt(n). Why?
 
-Classic sieve.
+If `p * q = n` where p ≤ q, then `p ≤ sqrt(n)`. So every composite number ≤ n has a prime factor ≤ sqrt(n). Marking multiples of every prime up to sqrt(n) covers all composites.
 
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
+For primes p > sqrt(n), their smallest un-marked multiple is p² > n, which is out of range. Nothing new to mark.
 
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+So the outer loop goes i = 2, 3, 5, ..., up to sqrt(n).
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 5: Further: Start Marking From p²
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+Another optimization. When we find a prime p, its multiples are 2p, 3p, 4p, ..., (p-1)p, p², (p+1)p, ...
 
-n=10. i=2: mark 4,6,8. i=3: mark 9. Unmarked 2..9: 2,3,5,7 → 4 primes.
+The multiples 2p, 3p, ..., (p-1)p are all `p * k` for k < p. Each such k has a prime factor ≤ k < p — so these multiples were already marked when processing smaller primes.
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+So we only need to start marking from **p²**.
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
+For p = 5, don't mark 10 (5·2), 15 (5·3), 20 (5·4) — those are already marked. Start from 25 (5²).
 
-
-----------------------------------------
-
-## Step 8: Time and Space Complexity
-
-Complexity isn't magic — it's just counting the work.
-
-Time: O(n log log n). Space: O(n).
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
+This slightly reduces the constant factor.
 
 ----------------------------------------
 
-## Step 9: C++ Implementation
+## Step 6: The Algorithm
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+```
+if n <= 2: return 0
+
+isComposite = [False] * n   # indices 0..n-1
+count = 0
+
+for i in 2..n-1:
+    if not isComposite[i]:
+        count++
+        if i * i < n:     # only sieve when p² fits
+            for j in i*i, i*i + i, i*i + 2i, ..., up to n-1:
+                isComposite[j] = True
+
+return count
+```
+
+Two loops: outer for primes, inner for marking their multiples starting from p².
+
+----------------------------------------
+
+## Step 7: Trace for n = 20
+
+```
+isComposite = all False. count = 0.
+
+i=2: not marked. count=1. i²=4 < 20. Mark 4, 6, 8, 10, 12, 14, 16, 18.
+i=3: not marked. count=2. i²=9 < 20. Mark 9, 12, 15, 18.
+i=4: marked. Skip. (but count still increments? Wait, we don't enter the "prime" branch, so no.)
+Actually let me re-read my code. `if not isComposite[i]: count++; ... else: skip`. So:
+i=4: marked. Do nothing.
+i=5: not marked. count=3. i²=25 >= 20. No marking needed.
+i=6: marked. Skip.
+i=7: not marked. count=4. i²=49 >= 20. No marking.
+i=8: marked. Skip.
+i=9: marked. Skip.
+i=10: marked.
+i=11: not marked. count=5. i²=121 >= 20. No marking.
+i=12: marked.
+i=13: not marked. count=6. No marking.
+i=14: marked.
+i=15: marked.
+i=16: marked.
+i=17: not marked. count=7. No marking.
+i=18: marked.
+i=19: not marked. count=8. No marking.
+```
+
+Primes < 20: 2, 3, 5, 7, 11, 13, 17, 19. Count = **8**. ✓
+
+----------------------------------------
+
+## Step 8: Why It's Fast
+
+The inner "mark multiples" loop runs `n/p` times for each prime p. Summing over primes p:
+```
+n/2 + n/3 + n/5 + n/7 + ... + n/p_max
+```
+
+Mathematical fact: the sum of reciprocals of primes up to N is approximately `ln(ln(N))`. So total inner work is `O(n · ln(ln(n)))`.
+
+That's much faster than O(n · sqrt(n)). For n = 10^6, it's about 10^6 · ~3 = 3 million ops. Blazing fast.
+
+----------------------------------------
+
+## Step 9: Naming
+
+This is the **Sieve of Eratosthenes** — attributed to Eratosthenes of Cyrene (276-194 BCE). One of the oldest algorithms still in regular use, and still the standard way to enumerate primes up to a moderate bound.
+
+Variants:
+- **Linear sieve** / **Euler's sieve**: O(n), eliminates redundant markings. Each composite marked exactly once by its smallest prime factor.
+- **Segmented sieve**: for enormous n where the array doesn't fit in memory.
+- **Wheel factorization**: skips multiples of small primes entirely.
+
+For interview scope, Eratosthenes is fine.
+
+----------------------------------------
+
+## Step 10: Complexity
+
+Time: **O(n log log n)**.
+Space: **O(n)** for the isComposite array.
+
+----------------------------------------
+
+## Step 11: C++ Implementation
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
 int countPrimes(int n) {
-    if (n < 3) return 0;
-    vector<char> comp(n, 0);
-    int cnt = 0;
+    if (n <= 2) return 0;
+    vector<bool> isComposite(n, false);
+    int count = 0;
     for (int i = 2; i < n; ++i) {
-        if (comp[i]) continue;
-        cnt++;
-        if ((long long)i * i < n)
-            for (int j = i*i; j < n; j += i) comp[j] = 1;
+        if (!isComposite[i]) {
+            count++;
+            if ((long long)i * i < n) {
+                for (int j = i * i; j < n; j += i) {
+                    isComposite[j] = true;
+                }
+            }
+        }
     }
-    return cnt;
+    return count;
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Implementation notes:
+- Cast to `long long` for `i * i` to avoid overflow when i ~ sqrt(INT_MAX).
+- Use `vector<bool>` — compact bit representation.
+- Start the inner loop from `i * i`, not `2 * i`, to skip already-marked multiples.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 12: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Segmented sieve for huge n.
-- Prime factorization using smallest-prime-factor array.
-- Count primes in a range [L,R].
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Enumerate the primes (not just count).** Modify to collect unmarked indices.
+- **Smallest prime factor of every number up to n.** Variant sieve: when marking `j = i * k`, record `smallestPrimeFactor[j] = i` (if not already set).
+- **Primes in a range [L, R] for large L, R.** Segmented sieve: precompute primes up to sqrt(R), then sieve the range [L, R] block by block.
+- **Is a given number n prime (single query, very large n)?** Miller-Rabin primality test — probabilistic O(k log³ n).
+- **Count primes up to 10^12.** Far beyond sieve memory. Use Meissel-Mertens or Lucy_Hedgehog's algorithm, O(n^(2/3)).
+- **Why not check primality by n mod 2, 3, 5, ... (Wilson's Theorem, etc.)?** Those are single-number tests, not batch. Sieve amortizes work across many numbers.

@@ -4,193 +4,228 @@
 https://leetcode.com/problems/smallest-good-base/description/
 
 **Topic:**
-Searching Binary Search
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** For each possible base length m, binary search base k such that 1+k+k²+...+k^(m-1) = n.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> n=13. m=3: binary search k; 1+k+k²=13 → k=3. Return '3'.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Searching / Binary Search
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Define "Good Base"
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+For an integer `n > 1`, a base `k ≥ 2` is **good** if n's representation in base k consists **entirely of 1's** (all digits are 1, and length ≥ 2 so that k ≥ 2 meaningfully).
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Given n (as a string since n can be huge), return the **smallest** good base as a string.
 
-So ask yourself:
+Example: n = 13. In base 3: 13 = 1·9 + 1·3 + 1 = "111". Good!
+Smallest good base of 13 → **3**.
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: For each possible base length m, binary search base k such that 1+k+k²+...+k^(m-1) = n.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
+Example: n = 4681. In base 8: 4681 = 8³ + 8² + 8 + 1 = "1111". Good!
+Smaller? Base 2: 4681 = "1001001001001" (not all 1's). So 8 is the smallest. Answer **8**.
 
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-A linear scan is the default. When the data is sorted *or* some predicate is monotonic over the search space, that linear scan becomes a logarithmic one. The core question to ask: 'If the answer is X, is the answer also valid for X+1?' If yes, binary search on the answer is on the table.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-If n has m representation digits of all 1s in base k, then n = (k^m - 1)/(k-1). For small m, solve for k by binary search.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Example: n = 1000000000000000000 — huge, need careful.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: Mathematical Formulation
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+If n in base k is all 1's with `m` digits, then:
 
-**The concept:** For each possible base length m, binary search base k such that 1+k+k²+...+k^(m-1) = n.
+```
+n = 1 + k + k² + ... + k^(m-1) = (k^m - 1) / (k - 1)
+```
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
+We want the **smallest k ≥ 2** such that this equation holds for some **m ≥ 2**.
 
-**Pattern recognition cue:**
+Rewrite: for a given m (length of the representation), we solve for k:
 
-**Whenever the input is sorted or the answer space is monotonic → think Binary Search.**
+```
+k^m - 1 = n · (k - 1)
+```
 
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-For m from log2(n+1) down to 2: binary search k in [2, n^(1/(m-1))]. Evaluate polynomial; if equals n, return k. Default m=1 → k=n-1.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
+Not easy algebraically. But for fixed m, the function `(k^m - 1) / (k - 1)` is monotonically increasing in k (for k ≥ 2). So we can **binary search** for k.
 
 ----------------------------------------
 
-## Step 6: Final Approach
+## Step 3: Range of m
 
-Now let's crystallize everything we've learned into a clean algorithm.
+If m = 2: n = k + 1, so k = n - 1. Always works. This gives k = n - 1 as the fallback — the "boring" good base.
 
-Outer loop on digit count, inner binary search.
+For m ≥ 2, smaller k corresponds to larger m. Rough bound: since n = 1 + k + ... + k^(m-1) ≥ k^(m-1), we have `k ≤ n^(1/(m-1))`. Since k ≥ 2, we get `2^(m-1) ≤ n`, i.e., `m ≤ log2(n) + 1`.
 
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
+For n up to 10¹⁸, m ≤ 60.
 
-**Before coding, it's worth asking:**
+**Strategy:** iterate m from the largest possible (~60) down to 2. For each m, binary search for the k such that `1 + k + k² + ... + k^(m-1) = n`. First valid k is the smallest — return it.
 
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+Why largest m first? Because larger m corresponds to smaller k (from the above bound). The **smallest k** comes from the **largest m** that admits a valid base.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 4: Binary Search for k Given m
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+For fixed m ≥ 3:
+- Lower bound: k = 2.
+- Upper bound: k = floor(n^(1/(m-1))) + 1, or just n^(1/(m-1)) carefully.
 
-n=13. m=3: binary search k; 1+k+k²=13 → k=3. Return '3'.
+Binary search in [2, upper]. For each candidate k, compute `(k^m - 1) / (k - 1)` and compare with n:
+- If equal → found.
+- If less → k too small, increase.
+- If more → k too large, decrease.
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+Careful with overflow. For n up to 10¹⁸, k^m for m=60 and k=2 is already 2^60 ≈ 10¹⁸. Use unsigned or check for overflow.
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
-
-----------------------------------------
-
-## Step 8: Time and Space Complexity
-
-Complexity isn't magic — it's just counting the work.
-
-Time: O(log² n). Space: O(1).
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
+A safer comparison: instead of computing (k^m - 1), compute `1 + k + k² + ...` iteratively, and stop early if it exceeds n.
 
 ----------------------------------------
 
-## Step 9: C++ Implementation
+## Step 5: Algorithm
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+```
+n = given (as integer, possibly needs big integer in Python; in C++, use long long)
+
+# m = 2 always works: k = n - 1
+answer = n - 1
+
+max_m = log2(n) + 1
+
+for m from max_m down to 3:
+    lo, hi = 2, n ** (1 / (m - 1))     # real-number bound
+    while lo <= hi:
+        k = (lo + hi) / 2
+        s = 1 + k + k**2 + ... + k**(m-1)  # compute iteratively
+        if s == n:
+            return k   # smallest k for this m; also smallest overall since m is largest
+        elif s < n:
+            lo = k + 1
+        else:
+            hi = k - 1
+
+return answer
+```
+
+----------------------------------------
+
+## Step 6: Why Iterate m Largest-First?
+
+Consider the function k(m) = smallest k such that 1 + k + ... + k^(m-1) = n.
+
+For m = 60, k must satisfy k^59 ≈ n, so k ≈ n^(1/59) — very small (just above 1).
+For m = 2, k = n - 1 — huge.
+
+Smaller m → larger k. So the smallest possible k comes from the LARGEST m that yields a valid solution.
+
+Iterate m from max down. First m that produces an integer k → that k is the answer.
+
+----------------------------------------
+
+## Step 7: Trace on n = 13
+
+max_m = log2(13) + 1 ≈ 4.
+
+**m = 4**: k must satisfy 1 + k + k² + k³ = 13. Try k = 2: 1 + 2 + 4 + 8 = 15. Too big. k = 1 invalid (k ≥ 2). No valid k.
+
+**m = 3**: 1 + k + k² = 13. k = 3: 1 + 3 + 9 = 13. ✓ Return **3**.
+
+Output: **3**. ✓
+
+----------------------------------------
+
+## Step 8: Trace on n = 4681
+
+max_m ≈ log2(4681) + 1 ≈ 13.
+
+**m = 13**: k = 2 → 2^13 - 1 = 8191. (1 + 2 + ... + 2^12) = 8191. Too big (> 4681). k = 2 is smallest allowed → no fit.
+
+**m = 12**: k = 2 → sum = 4095. Too small. No valid k.
+
+**m = 11, 10, ...**: similar checking (no match).
+
+**m = 4**: 1 + k + k² + k³ = 4681. Try k = 16: 1 + 16 + 256 + 4096 = 4369. Too small. k = 17: 1 + 17 + 289 + 4913 = 5220. Too big. No fit.
+
+**m = 5**: 1 + k + k² + k³ + k⁴ = 4681. Search for k... doesn't hit exactly.
+
+... Continuing, at **m = 4** check k = 16 doesn't work. Eventually **m = 4** with k = 8? 1 + 8 + 64 + 512 = 585. Too small. No fit.
+
+Wait, let me recompute. 4681 = 8³ + 8² + 8 + 1 = 512 + 64 + 8 + 1 = 585? That's wrong. Let me check: 8³ = 512. 512 + 64 = 576. 576 + 8 = 584. 584 + 1 = 585. So 4681 ≠ 8³+8²+8+1 at m=4.
+
+Let me check m=5 with k=8: 1 + 8 + 64 + 512 + 4096 = 4681. ✓ Yes!
+
+So at **m = 5**, k = 8 works. Iteration would find this.
+
+Output: **8**. ✓
+
+(I had the wrong formula earlier — fixed: m is the number of 1's in the representation.)
+
+----------------------------------------
+
+## Step 9: Name It
+
+**Nested binary search over geometric-series equation.** A specific numerical-search technique for problems where:
+- Outer loop iterates over a parameter (here, m).
+- Inner loop binary-searches another (here, k).
+- The "validity" is a precise numerical equality.
+
+Related:
+- Nth Ugly Number via binary search.
+- Smallest Prime X Not in Range.
+- Integer Break.
+
+The geometric-series equation `(k^m - 1) / (k - 1) = n` is a common number-theoretic shape.
+
+----------------------------------------
+
+## Step 10: Complexity
+
+- Outer loop: O(log n) values of m.
+- Inner binary search: O(log(n^(1/(m-1)))) = O((log n)/(m-1)).
+- Per iteration: O(m) to evaluate the sum.
+
+Total: O((log n)² × m_avg) which for n = 10¹⁸ is ~ 60² × 30 = 10⁵. Fast.
+
+Space: O(1).
+
+----------------------------------------
+
+## Step 11: C++ Implementation
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-string smallestGoodBase(string s) {
-    long long n = stoll(s);
-    for (int m = 60; m >= 2; --m) {
-        long long lo = 2, hi = pow(n, 1.0/(m-1)) + 1;
+string smallestGoodBase(string nStr) {
+    long long n = stoll(nStr);
+    // Fallback: m = 2 always works, k = n - 1.
+    long long answer = n - 1;
+
+    int maxM = (int)(log2(n)) + 1;
+
+    for (int m = maxM; m >= 3; --m) {
+        long long lo = 2, hi = (long long)pow((double)n, 1.0 / (m - 1)) + 1;
         while (lo <= hi) {
-            long long k = (lo + hi) / 2, sum = 0, p = 1;
-            bool over = false;
+            long long k = lo + (hi - lo) / 2;
+            // Evaluate 1 + k + k^2 + ... + k^(m-1). Detect overflow / early exit.
+            long long sum = 0, term = 1;
+            bool overflow = false;
             for (int i = 0; i < m; ++i) {
-                if (p > n) { over = true; break; }
-                sum += p;
-                if (i < m-1) p *= k;
+                sum += term;
+                if (i < m - 1) {
+                    if (term > n / k + 1) { overflow = true; break; }
+                    term *= k;
+                }
+                if (sum > n) { overflow = true; break; }
             }
-            if (!over && sum == n) return to_string(k);
-            if (over || sum > n) hi = k - 1;
-            else lo = k + 1;
+            if (overflow || sum > n) hi = k - 1;
+            else if (sum < n) lo = k + 1;
+            else return to_string(k);
         }
     }
-    return to_string(n - 1);
+    return to_string(answer);
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Critical: overflow check during the sum. For n near 10¹⁸ and m = 60, powers can explode.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 12: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Largest good base instead.
-- Good base in fixed range of m.
-- Represent n with digits in [0,d].
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Largest good base instead of smallest.** Always n - 1 (m = 2 case). Trivial.
+- **Count of good bases.** Iterate m from 2 to max_m; for each, check if a valid k exists.
+- **What if n = 1?** Edge case: "1" in any base is "1" (1 digit). Problem constraint n > 1 avoids this.
+- **All bases (not just good).** Different problem; just convert n to every base.
+- **Why does m = 2 always work?** n = 1 + k → k = n - 1, which is ≥ 2 for n ≥ 3.
+- **Geometric series closed form.** (k^m - 1)/(k - 1); the direct formula. Computing it directly risks overflow, so iteratively summing with early-exit is safer.

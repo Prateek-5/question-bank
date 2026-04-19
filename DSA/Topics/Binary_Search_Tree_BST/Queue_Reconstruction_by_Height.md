@@ -1,185 +1,171 @@
 # Queue Reconstruction by Height
 
 **Problem Link:**
-https://leetcode.com/problems/queue-reconstruction-by-height/description/
+https://leetcode.com/problems/queue-reconstruction-by-height/
 
 **Topic:**
-Binary Search Tree BST
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Sort by height desc, k asc; insert at position k.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> Input [[7,0],[4,4],[7,1],[5,0],[6,1],[5,2]]. Sort desc h: [[7,0],[7,1],[6,1],[5,0],[5,2],[4,4]]. Insert: [7,0]; [7,0],[7,1]; [7,0],[6,1],[7,1]; ... final [[5,0],[7,0],[5,2],[6,1],[4,4],[7,1]].
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Binary Search Tree (BST)
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Understand the Input
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+You have a list of people. Each person is described by `[h, k]`:
+- `h`: their height.
+- `k`: number of people in front of them in the queue who are **at least as tall**.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+The queue has been shuffled. Reconstruct it.
 
-So ask yourself:
+Example: `people = [[7,0], [4,4], [7,1], [5,0], [6,1], [5,2]]`.
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Sort by height desc, k asc; insert at position k.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
+- [7, 0]: 7ft tall, 0 people ≥ 7 in front.
+- [7, 1]: 7ft tall, 1 person ≥ 7 in front.
+- [6, 1]: 6ft tall, 1 person ≥ 6 in front.
+- [5, 0]: 5ft tall, 0 people ≥ 5 in front.
+- [5, 2]: 5ft tall, 2 people ≥ 5 in front.
+- [4, 4]: 4ft tall, 4 people ≥ 4 in front.
 
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
+The unique queue satisfying everyone's k is:
+```
+[[5,0], [7,0], [5,2], [6,1], [4,4], [7,1]]
+```
 
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-Many people's first instinct on a tree problem is to flatten it into an array and then work there. Sometimes that works — but it throws away the structural property of BSTs that makes them special: left < node < right. The right solutions exploit that property directly.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-If we process people from tallest to shortest, when inserting each person, taller people (already placed) are the only ones that matter for their k value; the current person's k equals exactly their target index.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Verify [7, 0]: 0 people before [5, 0]... before [7, 0] is [5, 0] who is 5 < 7. So 0 people ≥ 7. ✓
+Verify [4, 4]: before are [5, 0], [7, 0], [5, 2], [6, 1] — all ≥ 4. That's 4. ✓
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: Why It's Not Immediately Obvious
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+At first glance you might think to sort by height. But sorting alone doesn't tell you where to place each person — you need to figure out their exact index based on k.
 
-**The concept:** Sort by height desc, k asc; insert at position k.
+The hard part: a person's k depends on **who else is in front of them** at the final position. If we place people in the wrong order, we can't compute k correctly.
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever you need ordered operations (k-th smallest, range queries, predecessor/successor) → think BST.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+We need an ordering that lets us place people one at a time without later placements messing with earlier k values.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 3: Key Insight — Process Tallest First
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+Here's the trick. Imagine we're placing people into an empty queue one at a time. Order the processing so that **when we place a person, all people in front of them have already been placed**.
 
-Sort people by (−h, k). Iterate; for each (h,k) insert at position k in the result list. List insertion ensures taller-already-placed count equals k.
+The person [4, 4] is 4ft with 4 taller people in front. So we'd want to place [4, 4] **after** those 4 taller people. Let's process taller people first.
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
+Sort by height descending (and by k ascending within the same height, for a reason I'll explain). Then insert each into the answer list at the exact position `k`.
 
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
+Why does this work?
+- When we process someone at height h, every already-placed person has height ≥ h (we sorted descending). They count toward this person's k if they're in front.
+- We place this person at index k in the current answer list. Their k taller predecessors are exactly the k people at positions 0 to k-1.
+- Future inserts? They'll be shorter than this person (or equal). They **don't** count toward this person's k.
 
+Wait — future inserts at a position ≤ k would push this person's final index to k+1 or later, making their k stale. Let me re-think.
 
-----------------------------------------
+Future person at height ≤ h, inserted at some index `j`. If `j ≤ current_position_of_this_person`, the person we placed earlier moves one step back. But we inserted them **at index k**; does that change after?
 
-## Step 6: Final Approach
+Actually yes — if we insert someone at index j ≤ k later, our person's position shifts to k+1. But wait — that later person is shorter, so they **don't** count toward this person's k anyway. The "front" entries that are ≥ h are still the original k entries (now at positions 0 to k-1 shifted by whatever). But there might be NEW people at positions 0 to k-1!
 
-Now let's crystallize everything we've learned into a clean algorithm.
+Hmm, let me reconsider.
 
-Sort + list.insert.
+After inserting someone at position j ≤ k, our person is now at position k+1. People in front of them are now at 0 to k. Of those k+1 people, only the k taller originals count toward the k condition. One new shorter person got in front but doesn't count. Wait, the k condition says "k people ≥ h in front." Still k. So k is preserved. ✓
 
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
+So inserting shorter people in front of a taller person **doesn't change their k**. That's the key.
 
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+This is why "tallest first" works: we establish the skeleton of tall people in the right order, and shorter people slip in later without affecting established k's.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 4: Why Sort by k Ascending Within Same Height?
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+When two people have the same height, they still have potentially different k's. Within a group of equal heights, we should insert the lower-k ones first.
 
-Input [[7,0],[4,4],[7,1],[5,0],[6,1],[5,2]]. Sort desc h: [[7,0],[7,1],[6,1],[5,0],[5,2],[4,4]]. Insert: [7,0]; [7,0],[7,1]; [7,0],[6,1],[7,1]; ... final [[5,0],[7,0],[5,2],[6,1],[4,4],[7,1]].
+Why? Because a higher-k person gets placed further back. If we place a higher-k same-height person first, the lower-k one inserted later might push the higher-k one's "k" count off (since equal-height counts too).
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+Sorting by k ascending within equal heights ensures when we insert [7, 0] first, then [7, 1], both land correctly at their respective k positions.
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+Putting it together: **sort by height descending, k ascending.** Then insert each at index k.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 5: Trace on the Example
 
-Complexity isn't magic — it's just counting the work.
+`people = [[7,0], [4,4], [7,1], [5,0], [6,1], [5,2]]`.
 
-Time: O(n²). Space: O(n).
+Sort by (height desc, k asc):
+```
+(7, 0), (7, 1), (6, 1), (5, 0), (5, 2), (4, 4)
+```
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+Insert into an empty list, each at index k:
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+```
+Insert (7, 0) at index 0: [[7,0]].
+Insert (7, 1) at index 1: [[7,0], [7,1]].
+Insert (6, 1) at index 1: [[7,0], [6,1], [7,1]].
+Insert (5, 0) at index 0: [[5,0], [7,0], [6,1], [7,1]].
+Insert (5, 2) at index 2: [[5,0], [7,0], [5,2], [6,1], [7,1]].
+Insert (4, 4) at index 4: [[5,0], [7,0], [5,2], [6,1], [4,4], [7,1]].
+```
 
+Final: `[[5,0], [7,0], [5,2], [6,1], [4,4], [7,1]]`. ✓ Matches expected.
+
+Notice at each step, the newly-inserted person has k taller (or equal-height earlier-placed) people in front, exactly as required.
+
+----------------------------------------
+
+## Step 6: Why This Algorithm Is Clever
+
+The insight is an example of **commutative insertion**: later inserts of shorter people preserve earlier taller people's "in front" counts. This commutativity lets us place people in a principled order (tallest first), which in turn lets us use simple index-insertion.
+
+If we tried to place shortest first, we'd have no way to know where they go — their k depends on taller people who aren't placed yet. The ordering "taller first" breaks this circular dependency.
+
+----------------------------------------
+
+## Step 7: Name It
+
+This is a **greedy reconstruction** problem. It's listed under BST, but the canonical solution is sort + insert — no tree data structure required. A balanced BST with order-statistic augmentation would let us do O(log n) inserts, giving O(n log n) total, but ordinary list insertion is O(n) per insert, total O(n²), which is fine for typical constraints.
+
+The technique generalizes to problems where:
+- Each item has a constraint involving "other items of type X."
+- Processing items in an order that makes the constraint locally satisfiable works.
+
+----------------------------------------
+
+## Step 8: Complexity
+
+Time: sort O(n log n) + n inserts, each O(n) into a dynamic array = **O(n²)**.
+
+For a faster version, use a balanced BST or Fenwick tree with order-statistic queries, giving **O(n log n)**.
+
+Space: O(n) for the output list.
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
-
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-vector<vector<int>> reconstructQueue(vector<vector<int>>& p) {
-    sort(p.begin(), p.end(), [](auto& a, auto& b){
-        return a[0] != b[0] ? a[0] > b[0] : a[1] < b[1];
+vector<vector<int>> reconstructQueue(vector<vector<int>>& people) {
+    sort(people.begin(), people.end(), [](const vector<int>& a, const vector<int>& b) {
+        if (a[0] != b[0]) return a[0] > b[0];   // height descending
+        return a[1] < b[1];                      // k ascending within same height
     });
-    vector<vector<int>> res;
-    for (auto& x : p) res.insert(res.begin() + x[1], x);
-    return res;
+
+    vector<vector<int>> result;
+    for (auto& p : people) {
+        result.insert(result.begin() + p[1], p);
+    }
+    return result;
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Elegant. Two-line sort, four-line loop. The sort encodes the ordering insight; the insert at index k directly realizes the placement rule.
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Use a Fenwick tree for O(n log n).
-- What if k counts shorter people?
-- Stream reconstruction.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **"k shorter people in front" instead of "k ≥ tall in front."** Flip sorting order.
+- **k based on weight or some other attribute.** Generalize accordingly.
+- **Very large n.** Use a Fenwick tree with order statistics — O(n log n).
+- **Return any valid queue (if there are multiple).** Usually the answer is unique given the constraints, but ties in height with different k can yield multiple.
+- **Adversarial input: what if no valid queue exists?** Detect by checking if any insertion would require an invalid index.
+- **Why is BST helpful here?** For the O(n log n) version: balanced BSTs support order-statistics queries in O(log n) — "give me the k-th empty slot."

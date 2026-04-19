@@ -6,179 +6,200 @@ https://leetcode.com/problems/remove-nth-node-from-end-of-list/
 **Topic:**
 Linked List
 
+----------------------------------------
+
+## Step 1: Restate the Problem
+
+Given the head of a linked list and an integer `n`, remove the n-th node **from the end**, and return the updated head.
+
+Example: `1 → 2 → 3 → 4 → 5`, `n = 2`. The 2nd-from-end is node `4` (counting backward: 5 is 1st, 4 is 2nd). Result: `1 → 2 → 3 → 5`.
+
+Edge cases worth considering up front:
+- `n` could equal the length — we remove the head.
+- The list could have exactly one node and `n = 1` — we return null.
 
 ----------------------------------------
 
-## Step 1: Understand the Problem (Beginner Friendly)
+## Step 2: The Two-Pass Solution First
 
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Two-pointer gap of n+1 nodes.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> 1→2→3→4→5, n=2. After gap, slow ends at 3; remove 4 → 1→2→3→5.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
-
-----------------------------------------
-
-## Step 2: Break Down the Problem
-
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
-
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
-
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Two-pointer gap of n+1 nodes.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-Because linked lists don't give random access, the temptation is to copy them into arrays and work there. Sometimes that's fine; often it wastes memory. The classic trick is to use two pointers moving at different speeds or with different gaps — it lets you solve many problems in a single pass.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-If one pointer moves n+1 ahead, both pointers advancing together until the lead hits null leaves the trailing pointer just before the target.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
-
-----------------------------------------
-
-## Step 4: Connect to Concept
-
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
-
-**The concept:** Two-pointer gap of n+1 nodes.
-
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever you need to find cycles, middles, or the k-th-from-end → think slow/fast pointers.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-Dummy head; fast=slow=dummy. Advance fast n+1 steps. Then advance both until fast==null. slow->next = slow->next->next.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Two-pointer single pass.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
-
-----------------------------------------
-
-## Step 7: Dry Run (Detailed)
-
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
-
-1→2→3→4→5, n=2. After gap, slow ends at 3; remove 4 → 1→2→3→5.
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
-
-----------------------------------------
-
-## Step 8: Time and Space Complexity
-
-Complexity isn't magic — it's just counting the work.
-
-Time: O(L). Space: O(1).
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
-
-----------------------------------------
-
-## Step 9: C++ Implementation
-
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+The obvious approach: first count the length `L`, then walk to the `(L - n)`-th node from the start, and remove the one after it. That's fine and straightforward.
 
 ```cpp
-struct ListNode { int val; ListNode* next; ListNode(int x):val(x),next(nullptr){} };
-ListNode* removeNthFromEnd(ListNode* h, int n) {
-    ListNode d(0); d.next = h;
-    auto s = &d, f = &d;
-    for (int i = 0; i <= n; ++i) f = f->next;
-    while (f) { s = s->next; f = f->next; }
-    s->next = s->next->next;
-    return d.next;
+int L = 0;
+for (auto* p = head; p; p = p->next) L++;
+// remove node at position (L - n) from the start (0-indexed)
+auto* p = dummy;
+for (int i = 0; i < L - n; ++i) p = p->next;
+p->next = p->next->next;
+```
+
+Two passes, O(L). Works cleanly, but we're asked — implicitly by interviewers, and often explicitly — whether we can do it in **one pass**.
+
+Why would one pass even be possible? The problem is that when we reach the end, we'd need to know about a node `n` positions back. Can we somehow "keep track" of that node as we walk?
+
+----------------------------------------
+
+## Step 3: The Gap Trick
+
+Here's an idea. What if we had **two pointers separated by a fixed gap of `n`?**
+
+- Pointer A is at some node.
+- Pointer B is `n` nodes ahead of A.
+
+Now advance both in sync. When B reaches the end (null or last node), A is exactly `n` nodes back from B — which is exactly where the n-th-from-end lives (or just before it, depending on how we count).
+
+This is the classic "gap of n" trick. It converts "where is the n-th-from-end?" from a backward question into a forward one, using two pointers.
+
+Let me nail down the exact gap and loop condition.
+
+----------------------------------------
+
+## Step 4: Precise Setup — Remove, Not Just Find
+
+We don't just want to *find* the target; we want to **remove** it. To remove a node in a singly linked list, we need access to the **node before it** (so we can set `prev.next = prev.next.next`).
+
+So we want A to land **one step before** the target, and B to land at the end (or specifically, at `null` so our termination is clean).
+
+If A is at position `prev_target` (0-indexed, just before the target), and B is at position `length` (null), then `B - A = length - prev_target`. We need this gap to equal `n + 1` (because `prev_target = length - n - 1` when `target = length - n`).
+
+Wait, let me derive it with a concrete example.
+
+`1 → 2 → 3 → 4 → 5`, `n = 2`. Target is node 4 (position 3, 0-indexed). `prev_target` is node 3 (position 2). We want A to end at position 2, B to end at position 5 (null). Gap = 5 - 2 = 3. And `n + 1 = 3`. ✓
+
+So **advance B by `n + 1` steps first**, then walk A and B in sync until B is null. A ends up at the node just before the target.
+
+----------------------------------------
+
+## Step 5: Handling the "Remove the Head" Case
+
+If `n == length`, the target is the head itself. Then `prev_target` doesn't exist in the original list — there's nothing before the head. Special-casing this is annoying.
+
+The **dummy head trick** fixes it. Create a dummy node with `dummy.next = head`. Now the "node before the head" exists — it's the dummy. Walking `A` from the dummy with our gap-of-n+1 trick now works uniformly for all n.
+
+```
+dummy → 1 → 2 → 3 → 4 → 5
+```
+
+For `n = 5` (remove the head, which is node 1), we want A to end at dummy (position 0 if we count dummy as 0), B to end at null (position 6). Gap = 6 - 0 = 6 = n + 1. ✓
+
+----------------------------------------
+
+## Step 6: The Algorithm
+
+```
+dummy = new node; dummy.next = head
+A = dummy, B = dummy
+
+# Advance B by n+1 steps
+for i in 0..n:
+    B = B.next
+
+# Walk A and B in sync until B reaches null
+while B:
+    A = A.next
+    B = B.next
+
+# A is at the node before the target
+A.next = A.next.next
+
+return dummy.next
+```
+
+Clean and clear. Let's trace it.
+
+----------------------------------------
+
+## Step 7: Trace on `1 → 2 → 3 → 4 → 5`, `n = 2`
+
+```
+dummy → 1 → 2 → 3 → 4 → 5 → null
+
+Initial: A = dummy, B = dummy.
+
+Advance B by n+1 = 3:
+  B = 1, B = 2, B = 3.
+
+Now walk in sync:
+  A = 1, B = 4.
+  A = 2, B = 5.
+  A = 3, B = null → stop.
+
+A.next = 4, A.next.next = 5.
+A.next = 5. (node 4 removed)
+
+Result: dummy → 1 → 2 → 3 → 5.
+Return dummy.next = 1.
+```
+
+The remaining list is `1 → 2 → 3 → 5`. ✓
+
+Now try `n = 5` (remove the head):
+
+```
+dummy → 1 → 2 → 3 → 4 → 5
+
+Advance B by 6: B = 1, 2, 3, 4, 5, null.
+
+Now walk in sync: already B == null, skip the loop.
+
+A.next = 1, A.next.next = 2.
+A.next = 2. (node 1 removed)
+
+Result: dummy → 2 → 3 → 4 → 5.
+Return dummy.next = 2.
+```
+
+Exactly right.
+
+----------------------------------------
+
+## Step 8: Why This Works — One-Sentence Summary
+
+Because a **fixed gap** between two pointers turns "n-th from end" into "where A is when B is at the end" — and that's a property we can maintain throughout a single forward pass.
+
+The dummy-head trick handles the boundary where the head itself is being removed, without adding special-case code.
+
+----------------------------------------
+
+## Step 9: Complexity
+
+Time: B walks the list once; A walks once too. **O(L)** where L is the list length.
+Space: two pointers and a dummy node. **O(1)**.
+
+Same asymptotic complexity as the two-pass version, but with one fewer traversal in practice.
+
+----------------------------------------
+
+## Step 10: C++ Implementation
+
+```cpp
+ListNode* removeNthFromEnd(ListNode* head, int n) {
+    ListNode dummy(0);
+    dummy.next = head;
+    ListNode* A = &dummy;
+    ListNode* B = &dummy;
+
+    // Advance B by n + 1 steps so there's a gap of n + 1 between A and B
+    for (int i = 0; i <= n; ++i) B = B->next;
+
+    // Walk in sync until B hits null
+    while (B) {
+        A = A->next;
+        B = B->next;
+    }
+
+    // A is just before the target; skip it
+    A->next = A->next->next;
+    return dummy.next;
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
-
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 11: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Remove k-th from end in doubly linked.
-- Remove multiple nodes at once.
-- Insert nth-from-end node.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **What if `n` is larger than the list length?** The gap trick would advance `B` past the end and then the sync loop wouldn't do what we expect. Validate `n ≤ L` first, or handle the overflow explicitly.
+- **Remove the n-th node from the *start* (from the head).** Straightforward — just walk `n - 1` steps and skip.
+- **Remove all nodes whose values satisfy a predicate.** Single-pass with a dummy head; advance or splice out based on value.
+- **Remove multiple nodes from the end in one pass.** Keep a queue of the last k pointers; after the pass, the queue holds the candidates.
+- **Doubly-linked list variant.** Easier — with back-pointers you don't need a dummy head at all.

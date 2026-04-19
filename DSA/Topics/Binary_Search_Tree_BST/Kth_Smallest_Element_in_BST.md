@@ -4,187 +4,232 @@
 https://leetcode.com/problems/kth-smallest-element-in-a-bst/
 
 **Topic:**
-Binary Search Tree BST
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** In-order traversal with early termination at k-th visit.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> BST 3,1,4,_,2, k=1. Push left spine: [3,1]. Pop 1, k=0, return 1.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Binary Search Tree (BST)
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Read the Problem, Check Assumptions
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Given the root of a **Binary Search Tree** and an integer `k`, return the k-th smallest value. It's 1-indexed — `k = 1` means the smallest, `k = 2` means the second smallest, and so on.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Example:
+```
+     5
+    / \
+   3   6
+  / \
+ 2   4
+/
+1
+```
 
-So ask yourself:
+Sorted values in this tree: 1, 2, 3, 4, 5, 6. So for `k = 3`, the answer is **3**.
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: In-order traversal with early termination at k-th visit.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-Many people's first instinct on a tree problem is to flatten it into an array and then work there. Sometimes that works — but it throws away the structural property of BSTs that makes them special: left < node < right. The right solutions exploit that property directly.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-In-order yields sorted values. Stop at the k-th node visited.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+The key word is **BST**. Without that property, we'd need to collect everything and sort. With it, we can do better.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: The Defining BST Property
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+For any BST node, all values in its left subtree are smaller, and all values in its right subtree are larger. This has a wonderful consequence:
 
-**The concept:** In-order traversal with early termination at k-th visit.
+> **An in-order traversal of a BST visits nodes in sorted order.**
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
+In-order means: visit the entire left subtree, then the current node, then the entire right subtree. Because of the BST property, everything in the left subtree is < current, and everything in the right subtree is > current — so the visits are sorted.
 
-**Pattern recognition cue:**
+Let me verify on the example.
 
-**Whenever you need ordered operations (k-th smallest, range queries, predecessor/successor) → think BST.**
+In-order of our tree:
+- Recurse into 3's subtree → recurse into 2's subtree → recurse into 1. Visit 1.
+- Back to 2. Visit 2.
+- Right subtree of 2 is null.
+- Back to 3. Visit 3.
+- Recurse into 4. Visit 4.
+- Back to 5. Visit 5.
+- Recurse into 6. Visit 6.
 
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-Use an iterative in-order traversal; decrement k on each pop; when k==0, return that node's value.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
+Order: 1, 2, 3, 4, 5, 6. ✓
 
 ----------------------------------------
 
-## Step 6: Final Approach
+## Step 3: Using In-Order to Find the k-th
 
-Now let's crystallize everything we've learned into a clean algorithm.
+If in-order visits nodes in sorted order, then the k-th visited node is the k-th smallest. We just need to count.
 
-Iterative in-order with stack.
+Naïve version: do a full in-order traversal, collect into an array, return `array[k-1]`.
 
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
+```cpp
+void inorder(TreeNode* n, vector<int>& vals) {
+    if (!n) return;
+    inorder(n->left, vals);
+    vals.push_back(n->val);
+    inorder(n->right, vals);
+}
 
-**Before coding, it's worth asking:**
+int kthSmallest(TreeNode* root, int k) {
+    vector<int> vals;
+    inorder(root, vals);
+    return vals[k - 1];
+}
+```
 
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
-
-----------------------------------------
-
-## Step 7: Dry Run (Detailed)
-
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
-
-BST 3,1,4,_,2, k=1. Push left spine: [3,1]. Pop 1, k=0, return 1.
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+Works, but visits every node (O(n)) even though we only need the first k. Can we stop early?
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 4: Stopping Early
 
-Complexity isn't magic — it's just counting the work.
+Yes — just maintain a counter that decrements with each in-order visit. When the counter hits zero, that's the k-th smallest. Stop there.
 
-Time: O(h+k). Space: O(h).
+```
+kthSmallest(node, k):
+    use a stack for iterative in-order
+    while cur or stack not empty:
+        push left spine of cur
+        pop; decrement k
+        if k == 0: return that node's value
+        cur = popped.right
+```
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+Iterative in-order requires a stack. Let me make sure I remember it exactly.
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+**Iterative in-order pattern:**
 
+```
+cur = root
+stack = []
+while cur or stack:
+    while cur:           # push entire left spine
+        stack.push(cur)
+        cur = cur.left
+    cur = stack.pop()    # now visit
+    visit(cur)
+    cur = cur.right      # move to right subtree
+```
+
+Each `pop` is a "visit". So we can intercept there to apply the counter logic.
+
+```
+while cur or stack:
+    while cur:
+        stack.push(cur); cur = cur.left
+    cur = stack.pop()
+    k--
+    if k == 0: return cur.val
+    cur = cur.right
+```
+
+----------------------------------------
+
+## Step 5: Trace for k = 3 on Our Example
+
+```
+     5
+    / \
+   3   6
+  / \
+ 2   4
+/
+1
+```
+
+```
+Start: cur = 5, stack = []
+
+Push left spine of 5:
+  push 5, cur = 3.
+  push 3, cur = 2.
+  push 2, cur = 1.
+  push 1, cur = null.
+Stack: [5, 3, 2, 1].
+
+Pop 1. k=3→2. cur = null (1 has no right).
+Visit: 1.
+
+Pop 2. k=2→1. cur = null.
+Visit: 2.
+
+Pop 3. k=1→0. Return 3.
+```
+
+Answer: **3**. ✓
+
+We stopped after visiting exactly three nodes instead of traversing the whole tree.
+
+----------------------------------------
+
+## Step 6: The Recursive Version (Also Fine)
+
+```cpp
+int count = 0;
+int ans = -1;
+
+void inorder(TreeNode* n, int k) {
+    if (!n || ans != -1) return;
+    inorder(n->left, k);
+    if (++count == k) { ans = n->val; return; }
+    inorder(n->right, k);
+}
+```
+
+Recursive in-order, using `ans != -1` as an early-exit flag. Some interviewers prefer iterative for this problem because it doesn't need the shared-state flag.
+
+----------------------------------------
+
+## Step 7: What If the Tree Is Modified Frequently?
+
+The problem's follow-up asks: if we're doing many insertions, deletions, and k-th-smallest queries, can we do better than O(k) per query?
+
+Yes — **augment each node** with the size of its subtree. Then k-th smallest is a walk:
+
+- Let `left_size` = size of left subtree.
+- If `k == left_size + 1`: current node is the answer.
+- If `k <= left_size`: recurse left.
+- Else: recurse right with `k -= left_size + 1`.
+
+Each step descends one level, so the query is O(h). Inserts and deletes update the stored sizes along the path — also O(h).
+
+For a balanced BST, that's O(log n) per operation. A significant win when queries are frequent.
+
+----------------------------------------
+
+## Step 8: Complexity
+
+Time: at most k visits before we stop. In the worst case (k = n), that's **O(h + k)** — we walk the left spine to find the smallest, then visit k nodes in order. For a balanced tree this is essentially O(h + k), which is better than the O(n) full-traversal baseline when k is small.
+
+Space: **O(h)** for the iterative stack (or recursion depth).
+
+With augmentation: **O(h)** per query, O(h) per update.
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+Iterative, with early termination:
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-struct TreeNode { int val; TreeNode *left,*right; };
-
 int kthSmallest(TreeNode* root, int k) {
     stack<TreeNode*> st;
-    TreeNode* cur = root;
+    auto* cur = root;
     while (cur || !st.empty()) {
-        while (cur) { st.push(cur); cur = cur->left; }
+        while (cur) {
+            st.push(cur);
+            cur = cur->left;
+        }
         cur = st.top(); st.pop();
         if (--k == 0) return cur->val;
         cur = cur->right;
     }
-    return -1;
+    return -1;  // unreachable given valid k
 }
 ```
-
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- With frequent modifications — augment nodes with subtree size.
-- k-th largest.
-- Range count queries.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Kth largest in a BST.** Do a reverse in-order (right, root, left) with the same counter trick.
+- **Find the median of a BST.** If you know the size, the median is the (n/2)-th or (n/2 + 1)-th smallest.
+- **Frequent insert/delete and kth queries.** Augment nodes with subtree sizes as described.
+- **Morris traversal.** In-order in O(1) extra space (no stack or recursion) by temporarily rewiring pointers. Works but is subtle.
+- **Kth smallest in an unsorted tree (generic binary tree).** No BST property — fallback is collecting all and using a heap or quickselect.

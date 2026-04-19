@@ -4,185 +4,158 @@
 https://leetcode.com/problems/max-area-of-island/
 
 **Topic:**
-Graph BFS DFS Dijkstra DSU
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** DFS flood-fill counting connected land cells.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> grid=[[1,1,0],[0,1,0],[0,0,1]]. From (0,0) DFS visits (0,0),(0,1),(1,1) → area 3. From (2,2) area 1. Max=3.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Graph (BFS / DFS / Dijkstra / DSU)
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Understand the Problem
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Given an `m × n` grid of 0s and 1s, an **island** is a maximal group of 1s connected horizontally or vertically (not diagonally). Return the **area** (number of 1-cells) of the largest island.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Example:
+```
+0 0 1 0 0 0 0 1 0 0 0 0 0
+0 0 0 0 0 0 0 1 1 1 0 0 0
+0 1 1 0 1 0 0 0 0 0 0 0 0
+0 1 0 0 1 1 0 0 1 0 1 0 0
+0 1 0 0 1 1 0 0 1 1 1 0 0
+0 0 0 0 0 0 0 0 0 0 1 0 0
+0 0 0 0 0 0 0 1 1 1 0 0 0
+0 0 0 0 0 0 0 1 1 0 0 0 0
+```
 
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: DFS flood-fill counting connected land cells.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-A tempting first thought is to try every possible path from the start to the goal. The problem is that graphs have exponentially many paths. We need a traversal that visits each node at most a few times — that's exactly what BFS, DFS, and their weighted cousins give us.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Each island is a 4-connected component of 1s. DFS/BFS from each unvisited 1 cell to count its size; track the max.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Several islands. The largest has area 6. Identify it by flood-filling each island and taking the max.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: Connection to Number of Islands
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+If you've seen **Number of Islands**, this is the same setup with a twist. In Number of Islands, we count how many islands exist. Here, we find the **largest** area.
 
-**The concept:** DFS flood-fill counting connected land cells.
-
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever nodes have relationships or connectivity matters → think Graph. 'Shortest path' without weights → BFS. With weights → Dijkstra. Just connectivity → DSU.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+The algorithm is the same — traverse each 1-cell via DFS/BFS, marking visited, summing area — but instead of incrementing an island counter, we track the size of each DFS/BFS run.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 3: DFS With Area Accumulation
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+For each unvisited 1-cell, launch DFS. DFS visits every connected 1-cell, returning the count.
 
-Iterate cells. On a 1, launch DFS marking cells as visited (or flip to 0) and counting. Update the global max area.
+```
+def dfs(r, c):
+    if r, c out of bounds or grid[r][c] != 1: return 0
+    grid[r][c] = 0   # mark visited by overwriting
+    return 1 + dfs(r+1, c) + dfs(r-1, c) + dfs(r, c+1) + dfs(r, c-1)
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
+max_area = 0
+for each cell (r, c):
+    if grid[r][c] == 1:
+        max_area = max(max_area, dfs(r, c))
+return max_area
+```
 
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-DFS with boundary and visited checks.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+Each 1-cell is visited exactly once across all DFS calls (after being visited, it's marked 0). O(m × n) total.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 4: Trace a Small Example
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+```
+1 1 0
+0 1 1
+1 0 1
+```
 
-grid=[[1,1,0],[0,1,0],[0,0,1]]. From (0,0) DFS visits (0,0),(0,1),(1,1) → area 3. From (2,2) area 1. Max=3.
+Scan cells in row-major order.
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+(0, 0) = 1. DFS:
+- Mark (0, 0) = 0. Visit neighbors.
+- (1, 0) = 0. (0, 1) = 1. DFS into (0, 1).
+  - Mark (0, 1) = 0. Visit (0, 2) = 0, (1, 1) = 1. DFS into (1, 1).
+    - Mark (1, 1) = 0. Visit (2, 1) = 0, (1, 0) = 0, (1, 2) = 1. DFS into (1, 2).
+      - Mark (1, 2) = 0. Visit (0, 2) = 0, (2, 2) = 1. DFS into (2, 2).
+        - Mark (2, 2) = 0. Visit (2, 1) = 0, (1, 2) = 0, (2, 3) OOB.
+        - Return 1.
+      - Return 1 + 1 = 2.
+    - Return 1 + 2 = 3.
+  - Return 1 + 3 = 4.
+- (−1, 0) OOB. Return 1 + 4 = 5.
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
+Wait, DFS(0, 0) had children — what came back from which call? Let me not worry about exact totals and just note: DFS(0, 0) returns the size of the connected component starting there.
 
+Total for the upper-left component: 5 cells (the 1s at (0,0), (0,1), (1,1), (1,2), (2,2)).
+
+Next scan cells. (2, 0) = 1. DFS:
+- Mark it. Visit (1, 0) = 0, (2, 1) = 0, (3, 0) OOB.
+- Return 1.
+
+Island of size 1.
+
+max_area = max(5, 1) = 5.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 5: Why Marking Matters
 
-Complexity isn't magic — it's just counting the work.
+If we don't mark visited cells as 0, DFS would re-enter them endlessly and double-count area. Marking ensures each cell contributes exactly once.
 
-Time: O(n·m). Space: O(n·m) stack.
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
+Alternatively, use a separate `visited` matrix. That preserves the input but uses O(mn) extra space. For interview, either is fine.
 
 ----------------------------------------
 
-## Step 9: C++ Implementation
+## Step 6: Name It
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+**Flood fill with area tracking.** Same skeleton as Number of Islands, with area (node count per flood) replacing island count.
+
+Generalizes to:
+- Largest volume in a 3D binary grid.
+- Weighted islands (each cell has a value; sum instead of count).
+- Shortest distance within an island.
+- Count islands with specific properties (e.g., only count islands of size > k).
+
+----------------------------------------
+
+## Step 7: Complexity
+
+Time: **O(m · n)** — each cell visited at most once.
+Space: **O(m · n)** for recursion stack in the worst case (one giant island).
+
+----------------------------------------
+
+## Step 8: C++ Implementation
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-int maxAreaOfIsland(vector<vector<int>>& g) {
-    int n = g.size(), m = g[0].size(), best = 0;
-    function<int(int,int)> dfs = [&](int r, int c) {
-        if (r<0||c<0||r>=n||c>=m||!g[r][c]) return 0;
-        g[r][c] = 0;
-        return 1 + dfs(r+1,c) + dfs(r-1,c) + dfs(r,c+1) + dfs(r,c-1);
+int maxAreaOfIsland(vector<vector<int>>& grid) {
+    int m = grid.size();
+    if (m == 0) return 0;
+    int n = grid[0].size();
+
+    function<int(int, int)> dfs = [&](int r, int c) -> int {
+        if (r < 0 || c < 0 || r >= m || c >= n || grid[r][c] != 1) return 0;
+        grid[r][c] = 0;   // mark visited
+        return 1 + dfs(r+1, c) + dfs(r-1, c) + dfs(r, c+1) + dfs(r, c-1);
     };
-    for (int i=0;i<n;i++) for (int j=0;j<m;j++)
-        if (g[i][j]) best = max(best, dfs(i,j));
+
+    int best = 0;
+    for (int r = 0; r < m; ++r) {
+        for (int c = 0; c < n; ++c) {
+            if (grid[r][c] == 1) {
+                best = max(best, dfs(r, c));
+            }
+        }
+    }
     return best;
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+The recursive DFS is the simplest. For very large grids, use an iterative BFS/DFS with explicit stack to avoid recursion overflow.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 9: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Count number of islands instead.
-- 8-connected instead of 4-connected.
-- Find the island containing a given cell.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Count the number of islands (not area).** Increment count instead of summing area.
+- **Count islands of a specific size.** Filter DFS results by size threshold.
+- **Islands with diagonal connectivity.** Add 4 more neighbor offsets.
+- **Maximum perimeter of an island.** Different aggregation — count edges adjacent to water or boundary.
+- **Flood fill with recoloring (different color for each island).** Assign a unique marker to each flood.
+- **Weighted grid (each cell has a value).** Sum values during DFS instead of counting.

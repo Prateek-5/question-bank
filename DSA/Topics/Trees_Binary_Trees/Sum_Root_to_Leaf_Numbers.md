@@ -4,183 +4,188 @@
 https://leetcode.com/problems/sum-root-to-leaf-numbers/
 
 **Topic:**
-Trees Binary Trees
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** DFS constructing numbers digit-by-digit; sum at leaves.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> Tree 1,2,3. Paths 12 and 13. Sum=25.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Trees / Binary Trees
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: What's the Problem?
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+You have a binary tree where each node holds a digit 0-9. Each root-to-leaf path represents a number formed by concatenating the digits along the path. Return the **sum** of all such root-to-leaf numbers.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Example:
+```
+    1
+   / \
+  2   3
+```
+- Path 1 → 2 forms the number 12.
+- Path 1 → 3 forms the number 13.
+- Sum = 12 + 13 = **25**.
 
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: DFS constructing numbers digit-by-digit; sum at leaves.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-A natural first instinct is to traverse the tree many times — once per query, once per property. That works, but it usually does too much. A single recursive traversal can often compute everything post-order with the child results combined at each node.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Each root-to-leaf path represents a number formed by concatenating digits. DFS accumulates the number as num*10+digit and adds it at each leaf.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Bigger example:
+```
+      4
+     / \
+    9   0
+   / \
+  5   1
+```
+- 4 → 9 → 5: number 495.
+- 4 → 9 → 1: number 491.
+- 4 → 0: number 40.
+- Sum = 495 + 491 + 40 = **1026**.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: How Does a Digit String Become a Number?
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+When we see digits `4, 9, 5` and want the number 495, we're doing:
+- Start: 0.
+- Add 4: 0 · 10 + 4 = 4.
+- Add 9: 4 · 10 + 9 = 49.
+- Add 5: 49 · 10 + 5 = 495.
 
-**The concept:** DFS constructing numbers digit-by-digit; sum at leaves.
+Each new digit is appended by multiplying the running number by 10 and adding the new digit.
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever data is hierarchical or you can compute something per-subtree → think Binary Tree DFS.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+This accumulation pattern matters: as we descend a path, we can *carry* the running number into the recursion.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 3: Plan a DFS with a Running Number
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+Visit the tree top-down. At each recursive call, pass the running number built from the path so far.
 
-dfs(node, cur): if null return 0. cur = cur*10 + node.val. If leaf return cur. Else return dfs(left, cur) + dfs(right, cur).
+```
+dfs(node, currentNumber):
+    if node is null: return 0
+    newNumber = currentNumber * 10 + node.val
+    if node is a leaf: return newNumber    # we've completed a root-to-leaf number
+    return dfs(node.left, newNumber) + dfs(node.right, newNumber)
+```
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
+Initial call: `dfs(root, 0)`.
 
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Single DFS.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+The recursion:
+- At a leaf, we've built a complete number — contribute it.
+- At an internal node, we haven't reached a leaf yet — continue building via children, sum their results.
+- Null nodes contribute 0 (we only count paths ending at leaves).
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 4: Trace on the Tree
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+```
+      4
+     / \
+    9   0
+   / \
+  5   1
+```
 
-Tree 1,2,3. Paths 12 and 13. Sum=25.
+```
+dfs(4, 0):
+  newNumber = 0·10 + 4 = 4. Not leaf (has children).
+  left = dfs(9, 4):
+    newNumber = 4·10 + 9 = 49. Not leaf.
+    left = dfs(5, 49):
+      newNumber = 49·10 + 5 = 495. Leaf. Return 495.
+    right = dfs(1, 49):
+      newNumber = 491. Leaf. Return 491.
+    return 495 + 491 = 986.
+  right = dfs(0, 4):
+    newNumber = 40. Leaf. Return 40.
+  return 986 + 40 = 1026.
+```
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+Sum = 1026. ✓
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+Notice the running number grows as we descend, and at leaves we commit it into the total.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 5: Why Pass "currentNumber" Rather Than Building at Leaves
 
-Complexity isn't magic — it's just counting the work.
+An alternative: collect each path as a list of digits, then at each leaf convert the list into a number and sum.
 
-Time: O(n). Space: O(h).
+But that uses extra memory for the list and extra work for the conversion. Passing `currentNumber` as an integer during recursion lets us do the conversion incrementally — no list needed.
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
+Also, passing by value (integers are small) means no accidental mutation across siblings. Each recursive call independently carries its own copy of `currentNumber`. Clean.
 
 ----------------------------------------
 
-## Step 9: C++ Implementation
+## Step 6: Why This Works — The Recursive Invariant
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+**Invariant:** when we enter `dfs(node, currentNumber)`, `currentNumber` is the number formed by digits along the path from the root to `node`'s parent (before including `node`).
+
+Immediately we update: `newNumber = currentNumber · 10 + node.val`. This includes `node`'s digit.
+
+At a leaf, `newNumber` is the full root-to-leaf number for this path — we return it.
+At an internal node, recurse on children with `newNumber` as their carried-in number. They extend it further.
+
+Summing results across the tree gives the total of all root-to-leaf numbers.
+
+----------------------------------------
+
+## Step 7: Name the Technique
+
+This is **DFS with an accumulator parameter**. The accumulator — `currentNumber` here — carries context from ancestors to descendants. Same pattern appears in:
+- Path Sum (accumulator: remaining target or running sum).
+- Binary Tree Paths (accumulator: list of values on path).
+- Count binary substrings (accumulator: running counts).
+
+When a tree problem asks about values or properties along paths, carrying an accumulator through recursion is almost always the cleanest approach.
+
+----------------------------------------
+
+## Step 8: Edge Cases
+
+- **Empty tree (root null):** no paths, sum = 0. Our `dfs(null, 0)` returns 0. ✓
+- **Single node:** root is itself a leaf. dfs computes newNumber = 0·10 + root.val = root.val. Leaf check triggers. Return root.val. ✓
+- **Long paths / large numbers.** If paths are deep (say 9 levels), numbers can reach 10-digit range. Integer overflow isn't usually a problem because paths are typically ≤ 20 digits, but use `long long` if depth can be enormous.
+
+----------------------------------------
+
+## Step 9: Complexity
+
+Time: every node visited once, O(1) work per node. **O(n)**.
+Space: **O(h)** for the recursion stack, where h is the tree's height.
+
+----------------------------------------
+
+## Step 10: C++ Implementation
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-struct TreeNode { int val; TreeNode *left,*right; };
+int sumNumbers(TreeNode* root, int cur = 0) {
+    if (!root) return 0;
+    cur = cur * 10 + root->val;
+    if (!root->left && !root->right) return cur;   // leaf — commit
+    return sumNumbers(root->left, cur) + sumNumbers(root->right, cur);
+}
+```
 
-int dfs(TreeNode* r, int cur) {
-    if (!r) return 0;
-    cur = cur * 10 + r->val;
-    if (!r->left && !r->right) return cur;
-    return dfs(r->left, cur) + dfs(r->right, cur);
+Elegant — six lines. The default argument `cur = 0` handles the initial call without needing a wrapper.
+
+Alternative: explicit wrapper and helper:
+
+```cpp
+int dfs(TreeNode* n, int cur) {
+    if (!n) return 0;
+    cur = cur * 10 + n->val;
+    if (!n->left && !n->right) return cur;
+    return dfs(n->left, cur) + dfs(n->right, cur);
 }
 int sumNumbers(TreeNode* root) { return dfs(root, 0); }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Both are correct; use whichever style you prefer.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 11: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Sum in a different base.
-- Print all numbers formed.
-- Product of numbers along path.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Binary digits instead of decimal.** Replace `*10` with `*2`.
+- **Return the list of numbers, not just their sum.** Collect at leaves, concatenate going up.
+- **Paths can end at any node, not just leaves.** Slightly different — return the sum at every node you visit.
+- **Digits larger than 9 (multi-digit nodes).** `*10` no longer works; use `*10^digits_in_node` or concatenate as strings.
+- **Return the largest root-to-leaf number.** Replace sum with max.
+- **How does iterative BFS/DFS compare?** BFS with (node, cur) pairs is O(n) but uses more memory than DFS.

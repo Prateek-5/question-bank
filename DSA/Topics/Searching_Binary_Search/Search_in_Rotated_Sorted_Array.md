@@ -4,189 +4,180 @@
 https://leetcode.com/problems/search-in-rotated-sorted-array/
 
 **Topic:**
-Searching Binary Search
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Binary search with rotation detection.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> nums=[4,5,6,7,0,1,2], target=0. m=3:7≠0, left sorted [4..7], 0 not in it → lo=4. m=5:1≠0, left sorted [0..1], 0 in it → hi=4. m=4: 0 found.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Searching / Binary Search
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: The Problem
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+You have an array that was originally sorted in ascending order but has been **rotated** at some unknown pivot. Given a target, return its index, or -1 if not present. Do it in O(log n).
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Example: `[4, 5, 6, 7, 0, 1, 2]` was `[0, 1, 2, 4, 5, 6, 7]` before rotation at pivot 4. Target 0 → index 4. Target 3 → not found.
 
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Binary search with rotation detection.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
+The O(log n) requirement rules out a linear scan. We have to use binary search. But the array isn't fully sorted, so plain binary search breaks. We need to adapt it.
 
 ----------------------------------------
 
-## Step 3: Build Intuition (VERY IMPORTANT)
+## Step 2: What Does Rotation Preserve?
 
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
+Even though the array isn't sorted overall, it still has useful structure. Take a rotated array and split it at its middle `mid`. Look at the **two halves** `[l..mid]` and `[mid+1..r]`.
 
-A linear scan is the default. When the data is sorted *or* some predicate is monotonic over the search space, that linear scan becomes a logarithmic one. The core question to ask: 'If the answer is X, is the answer also valid for X+1?' If yes, binary search on the answer is on the table.
+Claim: at least **one** of the two halves is sorted.
 
-So how do we get smarter? Let's build the correct intuition step by step.
+Why? A sorted array is one contiguous increasing run. Rotating it at one pivot creates exactly **two** increasing runs. When we cut anywhere with `mid`, we hit at most one "break point" between the two runs — so at least one side is a clean increasing run.
 
-At each midpoint, one half is sorted. Check which half is sorted and whether target lies in it; discard the other half.
+Example: `[4, 5, 6, 7, 0, 1, 2]`, mid = 3 (value 7). Left `[4,5,6,7]` is sorted. Right `[0,1,2]` is also sorted. Both sorted because mid landed right at the boundary.
 
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
+Example: mid = 5 (value 1). Left `[4,5,6,7,0,1]` is not sorted (break between 7 and 0). Right `[2]` is trivially sorted.
 
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
+So at each step, we can figure out which half is sorted by comparing `a[l]` to `a[mid]`:
 
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+- If `a[l] <= a[mid]`: the left half is sorted.
+- Otherwise: the right half is sorted.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 3: Using the Sorted Half
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+Once we know a half is sorted, we can check in O(1) whether the target lies within its range.
 
-**The concept:** Binary search with rotation detection.
+- If **left is sorted** and `a[l] <= target < a[mid]`: target is in the left half. Search there.
+- If **left is sorted** and target is outside that range: target must be in the right half. Search there.
+- If **right is sorted** and `a[mid] < target <= a[r]`: target is in the right half.
+- Otherwise: target is in the left half.
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
+At each step we cut the search space in half, so we still achieve O(log n).
 
-**Pattern recognition cue:**
-
-**Whenever the input is sorted or the answer space is monotonic → think Binary Search.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+This is the key idea. Now let's code it carefully.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 4: Pseudocode
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+```
+lo = 0, hi = n - 1
+while lo <= hi:
+    mid = (lo + hi) / 2
+    if a[mid] == target: return mid
 
-lo=0, hi=n-1. Loop: m=(lo+hi)/2. If a[m]==target return m. If a[lo]<=a[m] (left sorted): if a[lo]<=target<a[m] hi=m-1 else lo=m+1. Else right sorted: if a[m]<target<=a[hi] lo=m+1 else hi=m-1.
+    if a[lo] <= a[mid]:                   # left is sorted
+        if a[lo] <= target < a[mid]:      # target in left
+            hi = mid - 1
+        else:
+            lo = mid + 1
+    else:                                  # right is sorted
+        if a[mid] < target <= a[hi]:      # target in right
+            lo = mid + 1
+        else:
+            hi = mid - 1
+return -1
+```
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Modified binary search.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+Two subtleties:
+- `a[lo] <= a[mid]` uses `<=` (not `<`) because if the array has only one element between lo and mid, `a[lo] == a[mid]` is possible.
+- The boundary comparisons use `<` and `<=` carefully to handle the endpoint values.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 5: Dry Run on `[4, 5, 6, 7, 0, 1, 2]` for target 0
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+```
+lo=0, hi=6, a=[4,5,6,7,0,1,2].
+mid=3, a[mid]=7. Not target.
+a[lo]=4 <= a[mid]=7 → left sorted.
+Is 4 <= 0 < 7? No. So target not in left. lo = mid + 1 = 4.
 
-nums=[4,5,6,7,0,1,2], target=0. m=3:7≠0, left sorted [4..7], 0 not in it → lo=4. m=5:1≠0, left sorted [0..1], 0 in it → hi=4. m=4: 0 found.
+lo=4, hi=6, a[lo..hi]=[0,1,2].
+mid=5, a[mid]=1. Not target.
+a[lo]=0 <= a[mid]=1 → left sorted.
+Is 0 <= 0 < 1? Yes. Target in left. hi = mid - 1 = 4.
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+lo=4, hi=4.
+mid=4, a[mid]=0. Target found! Return 4.
+```
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
+Correct.
 
+Now for target 3:
+
+```
+lo=0, hi=6, mid=3, a[mid]=7. Not target.
+Left sorted. Is 4 <= 3 < 7? No. lo=4.
+
+lo=4, hi=6, mid=5, a[mid]=1. Not target.
+Left sorted ([0,1]). Is 0 <= 3 < 1? No. lo=6.
+
+lo=6, hi=6, mid=6, a[mid]=2. Not target.
+Left sorted ([2]). Is 2 <= 3 < 2? No. lo=7.
+
+lo>hi, return -1.
+```
+
+Correct.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 6: Why This Is Correct — The Invariant
 
-Complexity isn't magic — it's just counting the work.
+At every iteration of the loop, the target (if present) is in `a[lo..hi]`. The algorithm preserves this.
 
-Time: O(log n). Space: O(1).
+When we identify a sorted half and the target is in its range, we restrict `[lo, hi]` to that half — the target is definitely there.
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+When the target is *not* in the sorted half's range, it's either outside the array (not present) or in the other half. We restrict to the other half, preserving the invariant.
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+Eventually `lo > hi` (target not present) or `a[mid] == target` (found it).
 
+Each iteration halves the search space → O(log n) iterations.
+
+----------------------------------------
+
+## Step 7: An Important Edge Case
+
+What if the array **wasn't rotated** (rotation by 0)? Then the whole array is sorted, `a[lo] <= a[mid]` always holds, and we always enter the "left sorted" branch. The algorithm degenerates to regular binary search. ✓
+
+What if rotated by exactly n (full rotation)? Same as no rotation. ✓
+
+What if the array has only one element? `lo == hi`, one iteration, return 0 if match else -1. ✓
+
+What if the array has duplicates? **The algorithm above assumes all elements are distinct.** With duplicates, `a[lo] == a[mid] == a[hi]` gives no information about which half is sorted. The variant "Search in Rotated Sorted Array II" handles duplicates by linearly shrinking `lo` and `hi` when they tie with `a[mid]`, making the worst case O(n).
+
+----------------------------------------
+
+## Step 8: Complexity
+
+Time: **O(log n)**. Each iteration halves the search range.
+Space: **O(1)**.
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
-
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-int search(vector<int>& a, int t) {
+int search(vector<int>& a, int target) {
     int lo = 0, hi = a.size() - 1;
     while (lo <= hi) {
-        int m = (lo + hi) / 2;
-        if (a[m] == t) return m;
-        if (a[lo] <= a[m]) {
-            if (a[lo] <= t && t < a[m]) hi = m - 1;
-            else lo = m + 1;
-        } else {
-            if (a[m] < t && t <= a[hi]) lo = m + 1;
-            else hi = m - 1;
+        int mid = lo + (hi - lo) / 2;    // avoid overflow
+        if (a[mid] == target) return mid;
+        if (a[lo] <= a[mid]) {            // left half sorted
+            if (a[lo] <= target && target < a[mid]) hi = mid - 1;
+            else lo = mid + 1;
+        } else {                          // right half sorted
+            if (a[mid] < target && target <= a[hi]) lo = mid + 1;
+            else hi = mid - 1;
         }
     }
     return -1;
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Note the use of `lo + (hi - lo) / 2` instead of `(lo + hi) / 2` — the latter can overflow for large arrays.
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Variant with duplicates (harder).
-- Find min in rotated sorted array.
-- Multiple rotations.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Find the rotation point (the original index 0).** Binary search for the "break point" where `a[mid] > a[mid+1]`.
+- **Rotated array with duplicates (Search in RSA II).** When `a[lo] == a[mid]`, we can't tell which side is sorted, so shrink `lo`. Worst case O(n) but still fast on average.
+- **Find minimum in rotated sorted array.** Find the pivot — the smallest element. Binary search comparing `a[mid]` with `a[hi]`.
+- **Search in a 2D matrix that's row-sorted and circularly-rotated per row.** Solve each row independently; total O(m log n).
+- **Can we count the number of rotations?** Equivalent to finding the pivot index.

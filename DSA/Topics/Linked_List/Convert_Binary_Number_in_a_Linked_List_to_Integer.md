@@ -6,176 +6,153 @@ https://leetcode.com/problems/convert-binary-number-in-a-linked-list-to-integer/
 **Topic:**
 Linked List
 
+----------------------------------------
+
+## Step 1: What Are We Given?
+
+A singly linked list where each node's value is 0 or 1. The list represents a **binary number**, with the **most significant bit (MSB) at the head** and the least significant bit at the tail.
+
+Example: `head = [1, 0, 1]`.
+- Binary: 101.
+- Decimal: 1·4 + 0·2 + 1·1 = **5**.
+
+Example: `head = [0]` → 0. `head = [1, 0, 0, 1, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]` → a big 30-bit number.
+
+Return the integer value.
 
 ----------------------------------------
 
-## Step 1: Understand the Problem (Beginner Friendly)
+## Step 2: First Instinct — Count Nodes, Then Use Powers
 
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
+One obvious approach:
+1. Walk the list once to count length n.
+2. Walk again; for position i (0-indexed from head), contribute `val_i · 2^(n-1-i)`.
 
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
+Works. Two passes, and we need to track both a position and a power.
 
-**In plain words:** Left-shift accumulator while traversing.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> 1→0→1 → 101₂=5.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Can we do it in **one pass**?
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 3: The Horner's Method Reformulation
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Think about building up the number as we traverse. Suppose we've read bits `b_0 b_1 b_2` so far (in MSB-first order). Their value is:
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+```
+b_0 · 4 + b_1 · 2 + b_2
+```
 
-So ask yourself:
+Now we read a fourth bit `b_3`. The new value is:
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Left-shift accumulator while traversing.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
+```
+b_0 · 8 + b_1 · 4 + b_2 · 2 + b_3
+= 2 · (b_0 · 4 + b_1 · 2 + b_2) + b_3
+= 2 · (old_value) + new_bit
+```
 
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
+**Each new bit doubles the running value and adds the new bit's contribution.** This is exactly **Horner's method** for evaluating polynomials at x = 2.
 
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-Because linked lists don't give random access, the temptation is to copy them into arrays and work there. Sometimes that's fine; often it wastes memory. The classic trick is to use two pointers moving at different speeds or with different gaps — it lets you solve many problems in a single pass.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Process bits from MSB to LSB: res = res*2 + node.val.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+So: one pass, starting from value 0, for each node do `value = 2 * value + node->val`. Done.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 4: Algorithm
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+```
+value = 0
+node = head
+while node:
+    value = 2 * value + node.val
+    node = node.next
+return value
+```
 
-**The concept:** Left-shift accumulator while traversing.
+One pass. O(n) time, O(1) space. No need to know the length in advance.
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever you need to find cycles, middles, or the k-th-from-end → think slow/fast pointers.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-Traverse the list, updating res.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
+A bit-shift version is equivalent: `value = (value << 1) | node.val`. Cleaner in C/C++ where bit ops are idiomatic.
 
 ----------------------------------------
 
-## Step 6: Final Approach
+## Step 5: Trace
 
-Now let's crystallize everything we've learned into a clean algorithm.
+`head = [1, 0, 1]`:
 
-Single pass.
+```
+value = 0.
+Node 1: value = 2·0 + 1 = 1.     # 1
+Node 0: value = 2·1 + 0 = 2.     # 10
+Node 1: value = 2·2 + 1 = 5.     # 101
+```
 
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
+Return **5**. ✓
 
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
-
-----------------------------------------
-
-## Step 7: Dry Run (Detailed)
-
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
-
-1→0→1 → 101₂=5.
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+Try `head = [1, 0, 1, 1]`:
+```
+value = 0.
+Node 1: value = 1.
+Node 0: value = 2.
+Node 1: value = 5.
+Node 1: value = 11.     # 1011 = 11. ✓
+```
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 6: Why Horner's Is the Right Frame
 
-Complexity isn't magic — it's just counting the work.
+A number in base b is a polynomial in b: `b_0·b^k + b_1·b^(k-1) + ... + b_k`. Evaluating polynomials left-to-right (MSB first) is exactly Horner's rule:
 
-Time: O(n). Space: O(1).
+```
+P(x) = ((...(b_0 · x + b_1) · x + b_2) · x + ...) · x + b_k
+```
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+For binary, x = 2 — the "shift left and OR" idiom is Horner's in disguise. This trick works for **any base**: decimal strings, hex, arbitrary.
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+It also avoids computing explicit powers of 2 — no `pow` calls, no overflow risk from large powers multiplied with zero bits.
 
+----------------------------------------
+
+## Step 7: Name It
+
+**Horner's method** (for polynomial / base-conversion evaluation). A foundational technique.
+
+Applications:
+- Parsing integer strings: `num = 10 * num + (c - '0')`.
+- Evaluating polynomials in numerical code.
+- Rolling hashes in string matching (Rabin-Karp: treat strings as base-b numbers).
+- This problem: LSB-first stream requires a different framing; MSB-first is Horner-friendly.
+
+----------------------------------------
+
+## Step 8: Complexity
+
+Time: **O(n)** where n is the number of nodes.
+Space: **O(1)** extra.
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
-
 ```cpp
 struct ListNode { int val; ListNode* next; };
-int getDecimalValue(ListNode* h) {
-    int r = 0;
-    while (h) { r = r * 2 + h->val; h = h->next; }
-    return r;
+
+int getDecimalValue(ListNode* head) {
+    int value = 0;
+    for (ListNode* cur = head; cur; cur = cur->next) {
+        value = (value << 1) | cur->val;
+    }
+    return value;
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+`<<` doubles the running value; `|` sets the low bit to the current node's value. Equivalent to `value = 2 * value + cur->val` and often compiled identically, but reads cleanly as "shift in the next bit."
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Big integer (BigInt) support.
-- Base other than 2.
-- LSB-first list.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **LSB at the head instead of MSB.** Reverse the linked list first, or track `2^i` as you walk and sum `val · 2^i`.
+- **Very long binary (more bits than int).** Use `long long` or big-integer library.
+- **Arbitrary base (e.g., base 10 as a linked list of digits).** Same recurrence: `value = base * value + digit`.
+- **Produce the binary string from an int.** Opposite direction; bit-shift out and prepend '0' or '1'.
+- **Detect overflow.** Before the multiply, check if `value > INT_MAX / 2`. Safer: accumulate in 64-bit and cast at the end.
+- **Why not count length first and use `pow(2, n-1-i)`?** Two passes and floating-point inaccuracies for large n. Horner is one pass, integer-only.

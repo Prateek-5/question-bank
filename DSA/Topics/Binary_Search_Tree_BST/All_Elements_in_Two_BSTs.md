@@ -4,188 +4,181 @@
 https://leetcode.com/problems/all-elements-in-two-binary-search-trees/
 
 **Topic:**
-Binary Search Tree BST
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** In-order traversal produces sorted arrays; merge both sorted lists.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> Tree1 in-order: [1,2,4]; Tree2: [0,3,5]. Merge: [0,1,2,3,4,5].
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Binary Search Tree (BST)
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Read the Problem
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Given two BSTs, return a sorted list containing **all** elements from both trees combined.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Example:
+```
+Tree 1:        Tree 2:
+  2              1
+ / \            / \
+1   4          0   3
+```
 
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: In-order traversal produces sorted arrays; merge both sorted lists.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-Many people's first instinct on a tree problem is to flatten it into an array and then work there. Sometimes that works — but it throws away the structural property of BSTs that makes them special: left < node < right. The right solutions exploit that property directly.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-In-order traversal of a BST yields keys in sorted order. Do it for both trees to get two sorted lists, then merge them like merge-step of merge sort.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Elements: 2, 1, 4 and 1, 0, 3. Combined and sorted: `[0, 1, 1, 2, 3, 4]`. Duplicates are preserved.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: The Obvious Approach
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+Dump every value from both trees into an array, sort it, done.
 
-**The concept:** In-order traversal produces sorted arrays; merge both sorted lists.
+```cpp
+vector<int> all;
+collect(tree1, all);
+collect(tree2, all);
+sort(all.begin(), all.end());
+return all;
+```
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
+The `collect` function does any tree traversal (in-order, preorder, doesn't matter for now). Then one O(N log N) sort.
 
-**Pattern recognition cue:**
-
-**Whenever you need ordered operations (k-th smallest, range queries, predecessor/successor) → think BST.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-Traverse tree1 in-order into v1; tree2 into v2. Use two pointers to merge into a single sorted list.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
+N = total number of nodes (both trees combined). Time: O(N log N). Works. But let me think about whether we can do better.
 
 ----------------------------------------
 
-## Step 6: Final Approach
+## Step 3: Leverage the BST Property
 
-Now let's crystallize everything we've learned into a clean algorithm.
+Each BST, traversed **in-order**, gives a sorted list of its elements. That's the defining gift of a BST.
 
-Two in-order traversals + linear merge.
+So we can:
+1. In-order traverse tree 1 → sorted list L1.
+2. In-order traverse tree 2 → sorted list L2.
+3. Merge two sorted lists.
 
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
+This takes O(N) total: O(|L1| + |L2|) for traversals, O(|L1| + |L2|) for the merge. No sorting needed — we never throw away the BST's built-in order.
 
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+Going from O(N log N) to O(N) just by reading the problem structurally.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 4: Merge Two Sorted Lists
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+The merge step is a classic two-pointer operation:
 
-Tree1 in-order: [1,2,4]; Tree2: [0,3,5]. Merge: [0,1,2,3,4,5].
+```
+i = j = 0
+result = []
+while i < len(L1) and j < len(L2):
+    if L1[i] <= L2[j]:
+        result.append(L1[i]); i++
+    else:
+        result.append(L2[j]); j++
+# append remaining
+while i < len(L1): result.append(L1[i++])
+while j < len(L2): result.append(L2[j++])
+```
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+Linear in the combined size. This is the merge step from merge-sort.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 5: Trace on the Example
 
-Complexity isn't magic — it's just counting the work.
+Tree 1 in-order: 1, 2, 4.
+Tree 2 in-order: 0, 1, 3.
 
-Time: O(n1+n2). Space: O(n1+n2).
+Merge:
+```
+i=0, j=0: L1[0]=1, L2[0]=0. 0 smaller. Append 0. j=1. result=[0].
+i=0, j=1: L1[0]=1, L2[1]=1. 1 <= 1, append L1. i=1. result=[0, 1].
+i=1, j=1: L1[1]=2, L2[1]=1. 1 smaller. Append 1. j=2. result=[0, 1, 1].
+i=1, j=2: L1[1]=2, L2[2]=3. 2 smaller. Append 2. i=2. result=[0, 1, 1, 2].
+i=2, j=2: L1[2]=4, L2[2]=3. 3 smaller. Append 3. j=3. result=[0, 1, 1, 2, 3].
+j=3, L2 exhausted. Append rest of L1: 4. result=[0, 1, 1, 2, 3, 4].
+```
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+Final: `[0, 1, 1, 2, 3, 4]`. ✓
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+----------------------------------------
 
+## Step 6: Extra-Sharp Version — Interleaved Traversal
+
+The two-step approach (traverse each tree fully, then merge) uses O(N) auxiliary memory for the two lists. For O(h1 + h2) memory, we can interleave: use two BST iterators, comparing their "next" values and emitting whichever is smaller.
+
+This is the **BST iterator merge**:
+```
+it1 = BSTIterator(tree1)
+it2 = BSTIterator(tree2)
+result = []
+while it1.hasNext() and it2.hasNext():
+    if it1.peek() <= it2.peek():
+        result.append(it1.next())
+    else:
+        result.append(it2.next())
+# drain whichever is left
+while it1.hasNext(): result.append(it1.next())
+while it2.hasNext(): result.append(it2.next())
+```
+
+This needs a `peek()` method on the iterator (look without advancing). Each iterator holds its pending stack of ancestors — O(h) memory each.
+
+For small trees or simple implementations, the two-list approach is fine. The interleaved version shines when memory is tight and trees are balanced.
+
+----------------------------------------
+
+## Step 7: Name the Pattern
+
+This is a classic **two-sorted-lists merge**, the same operation that powers merge-sort's merge step. The twist is that the "sorted lists" here are the in-order traversals of BSTs — which we get for free from the BST structure.
+
+When you see "combine two BSTs" or "combine two sorted streams," merge step is the answer.
+
+----------------------------------------
+
+## Step 8: Complexity
+
+Time: **O(N)** where N = n1 + n2. Each node visited once for traversal, and the merge is linear.
+
+Space: **O(N)** for the two in-order lists and the output. O(h1 + h2) with the iterator approach.
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
-
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-struct TreeNode { int val; TreeNode *left,*right; };
+void inorder(TreeNode* node, vector<int>& out) {
+    if (!node) return;
+    inorder(node->left, out);
+    out.push_back(node->val);
+    inorder(node->right, out);
+}
 
-void inorder(TreeNode* r, vector<int>& v) { if (!r) return; inorder(r->left,v); v.push_back(r->val); inorder(r->right,v); }
+vector<int> getAllElements(TreeNode* root1, TreeNode* root2) {
+    vector<int> L1, L2;
+    inorder(root1, L1);
+    inorder(root2, L2);
 
-vector<int> getAllElements(TreeNode* a, TreeNode* b) {
-    vector<int> v1, v2, res;
-    inorder(a, v1); inorder(b, v2);
-    int i=0, j=0;
-    while (i < (int)v1.size() && j < (int)v2.size())
-        res.push_back(v1[i] <= v2[j] ? v1[i++] : v2[j++]);
-    while (i < (int)v1.size()) res.push_back(v1[i++]);
-    while (j < (int)v2.size()) res.push_back(v2[j++]);
-    return res;
+    vector<int> result;
+    result.reserve(L1.size() + L2.size());
+    int i = 0, j = 0;
+    while (i < (int)L1.size() && j < (int)L2.size()) {
+        if (L1[i] <= L2[j]) result.push_back(L1[i++]);
+        else result.push_back(L2[j++]);
+    }
+    while (i < (int)L1.size()) result.push_back(L1[i++]);
+    while (j < (int)L2.size()) result.push_back(L2[j++]);
+
+    return result;
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Reading the code:
+- `inorder` does a standard recursive in-order traversal.
+- `reserve` pre-allocates for `L1.size() + L2.size()` to avoid reallocations.
+- The merge step handles the case where one list exhausts before the other.
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Do it with O(h) memory using two iterator stacks.
-- Intersect keys instead of merging.
-- k-th smallest across both BSTs.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Merge K BSTs.** Use a min-heap of iterators (similar to Merge K Sorted Lists).
+- **Handle unbalanced BSTs (recursion might stack-overflow).** Switch to iterative in-order using explicit stacks.
+- **O(1) extra memory** (not counting output). Morris traversal on each tree, interleaved — very fiddly.
+- **Intersection of two BSTs (only values in both).** Similar merge, but only emit values equal in both.
+- **Symmetric difference (values in exactly one).** Similar merge, emit values from one side but skip if equal.
+- **Return sorted unique values.** Skip duplicates during the merge.

@@ -6,188 +6,208 @@ https://leetcode.com/problems/permutations-ii/
 **Topic:**
 Recursion
 
+----------------------------------------
+
+## Step 1: Understand the Twist
+
+**Permutations I** asked for all permutations of an array with **distinct** elements. Straightforward backtracking — n! permutations.
+
+**Permutations II** allows **duplicates** in the input. We must return **unique** permutations (no duplicates in the output).
+
+Example: `nums = [1, 1, 2]`. 
+
+All 3! = 6 permutations:
+- [1, 1, 2], [1, 2, 1], [1, 1, 2] (duplicate!), [1, 2, 1] (dup), [2, 1, 1], [2, 1, 1] (dup).
+
+Unique: [1, 1, 2], [1, 2, 1], [2, 1, 1]. Count = 3.
+
+We need to avoid generating duplicates. Naive: generate all 6 with standard backtracking, dedupe with a set. Works but wasteful.
+
+Better: **prune duplicate branches during backtracking**.
 
 ----------------------------------------
 
-## Step 1: Understand the Problem (Beginner Friendly)
+## Step 2: Visualize the Duplicate Problem
 
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
+In standard backtracking, at each recursion level, we pick an unused element and recurse. With duplicates `[1, 1, 2]`:
 
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
+Level 0 (pick one of three positions):
+- Pick index 0 (value 1). Subtree permutes [_, 1, 2].
+- Pick index 1 (value 1). Subtree permutes [1, _, 2].
+- Pick index 2 (value 2). Subtree permutes [1, 1, _].
 
-**In plain words:** Sorted backtracking with used[] skipping sibling duplicates.
+Subtrees of index 0 and index 1 are **identical in structure** (both permute a 1 and a 2), producing the same set of permutations. Duplicates come from this.
 
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> nums=[1,1,2] → 3 unique perms.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Fix: at each level, **don't pick a value we've already picked at this level**.
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 3: The Skip-Duplicate-Sibling Rule
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Sort `nums` first. Duplicates now sit adjacent.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+At each level of backtracking, iterate through indices. Skip an index `i` if:
+- We already used `i` in this permutation (standard `used[i]` check), OR
+- `nums[i] == nums[i-1]` AND we haven't used `i-1` yet (`!used[i-1]`).
 
-So ask yourself:
+The second condition is the new rule: if the previous sibling with the same value is unused, skip `i`. Why? Because:
+- Either `i-1` will be picked later at this level (creating a valid permutation starting with this duplicate value).
+- Or `i-1` won't be picked — meaning this value is used zero or more times later from position `i` or beyond, also covered.
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Sorted backtracking with used[] skipping sibling duplicates.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-Recursion is the natural language of branching problems. Your first recursive attempt is often *almost* right — the adjustments needed are usually (a) a correct base case and (b) careful state-undo when backtracking.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-To avoid duplicate permutations, ensure duplicates are chosen in order by skipping a duplicate whose twin hasn't been used yet at the same level.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+In either case, picking `i` instead of `i-1` would produce the same permutations, just with swapped indices (which the sorted invariant makes identical in value).
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 4: Why "`!used[i-1]`" and Not Just Skip All Duplicates?
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+Consider `nums = [1, 1, 2]` after sort. If we blindly skip all `nums[i] == nums[i-1]`, we'd never pick the second 1. But we DO want permutations like `[1, 1, 2]` that use both 1s.
 
-**The concept:** Sorted backtracking with used[] skipping sibling duplicates.
+The clever condition `!used[i-1]` allows:
+- At the first level, skip i = 1 (since used[0] = false, the previous 1 is available — picking i = 0 first is canonical).
+- After picking i = 0 (used[0] = true), at level 1 we can pick i = 1 (used[0] = true means the "skip" condition fails; we proceed).
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever a problem decomposes into similar sub-problems → think Recursion. Add memo if subproblems repeat.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+So duplicates are picked in **left-to-right order**, never out of order. This canonicalizes the permutations by index, avoiding duplicates in the output.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 5: The Algorithm
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+```
+sort(nums)
 
-Sort. dfs with used[]; for i: if used[i] or (i>0 && a[i]==a[i-1] && !used[i-1]) skip.
+def backtrack(used, current):
+    if len(current) == n:
+        result.append(current.copy())
+        return
+    for i in 0..n-1:
+        if used[i]: continue
+        if i > 0 and nums[i] == nums[i-1] and not used[i-1]: continue
+        used[i] = True
+        current.append(nums[i])
+        backtrack(used, current)
+        current.pop()
+        used[i] = False
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
+backtrack([False]*n, [])
+return result
+```
 
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Sorted dfs with used-array rule.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+Standard Permutations I template + the skip-duplicate rule.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 6: Trace on `[1, 1, 2]`
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+Sorted: [1, 1, 2]. (Already sorted.)
 
-nums=[1,1,2] → 3 unique perms.
+```
+backtrack([F,F,F], []):
+  i=0: used[0]=T, current=[1].
+    backtrack([T,F,F], [1]):
+      i=0: used. skip.
+      i=1: nums[1]==nums[0], used[0]=T, so the skip rule doesn't fire. Proceed.
+        used[1]=T, current=[1,1].
+        backtrack([T,T,F], [1,1]):
+          i=0, i=1: used.
+          i=2: proceed. current=[1,1,2]. Full. RECORD [1,1,2].
+          undo.
+        undo.
+      i=2: proceed. used[2]=T, current=[1,2].
+        backtrack([T,F,T], [1,2]):
+          i=0: used. skip.
+          i=1: nums[1]==nums[0], used[0]=T. Proceed.
+            current=[1,2,1]. Full. RECORD [1,2,1].
+            undo.
+          i=2: used.
+        undo.
+      undo.
+    undo.
+  
+  i=1: nums[1]==nums[0], used[0]=F. SKIP (rule fires).
+  
+  i=2: proceed. current=[2].
+    backtrack([F,F,T], [2]):
+      i=0: current=[2,1].
+        backtrack([T,F,T], [2,1]):
+          i=1: nums[1]==nums[0], used[0]=T. Proceed.
+            current=[2,1,1]. Full. RECORD [2,1,1].
+            undo.
+        undo.
+      i=1: nums[1]==nums[0], used[0]=F. SKIP.
+      i=2: used.
+    undo.
+```
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+Records: [1,1,2], [1,2,1], [2,1,1]. Three unique. ✓
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+The skip-rule fired twice (at level 0 when considering i=1, and deeper when considering i=1 after level-0 i=2). Both skips correctly prevented duplicate permutations.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 7: Name It
 
-Complexity isn't magic — it's just counting the work.
+**Backtracking with canonical ordering for duplicates.** The skip-duplicate-sibling rule imposes a total order on how duplicates can appear, eliminating symmetric branches.
 
-Time: O(n!·n). Space: O(n).
+Same pattern applies to:
+- Subsets II (duplicates in input).
+- Combination Sum II.
+- Unique Paths with some ordering.
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+The rule "sort, then skip if same value as unused previous" is a go-to for duplicate handling.
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+----------------------------------------
 
+## Step 8: Complexity
+
+Time: O(n · n!) for output in the worst case (all distinct); less when duplicates reduce the set of unique permutations.
+Space: O(n) for the used array and recursion stack.
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
-
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-void dfs(vector<int>& a, vector<bool>& used, vector<int>& cur, vector<vector<int>>& res) {
-    if (cur.size() == a.size()) { res.push_back(cur); return; }
-    for (int i = 0; i < (int)a.size(); ++i) {
-        if (used[i]) continue;
-        if (i > 0 && a[i] == a[i-1] && !used[i-1]) continue;
-        used[i] = true; cur.push_back(a[i]);
-        dfs(a, used, cur, res);
-        cur.pop_back(); used[i] = false;
+class Solution {
+    vector<vector<int>> result;
+    vector<int> current;
+    vector<bool> used;
+    vector<int> nums;
+
+    void backtrack() {
+        if (current.size() == nums.size()) {
+            result.push_back(current);
+            return;
+        }
+        for (int i = 0; i < (int)nums.size(); ++i) {
+            if (used[i]) continue;
+            if (i > 0 && nums[i] == nums[i-1] && !used[i-1]) continue;
+            used[i] = true;
+            current.push_back(nums[i]);
+            backtrack();
+            current.pop_back();
+            used[i] = false;
+        }
     }
-}
-vector<vector<int>> permuteUnique(vector<int>& a) {
-    sort(a.begin(), a.end());
-    vector<vector<int>> res; vector<int> cur; vector<bool> used(a.size(), false);
-    dfs(a, used, cur, res);
-    return res;
-}
+
+public:
+    vector<vector<int>> permuteUnique(vector<int>& input) {
+        nums = input;
+        sort(nums.begin(), nums.end());
+        used.assign(nums.size(), false);
+        backtrack();
+        return result;
+    }
+};
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Two key ingredients: sort + the skip-duplicate-sibling rule.
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Lexicographic order.
-- Unrank permutations.
-- Count distinct permutations.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Count distinct permutations.** Instead of listing, increment a counter. Or use the formula `n! / (k1! · k2! · ... )` where ki is the count of each distinct value.
+- **Next permutation with duplicates.** O(n) algorithm similar to standard next permutation.
+- **k-th unique permutation.** Factorial decomposition with duplicate awareness.
+- **Why not dedupe with a set at the end?** Works but wastes time generating duplicates and memory storing them. Pruning is more efficient.
+- **The skip condition with `used[i-1]`.** An alternative formulation uses `used[i-1]` being true (not false); some texts differ. Both give correct algorithms; the logic is equivalent with different interpretations.

@@ -6,174 +6,171 @@ https://leetcode.com/problems/add-digits/
 **Topic:**
 Math
 
+----------------------------------------
+
+## Step 1: Understand the Process
+
+Given a non-negative integer `num`, repeatedly sum its digits until only one digit remains. Return that digit.
+
+Example: num = 38.
+- 3 + 8 = 11. Two digits still.
+- 1 + 1 = 2. One digit. Return 2.
+
+Example: num = 0. Return 0.
+
+This is the concept of **digital root** in number theory.
 
 ----------------------------------------
 
-## Step 1: Understand the Problem (Beginner Friendly)
+## Step 2: Simulate Straightforwardly
 
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
+A direct implementation:
 
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
+```
+while num >= 10:
+    sum = 0
+    temp = num
+    while temp > 0:
+        sum += temp % 10
+        temp /= 10
+    num = sum
+return num
+```
 
-**In plain words:** Digital root — closed-form using modulo 9.
+Each inner loop sums digits. Each outer iteration replaces num with its digit sum. Eventually, sum drops below 10.
 
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
+For num = 1e9, digits ≤ 10. After one iteration, num ≤ 81 (max sum of 9 nines for 10-digit). Then after 2-3 iterations, < 10. Very fast.
 
-> n = 38. 1 + (37 % 9) = 1 + 1 = 2. Verify: 3+8=11 → 1+1=2. ✓
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
-
-----------------------------------------
-
-## Step 2: Break Down the Problem
-
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
-
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
-
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Digital root — closed-form using modulo 9.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
+O(log num) per iteration, O(1) outer iterations for practical input sizes.
 
 ----------------------------------------
 
-## Step 3: Build Intuition (VERY IMPORTANT)
+## Step 3: O(1) Closed-Form Solution
 
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
+There's a stunning mathematical shortcut. The **digital root** has a closed form:
 
-When you see an arithmetic puzzle, there's a temptation to simulate it step by step. That's honest, and often correct — but it's worth asking first: is there a closed-form shortcut? Mathematical invariants and modular arithmetic frequently collapse a loop into an O(1) formula.
+```
+digital_root(n) = 0 if n == 0
+               = 9 if n > 0 and n % 9 == 0
+               = n % 9 otherwise
+```
 
-So how do we get smarter? Let's build the correct intuition step by step.
+Or equivalently:
+```
+digital_root(n) = 1 + (n - 1) % 9 for n > 0
+```
 
-Repeatedly summing digits until one digit remains is the digital root. For any positive n, the digital root equals 1 + (n-1) % 9. This works because 10 ≡ 1 (mod 9), so a number is congruent to the sum of its digits modulo 9.
+Let me verify:
+- n = 38. (38 - 1) % 9 = 37 % 9 = 1. +1 = 2. ✓
+- n = 0. Return 0 (special case).
+- n = 9. (9 - 1) % 9 = 8. +1 = 9. ✓
+- n = 18. (18 - 1) % 9 = 17 % 9 = 8. +1 = 9. ✓
+- n = 27. (27 - 1) % 9 = 26 % 9 = 8. +1 = 9. ✓
 
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
-
-----------------------------------------
-
-## Step 4: Connect to Concept
-
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
-
-**The concept:** Digital root — closed-form using modulo 9.
-
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever you see digits, divisibility, primes, or modular structure → think Math/Number Theory.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+All consistent with digital root values.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 4: Why Does Modulo 9 Give the Digital Root?
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+This is a lovely fact from number theory.
 
-If n == 0 return 0. Else return 1 + (n - 1) % 9. The formula handles the special case where n is a multiple of 9 (should yield 9, not 0). The iterative simulation is also O(log n) per layer but the closed form is O(1).
+**Claim:** for any non-negative integer n, `n ≡ sum_of_digits(n) (mod 9)`.
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
+**Proof sketch:** in base 10, `10 ≡ 1 (mod 9)`. So `10^k ≡ 1^k = 1 (mod 9)`. Any number `n = a_k · 10^k + ... + a_0 · 10^0` has `n ≡ a_k + ... + a_0 (mod 9)` — its digit sum.
 
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
+So when we repeatedly take digit sums, we're preserving `n mod 9`. Eventually we reach a single digit, which is:
+- `0` if n ≡ 0 (mod 9) and n > 0: but a single digit that's 0 means the result is 0 only if we start at 0. Otherwise, the result is `9`.
+- `n mod 9` if n ≢ 0 (mod 9).
 
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Either simulate by summing digits in a loop or use the O(1) digital-root formula.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+The formula `1 + (n - 1) % 9` for n > 0 handles both cases:
+- For n ≡ 0 (mod 9): (n - 1) % 9 = 8. Result = 9. ✓
+- For n ≡ r (mod 9), r ≠ 0: (n - 1) % 9 = r - 1. Result = r. ✓
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 5: The Beauty of the Closed Form
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+This is one of my favorite "look mom, no loop" results. A problem that looks algorithmic (iterative digit summing) has a O(1) formula thanks to a number-theoretic observation.
 
-n = 38. 1 + (37 % 9) = 1 + 1 = 2. Verify: 3+8=11 → 1+1=2. ✓
+It's the kind of trick that, once you know it, feels obvious — but recognizing it in the first place requires knowing that `10 ≡ 1 (mod 9)`.
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+Interview-wise, show both: the iterative approach demonstrates you can code the problem; the closed form demonstrates you understand the math.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 6: Trace Both Approaches
 
-Complexity isn't magic — it's just counting the work.
+**Simulation for num = 99:**
+- Digits: 9 + 9 = 18.
+- Digits of 18: 1 + 8 = 9. Single digit. Return 9.
 
-O(1) time and space.
+**Formula:** 99 > 0, 99 % 9 = 0. Return 9. ✓
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+**Simulation for num = 1234:**
+- 1 + 2 + 3 + 4 = 10. 
+- 1 + 0 = 1. Return 1.
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+**Formula:** 1234 > 0, 1234 % 9 = (1+2+3+4) % 9 = 10 % 9 = 1. Not 0, so return 1. ✓
 
+----------------------------------------
+
+## Step 7: Name It
+
+**Digital root via modulo 9** — classical number theory. The key property `10 ≡ 1 (mod 9)` is a foundation of digit-sum tricks.
+
+Related problems:
+- Casting out nines (check arithmetic by looking at digit sums mod 9).
+- Number of Digit One (count digit 1 appearances — different but digit-focused).
+- Happy Number (cycle-based digit iteration).
+
+----------------------------------------
+
+## Step 8: Complexity
+
+Simulation: O(log num) per iteration, O(log log num) outer iterations. Very fast for any practical input.
+Closed form: **O(1)**.
+
+Space: O(1) for both.
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+**Closed form:**
 
 ```cpp
-int addDigits(int n) {
-    if (n == 0) return 0;
-    return 1 + (n - 1) % 9;
+int addDigits(int num) {
+    if (num == 0) return 0;
+    return 1 + (num - 1) % 9;
 }
 ```
 
-A few notes about the style:
+Two lines. Can't beat this.
 
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
+**Simulation (for educational or fallback purposes):**
 
+```cpp
+int addDigits(int num) {
+    while (num >= 10) {
+        int sum = 0;
+        while (num > 0) {
+            sum += num % 10;
+            num /= 10;
+        }
+        num = sum;
+    }
+    return num;
+}
+```
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- What if n can be arbitrary precision (string input)? Sum ASCII digits, mod 9.
-- Generalize to any base b (digital root mod b-1).
-- Prove the closed form via modular arithmetic.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Generalize to digital root in base b.** The formula becomes `1 + (n - 1) % (b - 1)` for n > 0 in base b. For base 10, b - 1 = 9.
+- **What's the pattern of iterated digital roots?** They converge to a single digit — they don't have "deeper" structure beyond that.
+- **Digital root of the sum / product of two numbers.** Works mod 9: `dr(a + b) = dr(dr(a) + dr(b))`.
+- **Digital root of a negative number.** Usually undefined; or use |n|.
+- **Iterated digital sum until reaching a fixed point.** Same as digital root.
+- **Why is this sometimes called "casting out nines"?** Before calculators, people verified arithmetic by computing digital roots — errors of multiples of 9 would be caught.

@@ -6,178 +6,190 @@ https://leetcode.com/problems/remove-outermost-parentheses/
 **Topic:**
 Stack
 
+----------------------------------------
+
+## Step 1: Define "Primitive Decomposition"
+
+A valid parentheses string can be split into "primitive" pieces — maximal balanced substrings that don't properly contain another such substring. Each primitive has a single outermost pair of parentheses wrapping everything inside.
+
+Remove those outermost pairs and concatenate what's inside.
+
+Example: `s = "(()())(())"`.
+
+Decompose into primitives:
+- `(()())`  : balanced, outermost at the first '(' and the 6th ')'.
+- `(())`    : balanced.
+
+Remove outermost from each:
+- `(()())` → `()()`.
+- `(())` → `()`.
+
+Result: `"()()()"`.
+
+Example: `s = "(()())(())(()(()))"`.
+
+Primitives: `(()())`, `(())`, `(()(()))`.
+
+Remove outermost from each:
+- `(()())` → `()()`.
+- `(())` → `()`.
+- `(()(()))` → `()(())`.
+
+Result: `()()()(())`. Concatenate: `"()()()" + "()(())"` = `"()()()()(())"`. Length 12.
 
 ----------------------------------------
 
-## Step 1: Understand the Problem (Beginner Friendly)
+## Step 2: How to Identify Primitive Boundaries?
 
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
+A primitive starts at an `'('` when we have **zero unmatched opens** (we're at depth 0 before entering). A primitive ends at `')'` that returns us to **depth 0**.
 
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
+So track depth as we scan. When depth reaches 0 at a ')', that's the end of a primitive. Everything from the primitive's start to this end is one primitive piece.
 
-**In plain words:** Track depth; skip chars at depth 0↔1 transitions.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> s='(()())(())'. Result '()()()'.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+But we want to **remove the outermost pair** of each primitive, not emit the whole primitive. So:
+- At the very start of a primitive (depth 0, reading '(' which will become depth 1): skip this '('.
+- At the end of a primitive (depth back to 0 via ')'): skip this ')'.
+- For every other char: keep it.
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 3: Simplified Rule
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Track depth. Process char c:
+- If c == '(':
+  - depth > 0: keep c.
+  - depth == 0: skip c (it's an outermost open).
+  - depth += 1.
+- If c == ')':
+  - depth -= 1.
+  - depth > 0: keep c.
+  - depth == 0: skip c (it's an outermost close).
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Or, equivalently:
+- If c == '(' and depth > 0: keep.
+- If c == ')' and depth > 1: keep.
+- (Others skipped.)
 
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Track depth; skip chars at depth 0↔1 transitions.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-You might try to scan multiple times, or use recursion to handle nested structure. A stack lets you remember just enough of the past to resolve it efficiently — especially 'next greater' or 'matching brackets' questions.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-An outermost '(' starts a primitive (depth 0→1) and its matching ')' ends it (depth 1→0). Skip those transitions.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+With the depth-update properly sequenced.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 4: Cleaner Form
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+Let me restructure for clarity:
 
-**The concept:** Track depth; skip chars at depth 0↔1 transitions.
+```
+result = []
+depth = 0
+for c in s:
+    if c == '(':
+        if depth > 0: result.append('(')
+        depth++
+    else:   # c == ')'
+        depth--
+        if depth > 0: result.append(')')
+return ''.join(result)
+```
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
+Depth increments on '(' (after the conditional keep), decrements on ')' (before the conditional keep). We keep `(` only when depth was already > 0, and `)` only when depth is still > 0 after decrement.
 
-**Pattern recognition cue:**
-
-**Whenever you see nested structure, matching brackets, or 'next greater element' → think Stack / Monotonic Stack.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-Iterate; open increments depth. Append char unless depth just became 1 (on '(') or just returned to 0 (on ')').
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
+These conditions are precisely "not at the outermost layer."
 
 ----------------------------------------
 
-## Step 6: Final Approach
+## Step 5: Trace on `"(()())(())"`
 
-Now let's crystallize everything we've learned into a clean algorithm.
+```
+depth=0. result=[].
 
-Depth counter.
+'(': depth=0, don't keep. depth=1.
+'(': depth=1>0, keep. result=['(']. depth=2.
+')': depth=1. 1>0, keep. result=['(', ')']. depth=1... wait I went wrong.
+```
 
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
+Let me redo. Depth starts 0.
 
-**Before coding, it's worth asking:**
+```
+'(': before increment, depth=0. 0 > 0? No, skip. depth becomes 1.
+'(': before increment, depth=1. 1 > 0? Yes, keep '('. depth becomes 2.
+')': depth becomes 1. 1 > 0? Yes, keep ')'.
+'(': before increment, depth=1. 1 > 0? Yes, keep '('. depth becomes 2.
+')': depth becomes 1. 1 > 0? Yes, keep ')'.
+')': depth becomes 0. 0 > 0? No, skip.
+'(': before increment, depth=0. Skip. depth becomes 1.
+'(': before increment, depth=1. Keep '('. depth becomes 2.
+')': depth becomes 1. Keep ')'.
+')': depth becomes 0. Skip.
+```
 
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
+Result: `(` `)` `(` `)` `(` `)` = `"()()()"`. 
 
-Get those clear in your head, and the code almost writes itself.
+Wait, expected was `()()()` but my decomposition at Step 1 had primitives `(()())` → `()()` and `(())` → `()`. Concatenating: `()()` + `()` = `()()()`. ✓
 
+So output is `"()()()"`. Matches.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 6: Do We Need an Explicit Stack?
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+We're tracking depth (a single integer) — technically a **counter**, not a stack. But conceptually, depth tracks the number of unmatched opens on the stack. Since we only care about the depth count, we don't need to store the actual stack contents.
 
-s='(()())(())'. Result '()()()'.
+In this problem, "the stack" degenerates to a counter. That's fine — it's still the stack pattern applied.
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+More generally, when the only stack info you need is "how many items are on the stack?", a counter suffices.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 7: Name It
 
-Complexity isn't magic — it's just counting the work.
+**Depth tracking for parenthesis nesting** — a specialized stack pattern. Related:
+- Valid Parentheses (explicit stack for matching).
+- Max Nesting Depth.
+- Minimum Add to Make Parentheses Valid.
+- Score of Parentheses.
 
-Time: O(n). Space: O(n).
+The trick "counter, not stack" works when only nesting depth matters.
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+----------------------------------------
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+## Step 8: Complexity
 
+Time: **O(n)** — single pass.
+Space: **O(n)** for the result string. O(1) auxiliary beyond that.
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
-
 ```cpp
 string removeOuterParentheses(string s) {
-    string r; int d = 0;
+    string result;
+    int depth = 0;
     for (char c : s) {
-        if (c == '(' && d++ > 0) r += c;
-        else if (c == ')' && --d > 0) r += c;
+        if (c == '(') {
+            if (depth > 0) result += c;
+            depth++;
+        } else {
+            depth--;
+            if (depth > 0) result += c;
+        }
     }
-    return r;
+    return result;
 }
 ```
 
-A few notes about the style:
+Eight lines. The key is getting the "depth check vs depth update" sequence right:
+- For '(': check first, then increment.
+- For ')': decrement first, then check.
 
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+That asymmetry correctly treats the outermost boundaries.
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Balance types (multi-bracket).
-- Depth-k outer removal.
-- Parse primitives list.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Count the primitives (don't construct result).** Count the number of times depth reaches 0 at a ')'.
+- **Total length of primitives (useless since it equals len(s) / 2 pairs, but conceptually interesting).** Same counter approach.
+- **Extract each primitive separately into a list.** Track the start of each primitive (when depth goes 0 → 1).
+- **Malformed input.** Add validity checks (depth never negative, ends at 0).
+- **Alternative: actually use a stack (not just counter).** Push '(' positions; on matching ')', check stack size to decide outermost-ness.
+- **Multiple bracket types.** More complex nesting; requires per-type tracking.

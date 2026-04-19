@@ -4,178 +4,225 @@
 https://leetcode.com/problems/binary-tree-preorder-traversal/
 
 **Topic:**
-Trees Binary Trees
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Root-left-right traversal.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> Tree 1,_,2,3. Preorder: 1,2,3.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Trees / Binary Trees
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: What's Preorder?
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Given a binary tree, return its **preorder** traversal: visit each node in the order **Root → Left subtree → Right subtree**.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Example:
+```
+    1
+     \
+      2
+     /
+    3
+```
 
-So ask yourself:
+Preorder visits: 1 (root), then left subtree (empty), then right subtree (the (2)-rooted subtree).
+For (2)-rooted subtree: visit 2, then left subtree (the (3)-rooted subtree), then right (empty).
+For (3)-rooted subtree: visit 3.
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Root-left-right traversal.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
+Order: [1, 2, 3].
 
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
+Another:
+```
+     F
+    / \
+   B   G
+  / \   \
+ A   D   I
+    / \  /
+   C   E H
+```
 
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-A natural first instinct is to traverse the tree many times — once per query, once per property. That works, but it usually does too much. A single recursive traversal can often compute everything post-order with the child results combined at each node.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Preorder gives the root before children — suitable for tree copy/serialize.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Preorder: F, B, A, D, C, E, G, I, H.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: Recursive — The Natural Expression
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+The definition *is* the algorithm:
 
-**The concept:** Root-left-right traversal.
+```
+def preorder(node):
+    if node is null: return
+    visit(node)          # Root
+    preorder(node.left)  # Left
+    preorder(node.right) # Right
+```
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
+Translates directly from the definition. O(n) time, O(h) stack space where h is tree height.
 
-**Pattern recognition cue:**
+For the first example:
+- preorder(1): visit 1. preorder(1.left = null). preorder(1.right = 2).
+  - preorder(2): visit 2. preorder(2.left = 3).
+    - preorder(3): visit 3. null left, null right.
+  - preorder(2.right = null).
 
-**Whenever data is hierarchical or you can compute something per-subtree → think Binary Tree DFS.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-Push current value, recurse left, recurse right.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
+Order of visits: 1, 2, 3. ✓
 
 ----------------------------------------
 
-## Step 6: Final Approach
+## Step 3: Iterative — Simulate the Call Stack
 
-Now let's crystallize everything we've learned into a clean algorithm.
+For very deep trees (skewed to a chain), recursion might blow the stack. The iterative version uses an explicit stack:
 
-Recursion or iterative stack pushing right first.
+```
+def preorder(root):
+    if root is null: return []
+    stack = [root]
+    result = []
+    while stack not empty:
+        node = stack.pop()
+        visit(node)
+        if node.right: stack.push(node.right)
+        if node.left: stack.push(node.left)
+    return result
+```
 
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
+Key detail: push **right first, then left**. When we pop, we get left first (because the stack is LIFO). This preserves the preorder "Root → Left → Right" visit order.
 
-**Before coding, it's worth asking:**
+Trace for the tree `1 \ 2 / 3`:
+```
+stack = [1].
+Pop 1. Visit 1. No right child. Push left (null? In this tree, 1.left = null so don't push). Push right (2). stack = [2].
 
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
+Wait, 1.left is null and 1.right is 2. Push right = 2.
+Order: push right first? Actually per my code: "if node.right: stack.push(node.right)" then "if node.left: stack.push(node.left)". So we'd push 2 first, then... but left is null. stack = [2].
 
-Get those clear in your head, and the code almost writes itself.
+Pop 2. Visit 2. Push right (null). Push left (3). stack = [3].
+Pop 3. Visit 3. Null children. stack = [].
+```
 
+Order: 1, 2, 3. ✓
+
+The "right before left" push order is the crucial trick. Getting it backward gives you postorder reversed or a mangled order.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 4: Morris Preorder — O(1) Space
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+There's a technique called **Morris traversal** that achieves O(n) time with O(1) extra space by temporarily modifying the tree (using null right pointers as "threads"). It's clever but more complex.
 
-Tree 1,_,2,3. Preorder: 1,2,3.
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+For interviews, recursive and iterative-with-stack are the standard answers. Morris is a "flex" — mention it exists, implement only if asked.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 5: Trace Both Versions on a Bigger Tree
 
-Complexity isn't magic — it's just counting the work.
+Tree:
+```
+     1
+    / \
+   2   3
+  / \
+ 4   5
+```
 
-Time: O(n). Space: O(h).
+**Recursive:**
+- preorder(1): visit 1. preorder(2).
+  - preorder(2): visit 2. preorder(4).
+    - preorder(4): visit 4. (null children)
+  - preorder(5).
+    - preorder(5): visit 5.
+- preorder(3): visit 3. (null children)
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+Order: 1, 2, 4, 5, 3.
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+**Iterative:**
+```
+stack=[1].
+Pop 1. Visit. Push right (3), left (2). stack=[3, 2].
+Pop 2. Visit. Push right (5), left (4). stack=[3, 5, 4].
+Pop 4. Visit. No children. stack=[3, 5].
+Pop 5. Visit. No children. stack=[3].
+Pop 3. Visit. No children.
+```
 
+Order: 1, 2, 4, 5, 3. ✓ Same.
+
+----------------------------------------
+
+## Step 6: Why Preorder Is Useful
+
+- **Serialization:** preorder + null markers uniquely encode the tree structure.
+- **Expression tree evaluation:** prefix notation (Polish notation) for math.
+- **Tree copying:** build a copy by visiting in preorder and cloning.
+- **Directory listing:** "folder first, then contents" matches preorder.
+
+When to pick preorder vs inorder vs postorder? Depends on when the parent info matters:
+- **Preorder:** parent info available *before* descending into children.
+- **Inorder:** parent info available *between* left and right child traversals.
+- **Postorder:** parent info available *after* both children processed.
+
+For recursive problems that aggregate from children (heights, sums), postorder fits. For problems that propagate info down (depths, paths), preorder fits.
+
+----------------------------------------
+
+## Step 7: Name It
+
+**Preorder (Root-Left-Right) DFS traversal.** One of the three classic binary tree traversals; learn all three.
+
+----------------------------------------
+
+## Step 8: Complexity
+
+Time: **O(n)** — visit each node once.
+Space: **O(h)** for recursion or stack. O(1) for Morris.
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+**Recursive:**
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-struct TreeNode { int val; TreeNode *left,*right; };
-
-void pr(TreeNode* r, vector<int>& v) { if (!r) return; v.push_back(r->val); pr(r->left,v); pr(r->right,v); }
-vector<int> preorderTraversal(TreeNode* root) { vector<int> v; pr(root, v); return v; }
+class Solution {
+    void preorder(TreeNode* node, vector<int>& result) {
+        if (!node) return;
+        result.push_back(node->val);
+        preorder(node->left, result);
+        preorder(node->right, result);
+    }
+public:
+    vector<int> preorderTraversal(TreeNode* root) {
+        vector<int> result;
+        preorder(root, result);
+        return result;
+    }
+};
 ```
 
-A few notes about the style:
+**Iterative:**
 
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
+```cpp
+vector<int> preorderTraversal(TreeNode* root) {
+    vector<int> result;
+    if (!root) return result;
+    stack<TreeNode*> stk;
+    stk.push(root);
+    while (!stk.empty()) {
+        TreeNode* node = stk.top(); stk.pop();
+        result.push_back(node->val);
+        if (node->right) stk.push(node->right);
+        if (node->left) stk.push(node->left);
+    }
+    return result;
+}
+```
 
+Both are clean. Recursive is shortest; iterative is stack-safe.
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Iterative preorder with stack.
-- Morris preorder.
-- Threaded binary tree traversals.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Iterative inorder traversal.** Different structure — push left spine, pop to visit, then move right.
+- **Iterative postorder traversal.** Trickier — two-stack approach or track last-visited.
+- **Morris traversal.** Thread right pointers for O(1) space.
+- **N-ary tree preorder.** Similar recursion; loop over children instead of two calls.
+- **Concurrent traversal.** Each thread picks up from where the previous left off; state is pointer + stack.
+- **Serialize/deserialize a tree.** Use preorder with null markers.

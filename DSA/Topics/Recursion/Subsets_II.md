@@ -6,185 +6,188 @@ https://leetcode.com/problems/subsets-ii/
 **Topic:**
 Recursion
 
+----------------------------------------
+
+## Step 1: Problem Setup
+
+Given an integer array `nums` that **may contain duplicates**, return all possible subsets (the power set) **without duplicates**.
+
+Example: `nums = [1, 2, 2]`.
+
+All 2^3 = 8 subsets if we considered positions:
+- {} (empty)
+- {1}, {2 @ pos 1}, {2 @ pos 2}
+- {1, 2 @ pos 1}, {1, 2 @ pos 2}, {2, 2}
+- {1, 2, 2}
+
+Ignoring position (subsets are unordered multisets):
+- {}, {1}, {2}, {1, 2}, {2, 2}, {1, 2, 2}
+
+6 unique subsets. Return them.
 
 ----------------------------------------
 
-## Step 1: Understand the Problem (Beginner Friendly)
+## Step 2: Subsets I Recap
 
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
+For distinct inputs, standard backtracking produces all 2^n subsets:
 
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
+```
+def backtrack(start, current):
+    result.append(current.copy())
+    for i in start..n-1:
+        current.append(nums[i])
+        backtrack(i + 1, current)
+        current.pop()
+```
 
-**In plain words:** Sort + skip duplicates at same depth.
+For `[1, 2, 3]`, this produces {}, {1}, {1,2}, {1,2,3}, {1,3}, {2}, {2,3}, {3}. 8 subsets.
 
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> nums=[1,2,2] → [[],[1],[1,2],[1,2,2],[2],[2,2]].
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
-
-----------------------------------------
-
-## Step 2: Break Down the Problem
-
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
-
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
-
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Sort + skip duplicates at same depth.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
+But for `[1, 2, 2]`, this would produce duplicates: picking 2 @ pos 1 alone and 2 @ pos 2 alone both yield subset {2}.
 
 ----------------------------------------
 
-## Step 3: Build Intuition (VERY IMPORTANT)
+## Step 3: Skip Sibling Duplicates
 
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
+**Same trick as Permutations II / Combination Sum II:** sort, then at each level skip indices that are duplicates of their previous sibling.
 
-Recursion is the natural language of branching problems. Your first recursive attempt is often *almost* right — the adjustments needed are usually (a) a correct base case and (b) careful state-undo when backtracking.
+Specifically: within a single level (one recursion depth, one iteration of the for-loop), skip `i` if `i > start` and `nums[i] == nums[i-1]`.
 
-So how do we get smarter? Let's build the correct intuition step by step.
+Why "within a level, not globally"? Because across different recursion depths, duplicates might be legitimately chosen (e.g., we DO want {2, 2} in the output — that uses both 2s). Skipping globally would over-prune.
 
-After sorting, duplicates appear consecutively. Skip them after the first to avoid duplicate subsets.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+The condition `i > start` is the key: we allow the first occurrence of a value at each level; we skip subsequent same-valued indices at the same level.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 4: Algorithm
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+```
+sort(nums)
 
-**The concept:** Sort + skip duplicates at same depth.
+def backtrack(start, current):
+    result.append(current.copy())
+    for i in start..n-1:
+        if i > start and nums[i] == nums[i-1]: continue
+        current.append(nums[i])
+        backtrack(i + 1, current)
+        current.pop()
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever a problem decomposes into similar sub-problems → think Recursion. Add memo if subproblems repeat.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-Sort. dfs(start): record current. For i=start..n-1: if i>start and a[i]==a[i-1] skip. Push, recurse, pop.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
+backtrack(0, [])
+return result
+```
 
 ----------------------------------------
 
-## Step 6: Final Approach
+## Step 5: Trace on `[1, 2, 2]`
 
-Now let's crystallize everything we've learned into a clean algorithm.
+Sort: [1, 2, 2]. (Already sorted.)
 
-Sorted subset backtracking.
+```
+backtrack(start=0, current=[]):
+  RECORD [].
+  i=0 (value 1):
+    current=[1].
+    backtrack(1, [1]):
+      RECORD [1].
+      i=1 (value 2):
+        current=[1, 2].
+        backtrack(2, [1, 2]):
+          RECORD [1, 2].
+          i=2 (value 2):
+            current=[1, 2, 2].
+            backtrack(3, [1, 2, 2]):
+              RECORD [1, 2, 2].
+              (no more i in range).
+            undo.
+        undo.
+      i=2 (value 2): i > start=1 and nums[2]==nums[1]. SKIP.
+    undo.
+  i=1 (value 2):
+    current=[2].
+    backtrack(2, [2]):
+      RECORD [2].
+      i=2 (value 2):
+        current=[2, 2].
+        backtrack(3, [2, 2]):
+          RECORD [2, 2].
+        undo.
+    undo.
+  i=2 (value 2): i > start=0 and nums[2]==nums[1]. SKIP.
+```
 
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
+Recorded: [], [1], [1, 2], [1, 2, 2], [2], [2, 2]. Six subsets. ✓
 
-**Before coding, it's worth asking:**
+Notice the skip fires twice: at the top-level (skipping to re-starting a subset with just the "second" 2), and inside the subtree rooted at picking the first 2 (skipping to re-pick a pair of 2s starting from the second 2).
 
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+Both skips correctly prevent duplicate outputs.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 6: Why the Rule Works
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+**Claim:** "skip i if i > start and nums[i] == nums[i-1]" produces each unique subset exactly once.
 
-nums=[1,2,2] → [[],[1],[1,2],[1,2,2],[2],[2,2]].
+**Proof sketch:** For any unique subset S, order its elements by the canonical sorted order. Each unique subset corresponds to exactly **one canonical index path**: pick elements in order of increasing index. When duplicates exist in `nums`, the canonical path picks the **first available** duplicate. The skip rule enforces this canonicalization: we never start a subset with a duplicate of a sibling at the same level.
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+So each unique subset is produced by exactly one backtracking path. No duplicates.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 7: Name It
 
-Complexity isn't magic — it's just counting the work.
+**Backtracking with sibling-duplicate skipping for unique subsets.** Same pattern applied across:
+- Combination Sum II.
+- Permutations II.
+- Palindrome Partitioning.
+- N-Queens variants.
 
-Time: O(2^n). Space: O(n).
+The canonical form: sort, then skip repeated values at the same recursion level.
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+----------------------------------------
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+## Step 8: Complexity
 
+Time: up to 2^n subsets, each of average length n/2 to copy. **O(n · 2^n)** worst case.
+Space: **O(n)** for recursion + O(output size).
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
-
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-void dfs(vector<int>& a, int s, vector<int>& cur, vector<vector<int>>& res) {
-    res.push_back(cur);
-    for (int i = s; i < (int)a.size(); ++i) {
-        if (i > s && a[i] == a[i-1]) continue;
-        cur.push_back(a[i]); dfs(a, i+1, cur, res); cur.pop_back();
+class Solution {
+    vector<vector<int>> result;
+    vector<int> current;
+    vector<int> nums;
+
+    void backtrack(int start) {
+        result.push_back(current);
+        for (int i = start; i < (int)nums.size(); ++i) {
+            if (i > start && nums[i] == nums[i-1]) continue;
+            current.push_back(nums[i]);
+            backtrack(i + 1);
+            current.pop_back();
+        }
     }
-}
-vector<vector<int>> subsetsWithDup(vector<int>& a) {
-    sort(a.begin(), a.end());
-    vector<vector<int>> res; vector<int> cur;
-    dfs(a, 0, cur, res);
-    return res;
-}
+
+public:
+    vector<vector<int>> subsetsWithDup(vector<int>& input) {
+        nums = input;
+        sort(nums.begin(), nums.end());
+        backtrack(0);
+        return result;
+    }
+};
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Ten lines. The sort + skip-sibling-duplicates is the dedup mechanism.
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Count distinct subsets.
-- Fixed-size subsets with duplicates.
-- Lexicographic order.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Subsets II but return only subsets of size k.** Add a size check before recording.
+- **Count unique subsets without listing.** Use formula: product over each distinct value of (count+1). For [1, 2, 2]: (1+1)(2+1) = 6. ✓
+- **Subsets of a multiset with a sum constraint.** Add a sum parameter to the recursion.
+- **Iterative version.** Use the "for each element, double the current set" trick, but dedupe for each new duplicate.
+- **Bitmask enumeration.** For small n (≤ 20), enumerate 2^n masks, deduplicate at the end.
+- **Why is the skip condition `i > start` (not `i > 0`)?** Because we want to allow the same value to appear at different recursion depths; we only skip "same level" duplicates, which is captured by comparing `i` to `start`.

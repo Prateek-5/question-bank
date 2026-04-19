@@ -6,173 +6,127 @@ https://leetcode.com/problems/single-number/
 **Topic:**
 Bit Manipulation
 
+----------------------------------------
+
+## Step 1: Understand the Setup
+
+Given a non-empty integer array where every element appears **twice**, except for **one** element which appears just once — find that unique element. The solution should run in linear time and use constant extra memory.
+
+Example: `[4, 1, 2, 1, 2]` → answer is `4` (1 and 2 each appear twice; 4 once).
+
+Two constraints make this interesting: O(n) time and O(1) space. If we could use O(n) space, a hashmap would solve it instantly. We can't. So we need to be clever.
 
 ----------------------------------------
 
-## Step 1: Understand the Problem (Beginner Friendly)
+## Step 2: First Ideas (Before Cleverness)
 
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
+**Sorting approach:** sort the array, then pairs of duplicates will sit next to each other. Walk the array and find the position where a number doesn't equal its neighbor. Works. O(n log n) time, O(1) space (or O(n) if the sort isn't in-place). Misses the linear-time requirement.
 
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
+**Hashmap approach:** count occurrences, return the one with count 1. O(n) time, O(n) space. Misses the constant-space requirement.
 
-**In plain words:** XOR accumulation cancels pairs.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> nums=[2,2,1] → 2^2^1=1.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+So both obvious approaches fail one constraint. We need a fundamentally different trick.
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 3: Hunt for an Invariant
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+What property of pairs would let me "cancel them out" as I sweep through the array? I need an operation `op` such that `op(x, x) = identity` — where the identity doesn't affect further combinations.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Subtraction: `x - x = 0`. But `0 + y != y + y` in a useful sense. Doesn't chain well.
 
-So ask yourself:
+Addition: `x + x = 2x`, not zero. Also tricky.
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: XOR accumulation cancels pairs.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
+XOR: `x XOR x = 0`. And `0 XOR y = y`. That's promising. Plus, XOR is commutative and associative, so the order of combination doesn't matter.
 
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
+So if I XOR everything together, every pair cancels (because `x XOR x = 0`), and what remains is `0 XOR unique = unique`.
 
+This is the insight. Let me verify on the example.
 
-----------------------------------------
+`4 XOR 1 XOR 2 XOR 1 XOR 2`
 
-## Step 3: Build Intuition (VERY IMPORTANT)
+Rearrange (using commutativity): `4 XOR (1 XOR 1) XOR (2 XOR 2) = 4 XOR 0 XOR 0 = 4`.
 
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-An ordinary arithmetic or counting approach can work, but bit-level manipulation often gives constant-time elegance. Watch for parity, XOR cancellation, and bitmask enumeration.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-x XOR x = 0 and XOR is commutative — paired values vanish; only the lone value survives.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Answer: 4. ✓
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 4: Why XOR Is the Right Operation
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+Let me be precise about XOR's properties:
 
-**The concept:** XOR accumulation cancels pairs.
+1. **Associative:** `(a XOR b) XOR c = a XOR (b XOR c)`.
+2. **Commutative:** `a XOR b = b XOR a`.
+3. **Self-inverse:** `a XOR a = 0`.
+4. **Identity:** `a XOR 0 = a`.
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
+Because XOR is commutative and associative, XORing all `n` numbers is equivalent to XORing them in *any* order. I can rearrange so all the duplicates are adjacent, cancel them to 0, and the remaining singleton is the final result.
 
-**Pattern recognition cue:**
-
-**Whenever you see XOR, powers of two, subsets of ≤ 20 items → think Bitmask / Bit Tricks.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+No other common arithmetic operation has all four properties. Addition is commutative and associative, but `a + a ≠ 0`. Multiplication is too. Subtraction isn't associative. XOR is uniquely suited here.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-XOR all elements; result is the single number.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-One pass XOR.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
-
-----------------------------------------
-
-## Step 7: Dry Run (Detailed)
-
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
-
-nums=[2,2,1] → 2^2^1=1.
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
-
-----------------------------------------
-
-## Step 8: Time and Space Complexity
-
-Complexity isn't magic — it's just counting the work.
-
-Time: O(n). Space: O(1).
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
-
-----------------------------------------
-
-## Step 9: C++ Implementation
-
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+## Step 5: The Algorithm in One Line
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-int singleNumber(vector<int>& a) { int x = 0; for (int v : a) x ^= v; return x; }
+int result = 0;
+for (int x : nums) result ^= x;
+return result;
 ```
 
-A few notes about the style:
+Three lines of code. One pass. No extra data structures.
 
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Reading it: `result` accumulates the running XOR. Every paired element contributes nothing (its two appearances cancel). The unique element contributes its value once.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 6: Trace on a Slightly Longer Example
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
+`[2, 2, 1, 4, 4, 3, 3]` → expected unique = 1.
 
-- Single Number II (others thrice).
-- Single Number III (two singletons).
-- Missing number.
+```
+result = 0
+After 2: 0 ^ 2 = 2
+After 2: 2 ^ 2 = 0
+After 1: 0 ^ 1 = 1
+After 4: 1 ^ 4 = 5
+After 4: 5 ^ 4 = 1
+After 3: 1 ^ 3 = 2
+After 3: 2 ^ 3 = 1
+```
 
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
+Final result: 1. ✓
 
----
+Notice how the intermediate values bounce around — they don't represent anything meaningful. Only the *final* result is the answer. That's OK; the invariant (XOR of processed elements so far) only reveals the unique value once everything's been XOR'd in.
 
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+----------------------------------------
+
+## Step 7: Why O(n) Time and O(1) Space
+
+Time: one pass of XORs, each O(1). **O(n)**.
+Space: a single accumulator integer. **O(1)**.
+
+Exactly what the problem asked for, and the XOR trick is what makes it possible.
+
+----------------------------------------
+
+## Step 8: C++ Implementation
+
+```cpp
+int singleNumber(vector<int>& nums) {
+    int result = 0;
+    for (int x : nums) result ^= x;
+    return result;
+}
+```
+
+That's the entire solution.
+
+----------------------------------------
+
+## Step 9: Follow-up Questions
+
+- **Single Number II:** every element appears three times except one (which appears once). XOR alone doesn't work because `x XOR x XOR x = x`. Solution: bit-count each bit mod 3, or use a state machine with two accumulators.
+- **Single Number III:** two unique elements, rest appear twice. First XOR everything → you get `a XOR b` where `a, b` are the two unique. Find any bit where `a XOR b` is 1 (they differ there). Partition the array by that bit; XOR each partition separately — one gives `a`, the other gives `b`.
+- **Missing number in `[0, n]`.** Similar XOR idea: XOR all numbers 0 through n, XOR all array elements, XOR the two — the missing number pops out.
+- **Find the element appearing more than n/2 times (majority).** Boyer-Moore voting — a similar O(n) time, O(1) space trick, but with a counter-based approach rather than XOR.
+- **If the array is streaming (you can't re-read).** XOR still works — accumulate on the fly.

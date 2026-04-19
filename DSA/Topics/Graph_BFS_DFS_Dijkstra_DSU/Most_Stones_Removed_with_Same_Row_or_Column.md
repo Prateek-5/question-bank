@@ -4,189 +4,196 @@
 https://leetcode.com/problems/most-stones-removed-with-same-row-or-column/
 
 **Topic:**
-Graph BFS DFS Dijkstra DSU
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** DSU grouping stones that share a row or column; answer is n - components.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> stones = [[0,0],[0,1],[1,0],[1,2],[2,1],[2,2]]. All in one component → answer = 6 - 1 = 5.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Graph (BFS / DFS / Dijkstra / DSU)
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Read the Problem
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Stones are placed on a 2D plane. You can remove a stone if it **shares a row or column with at least one other stone** that's still on the plane.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Return the **maximum number of stones** you can remove.
 
-So ask yourself:
+Example: `stones = [[0,0], [0,1], [1,0], [1,2], [2,1], [2,2]]`.
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: DSU grouping stones that share a row or column; answer is n - components.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
+Six stones. Let's see which we can remove:
+- (0, 0) shares row with (0, 1). Remove it.
+- (2, 2) shares row with (2, 1). Remove it.
+- (0, 1) shares column with (2, 1). Remove it.
+- (1, 0) shares row with (1, 2). Remove it.
+- (1, 2) shares column with (2, 2)? But (2, 2) was removed. Check against remaining: (2, 1). Same column? col 2 vs col 1. No. Same row? row 1 vs row 2. No. Can't remove unless we remove in different order.
 
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
+Let's try:
+- (1, 2) shares col with (0, 2)? Not in list. Shares row with (1, 0). Remove (1, 2).
+- (2, 1) shares col with (0, 1). Remove.
+- (0, 0), (0, 1), (1, 0), (2, 2) remain.
+- (0, 0) and (0, 1): same row. Remove (0, 0).
+- (0, 1), (1, 0), (2, 2): no pair shares row/col... wait, (0, 1) and (2, 1)? (2, 1) is already removed. (1, 0) and (0, 0)? (0, 0) removed. 
 
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-A tempting first thought is to try every possible path from the start to the goal. The problem is that graphs have exponentially many paths. We need a traversal that visits each node at most a few times — that's exactly what BFS, DFS, and their weighted cousins give us.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Stones in the same row/column can all be removed except one (you need one stone remaining as the last). So within each connected group (via shared row/column) you remove size-1 stones. Total = n - #components.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+This is getting fiddly. The answer is 5. Expected: we remove 5 stones, leaving 1.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: The Big-Picture Claim
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+**Claim:** the maximum number of removable stones = total stones - number of **connected components**.
 
-**The concept:** DSU grouping stones that share a row or column; answer is n - components.
+Where "connected" means: two stones are in the same component iff they share a row OR column (directly or transitively).
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever nodes have relationships or connectivity matters → think Graph. 'Shortest path' without weights → BFS. With weights → Dijkstra. Just connectivity → DSU.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+Why? In each component of k stones, we can always remove k - 1 of them (leaving just 1). Total removals = n - number_of_components.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 3: Proving the Claim
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+**Upper bound:** In each component, at least one stone must remain (once we've removed everything but one, the last one has nothing to share with). So at most (size of component) − 1 removals per component.
 
-Union stones that share a row or column (map each row/column index to its first stone). Count DSU components. Answer = n - components.
+**Lower bound:** For each component, we can achieve (size − 1) removals. Take any spanning tree of the component's "row/column-shared" graph. Remove leaves of the tree (always valid because a leaf still has its neighbor). Continue until one stone remains.
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
+More concretely: pick any stone as a "keep", then repeatedly remove stones connected to already-present stones (each removal maintains the connectivity with the kept stone). Since every stone in the component is reachable from the kept one, we can order removals so each remains valid.
 
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-DSU over stone indices with row/column index mapping.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+Hence, (component size) − 1 removals per component. Summing: n − components.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 4: Counting Components with Union-Find
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+We need to group stones by "share row or column." Two stones share a row ↔ they have the same row coordinate. Same for column.
 
-stones = [[0,0],[0,1],[1,0],[1,2],[2,1],[2,2]]. All in one component → answer = 6 - 1 = 5.
+Use **Union-Find** with a trick: for each stone (r, c), we union it with:
+- All other stones in row r.
+- All other stones in column c.
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+But iterating for each stone over all other stones is O(n²). Instead, union the stone's (r, c) with a virtual node representing "row r" and another for "column c." All stones in row r get unioned with the same "row r" virtual node, so they end up in the same component.
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
+**Encoding:**
+- Stones labeled 0..n-1 directly.
+- Virtual row node for row r: labeled `n + r`.
+- Virtual column node for col c: labeled `n + maxRow + c` (offset to avoid collisions).
 
+Or more simply: encode row r as `row_r` (some unique ID) and column c as `col_c`. In a hashmap DSU, these can be strings or offsets.
+
+Each stone i at (r, c): `union(i, row_r)` and `union(i, col_c)`.
+
+At the end, count distinct roots among stones 0..n-1. That's the component count. Answer = n - components.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 5: A Cleaner Encoding
 
-Complexity isn't magic — it's just counting the work.
+Since rows and columns are ≤ 10^4, we can offset:
+- Union(stone_index, row + 0).
+- Union(stone_index, col + 10001). (Offset by something bigger than max row.)
 
-Time: O(n α). Space: O(n).
+Wait, stone_index is in [0, n). If n ≤ 1000 and rows ≤ 10000, we have collisions. Let me be more careful.
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+Simplest approach: don't union stones with virtual nodes at all. Instead, maintain two hashmaps `rowToFirstStone` and `colToFirstStone`. For each stone i at (r, c):
+- If rowToFirstStone has r, union(i, rowToFirstStone[r]). Else, set rowToFirstStone[r] = i.
+- Same for col.
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+This way, all stones in row r get unioned with the first stone in row r, transitively connecting them all.
 
+```
+DSU over stones 0..n-1.
+rowMap = {}, colMap = {}
+
+for i in 0..n-1:
+    (r, c) = stones[i]
+    if r in rowMap: union(i, rowMap[r])
+    else: rowMap[r] = i
+    if c in colMap: union(i, colMap[c])
+    else: colMap[c] = i
+
+components = count of distinct find(i) for i in 0..n-1
+return n - components
+```
+
+Clean, no virtual nodes needed.
+
+----------------------------------------
+
+## Step 6: Trace
+
+`stones = [[0,0], [0,1], [1,0], [1,2], [2,1], [2,2]]`.
+
+```
+DSU initial: each stone its own component (6 components).
+rowMap = {}, colMap = {}.
+
+i=0 (0, 0): row 0 not in rowMap, rowMap[0]=0. col 0 not in colMap, colMap[0]=0.
+i=1 (0, 1): rowMap[0]=0. union(1, 0). Now {0, 1} one component. colMap[1]=1.
+i=2 (1, 0): rowMap[1]=2. colMap[0]=0. union(2, 0). Now {0, 1, 2} one component.
+i=3 (1, 2): rowMap[1]=2. union(3, 2). Now {0, 1, 2, 3} one component. colMap[2]=3.
+i=4 (2, 1): rowMap[2]=4. colMap[1]=1. union(4, 1). Now {0, 1, 2, 3, 4} one component.
+i=5 (2, 2): rowMap[2]=4. union(5, 4). Now {0, 1, 2, 3, 4, 5} one component. colMap[2]=3. union(5, 3). Still same component.
+
+Components = 1.
+Answer = 6 - 1 = 5.
+```
+
+✓ Matches expected.
+
+----------------------------------------
+
+## Step 7: Name It
+
+**Union-Find on a connectivity-by-shared-attribute graph.** We treat "sharing a row" and "sharing a column" as separate types of edges, but DSU doesn't care about edge types — it just merges components.
+
+The clever bit: using a **hashmap to map each row/column to its first-seen stone** avoids O(n²) pairwise unions.
+
+The general formula "n − components = max removable (or equivalent)" is a common shape in DSU problems where each component's contribution is one less than its size.
+
+----------------------------------------
+
+## Step 8: Complexity
+
+Time: **O(n α(n))** — n unions, each α(n) amortized.
+Space: **O(n)** for DSU + row/col maps.
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
-
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-struct DSU { vector<int> p; DSU(int n):p(n){iota(p.begin(),p.end(),0);} int f(int x){return p[x]==x?x:p[x]=f(p[x]);} void u(int a,int b){p[f(a)]=f(b);} };
-
-int removeStones(vector<vector<int>>& s) {
-    int n = s.size();
-    DSU d(n);
-    unordered_map<int,int> rowMap, colMap;
-    for (int i = 0; i < n; ++i) {
-        int r = s[i][0], c = s[i][1];
-        if (rowMap.count(r)) d.u(i, rowMap[r]); else rowMap[r] = i;
-        if (colMap.count(c)) d.u(i, colMap[c]); else colMap[c] = i;
+class DSU {
+    vector<int> parent;
+public:
+    DSU(int n) : parent(n) { iota(parent.begin(), parent.end(), 0); }
+    int find(int x) {
+        return parent[x] == x ? x : parent[x] = find(parent[x]);
     }
-    int comps = 0;
-    for (int i = 0; i < n; ++i) if (d.f(i) == i) comps++;
-    return n - comps;
+    void unite(int a, int b) {
+        int ra = find(a), rb = find(b);
+        if (ra != rb) parent[ra] = rb;
+    }
+};
+
+int removeStones(vector<vector<int>>& stones) {
+    int n = stones.size();
+    DSU dsu(n);
+    unordered_map<int, int> rowMap, colMap;
+
+    for (int i = 0; i < n; ++i) {
+        int r = stones[i][0], c = stones[i][1];
+        if (rowMap.count(r)) dsu.unite(i, rowMap[r]);
+        else rowMap[r] = i;
+        if (colMap.count(c)) dsu.unite(i, colMap[c]);
+        else colMap[c] = i;
+    }
+
+    unordered_set<int> roots;
+    for (int i = 0; i < n; ++i) roots.insert(dsu.find(i));
+    return n - roots.size();
 }
 ```
-
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Maximum stones removed given removal constraints.
-- Weighted stones.
-- Queries on dynamic stone addition/removal.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Find an optimal order of removal.** More involved — construct spanning trees of each component, remove in post-order (leaves first).
+- **Stones in 3D or higher.** Extend: share any coordinate → connected.
+- **Maximum stones kept (instead of removed).** The complement: answer is the number of components.
+- **Streaming stones.** DSU handles this online — each new stone adds at most two unions.
+- **Why count components via `n - components`?** Each component contributes (size − 1) removals. Sum is n − (number of components).
+- **DFS/BFS alternative.** Build the graph explicitly (stones as nodes, row/col-share as edges), run connected-component count. Works but more verbose.

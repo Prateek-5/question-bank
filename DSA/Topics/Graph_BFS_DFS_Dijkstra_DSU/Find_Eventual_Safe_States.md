@@ -4,193 +4,232 @@
 https://leetcode.com/problems/find-eventual-safe-states/
 
 **Topic:**
-Graph BFS DFS Dijkstra DSU
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Topological sort on the reverse graph (or DFS with three-color marking).
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> graph=[[1,2],[2,3],[5],[0],[5],[],[]] → safes are 2,4,5,6. Terminal 5,6 initially, then 2 (points only to 5), then 4 (points to 5).
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Graph (BFS / DFS / Dijkstra / DSU)
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: What Makes a Node "Safe"?
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+You have a directed graph. From any node, you can start walking along outgoing edges. A **terminal** node has no outgoing edges — once you reach one, your walk ends.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+A node is called **safe** if **every possible walk** from it eventually reaches a terminal. Otherwise, some walk from it can get stuck in an infinite loop (a cycle).
 
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Topological sort on the reverse graph (or DFS with three-color marking).
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
+Return the list of safe nodes, sorted ascending.
 
 ----------------------------------------
 
-## Step 3: Build Intuition (VERY IMPORTANT)
+## Step 2: Play With a Small Example
 
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
+Graph (directed edges):
+- 0 → 1, 0 → 2
+- 1 → 2, 1 → 3
+- 2 → 5
+- 3 → 0
+- 4 → 5
+- 5: terminal
+- 6: terminal
 
-A tempting first thought is to try every possible path from the start to the goal. The problem is that graphs have exponentially many paths. We need a traversal that visits each node at most a few times — that's exactly what BFS, DFS, and their weighted cousins give us.
+From node 0:
+- Path 0 → 1 → 3 → 0 → 1 → 3 → ... cycle. Not all walks terminate. So 0 is **not safe**.
 
-So how do we get smarter? Let's build the correct intuition step by step.
+From node 4:
+- Only edge: 4 → 5 (terminal). All walks from 4 reach 5. **Safe**.
 
-A safe node leads only to terminal (no outgoing) or other safe nodes. Reverse edges and BFS from terminal nodes; any node reached is safe. Equivalently, nodes not on any cycle.
+From node 2:
+- Only edge: 2 → 5 (terminal). **Safe**.
 
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
+From node 1:
+- Edge 1 → 2 (safe, leads to terminal). Edge 1 → 3.
+- 1 → 3 → 0 → ... cycle. So 1 is **not safe**.
 
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
+Terminal nodes 5, 6 are trivially safe.
 
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
-
-----------------------------------------
-
-## Step 4: Connect to Concept
-
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
-
-**The concept:** Topological sort on the reverse graph (or DFS with three-color marking).
-
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever nodes have relationships or connectivity matters → think Graph. 'Shortest path' without weights → BFS. With weights → Dijkstra. Just connectivity → DSU.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+Safe set: {2, 4, 5, 6}.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 3: Rephrase "Safe" Recursively
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+Look at the pattern. A node is safe iff **all of its out-neighbors are safe**.
 
-Reverse the graph. Start BFS from nodes with original out-degree 0. Decrement in the reversed graph's in-degree when their predecessors are processed. All processed nodes are safe.
+- Terminal nodes (no out-neighbors) are safe vacuously — the condition "all out-neighbors are safe" holds over an empty set.
+- A node with all safe out-neighbors is safe.
+- A node with even one unsafe out-neighbor (or a self-loop, or a cycle) is unsafe.
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
+This is the kind of recursive definition that screams "DP or BFS on graphs." But there's a subtlety: cycles. When two nodes point at each other, we can't say "A is safe iff B is safe" because we'd loop forever.
 
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Reverse graph + Kahn, or three-color DFS (white/gray/black).
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+We need a way to resolve the cycle issue.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 4: First Attempt — DFS with Cycle Detection
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+Do DFS from each node, tracking which nodes are currently on the path. If we encounter a node already on the current path, that's a cycle — current node (and all path ancestors to the cycle) are unsafe.
 
-graph=[[1,2],[2,3],[5],[0],[5],[],[]] → safes are 2,4,5,6. Terminal 5,6 initially, then 2 (points only to 5), then 4 (points to 5).
+Use three colors:
+- WHITE (unvisited) = not processed yet.
+- GRAY (on stack) = currently being explored via DFS.
+- BLACK (finished) = DFS from this node has completed.
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+Algorithm:
+- When entering a WHITE node, mark it GRAY.
+- If we see a GRAY neighbor during exploration, we found a back-edge (cycle). The current node is unsafe.
+- If all outgoing edges lead to safe (BLACK with "safe" attribute) nodes, the current node is safe.
+- After exploring all neighbors without finding a cycle, mark the current node as safe and BLACK.
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
-
-----------------------------------------
-
-## Step 8: Time and Space Complexity
-
-Complexity isn't magic — it's just counting the work.
-
-Time: O(V + E). Space: O(V + E).
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
+Key observation: once we've fully processed a node (BLACK), we know if it's safe or not. So future DFS visits just read the cached answer.
 
 ----------------------------------------
 
-## Step 9: C++ Implementation
+## Step 5: Let Me Trace DFS
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+Using the example graph:
+
+```
+0 → 1, 2     1 → 2, 3     2 → 5     3 → 0     4 → 5     5: (terminal)     6: (terminal)
+```
+
+Start DFS from 0.
+
+```
+dfs(0): color[0] = GRAY.
+  Explore 0 → 1. dfs(1): color[1] = GRAY.
+    Explore 1 → 2. dfs(2): color[2] = GRAY.
+      Explore 2 → 5. dfs(5): color[5] = GRAY. No edges. color[5] = BLACK. Safe.
+      5 returned safe. Continue.
+      (no more edges for 2)
+      color[2] = BLACK. Safe.
+    2 returned safe. Continue with 1's edges.
+    Explore 1 → 3. dfs(3): color[3] = GRAY.
+      Explore 3 → 0. color[0] = GRAY. CYCLE DETECTED. 3 is unsafe.
+      color[3] = BLACK. Unsafe.
+    3 returned unsafe. So 1 is unsafe (at least one unsafe out-neighbor).
+    color[1] = BLACK. Unsafe.
+  1 returned unsafe. So 0 is unsafe.
+  color[0] = BLACK. Unsafe.
+
+dfs(4): color[4] = GRAY.
+  Explore 4 → 5. 5 is BLACK, safe. Continue.
+  color[4] = BLACK. Safe.
+
+dfs(5), dfs(6): already handled or trivial terminals.
+
+Final: color[] and safety:
+  0: unsafe, 1: unsafe, 2: safe, 3: unsafe, 4: safe, 5: safe, 6: safe.
+```
+
+Safe nodes: {2, 4, 5, 6}. ✓
+
+The key moment was dfs(3) seeing GRAY on node 0, which told us 3 is on a cycle → unsafe. This propagated up: 1 is unsafe (because it has unsafe 3 as neighbor), and 0 is unsafe (because it has unsafe 1 as neighbor).
+
+----------------------------------------
+
+## Step 6: Formalizing the DFS Code
+
+Instead of a separate "safe" flag, we can encode everything in the color:
+- WHITE = 0 (unvisited).
+- GRAY = 1 (on stack, possibly part of cycle).
+- BLACK = 2 (finished, safe).
+
+We mark a node GRAY at entry. If DFS completes without finding a cycle through this node, we upgrade to BLACK. Otherwise, leave as GRAY (indicating unsafe; we'll never upgrade it).
+
+Wait — after DFS returns, we want to distinguish "safe and processed" from "unsafe and processed." If we always transition GRAY → BLACK at the end, we lose that distinction.
+
+Solution: only transition to BLACK if the DFS found no cycle. If a cycle was found, leave the node as GRAY (conceptually "unsafe processed"). Then after all DFS calls, a node is safe iff its color is BLACK.
+
+```
+colors = [WHITE] * n
+
+def dfs(u):
+    if colors[u] != WHITE:
+        return colors[u] == BLACK   # revisit: return cached safety
+    colors[u] = GRAY
+    for v in graph[u]:
+        if colors[v] == GRAY or not dfs(v):
+            return False   # cycle or unsafe neighbor → this node unsafe
+    colors[u] = BLACK
+    return True
+
+for u in 0..n-1:
+    dfs(u)
+
+safe = [u for u in 0..n-1 if colors[u] == BLACK]
+```
+
+The `colors[v] == GRAY` check detects a back-edge on a currently-exploring path. If found, return False immediately — don't upgrade to BLACK, leaving us GRAY → unsafe.
+
+If all out-neighbors are safe (BLACK), we transition to BLACK and return True.
+
+----------------------------------------
+
+## Step 7: Why This Works
+
+Inductive argument: after all dfs calls return, colors[u] is BLACK iff u is safe.
+
+- **Terminal nodes** have no out-edges. DFS enters GRAY, the for-loop does nothing, upgrade to BLACK. ✓
+- **Nodes with all safe out-neighbors** get upgraded to BLACK (no loop detection, no recursive-false return). ✓
+- **Nodes with at least one unsafe out-neighbor** fail the recursive dfs(v) (returns False) or see GRAY (back-edge), returning False without upgrading. Color stays GRAY. ✓
+
+So at the end, BLACK nodes are exactly the safe ones.
+
+----------------------------------------
+
+## Step 8: Alternative — Kahn-Style BFS (Optional)
+
+The DFS approach is clean. There's also a BFS approach using in-degrees on the **reversed graph**, which some prefer.
+
+Reverse all edges. Now terminals (in the original) become "source-only" (in-degree 0) in the reversed graph. Start BFS from those. Process nodes in reverse-topological order; confirm each as safe once all its reverse-neighbors have been processed.
+
+This is Kahn's topological sort applied backward. Works fine, but the DFS version is more natural for this problem.
+
+----------------------------------------
+
+## Step 9: Complexity
+
+Time: **O(V + E)** — each node and edge processed once.
+Space: **O(V)** for colors and recursion stack.
+
+----------------------------------------
+
+## Step 10: C++ Implementation
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-vector<int> eventualSafeNodes(vector<vector<int>>& g) {
-    int n = g.size();
-    vector<vector<int>> rev(n);
-    vector<int> outd(n);
-    for (int u = 0; u < n; ++u) {
-        outd[u] = g[u].size();
-        for (int v : g[u]) rev[v].push_back(u);
-    }
-    queue<int> q;
-    for (int i = 0; i < n; ++i) if (!outd[i]) q.push(i);
+vector<int> eventualSafeNodes(vector<vector<int>>& graph) {
+    int n = graph.size();
+    const int WHITE = 0, GRAY = 1, BLACK = 2;
+    vector<int> color(n, WHITE);
+
+    function<bool(int)> dfs = [&](int u) -> bool {
+        if (color[u] != WHITE) return color[u] == BLACK;
+
+        color[u] = GRAY;
+        for (int v : graph[u]) {
+            if (color[v] == GRAY) return false;   // back-edge: cycle
+            if (!dfs(v)) return false;             // neighbor is unsafe
+        }
+        color[u] = BLACK;
+        return true;
+    };
+
+    for (int u = 0; u < n; ++u) dfs(u);
+
     vector<int> safe;
-    while (!q.empty()) {
-        int u = q.front(); q.pop();
-        safe.push_back(u);
-        for (int v : rev[u]) if (--outd[v] == 0) q.push(v);
+    for (int u = 0; u < n; ++u) {
+        if (color[u] == BLACK) safe.push_back(u);
     }
-    sort(safe.begin(), safe.end());
     return safe;
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Clean. The `if (color[u] != WHITE) return color[u] == BLACK;` at the top handles cached answers — for GRAY nodes encountered mid-DFS, this doesn't fire because we check `color[v] == GRAY` before calling `dfs(v)`.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 11: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Detect cycle nodes vs safe nodes.
-- Count of strongly connected components.
-- Nodes from which all paths end in a target set.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Return unsafe nodes instead.** Just flip the condition.
+- **Detect and list the cycles themselves.** More work during DFS: track the path; on back-edge, report the cycle.
+- **Multiple DFS colorings (e.g., for different properties).** Similar framework, different invariants.
+- **Graph modifications (add/remove edges).** DSU doesn't help here; full re-run after each change.
+- **Why do we say "GRAY means unsafe" at the end?** Because the only way to stay GRAY is to return False somewhere — either a back-edge or an unsafe child. Both imply unsafe.
+- **What if multiple components exist?** The outer loop `for u in 0..n-1` starts DFS from every node, so disconnected components are handled.

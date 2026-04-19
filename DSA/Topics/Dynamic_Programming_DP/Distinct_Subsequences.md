@@ -4,182 +4,199 @@
 https://leetcode.com/problems/distinct-subsequences/
 
 **Topic:**
-Dynamic Programming DP
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** DP dp[i][j] = ways to form t[0..j-1] from s[0..i-1].
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> s='rabbbit', t='rabbit'. dp[n][m]=3.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Dynamic Programming (DP)
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Reread the Prompt Slowly
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Given two strings `s` and `t`, count the number of **distinct subsequences** of `s` that equal `t`.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+A subsequence keeps relative order but may skip characters. So if `s = "rabbbit"`, we could pick indices {0, 1, 3, 6} to form "rabit"... wait that's not a match for `t = "rabbit"`. Let me find matches.
 
-So ask yourself:
+`t = "rabbit"`.
+- `s = "rabbbit"` has r-a-b-b-b-i-t. We need to pick 'r', 'a', 'b', 'b', 'i', 't' in order.
+- Option 1: indices 0, 1, 2, 3, 5, 6 — chars r, a, b, b, i, t = "rabbit". ✓
+- Option 2: indices 0, 1, 2, 4, 5, 6 — r, a, b, b, i, t. ✓
+- Option 3: indices 0, 1, 3, 4, 5, 6 — r, a, b, b, i, t. ✓
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: DP dp[i][j] = ways to form t[0..j-1] from s[0..i-1].
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
+Three distinct index selections all form `"rabbit"`. Answer: **3**.
 
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-Your very first thought is often recursion. That's actually the right start — but naive recursion re-computes the same subproblems exponentially. The fix is memoization (top-down) or tabulation (bottom-up). The hard part is identifying the state that captures all we need to know about the past.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-At each (i,j), either skip s[i-1] (dp[i-1][j]) or consume it if s[i-1]==t[j-1] (+ dp[i-1][j-1]).
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Different index selections that yield the *same* subsequence string still count as distinct — the problem is about how many distinct *ways* to form t as a subsequence, not distinct *strings*.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: Small Cases
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+`s = "abc"`, `t = ""`. Number of ways to form empty string from any s: always 1 (pick no characters). Answer: 1.
 
-**The concept:** DP dp[i][j] = ways to form t[0..j-1] from s[0..i-1].
+`s = ""`, `t = "a"`. Need at least one 'a' from an empty string. Impossible. Answer: 0.
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
+`s = "aaa"`, `t = "a"`. Ways to pick one 'a' from "aaa" — three choices (index 0, 1, or 2). Answer: 3.
 
-**Pattern recognition cue:**
+`s = "aaa"`, `t = "aa"`. Ways to pick two a's in order from three a's — C(3, 2) = 3 choices. Answer: 3.
 
-**Whenever a brute-force recursion has overlapping subproblems → think DP. Identify state first, then transition.**
+`s = "ab"`, `t = "ab"`. Only one way: pick both in order. Answer: 1.
 
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
+`s = "ba"`, `t = "ab"`. Order matters. Can we get a-b from b-a? No. Answer: 0.
 
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-Init dp[i][0]=1. For i,j>0: dp[i][j] = dp[i-1][j] + (s[i-1]==t[j-1] ? dp[i-1][j-1] : 0).
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
+A pattern forms: the answer depends on how many ways matching characters can be chosen while preserving order.
 
 ----------------------------------------
 
-## Step 6: Final Approach
+## Step 3: Set Up the DP State
 
-Now let's crystallize everything we've learned into a clean algorithm.
+Let `f(i, j)` = number of distinct subsequences of `s[0..i)` (first i characters of s) that equal `t[0..j)` (first j characters of t).
 
-2D DP; can compress to 1D.
+We want `f(|s|, |t|)`.
 
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
+How does `f(i, j)` relate to smaller subproblems? Consider the last character we use from s, i.e., `s[i-1]`:
 
-**Before coding, it's worth asking:**
+**Case A: we *don't* use `s[i-1]`** as the last-matched character. Then we're matching `t[0..j)` using only `s[0..i-1)`. So this contributes `f(i-1, j)`.
 
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
+**Case B: we *do* use `s[i-1]` as the j-th character of t.** This is only possible if `s[i-1] == t[j-1]` (otherwise `s[i-1]` can't match `t[j-1]`). In that case, after matching `s[i-1]` with `t[j-1]`, we need to match `t[0..j-1)` with `s[0..i-1)`. Contributes `f(i-1, j-1)`.
 
-Get those clear in your head, and the code almost writes itself.
+Total: `f(i, j) = f(i-1, j) + (s[i-1] == t[j-1] ? f(i-1, j-1) : 0)`.
 
-
-----------------------------------------
-
-## Step 7: Dry Run (Detailed)
-
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
-
-s='rabbbit', t='rabbit'. dp[n][m]=3.
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+Base cases:
+- `f(i, 0) = 1` for all i ≥ 0: one way to form the empty t from any prefix of s (by picking nothing).
+- `f(0, j) = 0` for j > 0: no way to form a non-empty t from an empty s.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 4: Verify on Small Cases
 
-Complexity isn't magic — it's just counting the work.
+`s = "rabbbit"`, `t = "rabbit"`. n = 7, m = 6.
 
-Time: O(n·m). Space: O(n·m) or O(m).
+I won't fill the entire 7x6 table by hand but I'll compute `f(7, 6)` directly using the recurrence once I believe it's correct. Let me verify on smaller examples first.
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+`s = "aaa"`, `t = "aa"`, expect answer 3.
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+```
+f(0, 0) = 1. f(0, 1) = 0. f(0, 2) = 0.
+f(1, 0) = 1. s[0]='a'.
+  f(1, 1): s[0]==t[0]='a' → f(0, 1) + f(0, 0) = 0 + 1 = 1.
+  f(1, 2): s[0]==t[1]='a' → f(0, 2) + f(0, 1) = 0 + 0 = 0.
+f(2, 0) = 1. s[1]='a'.
+  f(2, 1): match → f(1, 1) + f(1, 0) = 1 + 1 = 2.
+  f(2, 2): match → f(1, 2) + f(1, 1) = 0 + 1 = 1.
+f(3, 0) = 1. s[2]='a'.
+  f(3, 1): match → f(2, 1) + f(2, 0) = 2 + 1 = 3.
+  f(3, 2): match → f(2, 2) + f(2, 1) = 1 + 2 = 3.
+```
 
+`f(3, 2) = 3`. ✓
+
+`s = "rabbbit"`, `t = "rabbit"`. Computing this by the same recurrence (I'll trust the implementation) yields 3.
 
 ----------------------------------------
 
-## Step 9: C++ Implementation
+## Step 5: Why the Recurrence Is Exhaustive
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+For any subsequence-of-s that matches t, the last character of t (t[j-1]) must be matched by some character in s. The decision at level (i, j) is "does the j-th char of t match at position i-1 of s, or earlier?"
+
+- If we match it at position i-1 (requires s[i-1] == t[j-1]), we reduce to matching t[0..j-1) with s[0..i-1) — that's `f(i-1, j-1)` ways.
+- Otherwise, we match it earlier in s — equivalent to matching t[0..j) with s[0..i-1) — that's `f(i-1, j)` ways.
+
+These two subcases are mutually exclusive (different positions where t[j-1] is matched) and cover all possibilities, so we add them.
+
+This is the core DP trick: think about what happens at the "last step" of the subsequence alignment.
+
+----------------------------------------
+
+## Step 6: Space Optimization
+
+Each cell depends on `f(i-1, j)` and `f(i-1, j-1)` — both from the previous row. So we can use a 1D array, updating it row by row.
+
+But here's a subtlety. When updating `f[j]` (new row) we need `f[j]` (old row, for the first term) and `f[j-1]` (old row, for the second term). If we iterate `j` from left to right, we'd overwrite `f[j-1]` before we need it for `f[j]`.
+
+Fix: iterate `j` from **right to left**, so `f[j-1]` is still from the old row when we compute `f[j]`.
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
+vector<long long> f(m + 1, 0);
+f[0] = 1;
+for (int i = 1; i <= n; ++i) {
+    for (int j = m; j >= 1; --j) {
+        if (s[i-1] == t[j-1]) f[j] = f[j] + f[j-1];
+        // else f[j] stays the same (f(i, j) = f(i-1, j))
+    }
+}
+return f[m];
+```
+
+O(m) space, O(n·m) time.
+
+----------------------------------------
+
+## Step 7: Name the Pattern
+
+This is **counting DP on two sequences** — a close cousin to LCS, Edit Distance, and Interleaving String. All share the state `(i, j) = progress into s and into t` and transitions based on whether the current characters match.
+
+The distinction: LCS and Edit Distance optimize some value; Distinct Subsequences **counts** configurations. The recurrence uses `+` instead of `max` or `min`, but the skeleton is the same.
+
+----------------------------------------
+
+## Step 8: Overflow Gotcha
+
+The answer can grow quickly. The problem typically guarantees the answer fits in a 32-bit signed int, but intermediate computations with `long long` are a good habit — especially when the recurrence sums across many cells.
+
+----------------------------------------
+
+## Step 9: Complexity
+
+Time: **O(n · m)**.
+Space: **O(n · m)** full table, **O(m)** with the rolling array.
+
+----------------------------------------
+
+## Step 10: C++ Implementation
+
+```cpp
 int numDistinct(string s, string t) {
     int n = s.size(), m = t.size();
-    vector<unsigned long long> dp(m+1, 0); dp[0] = 1;
-    for (int i = 1; i <= n; ++i)
-        for (int j = m; j >= 1; --j)
-            if (s[i-1] == t[j-1]) dp[j] += dp[j-1];
-    return (int)dp[m];
+    vector<vector<unsigned long long>> f(n + 1, vector<unsigned long long>(m + 1, 0));
+    for (int i = 0; i <= n; ++i) f[i][0] = 1;   // one way to form empty t
+
+    for (int i = 1; i <= n; ++i) {
+        for (int j = 1; j <= m; ++j) {
+            f[i][j] = f[i - 1][j];   // case A: don't use s[i-1]
+            if (s[i - 1] == t[j - 1]) {
+                f[i][j] += f[i - 1][j - 1];   // case B: use s[i-1] as t[j-1]
+            }
+        }
+    }
+    return (int)f[n][m];
 }
 ```
 
-A few notes about the style:
+Notes:
+- I use `unsigned long long` to guard against intermediate overflow. The final cast assumes the answer fits.
+- The `f[i][0] = 1` initialization is crucial — every row in column 0 represents "empty t," which has exactly 1 way.
 
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
+Space-optimized version:
 
+```cpp
+int numDistinct(string s, string t) {
+    int n = s.size(), m = t.size();
+    vector<unsigned long long> f(m + 1, 0);
+    f[0] = 1;
+    for (int i = 1; i <= n; ++i) {
+        for (int j = m; j >= 1; --j) {
+            if (s[i - 1] == t[j - 1]) f[j] += f[j - 1];
+        }
+    }
+    return (int)f[m];
+}
+```
+
+Right-to-left iteration in the inner loop preserves the "previous row" values we need.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 11: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Number of distinct supersequences.
-- LCS variant (Edit-distance).
-- Regex subsequences.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Count subsequences with a specific structure** (e.g., palindromic subsequences). Different DP state, similar structure.
+- **Count distinct subsequences of s** (any string, not matching a specific t). Separate DP tracking "new subsequences introduced by each character."
+- **Longest Common Subsequence (LCS).** Same shape of DP, but max instead of sum; answer is a length.
+- **If we want the actual subsequences, not just the count.** Backtrack through the DP table; pick both branches when available.
+- **What if t contains wildcards like `.` for any char?** Adjust the match check; everything else is identical.

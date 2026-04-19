@@ -4,183 +4,184 @@
 https://leetcode.com/problems/ones-and-zeroes/
 
 **Topic:**
-Dynamic Programming DP
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** 0/1 knapsack over two capacities (0s and 1s).
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> strs=['10','0001','111001','1','0'], m=5,n=3 → 4.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Dynamic Programming (DP)
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Read the Problem
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+You have an array `strs` of binary strings (containing only '0' and '1'), and two integers `m` and `n`. Return the **maximum number of strings** you can pick such that the total count of 0s across picked strings is ≤ m, and total count of 1s is ≤ n.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Example: `strs = ["10", "0001", "111001", "1", "0"]`, m = 5, n = 3.
 
-So ask yourself:
+String counts (zeros, ones):
+- "10" → (1, 1)
+- "0001" → (3, 1)
+- "111001" → (2, 4)
+- "1" → (0, 1)
+- "0" → (1, 0)
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: 0/1 knapsack over two capacities (0s and 1s).
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
+Pick as many as possible with total zeros ≤ 5, total ones ≤ 3.
 
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
+Try picking {"10", "0001", "1", "0"}: zeros = 1+3+0+1 = 5, ones = 1+1+1+0 = 3. Four strings, exactly at the limits. ✓
 
+Can we get 5? Include "111001" which has (2, 4) ones. Would push ones count to 3 + 4 = 7 > n. Dropping some other string to accommodate: might reduce count. Can't easily get 5.
 
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-Your very first thought is often recursion. That's actually the right start — but naive recursion re-computes the same subproblems exponentially. The fix is memoization (top-down) or tabulation (bottom-up). The hard part is identifying the state that captures all we need to know about the past.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Each string 'costs' its count of 0s and 1s; we maximize count of strings within budgets (m zeros, n ones).
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Answer: **4**.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: Shape of the Problem
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+Each string is an item with two "costs" (zeros and ones). We have two "budgets" (m and n). Maximize the count of chosen items subject to the budgets.
 
-**The concept:** 0/1 knapsack over two capacities (0s and 1s).
+This is **0/1 knapsack** — classic — but with **two** capacity dimensions instead of one.
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever a brute-force recursion has overlapping subproblems → think DP. Identify state first, then transition.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+In standard 0/1 knapsack, state is (items considered, remaining capacity). Here, state is (items considered, remaining zero-budget, remaining one-budget).
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 3: Set Up the DP
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+Let `dp[i][j]` = maximum number of strings we can pick, using at most `i` zeros and `j` ones.
 
-dp[i][j] = max strings using at most i zeros and j ones. For each string with z zeros, o ones: dp[i][j] = max(dp[i][j], dp[i-z][j-o]+1) iterating i,j downward.
+For each string with `z` zeros and `o` ones:
+- **Skip it:** `dp[i][j]` stays.
+- **Take it (if z ≤ i and o ≤ j):** `dp[i][j] = dp[i - z][j - o] + 1`.
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
+Take the max.
 
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
+Iteration: process strings one at a time, update dp.
 
+```
+dp = 2D array of (m+1) × (n+1), initialized to 0.
 
-----------------------------------------
+for each string:
+    count its zeros z and ones o.
+    for i from m down to z:
+        for j from n down to o:
+            dp[i][j] = max(dp[i][j], dp[i - z][j - o] + 1)
 
-## Step 6: Final Approach
+return dp[m][n]
+```
 
-Now let's crystallize everything we've learned into a clean algorithm.
+Key detail: iterate `i` and `j` **downward**. Why? Because in 0/1 knapsack, we can't use the same item twice. Iterating upward would let `dp[i - z][j - o]` already reflect the new item, double-counting.
 
-2D 0/1 knapsack.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+Going downward ensures `dp[i - z][j - o]` is from the **previous** iteration (before this item was considered).
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 4: Trace for `strs = ["10", "0001", "1", "0"]`, m = 5, n = 3
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+I'll only process these 4 strings (ignoring "111001" since the answer uses the other 4).
 
-strs=['10','0001','111001','1','0'], m=5,n=3 → 4.
+Zeros and ones per string:
+- "10": z=1, o=1.
+- "0001": z=3, o=1.
+- "1": z=0, o=1.
+- "0": z=1, o=0.
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+Start with dp = zeros (6×4 grid: i from 0 to 5, j from 0 to 3).
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
+**Process "10" (z=1, o=1):**
+For i from 5 down to 1, j from 3 down to 1:
+- dp[i][j] = max(dp[i][j], dp[i-1][j-1] + 1).
+- All dp[i-1][j-1] are 0, so dp[i][j] becomes 1 for all (i ≥ 1, j ≥ 1).
 
+After: dp[i][j] = 1 for (i, j) with i ≥ 1 and j ≥ 1. Others 0.
+
+**Process "0001" (z=3, o=1):**
+For i from 5 down to 3, j from 3 down to 1:
+- dp[i][j] = max(dp[i][j], dp[i-3][j-1] + 1).
+- For i = 3, j = 1: dp[0][0] + 1 = 1. dp[3][1] was 1. Max 1. No change.
+- For i = 4, j = 1: dp[1][0] + 1 = 1. dp[4][1] = 1. No change.
+  (Hmm, but we'd like to show the DP picking up this string in combination with earlier.)
+- For i = 4, j = 2: dp[1][1] + 1 = 2. dp[4][2] was 1. Now 2. ✓
+- For i = 5, j = 2: dp[2][1] + 1 = 2. dp[5][2] was 1. Now 2.
+- Etc.
+
+After "0001": dp[i][j] reflects "can pick up to 2 strings using these budgets."
+
+**Process "1" (z=0, o=1):**
+For i from 5 down to 0, j from 3 down to 1:
+- dp[i][j] = max(dp[i][j], dp[i][j-1] + 1).
+- For i = 4, j = 3: dp[4][2] was 2 (after "0001"). dp[4][3] = max(old, 2+1) = 3.
+- For i = 5, j = 3: dp[5][2] was 2. dp[5][3] = max(old, 3).
+
+After "1": some cells jump to 3.
+
+**Process "0" (z=1, o=0):**
+For i from 5 down to 1, j from 3 down to 0:
+- dp[i][j] = max(dp[i][j], dp[i-1][j] + 1).
+- For i = 5, j = 3: dp[4][3] was 3 (after "1"). dp[5][3] = max(old, 3+1) = 4.
+
+After all 4 strings: dp[5][3] = 4. ✓
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 5: Why Downward Iteration Prevents Double-Counting
 
-Complexity isn't magic — it's just counting the work.
+Consider the inner loop when processing a new string. We're updating dp using `dp[i - z][j - o]`.
 
-Time: O(K·m·n). Space: O(m·n).
+If we went upward (i from z to m, j from o to n), we'd compute:
+- dp[z][o] = max(dp[z][o], dp[0][0] + 1). OK.
+- dp[2z][2o] = max(dp[2z][2o], dp[z][o] + 1). But dp[z][o] was already updated with **this item**. So we're picking the same item twice!
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+Going downward fixes this: when we update dp[2z][2o], dp[z][o] still holds its pre-update value (didn't process it yet in this pass). No double-count.
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
+This directional trick is the defining feature of **0/1 knapsack** vs **unbounded knapsack** (which iterates upward).
 
 ----------------------------------------
 
-## Step 9: C++ Implementation
+## Step 6: Name It
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+**2D 0/1 knapsack** — "items with two-dimensional costs, one-dimensional value (count)." Same pattern solves:
+- Target Sum (1D 0/1 knapsack with +/- choices).
+- Partition Equal Subset Sum (1D 0/1 knapsack on half the total).
+- Coin Change II (unbounded 1D knapsack, different direction).
+
+The number of budget dimensions matches the dimensionality of the DP table (excluding the item index axis).
+
+----------------------------------------
+
+## Step 7: Complexity
+
+Time: for each of the N strings, we update an `(m+1) × (n+1)` table. **O(N · m · n)**.
+Space: **O(m · n)** — one 2D table.
+
+For typical constraints (N ≤ 600, m, n ≤ 100), ~6 × 10^6 operations — fast.
+
+----------------------------------------
+
+## Step 8: C++ Implementation
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
 int findMaxForm(vector<string>& strs, int m, int n) {
-    vector<vector<int>> dp(m+1, vector<int>(n+1, 0));
-    for (auto& s : strs) {
-        int z = count(s.begin(), s.end(), '0'), o = s.size() - z;
-        for (int i = m; i >= z; --i) for (int j = n; j >= o; --j)
-            dp[i][j] = max(dp[i][j], dp[i-z][j-o] + 1);
+    vector<vector<int>> dp(m + 1, vector<int>(n + 1, 0));
+
+    for (const string& s : strs) {
+        int zeros = count(s.begin(), s.end(), '0');
+        int ones  = s.size() - zeros;
+
+        for (int i = m; i >= zeros; --i) {
+            for (int j = n; j >= ones; --j) {
+                dp[i][j] = max(dp[i][j], dp[i - zeros][j - ones] + 1);
+            }
+        }
     }
     return dp[m][n];
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Clean. The downward iteration in both `i` and `j` is the critical detail — getting the direction wrong here produces very wrong answers (all items would be picked repeatedly).
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 9: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Minimize number of strings to meet a target.
-- 3D (0,1,2 digits).
-- Unbounded knapsack variant.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Items have weights/values too.** Add another dimension or use weighted DP. Maximize total value subject to budgets.
+- **Unlimited copies of each string.** Change iteration to upward (`i from zeros to m`). That's unbounded knapsack.
+- **Budgets can be very large (10^9).** DP table too big. Need a different approach (greedy if applicable, or more structure).
+- **Three budgets instead of two.** 3D DP table, extra nested loop.
+- **Reconstruct which strings were picked.** Track parent pointers in a separate table; backtrack from dp[m][n].
+- **Why max (not min)?** Problem asks for maximum count. For minimum count with budget-constraint, different interpretation.

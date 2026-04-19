@@ -6,181 +6,146 @@ https://leetcode.com/problems/non-overlapping-intervals/
 **Topic:**
 Greedy
 
+----------------------------------------
+
+## Step 1: Read the Problem, Recast It
+
+You're given a collection of intervals `[start, end)`. Return the **minimum number of intervals you need to remove** so that the remaining ones don't overlap.
+
+Example: `[[1,2], [2,3], [3,4], [1,3]]`.
+- If I keep `[1,2], [2,3], [3,4]`, they are non-overlapping (touching at endpoints is fine). That's 3 intervals kept. I removed 1 (the `[1,3]`).
+- If I kept all 4, they'd overlap. So 1 is the minimum I can remove.
+
+Answer: **1**.
+
+Note the equivalence: "remove min intervals" = "keep max non-overlapping intervals, answer is `n - kept`." So I can think of it as **how many can I keep?**
 
 ----------------------------------------
 
-## Step 1: Understand the Problem (Beginner Friendly)
+## Step 2: Play With a Small Example
 
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
+`[[1,2], [1,3], [2,4], [3,5]]`. Which intervals can coexist without overlap?
 
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
+Let me draw them on a timeline:
+```
+1 2 3 4 5
+[ ]           (1-2)
+[    ]        (1-3)
+  [    ]      (2-4)
+    [    ]    (3-5)
+```
 
-**In plain words:** Greedy by earliest end time — classic activity-selection.
+`[1,2]` and `[2,4]` don't overlap (2-4 starts at 2, when 1-2 ended). Kept: 2.
+`[1,2]` and `[3,5]` don't overlap. Kept: 2.
+`[1,2], [2,4]` together — can I add `[3,5]`? 3 < 4, overlaps with `[2,4]`. No.
+`[1,2], [3,5]` — can I add another? `[1,3]` overlaps with `[3,5]` (touching at 3)? No — at 3 exactly, `[1,3)` has ended. Let me check: `[1,3]` vs `[3,5]`. If endpoints are inclusive ("closed"), they share 3. The problem typically treats endpoints as open (start inclusive, end exclusive) — "touch is fine." So `[1,3]` and `[3,5]` don't overlap.
 
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
+So a kept set could be: `[1,2], [3,5]` or `[1,3], [3,5]`, etc. Max size = 2 (since we have 4 intervals and 2 remove).
 
-> Intervals [[1,2],[2,3],[3,4],[1,3]]. Sort by end: [[1,2],[2,3],[1,3],[3,4]]. Keep [1,2]. [2,3] start>=last end 2 → keep. [1,3] start<3 → remove. [3,4] keep. Removed=1.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
-
-----------------------------------------
-
-## Step 2: Break Down the Problem
-
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
-
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
-
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Greedy by earliest end time — classic activity-selection.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
+Actually I need to check more carefully. In this example we probably can keep exactly 2 intervals non-overlapping; answer = 4 - 2 = 2 removed.
 
 ----------------------------------------
 
-## Step 3: Build Intuition (VERY IMPORTANT)
+## Step 3: What's the Right Strategy?
 
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
+Suppose I need to pick a maximum set of non-overlapping intervals. What's a sensible greedy choice?
 
-It's very tempting to try every combination. That's exponential. The key insight for greedy problems is that a *local* choice — the earliest end time, the smallest available item, the highest-priority task — is provably as good as any global decision. When the local choice is safe, greedy works.
+Option A: always pick the interval with the **earliest start**. Does this work? Consider `[[1,100], [2,3], [4,5]]`. Earliest start is `[1,100]`. If I pick it, nothing else fits. Kept: 1. But the best is 2 (the two short ones). So earliest-start greedy fails.
 
-So how do we get smarter? Let's build the correct intuition step by step.
+Option B: always pick the **shortest** interval. Consider `[[1,5], [2,3], [3,4], [4,10]]`. Shortest is either `[2,3]` or `[3,4]` (both length 1). If I pick `[2,3]`, now `[3,4]` is still available, and `[4,10]` is available. Kept: 3. Actually that's the best. But is shortest-first always right? Consider `[[1,4], [2,3], [3,6]]`. Shortest is `[2,3]`. Picking it blocks both others. Kept: 1. But best is 2 (`[1,4]` blocks `[2,3]` but allows `[3,6]`... wait no, `[1,4]` and `[3,6]` overlap at 3-4.) Hmm. Actually in this example kept is at most 2: `[2,3], [3,6]` — let me verify overlap. 3 is the endpoint. If open-end: no overlap. Kept: 2. So shortest-first gave us 1 when 2 was possible. Fails.
 
-To remove the minimum number of intervals, keep as many non-overlapping as possible. Sorting by end time and always picking the interval ending earliest maximizes the count kept.
+Option C: always pick the interval that **ends earliest**. Let me try `[[1,100], [2,3], [4,5]]`. Ends are 100, 3, 5. Earliest end is `[2,3]`. Pick it; now we can't pick anything overlapping it. `[4,5]` starts at 4 ≥ 3, pick it. `[1,100]` overlaps both. Kept: 2. That's the best.
 
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
+Let me try the other example: `[[1,4], [2,3], [3,6]]`. Ends: 4, 3, 6. Earliest end: `[2,3]`. Pick it. Next candidates start ≥ 3: `[3,6]`. Pick it. `[1,4]` starts at 1, overlaps `[2,3]`. Skip. Kept: 2. Correct.
 
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+**Greedy by earliest end seems to work.**
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 4: Why Earliest-End Works
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+Let me argue formally why this strategy gives the maximum count of non-overlapping intervals.
 
-**The concept:** Greedy by earliest end time — classic activity-selection.
+**Claim:** Sorting by end time and greedily picking each interval whose start is ≥ the previously kept end gives the optimum.
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
+**Proof sketch (exchange argument):** Suppose some optimal solution uses a different interval first than the one our greedy picks. The greedy picks the interval `g` with the smallest end time. Any optimal solution's first picked interval, `o`, must have `o.end ≥ g.end` (because `g.end` is the smallest). Now compare: if we replace `o` with `g` in the optimal solution, do we break anything? No — `g` ends no later than `o`, so anything that came after `o` in the optimal is still compatible with `g` (it starts no earlier than `o.end ≥ g.end`). So we can swap `o` for `g` without shrinking the optimal.
 
-**Pattern recognition cue:**
+Applying this argument repeatedly, we transform any optimal into one that starts with the greedy's first choice, then proceeds recursively on the remaining intervals. So greedy matches optimum at every step.
 
-**Whenever a problem asks for min/max and a local 'best' choice seems correct → check if Greedy applies. Always prove it with an exchange argument before trusting it.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+This is a classic **interval scheduling** argument. The elegance of the proof convinces us that greedy isn't a heuristic here — it's exact.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 5: The Algorithm
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-Sort intervals by end. Iterate; if the current start < last end, it overlaps → remove (answer++). Else accept and update last end.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
+1. Sort intervals by `end` ascending.
+2. Track `lastEnd` = end of the last kept interval, initially `-∞`.
+3. For each interval in sorted order: if `interval.start >= lastEnd`, keep it — update `lastEnd = interval.end`. Otherwise, it overlaps; we remove it (increment a counter).
+4. Return the count of removed.
 
 ----------------------------------------
 
-## Step 6: Final Approach
+## Step 6: Trace on the Original Example
 
-Now let's crystallize everything we've learned into a clean algorithm.
+`intervals = [[1,2], [2,3], [3,4], [1,3]]`.
 
-Sort + one scan.
+Sort by end: `[[1,2], [2,3], [1,3], [3,4]]`. (Ends: 2, 3, 3, 4 — ties broken by start.)
 
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
+```
+lastEnd = -∞, removed = 0.
 
-**Before coding, it's worth asking:**
+[1,2]: start 1 >= -∞. Keep. lastEnd = 2.
+[2,3]: start 2 >= 2. Keep. lastEnd = 3.
+[1,3]: start 1 < 3. Overlaps. Remove. removed = 1.
+[3,4]: start 3 >= 3. Keep. lastEnd = 4.
+```
 
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
-
-----------------------------------------
-
-## Step 7: Dry Run (Detailed)
-
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
-
-Intervals [[1,2],[2,3],[3,4],[1,3]]. Sort by end: [[1,2],[2,3],[1,3],[3,4]]. Keep [1,2]. [2,3] start>=last end 2 → keep. [1,3] start<3 → remove. [3,4] keep. Removed=1.
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+Kept: 3. Removed: 1. ✓
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 7: Name What We Did
 
-Complexity isn't magic — it's just counting the work.
+This is **interval scheduling** — a foundational greedy problem. The earliest-end-time selection appears in classroom scheduling, meeting-room allocation, job deadline problems, etc. Even if you see a problem with different wording ("attend max meetings," "fit max bookings"), the shape is often the same.
 
-Time: O(n log n). Space: O(1).
+Be careful: interval scheduling's "earliest end" is distinct from **interval partitioning** (how many rooms needed). Different problem, different greedy.
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+----------------------------------------
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+## Step 8: Complexity
 
+Time: sorting dominates. **O(n log n)**.
+Space: sorting overhead. **O(log n)** or **O(n)** depending on algorithm. Beyond that, O(1).
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
-
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-int eraseOverlapIntervals(vector<vector<int>>& a) {
-    sort(a.begin(), a.end(), [](auto& x, auto& y){ return x[1] < y[1]; });
-    int cnt = 0, end = INT_MIN;
-    for (auto& iv : a) {
-        if (iv[0] < end) cnt++;
-        else end = iv[1];
+int eraseOverlapIntervals(vector<vector<int>>& intervals) {
+    if (intervals.empty()) return 0;
+    sort(intervals.begin(), intervals.end(),
+         [](const vector<int>& a, const vector<int>& b) {
+             return a[1] < b[1];       // sort by end time
+         });
+    int removed = 0;
+    int lastEnd = INT_MIN;
+    for (const auto& iv : intervals) {
+        if (iv[0] >= lastEnd) lastEnd = iv[1];   // keep
+        else removed++;                           // overlaps with kept
     }
-    return cnt;
+    return removed;
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+A subtle style choice: I compare `iv[0] >= lastEnd` (non-strict). This lets touching-endpoint intervals both be kept, matching the usual "open-ended" interval convention of these problems. If the problem defines touch as overlap, change to `>`.
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Return the kept intervals.
-- Weighted interval scheduling (DP).
-- Minimum number of rooms (sweep line).
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Maximum number of meetings you can attend** (same problem, different framing). Answer = `n - eraseOverlapIntervals`.
+- **Minimum number of meeting rooms needed to hold all meetings.** Different problem — interval partitioning. Sort start times and end times separately, sweep through to track concurrent meetings.
+- **Weighted interval scheduling (each interval has value; maximize total value without overlap).** Greedy fails; use DP with binary search.
+- **Intervals on a circle** (e.g., jobs around 24-hour clock). Split at some point and run scheduling on each half.
+- **Handle touching-endpoint intervals as overlapping.** Change `iv[0] >= lastEnd` to `iv[0] > lastEnd`.

@@ -4,185 +4,203 @@
 https://leetcode.com/problems/path-sum-ii/
 
 **Topic:**
-Trees Binary Trees
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Backtracking along root-to-leaf paths collecting matches.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> Tree similar; collect each root-to-leaf path equaling target.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Trees / Binary Trees
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: What's Changed From Path Sum I?
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Path Sum I asked a yes/no: does **any** root-to-leaf path sum to the target?
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Path Sum II asks: **return every root-to-leaf path** whose sum equals the target.
 
-So ask yourself:
+So we need to *construct* paths, not just check for existence. Every matching path becomes a list of node values.
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Backtracking along root-to-leaf paths collecting matches.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
+Example:
+```
+         5
+        / \
+       4   8
+      /   / \
+     11  13  4
+    /  \    / \
+   7    2  5   1
+```
+targetSum = 22.
 
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
+Root-to-leaf paths and their sums:
+- 5, 4, 11, 7 → 27.
+- 5, 4, 11, 2 → 22. ✓
+- 5, 8, 13 → 26.
+- 5, 8, 4, 5 → 22. ✓
+- 5, 8, 4, 1 → 18.
 
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-A natural first instinct is to traverse the tree many times — once per query, once per property. That works, but it usually does too much. A single recursive traversal can often compute everything post-order with the child results combined at each node.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Extend Path Sum by recording the current path. On a leaf with the target sum met, snapshot the path.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Return `[[5, 4, 11, 2], [5, 8, 4, 5]]`.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: How Would You Track Paths By Hand?
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+Walking the tree top-down, you'd carry along a **current partial path** — the sequence of node values from the root to wherever you currently are. When you hit a leaf, check if the running sum matches the target; if yes, snapshot the path into your result list.
 
-**The concept:** Backtracking along root-to-leaf paths collecting matches.
+When you descend into a child, you extend the partial path. When you return (backtrack) from that child, you'd remove the last node — because now you're ascending back to the parent and about to try a different branch.
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever data is hierarchical or you can compute something per-subtree → think Binary Tree DFS.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+This "extend going down, revert going up" pattern is **backtracking**.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 3: The Algorithm Sketch
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+```
+dfs(node, remaining, path):
+    if node is null: return
+    path.append(node.val)          # extend
+    
+    if node is a leaf and remaining == node.val:
+        result.append(path.copy())  # matched — record
+    
+    dfs(node.left,  remaining - node.val, path)
+    dfs(node.right, remaining - node.val, path)
+    
+    path.pop()                     # revert
+```
 
-DFS with a running vector. On entry push node. On leaf with remaining sum zero, copy path to result. On exit pop node.
+The crucial bits:
+- `path.append` before recursing into children.
+- `path.pop()` after both recursions — this is the backtracking.
+- `result.append(path.copy())` at matching leaves — **copy** is essential; if we appended the path itself, future modifications would corrupt the recorded result.
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Backtracking DFS.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+At a leaf, "remaining == node.val" means subtracting this node's value would bring remaining to 0 — a match.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 4: Trace on the Example
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+targetSum = 22. result = []. path = [].
 
-Tree similar; collect each root-to-leaf path equaling target.
+```
+dfs(5, 22):
+  path = [5].
+  Not leaf (has children).
+  dfs(4, 17):
+    path = [5, 4].
+    dfs(11, 13):
+      path = [5, 4, 11].
+      dfs(7, 2):
+        path = [5, 4, 11, 7]. Leaf. remaining=2 ≠ 7. Not recorded.
+        No children to recurse into.
+        path.pop → [5, 4, 11].
+      dfs(2, 2):
+        path = [5, 4, 11, 2]. Leaf. remaining=2 == 2. RECORD [5, 4, 11, 2].
+        No children.
+        path.pop → [5, 4, 11].
+      path.pop → [5, 4].
+    path.pop → [5].
+  dfs(8, 17):
+    path = [5, 8].
+    dfs(13, 9):
+      path = [5, 8, 13]. Leaf. remaining=9 ≠ 13. Not recorded.
+      path.pop → [5, 8].
+    dfs(4, 9):
+      path = [5, 8, 4].
+      dfs(5, 5):
+        path = [5, 8, 4, 5]. Leaf. remaining=5 == 5. RECORD [5, 8, 4, 5].
+        path.pop → [5, 8, 4].
+      dfs(1, 5):
+        path = [5, 8, 4, 1]. Leaf. remaining=5 ≠ 1. Not recorded.
+        path.pop → [5, 8, 4].
+      path.pop → [5, 8].
+    path.pop → [5].
+  path.pop → [].
+```
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+result = `[[5, 4, 11, 2], [5, 8, 4, 5]]`. ✓
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+You can see the **path** variable breathing in and out — extending when we descend, contracting when we ascend. Exactly like following branches of a maze and leaving a breadcrumb trail that you pick back up.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 5: Why the Pop Matters
 
-Complexity isn't magic — it's just counting the work.
+Without `path.pop()` at the end, when we return from `dfs(7, 2)` and start `dfs(2, 2)` from the same parent, `path` would still contain `[5, 4, 11, 7]` instead of `[5, 4, 11]`. We'd then extend it to `[5, 4, 11, 7, 2]` — wrong!
 
-Time: O(n²) worst case. Space: O(h).
+The pop resets `path` to the state it was in when the current call started. That's the essence of backtracking: each recursive call returns shared state exactly as it found it.
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+----------------------------------------
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+## Step 6: Why Copy at Record Time
 
+When we hit a matching leaf and say `result.append(path)`, we'd be appending a **reference** to `path`. Later when we pop and extend `path` for different branches, the recorded entry would change too — shared mutable state is sneaky.
+
+By copying, we take a snapshot. Future modifications to `path` don't affect already-recorded paths. This is a standard backtracking gotcha.
+
+----------------------------------------
+
+## Step 7: Name It
+
+This is **DFS with backtracking for path enumeration**. Same shape appears in:
+- Sum Root to Leaf Numbers (record numbers formed by digit concatenation).
+- All Paths From Source to Target (graph variant).
+- Word Search (path in a grid).
+- Generate Parentheses (building strings).
+- Subsets and Permutations.
+
+The skeleton: **extend → record (at goal) → recurse → revert**.
+
+----------------------------------------
+
+## Step 8: Complexity
+
+Time: Each node visited once. Plus the cost of copying a path (length up to h) at every matching leaf. If there are k matching paths, total copying is O(k · h). Worst case k = O(2^h / 2) paths for a full tree, so **O(n·h)** or **O(n²)** worst case.
+
+Space: O(h) for recursion + O(result size). The result can be up to O(n²) in the worst case.
+
+For typical trees, this is well within interview constraints.
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
-
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-struct TreeNode { int val; TreeNode *left,*right; };
+class Solution {
+    vector<vector<int>> result;
+    vector<int> path;
 
-void dfs(TreeNode* r, int s, vector<int>& cur, vector<vector<int>>& res) {
-    if (!r) return;
-    cur.push_back(r->val);
-    if (!r->left && !r->right && s == r->val) res.push_back(cur);
-    dfs(r->left, s - r->val, cur, res);
-    dfs(r->right, s - r->val, cur, res);
-    cur.pop_back();
-}
-vector<vector<int>> pathSum(TreeNode* r, int s) { vector<vector<int>> res; vector<int> cur; dfs(r, s, cur, res); return res; }
+    void dfs(TreeNode* node, int remaining) {
+        if (!node) return;
+        path.push_back(node->val);
+
+        // Check leaf
+        if (!node->left && !node->right && remaining == node->val) {
+            result.push_back(path);   // copy by value
+        }
+
+        dfs(node->left,  remaining - node->val);
+        dfs(node->right, remaining - node->val);
+
+        path.pop_back();
+    }
+
+public:
+    vector<vector<int>> pathSum(TreeNode* root, int targetSum) {
+        dfs(root, targetSum);
+        return result;
+    }
+};
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Implementation notes:
+- `result.push_back(path)` copies by value (C++'s default for pushing into a vector of vectors). That's exactly what we want.
+- We don't check "remaining < 0" pruning because the problem allows negative values.
+- The leaf check is `!node->left && !node->right`.
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Count paths with sum ≤ target.
-- Paths of exactly k edges.
-- Tolerate negative values (already works).
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Count matching paths without listing them.** Same DFS, but increment a counter instead of copying.
+- **Paths with sum less than or equal to target.** Check `remaining >= node->val` at leaves; less clean, more case-heavy.
+- **Paths not ending at leaves (any node-to-descendant path).** This is Path Sum III. Prefix-sum + hashmap trick.
+- **Longest path with sum ≤ target.** Return path length instead of path itself.
+- **Paths in a graph (not tree).** Handle cycles; need visited tracking.
+- **Iterative version (no recursion).** Use an explicit stack with (node, remainingSum, pathSoFar) tuples.

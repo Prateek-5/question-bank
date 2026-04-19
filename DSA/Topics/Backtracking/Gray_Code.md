@@ -6,180 +6,194 @@ https://leetcode.com/problems/gray-code/
 **Topic:**
 Backtracking
 
+----------------------------------------
+
+## Step 1: What's a Gray Code?
+
+Given an integer `n`, return an ordering of all `2^n` non-negative integers less than `2^n` such that **consecutive numbers differ by exactly one bit**, and the first and last numbers also differ by one bit (circular).
+
+Example for n = 2 (numbers 0..3):
+- Valid gray code: `[0, 1, 3, 2]`.
+  - 0 (00) → 1 (01): differs in bit 0. ✓
+  - 1 (01) → 3 (11): differs in bit 1. ✓
+  - 3 (11) → 2 (10): differs in bit 0. ✓
+  - 2 (10) → 0 (00): differs in bit 1 (circular check). ✓
+
+There are multiple valid orderings (reflections, rotations). The problem accepts any.
 
 ----------------------------------------
 
-## Step 1: Understand the Problem (Beginner Friendly)
+## Step 2: Try to Construct by Hand for n = 3
 
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
+We need 8 numbers (0..7), each a 3-bit binary, each differing by one bit from the previous.
 
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
+Start at 0 (000). What can we do next? Any of 001, 010, 100 (differ by one bit). Let's pick 001.
 
-**In plain words:** Reflect-and-prefix construction.
+From 001, next could be 011, 000, or 101. But 000 is already used. Pick 011.
 
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
+Continue: from 011, next could be 010, 001, or 111. Pick 010.
 
-> n=2: start [0,1]. Reflect → [0,1,1,0]. OR with 2 on new half → [0,1,3,2].
+From 010: next could be 000, 011, 110. Only 110 is new. Pick 110.
 
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
+From 110: 111, 100, 010. Only 111 or 100 new. Pick 111.
 
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
+From 111: 110, 101, 011. Only 101 new. Pick 101.
 
+From 101: 100, 111, 001. Only 100 new. Pick 100.
 
-----------------------------------------
+Result: `[0, 1, 3, 2, 6, 7, 5, 4]`.
 
-## Step 2: Break Down the Problem
-
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
-
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
-
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Reflect-and-prefix construction.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
+Verify circular: 4 (100) → 0 (000) differs in bit 2. ✓
 
 ----------------------------------------
 
-## Step 3: Build Intuition (VERY IMPORTANT)
+## Step 3: Notice the Pattern
 
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
+Look at the n=2 and n=3 sequences:
 
-Brute-force enumeration is the starting point. The real engineering is pruning — cutting branches as soon as they can't lead to a valid answer. Good pruning can turn an exponential search into something that finishes in milliseconds.
+n=1: [0, 1].
+n=2: [0, 1, 3, 2].
+n=3: [0, 1, 3, 2, 6, 7, 5, 4].
 
-So how do we get smarter? Let's build the correct intuition step by step.
+Compare n=2 and n=3:
+- First half of n=3: [0, 1, 3, 2] — exactly the n=2 sequence.
+- Second half of n=3: [6, 7, 5, 4] — that's [2, 3, 1, 0] + 4 = [2, 3, 1, 0] with bit 2 set.
 
-A Gray code of n bits is the (n-1)-bit code followed by its reverse with MSB set.
+Actually, let's look more carefully. [6, 7, 5, 4] has its bit-2 set: 100, 101, 111, 110. And the remaining bits (after removing bit 2) are 10, 11, 01, 00 — which is the n=2 sequence **reversed**!
 
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
+So: n=3 = (n=2 sequence) followed by (n=2 sequence reversed, with bit 2 added).
 
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
+This is the **reflect-and-add-MSB** construction. Recursively:
+- n=1: [0, 1].
+- n=k: (n=(k-1) sequence) + (reversed n=(k-1) sequence, each with bit k-1 set).
 
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
-
-----------------------------------------
-
-## Step 4: Connect to Concept
-
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
-
-**The concept:** Reflect-and-prefix construction.
-
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever you need to generate all permutations, combinations, or configurations → think Backtracking with pruning.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+Each step doubles the length. After n levels, we have 2^n numbers.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 4: Why Reflect-and-Add Works
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+Consider the n=k sequence. Each consecutive pair differs by one bit (say, in the lower k-1 bits). Adding bit k-1 to the reversed copy means:
+- The last element of the first half and the first of the second half: they have the same lower k-1 bits (because reversed), but the second half has bit k-1 set. So they differ by exactly bit k-1. ✓
+- Within each half, consecutive differences are preserved (bit k-1 stays constant within a half).
+- The last element of the second half has the value of the first element of the first half, plus bit k-1. So closing the circle: last in second half → first in first half differs by exactly bit k-1. ✓
 
-Start with [0,1]. For each bit from 1 to n-1: duplicate list in reverse, OR top bit (1<<i) onto the new half.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
+Reflect-and-add maintains all the gray code properties.
 
 ----------------------------------------
 
-## Step 6: Final Approach
+## Step 5: Algorithm
 
-Now let's crystallize everything we've learned into a clean algorithm.
+```
+result = [0]
+for bit in 0..n-1:
+    for i in reversed(result):
+        result.append(i | (1 << bit))
+return result
+```
 
-Iterative reflection.
+Iterate for each bit level. Append the reversed current list with the new MSB set.
 
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
+For n = 2:
+- Start: [0].
+- bit 0: append reversed [0] with bit 0 set: [1]. Result: [0, 1].
+- bit 1: append reversed [0, 1] with bit 1 set: [3, 2]. Result: [0, 1, 3, 2]. ✓
 
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
-
-----------------------------------------
-
-## Step 7: Dry Run (Detailed)
-
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
-
-n=2: start [0,1]. Reflect → [0,1,1,0]. OR with 2 on new half → [0,1,3,2].
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+For n = 3:
+- After bit 0, 1: [0, 1, 3, 2].
+- bit 2: append reversed [0, 1, 3, 2] with bit 2 set: [6, 7, 5, 4]. Result: [0, 1, 3, 2, 6, 7, 5, 4]. ✓
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 6: An Even Cooler Formula
 
-Complexity isn't magic — it's just counting the work.
+Every gray code has a beautiful closed form:
+```
+gray(i) = i XOR (i >> 1)
+```
 
-Time: O(2^n). Space: O(2^n).
+That is, the i-th gray code value is `i ^ (i >> 1)`.
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+Let me verify for n = 2:
+- i=0: 0 ^ 0 = 0. ✓
+- i=1: 1 ^ 0 = 1. ✓
+- i=2: 2 ^ 1 = 3. ✓
+- i=3: 3 ^ 1 = 2. ✓
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+And n = 3:
+- i=0: 0. i=1: 1. i=2: 3. i=3: 2. i=4: 4 ^ 2 = 6. i=5: 5 ^ 2 = 7. i=6: 6 ^ 3 = 5. i=7: 7 ^ 3 = 4.
 
+Sequence: [0, 1, 3, 2, 6, 7, 5, 4]. ✓
+
+Where does this formula come from? It's a remarkable bit-twiddle: XORing i with i shifted right by 1 bit effectively "flips" adjacent-bit transitions, producing exactly the gray code encoding.
+
+Using this formula:
+```
+result = []
+for i in 0..(2^n - 1):
+    result.append(i ^ (i >> 1))
+return result
+```
+
+O(2^n) time, no recursion, no iteration over bits.
+
+----------------------------------------
+
+## Step 7: Name It
+
+This is the **reflected binary code**, or **Gray code**, named after Frank Gray. Both techniques — recursive reflect-and-add and the XOR formula — are standard.
+
+Gray codes appear in real hardware: rotary encoders, Karnaugh maps, error-correction codes. The defining property (consecutive values differ by one bit) means "adjacent states" in physical devices.
+
+----------------------------------------
+
+## Step 8: Complexity
+
+Both approaches: **O(2^n)** time and space.
+The XOR formula is slightly faster (no reversal) and uses constant extra space beyond the output.
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+**XOR formula (shortest):**
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
 vector<int> grayCode(int n) {
-    vector<int> r = {0};
-    for (int i = 0; i < n; ++i) {
-        int sz = r.size();
-        for (int j = sz - 1; j >= 0; --j) r.push_back(r[j] | (1 << i));
+    vector<int> result;
+    result.reserve(1 << n);
+    for (int i = 0; i < (1 << n); ++i) {
+        result.push_back(i ^ (i >> 1));
     }
-    return r;
+    return result;
 }
 ```
 
-A few notes about the style:
+**Reflect-and-add (more illustrative of the construction):**
 
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
+```cpp
+vector<int> grayCode(int n) {
+    vector<int> result = {0};
+    for (int bit = 0; bit < n; ++bit) {
+        int size = result.size();
+        int mask = 1 << bit;
+        for (int i = size - 1; i >= 0; --i) {
+            result.push_back(result[i] | mask);
+        }
+    }
+    return result;
+}
+```
 
+The XOR version is one-liner-simple and hardware-efficient. The reflect-and-add version is more illustrative of where the pattern comes from.
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Direct formula: i ^ (i>>1).
-- Gray code for non-powers-of-two.
-- Balanced Gray code.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Inverse: given a Gray code value, find its index `i`.** Also a simple formula. Gray-to-binary: `g ^ (g >> 1) ^ (g >> 2) ^ ...`.
+- **Next gray code value given the current.** Find the lowest set bit of `(i + 1)` and flip that bit in the current code... trickier. Formula exists.
+- **Generate all Gray codes with some additional property.** Usually requires backtracking — the reflect-and-add doesn't easily accommodate extra constraints.
+- **2D Gray code (sweeping a grid).** Different construction; see "snake" traversals.
+- **Balanced Gray code (every bit flips roughly equal number of times).** Harder combinatorial object.
+- **Why does `i XOR (i >> 1)` work?** It encodes "position" by XOR-ing adjacent bits. Adjacent i values differ by 1, which in binary flips exactly one "run" of trailing bits; XOR with shift localizes that change to exactly one bit in the gray code. Cute bit theory.

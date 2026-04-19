@@ -4,195 +4,217 @@
 https://leetcode.com/problems/count-of-smaller-numbers-after-self/
 
 **Topic:**
-Sorting Divide and Conquer
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Merge sort counting inversions on the right side.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> nums=[5,2,6,1]. counts=[2,1,1,0].
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Sorting / Divide & Conquer
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Understand the Problem
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Given an integer array `nums`, return a new array `result` where `result[i]` is the **count of numbers to the right of nums[i] that are strictly less than nums[i]**.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Example: `nums = [5, 2, 6, 1]`.
+- nums[0] = 5. To its right: [2, 6, 1]. Numbers < 5: 2 and 1. Count = 2.
+- nums[1] = 2. Right: [6, 1]. Numbers < 2: 1. Count = 1.
+- nums[2] = 6. Right: [1]. Numbers < 6: 1. Count = 1.
+- nums[3] = 1. Right: []. Count = 0.
 
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Merge sort counting inversions on the right side.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
+Result: `[2, 1, 1, 0]`.
 
 ----------------------------------------
 
-## Step 3: Build Intuition (VERY IMPORTANT)
+## Step 2: Brute Force and Its Limit
 
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
+For each i, scan everything to the right and count smaller. O(n²). For n = 10^5, too slow.
 
-Sorting first is often the most useful preprocessing step in algorithms. Divide-and-conquer generalizes that idea: split the problem in halves, solve each recursively, and merge. The merge step is where insights like inversion counting live.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-During merge, when taking an element from the left half, elements already moved from the right half are smaller and all come after in the original array — count them.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+We need something better. Let's think about the structure.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 3: Reframing as an Inversion Problem
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+"Count of smaller numbers after self" is a variant of **inversion counting** in sorting. An inversion is a pair (i, j) with i < j and nums[i] > nums[j]. The classic way to count inversions: **merge sort**.
 
-**The concept:** Merge sort counting inversions on the right side.
+Merge sort naturally decomposes into left and right halves. When merging two sorted halves, any time we pick an element from the right half, it's because it's smaller than some remaining element(s) in the left half. That's where inversion counts live.
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever the problem smells like 'count inversions' or 'k-th statistic' → think Merge Sort variants or Quickselect.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+For our problem, we need per-element counts (not just the total). That changes the approach slightly: we'll count how many "right-half" elements end up being placed before each "left-half" element during merges.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 4: Mergesort With Per-Element Counting
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+Here's the plan:
+- Work on **indices**, not values directly. Sort indices by the value at that index. Keep track of the original index for each.
+- During merge, when we place a right-half element before a left-half element, increment the counts of all remaining left-half elements (they have found one more "smaller-after-them").
 
-Sort indices by value via merge sort; in each merge step, when copying left[i], increment counts[idx[left[i]]] by number of right elements already taken.
+Let me get specific.
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
+Maintain an `indices` array (initially `[0, 1, 2, ..., n-1]`) and a `count` array (initially zeros). Mergesort sorts `indices` by `nums[index]`. During merges:
+- We have two sorted sub-arrays of indices: left and right.
+- When merging, we compare values `nums[left[i]]` and `nums[right[j]]`.
+- If `nums[right[j]] < nums[left[i]]`: place right[j] first. But more importantly, every remaining element in the left half has a "smaller after it" — specifically, right[j] was originally to the right of them (because it's in the right half, and the right half has larger original indices).
+  
+  Wait, we need to be careful. In mergesort on **indices**, the "left half" and "right half" correspond to original index positions (assuming we did the top-level split by index range). So yes: everything in the right half has a higher original index than everything in the left half.
+  
+  So when we place right[j] before some remaining elements of left (those at position i, i+1, ...), each of those left elements has one more "smaller after them" (namely, right[j]).
 
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Merge sort on indices.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+Actually the cleaner way: when we place a **left** element, count how many right elements have been placed **before** it in this merge. Those are exactly the "smaller after self" for this left element.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 5: Refined Counting Step
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
-
-nums=[5,2,6,1]. counts=[2,1,1,0].
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
-
-----------------------------------------
-
-## Step 8: Time and Space Complexity
-
-Complexity isn't magic — it's just counting the work.
-
-Time: O(n log n). Space: O(n).
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
-
-----------------------------------------
-
-## Step 9: C++ Implementation
-
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
-
-```cpp
-#include <bits/stdc++.h>
-using namespace std;
-void merge(vector<int>& idx, vector<int>& tmp, vector<int>& nums, vector<int>& counts, int l, int r) {
-    if (l >= r) return;
-    int m = (l + r) / 2;
-    merge(idx, tmp, nums, counts, l, m);
-    merge(idx, tmp, nums, counts, m+1, r);
-    int i = l, j = m+1, k = l, right = 0;
-    while (i <= m && j <= r) {
-        if (nums[idx[i]] <= nums[idx[j]]) { counts[idx[i]] += right; tmp[k++] = idx[i++]; }
-        else { right++; tmp[k++] = idx[j++]; }
-    }
-    while (i <= m) { counts[idx[i]] += right; tmp[k++] = idx[i++]; }
-    while (j <= r) tmp[k++] = idx[j++];
-    for (int x = l; x <= r; ++x) idx[x] = tmp[x];
-}
-vector<int> countSmaller(vector<int>& nums) {
-    int n = nums.size();
-    vector<int> idx(n), tmp(n), counts(n, 0);
-    iota(idx.begin(), idx.end(), 0);
-    merge(idx, tmp, nums, counts, 0, n-1);
-    return counts;
-}
+Modify merge as follows:
+```
+def merge(left, right, indices, counts):
+    i = 0  # pointer into left
+    j = 0  # pointer into right
+    merged = []
+    while i < len(left) and j < len(right):
+        if nums[left[i]] <= nums[right[j]]:   # left wins
+            # all right[0..j-1] were placed before left[i].
+            # They're "smaller after" left[i] (j elements).
+            counts[left[i]] += j
+            merged.append(left[i])
+            i++
+        else:  # right wins
+            merged.append(right[j])
+            j++
+    while i < len(left):
+        counts[left[i]] += j   # all of right was already placed
+        merged.append(left[i])
+        i++
+    merged.extend(right[j:])
+    return merged
 ```
 
-A few notes about the style:
+Reading this: every time we pick a left element, we know how many right elements have been placed so far (that's `j`). Those right elements are all originally to the right of `left[i]` (since they came from the right half of the index range). And they were all placed before left[i] in the sorted order, meaning they're all smaller than left[i]. So add `j` to `counts[left[i]]`.
 
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+After all merges finish, `counts` has the final answer.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 6: Trace on `[5, 2, 6, 1]`
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
+Initial: indices = [0, 1, 2, 3]. counts = [0, 0, 0, 0].
 
-- Number of inversions total.
-- BIT-based approach.
-- Online queries.
+Split into [0, 1] and [2, 3]. Recurse.
 
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
+**Left half [0, 1]:**
+Split into [0] and [1]. No merge needed within.
+Merge [0] (value 5) with [1] (value 2):
+  i=0, j=0: nums[left[0]]=5, nums[right[0]]=2. 5 > 2, right wins. Append right[0]=1. j=1.
+  i=0, j=1: left only. Add j=1 to counts[0]. counts = [1, 0, 0, 0]. Append left[0]=0. i=1.
+  Done. Merged = [1, 0].
 
----
+**Right half [2, 3]:**
+Similarly, merge [2] and [3]:
+  nums[2]=6, nums[3]=1. 6 > 1. Append 3. j=1.
+  Add j=1 to counts[2]. counts = [1, 0, 1, 0]. Append 2.
+  Merged = [3, 2].
 
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+**Top-level merge of [1, 0] (values 2, 5) and [3, 2] (values 1, 6):**
+  i=0, j=0: nums[left[0]]=2, nums[right[0]]=1. 2 > 1. Append right[0]=3. j=1.
+  i=0, j=1: 2 vs 6. 2 <= 6, left wins. Add j=1 to counts[left[0]] = counts[1]. counts = [1, 1, 1, 0]. Append 1. i=1.
+  i=1, j=1: nums[left[1]]=5 vs 6. 5 <= 6. Add j=1 to counts[left[1]] = counts[0]. counts = [2, 1, 1, 0]. Append 0. i=2.
+  Remaining right: [2]. Append.
+  Merged = [3, 1, 0, 2].
+
+Final counts: `[2, 1, 1, 0]`. ✓ Matches expected.
+
+----------------------------------------
+
+## Step 7: Why This Works
+
+During a merge of left and right halves:
+- Every element in right has a higher **original** index than every element in left (because we split by index ranges in mergesort).
+- If a right element is placed **before** a remaining left element during merge, that right element is smaller than the left element (merge order). And it's originally to the right. So it contributes to the left element's "smaller-after-self" count.
+
+By adding `j` to `counts[left[i]]` when we place `left[i]`, we capture exactly those right elements placed before it.
+
+This counting happens at every merge step; across all levels of mergesort, each pair of indices is visited exactly once in the relevant comparison. So we count every qualifying pair.
+
+----------------------------------------
+
+## Step 8: Complexity
+
+Time: mergesort is O(n log n); counting adds O(1) per merge step. **O(n log n)** total.
+Space: O(n) for the merge buffer and counts array.
+
+Huge win over O(n²) brute force.
+
+Alternative: use a **Fenwick tree (BIT)**. Iterate from right to left; for each value, query "count of values less than this" in the BIT; then insert this value. Also O(n log n). Either approach works.
+
+----------------------------------------
+
+## Step 9: Name It
+
+This is **mergesort-based inversion counting**, adapted for per-element counts.
+
+The core idea — "each merge detects certain cross-half pairs" — is the same as counting total inversions. For per-element counts, we just track where the contribution lands (which left element gets credited).
+
+Related:
+- Reverse Pairs (count pairs where nums[i] > 2 · nums[j]).
+- Count of smaller elements before self (symmetric; iterate left-to-right instead).
+- Number of Range Sum (similar DP with mergesort).
+
+----------------------------------------
+
+## Step 10: C++ Implementation
+
+```cpp
+class Solution {
+    vector<int> counts;
+    vector<int> nums;
+
+    void mergeSort(vector<int>& indices, int lo, int hi) {
+        if (lo >= hi) return;
+        int mid = (lo + hi) / 2;
+        mergeSort(indices, lo, mid);
+        mergeSort(indices, mid + 1, hi);
+
+        // Merge indices[lo..mid] and indices[mid+1..hi] by nums[index] value.
+        vector<int> merged;
+        int i = lo, j = mid + 1;
+        while (i <= mid && j <= hi) {
+            if (nums[indices[i]] <= nums[indices[j]]) {
+                // indices[j..j-1] (i.e., j-1 - (mid+1) + 1 = j - mid - 1 elements) came from right
+                counts[indices[i]] += (j - mid - 1);
+                merged.push_back(indices[i++]);
+            } else {
+                merged.push_back(indices[j++]);
+            }
+        }
+        while (i <= mid) {
+            counts[indices[i]] += (j - mid - 1);   // all of right half placed already
+            merged.push_back(indices[i++]);
+        }
+        while (j <= hi) merged.push_back(indices[j++]);
+
+        for (int k = 0; k < (int)merged.size(); ++k) indices[lo + k] = merged[k];
+    }
+
+public:
+    vector<int> countSmaller(vector<int>& input) {
+        nums = input;
+        int n = nums.size();
+        counts.assign(n, 0);
+        vector<int> indices(n);
+        iota(indices.begin(), indices.end(), 0);
+        mergeSort(indices, 0, n - 1);
+        return counts;
+    }
+};
+```
+
+Key detail: when merging range `[lo, mid]` and `[mid+1, hi]`, the number of right-half elements already placed before the current left-half element (at index `i`) is `j - mid - 1`. Add this to `counts[indices[i]]`.
+
+----------------------------------------
+
+## Step 11: Follow-up Questions
+
+- **Count smaller elements BEFORE self (not after).** Symmetric: iterate right-to-left or reverse the array first.
+- **Count of equal elements (nums[i] == nums[j]).** Change `<=` to `<` in the comparison so equals aren't counted; or handle separately.
+- **Total inversion count (sum of all counts).** Either sum the counts array, or adapt the algorithm to just track a total.
+- **Find the k-th pair by inversion index.** Harder — combination of mergesort with binary search.
+- **Fenwick tree approach.** Coordinate-compress values, then for each from right to left: query BIT for "count of values < current"; then add 1 to BIT at current.
+- **Why not sort and binary search?** Sorting loses original positions; we need per-original-index counts.

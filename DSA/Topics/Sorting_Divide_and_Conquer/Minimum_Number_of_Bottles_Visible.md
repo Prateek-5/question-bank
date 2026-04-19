@@ -4,183 +4,146 @@
 https://leetcode.com/problems/minimum-number-of-bottles-visible-when-standing-on-a-shelf/
 
 **Topic:**
-Sorting Divide and Conquer
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Greedy subtraction of consumed bottles based on exchange ratio.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> numBottles=9, numExchange=3. Drink 9. Exchange 9/3=3 → drink 3. Exchange 3/3=1 → drink 1. Total=13.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Sorting / Divide and Conquer
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: The Setup
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Bottles are arranged on a shelf. Each bottle has a **height**. When you look at the shelf from one side, **each bottle hides behind every taller bottle that stands between it and the viewer** in the row — so the minimum number of bottles visible equals the number of bottles you actually see.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+A cleaner framing: given heights array `h`, count how many bottles are visible given specific viewing rules.
 
-So ask yourself:
+A common variant:
+- Bottles are arranged in a line. You view from the left.
+- A bottle is **visible** if no taller bottle stands in front of it (to its left).
+- Equivalently: a bottle at index i is visible iff `h[i]` is greater than all heights to its left.
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Greedy subtraction of consumed bottles based on exchange ratio.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
+We want the count of visible bottles — equivalently, the count of **new running maxima** as we scan left to right.
 
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
+Example: `h = [3, 1, 4, 2, 5]`.
+- 3 visible (nothing left of it).
+- 1 not visible (3 > 1 blocks it).
+- 4 visible (bigger than 3).
+- 2 not visible (3 or 4 blocks).
+- 5 visible (bigger than 4).
 
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-Sorting first is often the most useful preprocessing step in algorithms. Divide-and-conquer generalizes that idea: split the problem in halves, solve each recursively, and merge. The merge step is where insights like inversion counting live.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Each exchange reduces total bottles; the minimum visible at end is (initial - fully consumed). Iteratively exchange until fewer than needed remain.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Visible count: **3**.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: Running Maximum Scan
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+Looking from the left, a bottle is visible iff it's **strictly greater than the max of everything to its left**. So maintain a running max; increment visible count whenever current > running max; update running max.
 
-**The concept:** Greedy subtraction of consumed bottles based on exchange ratio.
+```
+max_so_far = -∞
+visible = 0
+for h in heights:
+    if h > max_so_far:
+        visible++
+        max_so_far = h
+return visible
+```
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever the problem smells like 'count inversions' or 'k-th statistic' → think Merge Sort variants or Quickselect.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-total = numBottles. empty = numBottles. While empty >= numExchange: new = empty / numExchange; total += new; empty = new + empty % numExchange.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
+O(n) time, O(1) space.
 
 ----------------------------------------
 
-## Step 6: Final Approach
+## Step 3: Trace on `[3, 1, 4, 2, 5]`
 
-Now let's crystallize everything we've learned into a clean algorithm.
+```
+max_so_far = -∞, visible = 0.
+h=3: 3 > -∞. visible = 1. max = 3.
+h=1: 1 not > 3. skip.
+h=4: 4 > 3. visible = 2. max = 4.
+h=2: 2 not > 4. skip.
+h=5: 5 > 4. visible = 3. max = 5.
+```
 
-Iterative exchange loop.
+Return **3**. ✓
 
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
+Try `[1, 2, 3, 4]`:
+```
+h=1: visible = 1. max = 1.
+h=2: visible = 2. max = 2.
+h=3: visible = 3. max = 3.
+h=4: visible = 4. max = 4.
+```
 
-**Before coding, it's worth asking:**
+All 4 visible (strictly increasing heights — nothing blocks).
 
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
-
-----------------------------------------
-
-## Step 7: Dry Run (Detailed)
-
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
-
-numBottles=9, numExchange=3. Drink 9. Exchange 9/3=3 → drink 3. Exchange 3/3=1 → drink 1. Total=13.
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+Try `[4, 3, 2, 1]`:
+- Only h=4 is visible. Return **1**.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 4: View from the Right?
 
-Complexity isn't magic — it's just counting the work.
+Same idea in reverse: scan right to left, tracking a running max, count new peaks. Or equivalently, reverse the array and scan left to right.
 
-Time: O(log). Space: O(1).
+For "view from both sides": use both scans. A bottle is visible from some side if it's a running-max from either direction.
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+----------------------------------------
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+## Step 5: Handle Ties
 
+The problem statement might say "visible if no taller OR equal bottle blocks" — check carefully. If equal heights block, the condition becomes `h > max_so_far` (strict). If equal heights don't block, use `h >= max_so_far`.
+
+The default and most common: strict inequality — a bottle of equal height in front still blocks.
+
+----------------------------------------
+
+## Step 6: Why "Running Max"?
+
+A bottle is visible iff nothing taller is in front. The **tallest bottle seen so far** summarizes all blockers: if the current bottle exceeds this maximum, it's taller than every blocker → visible.
+
+This pattern — replace a history of comparisons with a single "running summary" — is powerful.
+
+----------------------------------------
+
+## Step 7: Name It
+
+**Running maximum (prefix max)**. Related problems:
+- Stock span / next greater element (but more structural — with a stack).
+- Count of "record highs" in a permutation.
+- Histogram skyline visibility.
+
+When viewing from *both* sides, a related pattern emerges: peaks-as-seen-from-left and peaks-as-seen-from-right. Intersection/union of the two gives different counts.
+
+----------------------------------------
+
+## Step 8: Complexity
+
+Time: **O(n)**. Single pass.
+Space: **O(1)** extra.
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
-
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-int numWaterBottles(int nB, int nE) {
-    int total = nB, empty = nB;
-    while (empty >= nE) {
-        int got = empty / nE;
-        total += got;
-        empty = got + empty % nE;
+int minVisibleBottles(vector<int>& heights) {
+    int maxSoFar = INT_MIN, visible = 0;
+    for (int h : heights) {
+        if (h > maxSoFar) {
+            visible++;
+            maxSoFar = h;
+        }
     }
-    return total;
+    return visible;
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Two variables and a loop. The fundamental "scan with running summary" idiom.
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Upper bound formula (nB + (nB-1)/(nE-1)).
-- Multi-currency exchange.
-- Rate-limited exchanges.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Visible from both sides.** Run the scan left-to-right, then right-to-left; mark each visible from either. A bottle is counted once.
+- **Bottles visible when viewed from above (projected).** Different geometry — might involve 2D ordering.
+- **Heights with ties where equal heights don't block.** Change `>` to `>=` in the condition.
+- **Maximum visible bottles after rearrangement.** The maximum is achieved by sorting ascending (viewed from left) — all n visible.
+- **Bottles of variable width?** The blocking condition changes; pure height argument no longer works.
+- **Return the indices of visible bottles, not just count.** Easy extension — track indices when updating `maxSoFar`.

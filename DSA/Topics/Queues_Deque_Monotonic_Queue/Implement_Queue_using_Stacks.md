@@ -4,183 +4,181 @@
 https://leetcode.com/problems/implement-queue-using-stacks/
 
 **Topic:**
-Queues Deque Monotonic Queue
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Two stacks — in and out.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> Push 1,2. Pop: transfer to out=[2,1], pop 1. Push 3. Pop: out=[2], pop 2. Pop: out empty, transfer in=[3] → [3], pop 3.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Queues / Deque / Monotonic Queue
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: The Task
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Implement the **queue** interface (push, pop, peek, empty) using only **stack** operations (push, pop, top, empty).
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
-
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Two stacks — in and out.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
+Stack is LIFO; queue is FIFO. So when we want to remove "the oldest" element from a queue, we have to reach into the "bottom" of a stack somehow.
 
 ----------------------------------------
 
-## Step 3: Build Intuition (VERY IMPORTANT)
+## Step 2: Key Trick — Two Stacks Reverse the Order
 
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
+If we push elements 1, 2, 3 onto stack A, they sit as [1, 2, 3] with 3 on top. Popping A one-by-one gives 3, 2, 1. If we push those pops onto stack B, B becomes [3, 2, 1] with 1 on top.
 
-A nested loop over each window is the obvious approach. But each element enters and leaves the window exactly once, so a deque that maintains only 'useful' candidates gives us the answer in amortized O(1) per position.
+**Stack B now has the oldest element (1) at the top.** Popping B gives 1, 2, 3 — exactly queue order.
 
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Push to 'in'. For peek/pop, if 'out' is empty transfer all from 'in' (reverses order), then operate on 'out'.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+So the strategy: maintain two stacks, `inStack` (for pushes) and `outStack` (for pops). Whenever outStack is empty and we need to pop, transfer all of inStack to outStack (reversing order). The oldest element is now on top of outStack.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 3: Algorithm
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+```
+push(x):
+    inStack.push(x)
 
-**The concept:** Two stacks — in and out.
+pop():
+    if outStack is empty:
+        while inStack not empty:
+            outStack.push(inStack.pop())
+    return outStack.pop()
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
+peek():
+    if outStack is empty:
+        while inStack not empty:
+            outStack.push(inStack.pop())
+    return outStack.top()
 
-**Pattern recognition cue:**
-
-**Whenever you need sliding window max/min in O(n) → think Monotonic Deque.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-Push: in.push. Pop/Peek: if out empty, while in not empty move top to out. Then pop/peek out.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
+empty():
+    return inStack is empty AND outStack is empty
+```
 
 ----------------------------------------
 
-## Step 6: Final Approach
+## Step 4: Trace
 
-Now let's crystallize everything we've learned into a clean algorithm.
+```
+push(1). inStack = [1]. outStack = [].
+push(2). inStack = [1, 2].
+push(3). inStack = [1, 2, 3].
 
-Amortized O(1) per op.
+peek(): outStack empty → transfer.
+  Pop 3 from inStack, push to outStack. outStack = [3].
+  Pop 2, push. outStack = [3, 2].
+  Pop 1, push. outStack = [3, 2, 1].
+  inStack = [], outStack = [3, 2, 1]. Top = 1.
 
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
+pop() = 1. outStack = [3, 2].
 
-**Before coding, it's worth asking:**
+push(4). inStack = [4]. (outStack untouched.)
 
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
+pop(): outStack not empty. Pop top = 2. outStack = [3].
 
-Get those clear in your head, and the code almost writes itself.
+pop(): outStack not empty. Pop 3. outStack = [].
 
+pop(): outStack empty → transfer from inStack = [4].
+  Pop 4, push to outStack. outStack = [4]. inStack = [].
+  Pop top = 4.
+```
 
-----------------------------------------
-
-## Step 7: Dry Run (Detailed)
-
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
-
-Push 1,2. Pop: transfer to out=[2,1], pop 1. Push 3. Pop: out=[2], pop 2. Pop: out empty, transfer in=[3] → [3], pop 3.
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+Sequence of pops: 1, 2, 3, 4. Exactly queue FIFO order. ✓
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 5: Amortized Complexity
 
-Complexity isn't magic — it's just counting the work.
+Each element is pushed to inStack once, then moved to outStack once (via transfer), then popped once. That's 3 stack operations per element.
 
-Amortized O(1).
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
+**Amortized O(1) per queue operation.** Even though a single pop can be O(n) (when it triggers a transfer of n elements), the total work over any sequence of k operations is O(k).
 
 ----------------------------------------
 
-## Step 9: C++ Implementation
+## Step 6: Why Two Stacks and Not One?
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+With one stack, we can either:
+- Push in order and pop in reverse (LIFO natively — wrong).
+- Rearrange on every op (O(n) per op).
+
+Two stacks give us **amortized O(1)** because each transfer is free on average — we only transfer when outStack is empty, and each element takes part in at most one transfer.
+
+If we tried to use one stack, we'd have to rearrange after every push (or every pop), giving O(n) per op, not amortized O(1).
+
+----------------------------------------
+
+## Step 7: Why Lazy Transfer (Not Eager)?
+
+Eager version: after every push, immediately rearrange to keep outStack sorted for FIFO. That would force O(n) per push.
+
+Lazy: transfer only when outStack is empty AND we need to pop. This lets multiple pushes accumulate without touching outStack. Over the lifetime of each element, only 3 constant-work operations — O(1) amortized.
+
+----------------------------------------
+
+## Step 8: Name It
+
+**Amortized analysis via two-stack queue simulation.** A classical textbook example of amortization.
+
+Related problems:
+- Implement Stack using Queues (symmetric; harder to get O(1) amortized).
+- Design Browser History (two stacks for forward/back).
+- Implement Deque from stacks.
+- Online algorithms where amortized complexity matters.
+
+The two-stack pattern appears whenever you need to reverse the access order of a stream of data.
+
+----------------------------------------
+
+## Step 9: Complexity
+
+- **push**: O(1) always.
+- **pop**: O(1) amortized, O(n) worst-case.
+- **peek**: same as pop.
+- **empty**: O(1).
+- **Space**: O(n) total across both stacks.
+
+----------------------------------------
+
+## Step 10: C++ Implementation
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
 class MyQueue {
-    stack<int> in, out;
-    void shift() { while (!in.empty()) { out.push(in.top()); in.pop(); } }
+    stack<int> inSt, outSt;
+
+    void transfer() {
+        while (!inSt.empty()) {
+            outSt.push(inSt.top());
+            inSt.pop();
+        }
+    }
+
 public:
-    void push(int x) { in.push(x); }
-    int pop() { if (out.empty()) shift(); int v = out.top(); out.pop(); return v; }
-    int peek() { if (out.empty()) shift(); return out.top(); }
-    bool empty() { return in.empty() && out.empty(); }
+    MyQueue() {}
+
+    void push(int x) {
+        inSt.push(x);
+    }
+
+    int pop() {
+        if (outSt.empty()) transfer();
+        int x = outSt.top();
+        outSt.pop();
+        return x;
+    }
+
+    int peek() {
+        if (outSt.empty()) transfer();
+        return outSt.top();
+    }
+
+    bool empty() {
+        return inSt.empty() && outSt.empty();
+    }
 };
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Transfer only when outSt is empty — that's the key to amortized O(1).
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 11: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Implement stack using queues.
-- Double-ended queue.
-- Concurrent queue.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Amortized vs. worst-case O(1).** Can we achieve O(1) worst-case? Yes, with more bookkeeping (incremental transfer), but code is much more complex.
+- **Thread-safe queue from stacks.** Needs locks; concurrent modifications may require lock-free techniques.
+- **Queue size in O(1).** Keep a running count: increment on push, decrement on pop.
+- **Get the k-th oldest element.** Need additional structure (e.g., indexed access).
+- **Priority queue from stacks.** Heap-like behavior is harder; usually pair with explicit ordering.
+- **Why not simply use a std::queue?** The exercise is to build it from primitives — demonstrating data-structure abstraction.

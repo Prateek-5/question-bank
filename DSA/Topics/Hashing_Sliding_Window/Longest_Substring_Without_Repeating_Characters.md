@@ -4,157 +4,144 @@
 https://leetcode.com/problems/longest-substring-without-repeating-characters/
 
 **Topic:**
-Hashing Sliding Window
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Sliding window with char→last-index map.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> s='abcabcbb'. Windows 'abc','bca','cab','abc','cb','b' → max length 3.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Hashing / Sliding Window
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: What Are We Actually Asked?
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Given a string `s`, find the length of the longest *substring* (contiguous slice) in which every character is unique.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Example: `s = "abcabcbb"`. Possible unique-character substrings include `"abc"`, `"bca"`, `"cab"`, etc. — all length 3. There's no length-4 substring with all unique characters. So the answer is `3`.
 
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Sliding window with char→last-index map.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
+Another: `s = "pwwkew"` → best is `"wke"` of length 3 (note `"pwke"` isn't contiguous since it skips an index).
 
 ----------------------------------------
 
-## Step 3: Build Intuition (VERY IMPORTANT)
+## Step 2: The Naïve Approach
 
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-The default is to enumerate every subarray or substring. That's O(n²). Two techniques collapse this: prefix-sum + hashmap for counting subarrays with a property, or a sliding window whose left and right pointers advance monotonically.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Maintain a window [l, r] with distinct chars. When a repeat enters at r, jump l to the position after the previous occurrence of that char.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
-
-----------------------------------------
-
-## Step 4: Connect to Concept
-
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
-
-**The concept:** Sliding window with char→last-index map.
-
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**'Subarray sum equals k' or 'count of something in windows' → think Prefix Sum + HashMap or Sliding Window.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-For each r: if last[c]>=l, l=last[c]+1. Update last[c]=r; track max window size.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Sliding window.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
-
-----------------------------------------
-
-## Step 7: Dry Run (Detailed)
-
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
-
-s='abcabcbb'. Windows 'abc','bca','cab','abc','cb','b' → max length 3.
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
-
-----------------------------------------
-
-## Step 8: Time and Space Complexity
-
-Complexity isn't magic — it's just counting the work.
-
-Time: O(n). Space: O(Σ).
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
-
-----------------------------------------
-
-## Step 9: C++ Implementation
-
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+For every starting index `i`, extend outward as long as characters stay unique. Track the max length.
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
+int best = 0;
+for (int i = 0; i < n; ++i) {
+    set<char> seen;
+    for (int j = i; j < n; ++j) {
+        if (seen.count(s[j])) break;
+        seen.insert(s[j]);
+    }
+    best = max(best, (int)seen.size());
+}
+```
+
+That's O(n²) in time and O(min(n, Σ)) space per outer iteration. For `n = 10^5` we really don't want that.
+
+So the question is: why does the brute force waste work? When we advance `i` by one, we're throwing away a bunch of information we already collected for `i-1`. Can we reuse it?
+
+----------------------------------------
+
+## Step 3: The "Window" Idea
+
+Let's think about it as a window `[l, r]` that slides across the string. The window always holds a substring with unique characters. We grow `r` whenever we can, and we shrink `l` whenever we *must*.
+
+- **When can we grow `r`?** When adding `s[r]` keeps all characters unique in the window.
+- **When must we shrink `l`?** When `s[r]` is already somewhere in the window — then we need to kick out the old occurrence of `s[r]` by moving `l` forward.
+
+Here's the beautiful part: `l` only ever moves forward. It never moves backward. So across the whole run, `l` advances at most `n` times and `r` advances exactly `n` times. Total work: O(n).
+
+Why doesn't `l` move backward? Because shrinking from the left only removes elements. Once we've confirmed the window `[l, r]` has unique characters, all its sub-windows do too — so moving `l` back couldn't help.
+
+----------------------------------------
+
+## Step 4: How to Detect a Duplicate Efficiently
+
+When we want to add `s[r]`, we need to check: is `s[r]` already in the window `[l, r-1]`?
+
+A hashmap / array of "last seen index" answers this in O(1):
+
+- `last[c]` = the most recent index at which character `c` was seen, or `-1` if never.
+- If `last[s[r]] >= l`, then `s[r]` is inside the window. We must shrink: set `l = last[s[r]] + 1`.
+- Then update `last[s[r]] = r` and continue.
+
+After each step, the window `[l, r]` has unique characters by construction, so we record `best = max(best, r - l + 1)`.
+
+This is a **sliding window** — two pointers both moving forward, with a hashmap maintaining a per-character "last seen" index.
+
+----------------------------------------
+
+## Step 5: Dry Run on "abcabcbb"
+
+I'll track `l`, `r`, `last`, and `best`.
+
+```
+Initially: l = 0, last = all -1, best = 0.
+
+r = 0, s[r] = 'a'. last['a'] = -1 < 0 = l. No shrink.
+       Update last['a'] = 0. Window = "a". best = 1.
+
+r = 1, s[r] = 'b'. last['b'] = -1. No shrink.
+       last['b'] = 1. Window = "ab". best = 2.
+
+r = 2, s[r] = 'c'. last['c'] = -1. No shrink.
+       last['c'] = 2. Window = "abc". best = 3.
+
+r = 3, s[r] = 'a'. last['a'] = 0 >= l = 0. SHRINK. l = 0 + 1 = 1.
+       last['a'] = 3. Window = "bca". best = max(3, 3) = 3.
+
+r = 4, s[r] = 'b'. last['b'] = 1 >= l = 1. SHRINK. l = 1 + 1 = 2.
+       last['b'] = 4. Window = "cab". best = 3.
+
+r = 5, s[r] = 'c'. last['c'] = 2 >= l = 2. SHRINK. l = 3.
+       last['c'] = 5. Window = "abc" (indices 3..5). best = 3.
+
+r = 6, s[r] = 'b'. last['b'] = 4 >= l = 3. SHRINK. l = 5.
+       last['b'] = 6. Window = "cb" (indices 5..6). best = 3.
+
+r = 7, s[r] = 'b'. last['b'] = 6 >= l = 5. SHRINK. l = 7.
+       last['b'] = 7. Window = "b" (index 7). best = 3.
+```
+
+Final answer: **3**. Matches the expected result.
+
+Notice one subtle point: when we shrink, we don't manually remove entries from `last`. We just set `l` past the old occurrence. The `last[c] >= l` check is doing double duty — it implicitly ignores occurrences that are now outside the window. That's cleaner than actively cleaning up `last`.
+
+----------------------------------------
+
+## Step 6: The Correctness Argument
+
+Let's convince ourselves this works.
+
+**Claim 1:** After processing index `r`, the window `[l, r]` contains only unique characters.
+
+*Proof:* Induction on `r`. Base case `r = 0` trivial. For the inductive step, suppose after `r-1` the window `[l_old, r-1]` is unique. At step `r`, we check if `s[r]` was seen at index `last[s[r]]`. If `last[s[r]] >= l_old`, `s[r]` is in the window, so we set `l = last[s[r]] + 1`, removing the old occurrence. The new window `[l, r]` has `s[r]` appearing exactly once (at position `r`), and by induction every other character appears exactly once too. ✓
+
+**Claim 2:** `l` never moves backward.
+
+*Proof:* When we shrink, `l_new = last[s[r]] + 1`. But `last[s[r]]` records an index `≥ l_old` (if the character is in the current window) — otherwise we wouldn't have shrunk. So `l_new ≥ l_old + 1 > l_old`. Monotonic forward. ✓
+
+**Claim 3:** Total work is O(n).
+
+*Proof:* `r` moves from 0 to n-1. `l` moves monotonically from 0 to at most n. Each pointer takes at most n steps. ✓
+
+----------------------------------------
+
+## Step 7: Complexity
+
+Time: **O(n)** by the monotonicity argument above.
+Space: **O(Σ)** where Σ is the alphabet size (256 for ASCII). Effectively constant.
+
+----------------------------------------
+
+## Step 8: C++ Implementation
+
+```cpp
 int lengthOfLongestSubstring(string s) {
     vector<int> last(256, -1);
     int l = 0, best = 0;
     for (int r = 0; r < (int)s.size(); ++r) {
-        if (last[s[r]] >= l) l = last[s[r]] + 1;
+        if (last[s[r]] >= l) {
+            l = last[s[r]] + 1;       // kick out the old occurrence
+        }
         last[s[r]] = r;
         best = max(best, r - l + 1);
     }
@@ -162,26 +149,14 @@ int lengthOfLongestSubstring(string s) {
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+A small implementation detail: I use an array of size 256 (one slot per ASCII code) instead of `unordered_map<char, int>` because it's faster and simpler when the alphabet is small. For Unicode you'd want the hashmap.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 9: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- At most k distinct chars.
-- With repeating but ≤ k times each.
-- Longest unique substring in a stream.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **What if we allow at most `k` distinct characters?** Track count-per-char in the window. Shrink `l` while the number of distinct chars exceeds `k`.
+- **What if we allow each char to appear at most `k` times?** Same structure, but track per-char counts and shrink while any count exceeds `k`.
+- **Longest substring with all characters identical.** Much simpler — just count consecutive runs.
+- **Can you reconstruct the actual substring, not just the length?** Yes — when you update `best`, also snapshot `l` and `r`. At the end, `s.substr(bestL, bestLen)`.
+- **What if the string is streamed and you see each character once?** The algorithm already processes one character at a time — it works as-is, as long as you can keep the hashmap in memory.

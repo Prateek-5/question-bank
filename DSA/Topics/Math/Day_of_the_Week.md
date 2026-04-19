@@ -6,183 +6,175 @@ https://leetcode.com/problems/day-of-the-week/
 **Topic:**
 Math
 
+----------------------------------------
+
+## Step 1: The Problem
+
+Given a date (day, month, year), return the day of the week as a string (e.g., "Sunday", "Monday", ...).
+
+Valid date range: 1971-01-01 to 2100-12-31.
+
+Example: `day = 31, month = 8, year = 2019`. Output: "Saturday".
 
 ----------------------------------------
 
-## Step 1: Understand the Problem (Beginner Friendly)
+## Step 2: Approach — Count Days Since a Known Reference
 
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
+Pick a reference date whose day-of-week we know. Compute the number of days between that reference and the input date. Modulo 7 gives the day-of-week offset.
 
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
+LeetCode's problem constraint starts at 1971-01-01. **January 1, 1971 was a Friday.**
 
-**In plain words:** Zeller's congruence or day-of-year counting from a known anchor date.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> Query 2019-08-31. Days from 1971 = sum of year-days + months-in-2019 + 31-1. Modulo 7 yields 6 → Saturday.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Algorithm:
+1. Compute total days from 1971-01-01 to (day, month, year).
+2. Compute `(friday_index + total_days) % 7` where Friday has some numeric index.
+3. Map the result to a weekday name.
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 3: Counting Days Elapsed
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Days between two dates = (years elapsed × days-per-year) + (days in completed months of target year) + (day - 1).
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Leap year adjustment: a year is a leap year if divisible by 4 AND not by 100, except years divisible by 400.
 
-So ask yourself:
+```
+def daysInYear(y):
+    return 366 if leap(y) else 365
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Zeller's congruence or day-of-year counting from a known anchor date.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
+def daysInMonth(m, y):
+    days = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    if m == 2 and leap(y): return 29
+    return days[m - 1]
 
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
+total = 0
+for y in 1971..year-1: total += daysInYear(y)
+for m in 1..month-1: total += daysInMonth(m, year)
+total += day - 1
 
+weekday_index = (5 + total) % 7   # 5 = Friday's index if Sunday=0
 
-----------------------------------------
+weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+return weekdays[weekday_index]
+```
 
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-When you see an arithmetic puzzle, there's a temptation to simulate it step by step. That's honest, and often correct — but it's worth asking first: is there a closed-form shortcut? Mathematical invariants and modular arithmetic frequently collapse a loop into an O(1) formula.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Pick a reference date whose weekday is known, then count the total days elapsed and take modulo 7 to find the target weekday.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+O(year - 1971) ≈ O(100) for typical inputs. Tiny.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 4: Trace for Aug 31, 2019
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+Days from 1971 to 2018 (years 1971..2018, 48 years):
+- Leap years in range: 1972, 1976, ..., 2016. Count: (2016 - 1972) / 4 + 1 = 12. (Exclude 2000 centennial check: 2000 is divisible by 400, so it's a leap year. No exclusions needed.)
+- Total: 48 × 365 + 12 = 17520 + 12 = 17532 days.
 
-**The concept:** Zeller's congruence or day-of-year counting from a known anchor date.
+Days in 2019, months 1..7 (Jan through July):
+- Jan (31) + Feb (28, 2019 not leap) + Mar (31) + Apr (30) + May (31) + Jun (30) + Jul (31) = 212 days.
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
+Day offset in August: 31 - 1 = 30.
 
-**Pattern recognition cue:**
+Total = 17532 + 212 + 30 = 17774 days.
 
-**Whenever you see digits, divisibility, primes, or modular structure → think Math/Number Theory.**
+(5 + 17774) % 7 = 17779 % 7 = ?
+17779 / 7 = 2539 remainder ? Let me compute: 7 × 2539 = 17773. 17779 - 17773 = 6.
 
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-From 1971-01-01 (Friday, index 5 if Sunday=0), compute the total number of days to the query date: account for leap years and days in months. Convert (5 + total_days) % 7 to a weekday name.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
+Weekday index 6 = "Saturday". ✓
 
 ----------------------------------------
 
-## Step 6: Final Approach
+## Step 5: Zeller's Congruence (Alternative)
 
-Now let's crystallize everything we've learned into a clean algorithm.
+A closed-form formula exists:
 
-Day-counting from epoch, with leap-year handling. Alternative: Zeller's formula.
+```
+Zeller's Congruence:
+h = (q + floor(13(m+1)/5) + K + floor(K/4) + floor(J/4) - 2J) mod 7
+```
 
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
+Where:
+- q = day.
+- m = month (with Jan and Feb treated as months 13 and 14 of the *previous* year).
+- K = year mod 100.
+- J = year / 100 (century).
+- h = 0 for Saturday, 1 for Sunday, ..., 6 for Friday.
 
-**Before coding, it's worth asking:**
+This is O(1) with no loop. The formula is from 19th-century astronomical calculations.
 
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
-
-----------------------------------------
-
-## Step 7: Dry Run (Detailed)
-
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
-
-Query 2019-08-31. Days from 1971 = sum of year-days + months-in-2019 + 31-1. Modulo 7 yields 6 → Saturday.
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+For interview, the day-counting approach is clearer. Mention Zeller's if the interviewer presses for O(1).
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 6: Why Count-Days Works
 
-Complexity isn't magic — it's just counting the work.
+Given any reference date with a known weekday, every subsequent date has a weekday offset equal to the number of elapsed days modulo 7.
 
-O(year-1971) per query.
+Math: if day D is weekday w, then day D + k is weekday `(w + k) % 7`.
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+Pick a reference early enough to cover all valid inputs, compute elapsed days, apply modulo.
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+----------------------------------------
 
+## Step 7: Name It
+
+**Day-counting with modular arithmetic**. A staple of calendar-related problems. The leap-year handling is fiddly but mechanical.
+
+Related:
+- Zeller's Congruence (closed form).
+- Easter date calculation (more complex).
+- ISO week number.
+- Date arithmetic in databases (DATEDIFF, etc.).
+
+----------------------------------------
+
+## Step 8: Complexity
+
+Time: **O(year - 1971)**. Essentially O(1) for bounded ranges.
+Space: **O(1)**.
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
-
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
+class Solution {
+    bool isLeap(int y) {
+        return (y % 4 == 0 && y % 100 != 0) || (y % 400 == 0);
+    }
 
-string dayOfTheWeek(int d, int m, int y) {
-    vector<string> days = {"Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"};
-    vector<int> md = {31,28,31,30,31,30,31,31,30,31,30,31};
-    auto leap = [](int y){ return (y%4==0 && y%100!=0) || y%400==0; };
-    int total = 0;
-    for (int yy = 1971; yy < y; ++yy) total += leap(yy) ? 366 : 365;
-    for (int mm = 0; mm < m - 1; ++mm) total += md[mm] + (mm == 1 && leap(y));
-    total += d - 1;
-    return days[(5 + total) % 7]; // 1971-01-01 was Friday
-}
+    int daysInMonth(int m, int y) {
+        vector<int> days = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+        if (m == 2 && isLeap(y)) return 29;
+        return days[m - 1];
+    }
+
+public:
+    string dayOfTheWeek(int day, int month, int year) {
+        int total = 0;
+        for (int y = 1971; y < year; ++y) {
+            total += isLeap(y) ? 366 : 365;
+        }
+        for (int m = 1; m < month; ++m) {
+            total += daysInMonth(m, year);
+        }
+        total += day - 1;
+
+        // 1971-01-01 was a Friday. Sunday=0, Monday=1, ..., Saturday=6.
+        // Friday = 5.
+        vector<string> weekdays = {"Sunday", "Monday", "Tuesday", "Wednesday",
+                                    "Thursday", "Friday", "Saturday"};
+        return weekdays[(5 + total) % 7];
+    }
+};
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Cleanly broken into helpers. The key fact is memorized: 1971-01-01 is Friday.
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Handle BC dates or a wider range.
-- Use Zeller's congruence for O(1).
-- Compute day of year; Julian day number.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Very old dates (before the Gregorian calendar).** Much more complex — Julian calendar rules.
+- **Dates across time zones / DST.** Handled outside the "day of week" abstraction.
+- **Computing days between two arbitrary dates.** Similar counting logic.
+- **Zeller's Congruence for O(1).** Implementable directly.
+- **Find all Mondays (or any weekday) in a year.** Enumerate Jan 1 to Dec 31, check each.
+- **Why is 2000 a leap year but 1900 isn't?** Divisible by 400 vs just 100. The "fix" to the Julian calendar's drift.

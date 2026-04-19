@@ -6,196 +6,220 @@ https://leetcode.com/problems/sudoku-solver/
 **Topic:**
 Backtracking
 
+----------------------------------------
+
+## Step 1: The Rules of Sudoku
+
+You have a 9×9 grid, partially filled with digits 1-9. Empty cells are marked with `.`. Fill them in such that:
+- Every row contains each digit 1-9 exactly once.
+- Every column contains each digit 1-9 exactly once.
+- Every 3×3 sub-box (there are 9 of them) contains each digit 1-9 exactly once.
+
+Modify the input board in place. The problem guarantees a unique solution.
 
 ----------------------------------------
 
-## Step 1: Understand the Problem (Beginner Friendly)
+## Step 2: Brute Force Idea
 
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
+For each empty cell, try digits 1 through 9. If a choice violates Sudoku rules, try the next. If no choice works, backtrack to the previous cell and try a different digit there.
 
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
+This is classical **backtracking**:
+- Pick an empty cell.
+- Try each digit 1-9.
+- For each: if valid in all three constraints (row, column, box), place it and recurse.
+- If recursion fails, undo and try next digit.
 
-**In plain words:** Backtracking with row/col/box masks.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> Standard 9x9 fills left-to-right, top-down.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+If we make it through every cell with valid placements, we've found the solution.
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 3: How to Validate a Placement Fast
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+For each cell (r, c), a candidate digit `d` is valid if:
+- No other cell in row r contains d.
+- No other cell in column c contains d.
+- No other cell in the 3×3 box containing (r, c) contains d.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Naive check: scan the row, column, and box each time — O(27) per check. Workable but slow for large backtracking trees.
 
-So ask yourself:
+Faster: maintain **three sets of bitmasks** — one per row, one per column, one per box. Each bitmask's bit `d-1` is set if digit d is present in that row/column/box.
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Backtracking with row/col/box masks.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
+- `rowMask[r]`: 9-bit mask of digits present in row r.
+- `colMask[c]`: same for column c.
+- `boxMask[b]`: same for box b (where `b = (r/3)*3 + c/3`).
 
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
+To check if d is valid at (r, c): test if bit d-1 is set in **any** of `rowMask[r]`, `colMask[c]`, `boxMask[b]`. If not set anywhere, valid.
 
+To place: set bit d-1 in all three.
+To remove: unset bit d-1 in all three.
 
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-Brute-force enumeration is the starting point. The real engineering is pruning — cutting branches as soon as they can't lead to a valid answer. Good pruning can turn an exponential search into something that finishes in milliseconds.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Fill empty cells one at a time. For each, try digits 1–9; check validity with masks; recurse.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Each op O(1).
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 4: The Backtracking Algorithm
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+```
+initialize rowMask, colMask, boxMask from the existing filled cells
 
-**The concept:** Backtracking with row/col/box masks.
-
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever you need to generate all permutations, combinations, or configurations → think Backtracking with pruning.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-Maintain rowMask[9], colMask[9], boxMask[9] of used digits. DFS over empty cells trying 1–9 where masks allow.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Backtracking with bitmasks.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
-
-----------------------------------------
-
-## Step 7: Dry Run (Detailed)
-
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
-
-Standard 9x9 fills left-to-right, top-down.
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
-
-----------------------------------------
-
-## Step 8: Time and Space Complexity
-
-Complexity isn't magic — it's just counting the work.
-
-Exponential worst; fast with masking.
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
-
-----------------------------------------
-
-## Step 9: C++ Implementation
-
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
-
-```cpp
-#include <bits/stdc++.h>
-using namespace std;
-bool solve(vector<vector<char>>& b, int r, int c, int rm[9], int cm[9], int bm[9]) {
-    if (r == 9) return true;
-    if (c == 9) return solve(b, r+1, 0, rm, cm, bm);
-    if (b[r][c] != '.') return solve(b, r, c+1, rm, cm, bm);
-    int bi = (r/3)*3 + c/3;
-    for (int d = 0; d < 9; ++d) {
-        int bit = 1 << d;
-        if ((rm[r] | cm[c] | bm[bi]) & bit) continue;
-        b[r][c] = '1' + d;
-        rm[r] |= bit; cm[c] |= bit; bm[bi] |= bit;
-        if (solve(b, r, c+1, rm, cm, bm)) return true;
-        b[r][c] = '.';
-        rm[r] &= ~bit; cm[c] &= ~bit; bm[bi] &= ~bit;
-    }
-    return false;
-}
-void solveSudoku(vector<vector<char>>& b) {
-    int rm[9] = {}, cm[9] = {}, bm[9] = {};
-    for (int i = 0; i < 9; ++i) for (int j = 0; j < 9; ++j) if (b[i][j] != '.') {
-        int d = b[i][j] - '1', bi = (i/3)*3 + j/3;
-        rm[i] |= 1<<d; cm[j] |= 1<<d; bm[bi] |= 1<<d;
-    }
-    solve(b, 0, 0, rm, cm, bm);
-}
+def solve():
+    find next empty cell (r, c)
+    if no empty cell: return True   # solved!
+    
+    for d in 1..9:
+        bit = 1 << (d - 1)
+        if (rowMask[r] | colMask[c] | boxMask[box(r, c)]) & bit: continue  # not valid
+        
+        # place d
+        board[r][c] = d
+        rowMask[r] |= bit
+        colMask[c] |= bit
+        boxMask[box(r, c)] |= bit
+        
+        if solve(): return True
+        
+        # undo
+        board[r][c] = '.'
+        rowMask[r] ^= bit
+        colMask[c] ^= bit
+        boxMask[box(r, c)] ^= bit
+    
+    return False   # no digit worked
 ```
 
-A few notes about the style:
+Recursion explores all choices. The masks let validity checks be O(1).
 
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+"Find next empty cell" can be a linear scan starting from the current position (preserving order), or optimized by maintaining an index.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 5: Why Backtracking Works for Sudoku
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
+Sudoku has a tree of decisions: each empty cell is a branching point with up to 9 children. With strict constraints pruning invalid choices early, most branches fail quickly.
 
-- Count all solutions.
-- Difficulty estimation via solve steps.
-- 16×16 Sudoku.
+The worst case is exponential, but in practice Sudoku puzzles are constrained enough that good backtracking finishes in milliseconds. Modern solvers can solve any 9×9 Sudoku almost instantly.
 
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
+----------------------------------------
 
----
+## Step 6: Practical Notes
 
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+**Choosing the next cell:** just picking the first empty cell in row-major order is fine. Fancier heuristics ("most-constrained cell first") can speed things up significantly, but they complicate the code.
+
+**Initial mask population:** before the recursion starts, iterate the board once and populate rowMask, colMask, boxMask based on pre-filled cells.
+
+**Undo step:** we use XOR (`^=`) to toggle bits. Since we only ever add then remove the same bit, toggling twice cancels out.
+
+----------------------------------------
+
+## Step 7: Walk Through a Small Thought Experiment
+
+Consider a simpler case: a 2×2 puzzle (for illustration only — real Sudoku is 9×9). Suppose we have:
+```
+1 .
+. 2
+```
+
+Empty cells: (0, 1) and (1, 0). Constraints: each row and column has each of {1, 2} exactly once.
+
+- (0, 1): row 0 has 1. Can be 2. Place 2.
+- (1, 0): row 1 has 2. Column 0 has 1. Can be 1? No, column 0 already has 1. Can be 2? No, row 1 has 2. Fail. Backtrack.
+- Back to (0, 1): already tried 2. Out of options. Backtrack further — no further. Problem unsolvable.
+
+For a valid 9×9 Sudoku, the branching is massive but pruning keeps it tractable.
+
+----------------------------------------
+
+## Step 8: Name It
+
+This is **constraint-propagation backtracking**. The constraints (row, column, box uniqueness) are maintained incrementally via bitmasks, and the recursion explores the decision tree.
+
+Related patterns:
+- N-Queens (similar structure; different constraints).
+- Latin Squares.
+- Crossword puzzle solving.
+- SAT solvers (a generalization).
+
+Sudoku is actually NP-hard in general (for n×n grids), but for small fixed sizes like 9, it's always solvable in practice.
+
+----------------------------------------
+
+## Step 9: Complexity
+
+**Time**: worst case exponential, but the constraints prune the search dramatically. For standard 9×9, under a millisecond usually.
+
+**Space**: O(1) extra memory beyond the board (just three 9-element arrays and recursion depth ≤ 81).
+
+----------------------------------------
+
+## Step 10: C++ Implementation
+
+```cpp
+class Solution {
+    int rowMask[9] = {0}, colMask[9] = {0}, boxMask[9] = {0};
+    vector<vector<char>>* board;
+
+    int boxIdx(int r, int c) { return (r / 3) * 3 + c / 3; }
+
+    bool solve(int r, int c) {
+        if (r == 9) return true;
+        int nr = (c == 8) ? r + 1 : r;
+        int nc = (c == 8) ? 0 : c + 1;
+
+        if ((*board)[r][c] != '.') return solve(nr, nc);
+
+        for (int d = 1; d <= 9; ++d) {
+            int bit = 1 << (d - 1);
+            int b = boxIdx(r, c);
+            if ((rowMask[r] | colMask[c] | boxMask[b]) & bit) continue;
+
+            (*board)[r][c] = '0' + d;
+            rowMask[r] |= bit;
+            colMask[c] |= bit;
+            boxMask[b] |= bit;
+
+            if (solve(nr, nc)) return true;
+
+            (*board)[r][c] = '.';
+            rowMask[r] ^= bit;
+            colMask[c] ^= bit;
+            boxMask[b] ^= bit;
+        }
+        return false;
+    }
+
+public:
+    void solveSudoku(vector<vector<char>>& bd) {
+        board = &bd;
+        // populate masks from existing digits
+        for (int r = 0; r < 9; ++r) {
+            for (int c = 0; c < 9; ++c) {
+                if (bd[r][c] != '.') {
+                    int d = bd[r][c] - '0';
+                    int bit = 1 << (d - 1);
+                    rowMask[r] |= bit;
+                    colMask[c] |= bit;
+                    boxMask[boxIdx(r, c)] |= bit;
+                }
+            }
+        }
+        solve(0, 0);
+    }
+};
+```
+
+Reading the code:
+- `solve(r, c)`: try to fill cell (r, c) and beyond.
+- If cell is already filled, move to the next.
+- Otherwise, try each digit; for each, check validity via the three masks; if valid, place and recurse.
+- On recursion failure, undo and try the next digit.
+
+----------------------------------------
+
+## Step 11: Follow-up Questions
+
+- **Count the number of valid solutions.** Don't return on first; continue searching and count. (Normally Sudoku has one, but custom puzzles may have more.)
+- **Solve a partially-filled puzzle with constraints violated in the input.** Detect the violation during initial mask population (bit already set means conflict).
+- **Solve 16×16 or 25×25 Sudoku.** Same algorithm; adjust constants. Bitmasks still fit in 32 bits for 16×16.
+- **Dance-Links / Algorithm X.** Knuth's algorithm for exact-cover problems. Much more efficient for Sudoku than naive backtracking.
+- **Deduction-based preprocessing.** Apply logical deduction rules (naked singles, hidden singles, pairs, etc.) before/during backtracking to prune.
+- **Detect if a Sudoku has multiple solutions.** Continue search after the first solution; if another is found, the puzzle isn't well-formed.

@@ -4,183 +4,153 @@
 https://leetcode.com/problems/total-hamming-distance/
 
 **Topic:**
-Arrays and Matrices
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Bitwise counting — per bit, contribution = ones * zeros.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> nums=[4,14,2]. Bit 1: binaries 100,1110,010. ones=2, zeros=1 → 2. Bit 2: ones=1,zeros=2→2. Bit 3: ones=1,zeros=2→2. Total=6.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Arrays & Matrices (Bit Manipulation flavored)
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Understand Hamming Distance
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+The **Hamming distance** between two integers is the number of bit positions where they differ.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Example: 
+- 1 = `0001`. 
+- 4 = `0100`. 
+- They differ at bits 0 and 2. Hamming distance = 2.
 
-So ask yourself:
+This problem: given `nums`, compute the **sum of Hamming distances over all pairs (i, j) with i < j**.
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Bitwise counting — per bit, contribution = ones * zeros.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
+Example: `nums = [4, 14, 2]`.
+- HD(4, 14): 4=0100, 14=1110. Differ at bits 1, 3. HD = 2.
+- HD(4, 2): 4=0100, 2=0010. Differ at bits 1, 2. HD = 2.
+- HD(14, 2): 14=1110, 2=0010. Differ at bits 2, 3. HD = 2.
 
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-Your first instinct is often a straightforward double loop over rows and columns. That's O(n·m), which is sometimes fine. When it isn't, look for contribution counting — asking 'for each element, how many sub-ranges include it?' — or look for patterns along diagonals, spirals, or boundaries.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Hamming distance sums over pairs. Each bit position contributes count_of_1s * count_of_0s pairs that differ in that bit.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Total: 6.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: Brute Force
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
-
-**The concept:** Bitwise counting — per bit, contribution = ones * zeros.
-
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever the problem is about rows, columns, diagonals, or all sub-rectangles → think contribution counting or per-row/col precomputation.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+For each pair, XOR them, count set bits. O(n² · bits). For n = 10^4, that's 10^9 ops — too slow.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 3: Per-Bit Contribution Trick
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+Think bit by bit. For each bit position `b`, how many pairs differ at bit b?
 
-For each bit b (0..31): count ones among nums with (num>>b)&1. answer += ones * (n - ones). Sum over all bits.
+Count how many numbers have bit b set (call this `c`). How many have bit b **not** set? That's `n - c`.
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
+Pairs that differ at bit b: one number with bit set, one without. Count = `c × (n - c)`.
 
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
+Total Hamming distance = sum over b of `c_b × (n - c_b)`.
 
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-32 * n per-bit count.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+**O(n · bits)** — linear in input size, constant per bit.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 4: Trace
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+`nums = [4, 14, 2]`. 4=100, 14=1110, 2=10. (4 bits.)
 
-nums=[4,14,2]. Bit 1: binaries 100,1110,010. ones=2, zeros=1 → 2. Bit 2: ones=1,zeros=2→2. Bit 3: ones=1,zeros=2→2. Total=6.
+Bit 0 (LSB):
+- 4 has bit 0 = 0. 14 bit 0 = 0. 2 bit 0 = 0. All zero.
+- c = 0. c·(n-c) = 0·3 = 0.
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+Bit 1:
+- 4 bit 1 = 0. 14 bit 1 = 1. 2 bit 1 = 1.
+- c = 2. c·(n-c) = 2·1 = 2.
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
+Bit 2:
+- 4 bit 2 = 1. 14 bit 2 = 1. 2 bit 2 = 0.
+- c = 2. c·(n-c) = 2·1 = 2.
 
+Bit 3:
+- 4 bit 3 = 0. 14 bit 3 = 1. 2 bit 3 = 0.
+- c = 1. c·(n-c) = 1·2 = 2.
+
+Total: 0 + 2 + 2 + 2 = **6**. ✓
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 5: Why Per-Bit Decomposition Works
 
-Complexity isn't magic — it's just counting the work.
+Hamming distance is **additive over bit positions**. HD(a, b) = Σ over bits of (1 if a,b differ at that bit, 0 otherwise).
 
-Time: O(32n). Space: O(1).
+Sum over all pairs:
+```
+Total = Σ_{pairs (i, j)} HD(nums[i], nums[j])
+      = Σ_{pairs} Σ_{bits} [differ at bit b]
+      = Σ_{bits} Σ_{pairs} [differ at bit b]
+      = Σ_{bits} (number of pairs differing at bit b)
+      = Σ_{bits} c_b × (n - c_b)
+```
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+Swapping the summation order lets us count pair-differences per bit. For each bit, only two configurations exist (0 or 1), and mixed pairs are the "differ" pairs.
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+----------------------------------------
 
+## Step 6: Implementation
+
+```
+total = 0
+for bit in 0..31:
+    c = 0
+    for x in nums:
+        if (x >> bit) & 1: c++
+    total += c * (len(nums) - c)
+return total
+```
+
+O(n · 32) = O(n). O(1) extra space.
+
+----------------------------------------
+
+## Step 7: Name It
+
+**Per-bit contribution counting** — a staple technique for problems involving bitwise operations over many numbers. Same pattern solves:
+- Counting Bits (for individual numbers).
+- Single Number III (isolate bits to partition).
+- Number of Different Integers in XOR Pairs.
+
+Whenever a problem asks about "sum/count over pairs" with a bit-related per-pair property, try swapping the summation order and counting per-bit.
+
+----------------------------------------
+
+## Step 8: Complexity
+
+Time: **O(n · 32) = O(n)**.
+Space: **O(1)**.
+
+Brute force was O(n² · bits). The per-bit trick is quadratic in speedup.
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
-
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
 int totalHammingDistance(vector<int>& nums) {
-    int n = nums.size(), ans = 0;
-    for (int b = 0; b < 32; ++b) {
-        int ones = 0;
-        for (int x : nums) ones += (x >> b) & 1;
-        ans += ones * (n - ones);
+    int total = 0;
+    int n = nums.size();
+    for (int bit = 0; bit < 32; ++bit) {
+        int c = 0;
+        for (int x : nums) {
+            if ((x >> bit) & 1) c++;
+        }
+        total += c * (n - c);
     }
-    return ans;
+    return total;
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Tight. The double loop is O(32n), which is effectively O(n).
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Hamming distance of single pair.
-- Total weighted Hamming distance.
-- Minimum Hamming distance via sorting.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Hamming distance between just two specific numbers.** One XOR + popcount.
+- **Weighted Hamming distance (different weights per bit).** Multiply per-bit contribution by the weight.
+- **Longest Hamming distance in the list.** Max of c·(n-c) bit contributions? No — that's total pairs. Finding max pair distance requires different structure.
+- **All distances below some threshold.** Per-bit contribution doesn't directly help; may need sort and pair exploration.
+- **3-bit distance (modulo, generalizations).** Different metric; analyze per-bit contributions with the new distance.
+- **Total Hamming distance over all PERMUTED pairs (2n² / 2 pairs).** Multiply by 2 (or handle ordering).

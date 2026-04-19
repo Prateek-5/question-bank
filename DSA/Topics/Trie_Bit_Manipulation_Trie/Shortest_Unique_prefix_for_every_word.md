@@ -1,190 +1,207 @@
-# Shortest Unique prefix for every word
+# Shortest Unique Prefix for Every Word
 
 **Problem Link:**
-https://www.geeksforgeeks.org/problems/shortest-unique-prefix-for-every-word/1
+https://www.geeksforgeeks.org/find-all-shortest-unique-prefixes-to-represent-each-word-in-a-given-list/
 
 **Topic:**
-Trie Bit Manipulation Trie
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Trie with prefix counts; walk to first node with count 1.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> Words: ['zebra','dog','duck','dove']. Results: ['z','dog','du','dov'].
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Trie / Bit Manipulation Trie
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Read the Problem
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Given an array of words, for each word, find the **shortest prefix** that is unique to that word (no other word in the array starts with that prefix).
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Example: `["zebra", "dog", "duck", "dove"]`.
+- "zebra": starts with 'z', unique. Shortest prefix: "z".
+- "dog": starts with 'd'. But "duck", "dove" also start with 'd'. Try "do" — matches "dog", "dove". Try "dog" — unique (other d-words: duck doesn't start with "dog", dove doesn't). Answer: "dog".
+- "duck": "d" not unique. "du" — matches "duck" only (others are dog, dove which don't start "du"). Answer: "du".
+- "dove": "d" not unique. "do" matches dog and dove. "dov" — unique. Answer: "dov".
 
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Trie with prefix counts; walk to first node with count 1.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
+Output: `["z", "dog", "du", "dov"]`.
 
 ----------------------------------------
 
-## Step 3: Build Intuition (VERY IMPORTANT)
+## Step 2: Brute-Force Thought
 
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
+For each word, try prefix lengths 1, 2, 3, ... Check whether the prefix appears as a prefix of any other word. Return the shortest unique one.
 
-You might try hashing every word or running regex matches. For prefix queries that's overkill — tries share prefixes so matching a new query touches only relevant nodes. For XOR problems, a binary trie lets you greedily chase the opposite bit at each level.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-For each word, the shortest unique prefix is the first depth at which no other word passes through. Store at each node how many words traverse it.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+O(n² · L²) — n words, n prefix-checks per word, L length per check. Too slow for large inputs.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 3: A Trie Makes This Natural
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+Build a trie of all words. For each node in the trie, count **how many words pass through it** (how many words share this prefix).
 
-**The concept:** Trie with prefix counts; walk to first node with count 1.
+Once the trie is built and prefix counts known, for each word, walk its characters down the trie. The shortest prefix whose count is **1** (only this word passes through) is the answer.
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever you see prefix queries, dictionary lookups, or max-XOR → think Trie.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+Specifically: for each word, walk down the trie character by character, tracking the count at each node. The first node where count == 1 marks the end of the shortest unique prefix.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 4: Build the Trie
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+Each trie node stores a `count` — how many words pass through this node.
 
-Insert all words, incrementing cnt at each node. For each word, walk letters; first node with cnt==1 is its unique prefix end.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Trie with pass-count per node.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
-
-----------------------------------------
-
-## Step 7: Dry Run (Detailed)
-
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
-
-Words: ['zebra','dog','duck','dove']. Results: ['z','dog','du','dov'].
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
-
-----------------------------------------
-
-## Step 8: Time and Space Complexity
-
-Complexity isn't magic — it's just counting the work.
-
-Time: O(total chars). Space: O(total chars).
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
-
-----------------------------------------
-
-## Step 9: C++ Implementation
-
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
-
-```cpp
-#include <bits/stdc++.h>
-using namespace std;
-struct N { N* c[26] = {}; int cnt = 0; };
-
-vector<string> shortestUniquePrefix(vector<string>& words) {
-    N* root = new N();
-    for (auto& w : words) { auto* n = root; for (char ch : w) { if (!n->c[ch-'a']) n->c[ch-'a'] = new N(); n = n->c[ch-'a']; n->cnt++; } }
-    vector<string> res;
-    for (auto& w : words) {
-        string p; auto* n = root;
-        for (char ch : w) { p += ch; n = n->c[ch-'a']; if (n->cnt == 1) break; }
-        res.push_back(p);
-    }
-    return res;
-}
+```
+insert(word):
+    cur = root
+    for ch in word:
+        if cur.children[ch] is null: cur.children[ch] = new Node()
+        cur = cur.children[ch]
+        cur.count += 1
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+After inserting all words, each node's count is the number of words whose prefix reaches this node.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 5: Find Each Word's Unique Prefix
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
+For each word, walk characters in order; output the prefix up to and including the first node with `count == 1`.
 
-- Longest common prefix.
-- Unique suffix (reverse).
-- k-th shortest unique prefix.
+```
+findPrefix(word):
+    cur = root
+    prefix = ""
+    for ch in word:
+        prefix += ch
+        cur = cur.children[ch]
+        if cur.count == 1:
+            return prefix
+    return prefix   # in case word itself is a prefix of another (unusual)
+```
 
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
+If we never find count == 1 along the way, the word is a prefix of another word. In that case, the entire word is the "unique prefix" (but actually, there's no shorter unique prefix; using the whole word is acceptable).
 
----
+----------------------------------------
 
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+## Step 6: Trace on `["zebra", "dog", "duck", "dove"]`
+
+Build trie. Show count at each node:
+
+```
+root (count = irrelevant)
+├── z (1)
+│   └── e (1) → b (1) → r (1) → a (1)
+└── d (3)
+    ├── o (2)
+    │   ├── g (1)
+    │   └── v (1) → e (1)
+    └── u (1) → c (1) → k (1)
+```
+
+For "zebra":
+- 'z' count 1. Return "z".
+
+For "dog":
+- 'd' count 3. Continue.
+- 'o' count 2. Continue.
+- 'g' count 1. Return "dog".
+
+For "duck":
+- 'd' count 3. Continue.
+- 'u' count 1. Return "du".
+
+For "dove":
+- 'd' count 3. Continue.
+- 'o' count 2. Continue.
+- 'v' count 1. Return "dov".
+
+Output: ["z", "dog", "du", "dov"]. ✓
+
+----------------------------------------
+
+## Step 7: Why Count == 1 Is the Cutoff
+
+If count at a node is `c`, there are `c` words that share this prefix. If `c == 1`, only one word passes through — this node is a unique prefix.
+
+Going one character further into the trie doesn't help — it's already uniquely identifying.
+
+Going one character less doesn't uniquely identify — the count at the previous node was `> 1`.
+
+So the first node with count == 1 marks the shortest unique prefix endpoint.
+
+----------------------------------------
+
+## Step 8: Name It
+
+**Trie with prefix counts.** A standard augmentation: store aggregate info (count) at each node for O(L) prefix queries.
+
+Related:
+- Autocomplete (count via popularity).
+- Spell-check (find closest word via edit distance + trie).
+- IP routing (longest-prefix match).
+
+Once you have a trie, augmenting it with per-node stats unlocks many query types.
+
+----------------------------------------
+
+## Step 9: Complexity
+
+Build: **O(total characters)** = O(n · L) where L = average word length.
+Query per word: **O(L)**.
+Total: **O(n · L)** for all words.
+
+Space: **O(total characters)** for the trie.
+
+Much better than brute-force O(n² · L²).
+
+----------------------------------------
+
+## Step 10: C++ Implementation
+
+```cpp
+struct TrieNode {
+    TrieNode* children[26] = {nullptr};
+    int count = 0;
+};
+
+class Solution {
+    TrieNode* root;
+
+    void insert(const string& word) {
+        TrieNode* cur = root;
+        for (char ch : word) {
+            int idx = ch - 'a';
+            if (!cur->children[idx]) cur->children[idx] = new TrieNode();
+            cur = cur->children[idx];
+            cur->count++;
+        }
+    }
+
+    string findPrefix(const string& word) {
+        TrieNode* cur = root;
+        string prefix;
+        for (char ch : word) {
+            prefix += ch;
+            cur = cur->children[ch - 'a'];
+            if (cur->count == 1) return prefix;
+        }
+        return prefix;   // word is a prefix of another; use whole word
+    }
+
+public:
+    vector<string> findPrefixes(vector<string>& words) {
+        root = new TrieNode();
+        for (const string& w : words) insert(w);
+        vector<string> result;
+        for (const string& w : words) result.push_back(findPrefix(w));
+        return result;
+    }
+};
+```
+
+Two passes: insert all words, then query each. Clean.
+
+----------------------------------------
+
+## Step 11: Follow-up Questions
+
+- **Handle duplicate words in input.** The count at leaf nodes can be > 1 even for the word itself. Algorithm still works if we pick the first count==1 node along the path (may not exist — all counts may be ≥ 2).
+- **Words with shared suffixes.** Trie indexed by forward prefix doesn't help for suffix queries; use a reverse trie.
+- **Online: words arrive over time, query current unique prefixes.** Update counts on insert; handle deletions similarly.
+- **Unique suffixes instead.** Build a trie of reversed words; same algorithm.
+- **Memory optimization.** Use hashmap children for sparse alphabets.
+- **Output the longest unique prefix (not shortest).** Different question — walk until count changes or word ends.

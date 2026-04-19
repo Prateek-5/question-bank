@@ -4,196 +4,220 @@
 https://leetcode.com/problems/palindrome-pairs/
 
 **Topic:**
-Hashing Sliding Window
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** For each word, check split points and see if the reverse of each half exists.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> ['abcd','dcba','lls','s','sssll']. Pairs like [0,1],[1,0],[3,2],[2,4].
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Hashing / Sliding Window
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Read the Problem
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Given a list of **distinct** words, return all pairs of indices `(i, j)` (with i ≠ j) such that concatenating `words[i] + words[j]` forms a palindrome.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Example: `words = ["abcd", "dcba", "lls", "s", "sssll"]`.
 
-So ask yourself:
+Checking every ordering:
+- "abcd" + "dcba" = "abcddcba" — palindrome. Pair: (0, 1).
+- "dcba" + "abcd" = "dcbaabcd" — palindrome. Pair: (1, 0).
+- "lls" + "sssll" = "llssssll" — palindrome. Pair: (2, 4).
+- "s" + "lls" = "slls" — palindrome. Pair: (3, 2).
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: For each word, check split points and see if the reverse of each half exists.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
+Output: `[[0, 1], [1, 0], [2, 4], [3, 2]]`.
 
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-The default is to enumerate every subarray or substring. That's O(n²). Two techniques collapse this: prefix-sum + hashmap for counting subarrays with a property, or a sliding window whose left and right pointers advance monotonically.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-A pair (a,b) forms palindrome iff (a+b) is palindrome. Split word at each index; if left is palindrome and reverse(right) is another word, that other word can be prefix. Symmetric for suffix.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Note: (i, j) and (j, i) are distinct pairs since the concatenation differs.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: Brute Force and Its Cost
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+Try every ordered pair: O(n²) pairs × O(L) palindrome check = O(n² L). For n = 5000 and L = 100, that's 10^9 — too slow.
 
-**The concept:** For each word, check split points and see if the reverse of each half exists.
-
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**'Subarray sum equals k' or 'count of something in windows' → think Prefix Sum + HashMap or Sliding Window.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+We need a smarter approach that reduces the O(n²) enumeration.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 3: A Key Question — When Is `s + t` a Palindrome?
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+Let's carefully think about when concatenating two strings yields a palindrome.
 
-Build map word→index. For each word, for each split i [0..|w|]: if left palindrome and reverse(right) in map (and different index) → pair. If i<|w| and right palindrome and reverse(left) in map.
+Picture `s + t` as a combined string. For it to be a palindrome, it must read the same forward and backward. The first character matches the last, second matches second-to-last, and so on.
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
+Let `|s| = a` and `|t| = b`. Three cases based on lengths:
 
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
+**Case X: a = b.** For `s + t` to be a palindrome, `t` must be the **reverse of s**. Easy to check: look up reverse(s) in a hashmap.
 
+**Case Y: a > b.** The first `b` chars of `s + t` are `s[0..b-1]`. These must match (in reverse) the last `b` chars of `s + t`, which are `t`. So `s[0..b-1]` reversed equals `t`. Additionally, the middle of `s + t` (which is `s[b..a-1]`) must be a **palindrome on its own**.
 
-----------------------------------------
+Restating: for `s + t` palindrome with a > b, `s` looks like `(reverse of t) + (palindrome)`.
 
-## Step 6: Final Approach
+**Case Z: a < b.** Symmetric: `t` looks like `(palindrome) + (reverse of s)`.
 
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Hashmap of reversed words.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+These three cases cover every possibility. (If a = b and s is self-reverse — i.e., a palindrome — t = reverse(s) = s, so we need another word equal to s. But problem says distinct; this only fires if another palindrome word of the same content exists.)
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 4: Rephrase Cases for a Hashmap Solution
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+Processing each word `s` one at a time, we want to find words `t` such that `s + t` is a palindrome. Transform the three cases:
 
-['abcd','dcba','lls','s','sssll']. Pairs like [0,1],[1,0],[3,2],[2,4].
+**Case 1 (s is the "front"): `s + t` palindrome.**
+Split s into a prefix and a suffix at some index k: `s = left + right`.
+- If `right` is a palindrome, then we need `t = reverse(left)`. Then `s + t = left + right + reverse(left)` reads as a palindrome (because first `len(left)` chars match last `len(left)` reversed, and middle `right` is palindromic).
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+**Case 2 (s is the "back"): `t + s` palindrome.**
+Split s again: `s = left + right`.
+- If `left` is a palindrome, then we need `t = reverse(right)`. Then `t + s = reverse(right) + left + right` is a palindrome.
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
+So: for each word s, for each split point k, check if the "non-matching" portion (right in Case 1, left in Case 2) is a palindrome. If yes, look up the reverse of the remaining portion in the hashmap. If found, we have a pair.
 
+This handles all three cases (X, Y, Z) — split points where k = 0 or k = len(s) correspond to Case X (t = reverse(s) for empty left/right).
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 5: Avoid Double-Counting
 
-Complexity isn't magic — it's just counting the work.
+One trap: Case 1 at `k = 0` and Case 2 at `k = len(s)` might both fire for the same (i, j) pair.
 
-Time: O(N·L²). Space: O(N·L).
+- Case 1 at k = 0: left = "", right = s. If s is a palindrome (and "" is considered palindromic trivially for left), then reverse("") = "" must be a word. Unlikely unless "" is in the list.
+- Case 2 at k = len(s): left = s, right = "". If s is a palindrome, reverse("") = "" must be a word.
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+These only fire with empty-word present.
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+More subtle duplication: Case 1 at k = len(s) and Case 2 at k = 0 both try the "full reverse" pair (s paired with reverse(s)):
+- Case 1 at k = len(s): left = s, right = "". Right is palindrome (empty). Look for reverse(s) in map → pair (i, map[reverse(s)]).
+- Case 2 at k = 0: left = "", right = s. Left is palindrome (empty). Look for reverse(s) in map → pair (map[reverse(s)], i).
 
+These give **different pairs** — (i, j) vs (j, i) — both valid. No double-counting.
+
+The real duplication concern: same (i, j) could be produced twice by Case 1 at one k and Case 2 at a different k. The standard fix: in Case 2, skip k = 0 (which would duplicate Case 1 at k = len(s) in its symmetric mirror — but that's for a different word being processed, not the same). Actually, the cleanest rule is:
+
+- Case 1: all k from 0 to len(s) (inclusive).
+- Case 2: all k from 1 to len(s) - 1 (exclusive of endpoints).
+
+This way, Case 2 at k = 0 and k = len(s) are skipped (their counterparts already handled by Case 1 at different k, for the same or different words).
+
+----------------------------------------
+
+## Step 6: Walk Through the Example
+
+`words = ["abcd", "dcba", "lls", "s", "sssll"]`. Map: `{"abcd":0, "dcba":1, "lls":2, "s":3, "sssll":4}`.
+
+Process i = 0, s = "abcd".
+- k = 0: left = "", right = "abcd".
+  - Case 1: right palindrome? No. Skip.
+  - (k=0, skipping Case 2 per rule.)
+- k = 1: left = "a", right = "bcd".
+  - Case 1: right palindrome? No.
+  - Case 2: left palindrome? Yes. reverse(right) = "dcb". In map? No.
+- k = 2: left = "ab", right = "cd". Neither palindrome. No match.
+- k = 3: left = "abc", right = "d".
+  - Case 1: right palindrome? Yes. reverse(left) = "cba". In map? No.
+  - Case 2: left palindrome? No.
+- k = 4: left = "abcd", right = "".
+  - Case 1: right palindrome (empty)? Yes. reverse(left) = "dcba". In map at index 1. Pair (0, 1). ✓
+
+Process i = 1, s = "dcba".
+- Similar scan. At k = 4: right = "", reverse(left) = "abcd" = words[0]. Pair (1, 0). ✓
+
+Process i = 2, s = "lls".
+- k = 0: skip Case 2.
+- k = 1: left = "l", right = "ls". L palindrome yes, reverse(right) = "sl" not in map.
+- k = 2: left = "ll", right = "s". L palindrome yes, reverse(right) = "s" in map at 3. Pair (3, 2). ✓
+- k = 3: left = "lls", right = "". Case 1: right palindrome yes, reverse(left) = "sll". In map? No.
+
+Process i = 3, s = "s".
+- k = 0: skip Case 2.
+- k = 1: left = "s", right = "". Case 1: right palindrome yes, reverse(left) = "s". In map at 3, but that's self — skip.
+
+Process i = 4, s = "sssll".
+- k = 3: left = "sss", right = "ll". Case 1: right palindrome yes, reverse(left) = "sss". In map? No. Case 2: left palindrome yes, reverse(right) = "ll". In map? No.
+- k = 2: left = "ss", right = "sll". Case 1: right palindrome? No. Case 2: left palindrome yes, reverse(right) = "lls" = words[2]. Pair (2, 4). ✓
+
+All four pairs found. ✓
+
+----------------------------------------
+
+## Step 7: Complexity
+
+For each of n words, we do O(L) splits. For each split, palindrome check is O(L), hashmap lookup is O(L) (hashing cost on strings). Total: **O(n · L²)**.
+
+For typical inputs, this is a big win over O(n² · L).
+
+Space: O(n · L) for the hashmap.
+
+----------------------------------------
+
+## Step 8: Name It
+
+**Hashmap-based palindrome pair detection using split-and-check.** The technique:
+1. Precompute `word → index` hashmap.
+2. For each word s, split at every position and use case analysis to find matching partners.
+3. Leverage hashmap for O(1) lookup of reversed halves.
+
+Alternative: **trie of reversed words**. Walk the trie from each source word; whenever we reach a word-end node and the remaining portion is palindromic, record a pair. Trie is more extensible but similar complexity.
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
-
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-bool isPal(const string& s, int l, int r) { while (l<r) if (s[l++]!=s[r--]) return false; return true; }
-vector<vector<int>> palindromePairs(vector<string>& w) {
-    unordered_map<string,int> idx;
-    for (int i = 0; i < (int)w.size(); ++i) idx[w[i]] = i;
-    vector<vector<int>> res;
-    for (int i = 0; i < (int)w.size(); ++i) {
-        string s = w[i]; int n = s.size();
-        for (int j = 0; j <= n; ++j) {
-            if (isPal(s, j, n-1)) {
-                string pre(s.begin(), s.begin()+j);
-                reverse(pre.begin(), pre.end());
-                if (idx.count(pre) && idx[pre] != i) res.push_back({i, idx[pre]});
-            }
-            if (j && isPal(s, 0, j-1)) {
-                string suf(s.begin()+j, s.end());
-                reverse(suf.begin(), suf.end());
-                if (idx.count(suf) && idx[suf] != i) res.push_back({idx[suf], i});
+class Solution {
+    bool isPalindrome(const string& s, int l, int r) {
+        while (l < r) {
+            if (s[l] != s[r]) return false;
+            l++; r--;
+        }
+        return true;
+    }
+
+public:
+    vector<vector<int>> palindromePairs(vector<string>& words) {
+        unordered_map<string, int> indexOf;
+        for (int i = 0; i < (int)words.size(); ++i) indexOf[words[i]] = i;
+
+        vector<vector<int>> result;
+
+        for (int i = 0; i < (int)words.size(); ++i) {
+            const string& s = words[i];
+            int n = s.size();
+            for (int k = 0; k <= n; ++k) {
+                // Case 1: right [k..n-1] palindrome, find reverse(left) = s[0..k-1]
+                if (isPalindrome(s, k, n - 1)) {
+                    string rev_left(s.begin(), s.begin() + k);
+                    reverse(rev_left.begin(), rev_left.end());
+                    auto it = indexOf.find(rev_left);
+                    if (it != indexOf.end() && it->second != i) {
+                        result.push_back({i, it->second});
+                    }
+                }
+                // Case 2: left palindrome, find reverse(right) = s[k..n-1]
+                // Skip k = 0 (duplicate of Case 1 at k = n from a different word's pov)
+                // Skip k = n (empty right, would match empty left from Case 1).
+                if (k != 0 && k != n && isPalindrome(s, 0, k - 1)) {
+                    string rev_right(s.begin() + k, s.end());
+                    reverse(rev_right.begin(), rev_right.end());
+                    auto it = indexOf.find(rev_right);
+                    if (it != indexOf.end() && it->second != i) {
+                        result.push_back({it->second, i});
+                    }
+                }
             }
         }
+        return result;
     }
-    return res;
-}
+};
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Key implementation details:
+- `it->second != i`: skip self-pairs (word paired with itself).
+- `k != 0 && k != n` in Case 2: prevents double-counting.
+- `isPalindrome(s, l, r)` checks substring [l..r] inclusive without making a copy.
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Palindrome triples.
-- Using a trie.
-- Large-word streaming.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Trie-based solution.** Insert reversed words into a trie. For each word, walk the trie matching its characters; when we find a terminal node with a matching palindrome remainder, record a pair. More complex code but similar O(n · L²) performance.
+- **Handle duplicate words.** Not in this problem (distinct guaranteed), but if allowed, map to a list of indices.
+- **Pairs where words[i] + words[j] is **almost** a palindrome (off by k chars).** Much harder; approximate matching.
+- **Online: words arrive over time.** Insert into map as they come; for each new word, perform the split-and-lookup against existing entries.
+- **Empty strings in input.** Can pair with any palindrome word. Handled naturally.
+- **What if we want pairs where the reverse ordering also forms a palindrome?** Filter results accordingly.

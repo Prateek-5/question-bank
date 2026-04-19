@@ -4,184 +4,195 @@
 https://leetcode.com/problems/find-k-closest-elements/
 
 **Topic:**
-Heap Priority Queue
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Binary search for the left boundary of a k-length window around x.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> arr=[1,2,3,4,5], k=4, x=3. lo=0, hi=1. mid=0. x-arr[0]=2, arr[4]-x=2. 2>2? no → hi=0. Loop ends. Window = arr[0..3] = [1,2,3,4].
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Heap / Priority Queue
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Understand the Problem
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Given a **sorted** array `arr`, an integer `k`, and an integer `x`, return the `k` closest elements to `x` from the array, sorted in ascending order.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+"Closest" is by absolute difference `|arr[i] - x|`. Ties broken by preferring smaller values.
 
-So ask yourself:
+Example: `arr = [1, 2, 3, 4, 5]`, k = 4, x = 3.
+- Distances: |1-3|=2, |2-3|=1, |3-3|=0, |4-3|=1, |5-3|=2.
+- Pick 4 smallest distances: 3 (dist 0), 2 (dist 1), 4 (dist 1), 1 (dist 2).
+- Ties at dist=2: between 1 and 5, prefer 1.
+- Sorted: [1, 2, 3, 4].
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Binary search for the left boundary of a k-length window around x.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-Your first instinct is probably to sort the whole array and pick from one end. That works — but it asks for more than we need. We don't care about every element's exact position, only the smallest or the largest at each step. Sorting does O(n log n) work just to reveal one extremum at a time. A heap does the same job with far less overhead per query.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Array is sorted. We need the window of size k whose elements are closest to x. Binary search finds the left index lo such that arr[lo..lo+k-1] is optimal — by comparing |arr[mid] - x| vs |arr[mid+k] - x|.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+`k=4, x=-1`: distances 2, 3, 4, 5, 6. Pick 4 smallest: 1, 2, 3, 4. Result: [1, 2, 3, 4].
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: First Approach — Heap of Size K
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+A very direct approach: use a max-heap of size k keyed on distance-to-x. For each arr[i]:
+- Push (distance, value).
+- If heap size > k, pop (kicks out the farthest).
 
-**The concept:** Binary search for the left boundary of a k-length window around x.
+At the end, the heap has the k closest. Sort them by value for the output.
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever you see 'k-th', 'top-k', or 'merge sorted streams' → think Heap.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+Time: O(n log k). Works but ignores the sorted-ness of the input.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 3: Better — Exploit the Sorted Input
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+The input is sorted. The "k closest" elements must form a **contiguous window** in the array. Why?
 
-Maintain lo=0, hi=n-k. While lo < hi, let mid=(lo+hi)/2. If x - arr[mid] > arr[mid+k] - x, lo=mid+1 (the right element is closer so shift right), else hi=mid. End: window [lo..lo+k-1].
+Suppose the answer is some subset S of k elements. Order them by index. The leftmost has some index L, the rightmost has index R, with R - L + 1 ≥ k. But if R - L + 1 > k, there must be elements in [L, R] that aren't in S. Since arr is sorted, those elements are all *between* arr[L] and arr[R] in value, and are therefore at most as far from x as max(arr[L], arr[R]). So they should be in S too — contradiction.
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
+Conclusion: the k closest elements are k **consecutive** elements in the sorted array. We just need to find the right window.
 
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Binary search on left boundary in O(log(n-k)). Much faster than heap O(n log k).
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+This is a huge simplification — we're not picking arbitrary k out of n; we're picking a contiguous window of size k.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 4: Find the Right Window via Binary Search
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+The window is `arr[L .. L + k - 1]` for some left index L in `[0, n - k]`. How do we pick L?
 
-arr=[1,2,3,4,5], k=4, x=3. lo=0, hi=1. mid=0. x-arr[0]=2, arr[4]-x=2. 2>2? no → hi=0. Loop ends. Window = arr[0..3] = [1,2,3,4].
+Intuition: the window should be "centered on x." Specifically, compare the leftmost element of the window (at L) with the element just past the right end (at L + k):
+- If `x - arr[L] > arr[L + k] - x`: the right element is closer to x than the left one. Shifting the window right is beneficial — we'd gain a closer element (arr[L+k]) and lose a farther one (arr[L]).
+- Otherwise: the left element is at least as good. The current window is at least as good as moving right.
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+Binary-search on L. Keep shrinking to the better half.
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
+```
+lo = 0, hi = n - k
+while lo < hi:
+    mid = (lo + hi) / 2
+    if x - arr[mid] > arr[mid + k] - x:
+        lo = mid + 1
+    else:
+        hi = mid
+return arr[lo .. lo + k - 1]
+```
 
+O(log(n - k) + k). Extremely fast.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 5: Why the Comparison Direction Works
 
-Complexity isn't magic — it's just counting the work.
+The condition `x - arr[mid] > arr[mid + k] - x` is asking: is the left boundary of the current window **farther** from x than the element just past the right? If yes, the window's left boundary is a "weak link" — we should shift right to drop it.
 
-Time: O(log(n-k) + k). Space: O(1).
+Tie case: if `x - arr[mid] == arr[mid + k] - x`, we don't shift. The problem's tie-break prefers smaller values, and staying at the current window keeps arr[mid] (smaller) in favor of arr[mid + k] (larger).
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
+That's why the `>` is strict — on equality, we stay.
 
 ----------------------------------------
 
-## Step 9: C++ Implementation
+## Step 6: Trace on `[1, 2, 3, 4, 5]`, k = 4, x = 3
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+n = 5, k = 4. L ranges in [0, 1].
+
+```
+lo=0, hi=1.
+mid=0.
+x - arr[0] = 3 - 1 = 2.
+arr[0 + 4] - x = arr[4] - 3 = 5 - 3 = 2.
+2 > 2? No. Set hi=0.
+
+Loop ends. L = 0.
+Return arr[0..3] = [1, 2, 3, 4].
+```
+
+✓
+
+Try `arr = [1, 2, 3, 4, 5]`, k = 4, x = -1:
+
+```
+lo=0, hi=1.
+mid=0.
+x - arr[0] = -1 - 1 = -2.
+arr[4] - x = 5 - (-1) = 6.
+-2 > 6? No. Set hi=0.
+Loop ends. L = 0.
+Return [1, 2, 3, 4].
+```
+
+✓
+
+Try `arr = [1, 2, 3, 4, 5]`, k = 4, x = 4:
+
+```
+lo=0, hi=1.
+mid=0.
+3 (=4-1) > 1 (=5-4)? Yes. Set lo=1.
+Loop ends. L = 1.
+Return arr[1..4] = [2, 3, 4, 5].
+```
+
+Distance check: from 4, distances are 3, 2, 1, 0, 1. Four smallest: 2, 3, 4, 5 (distances 2, 1, 0, 1). ✓
+
+----------------------------------------
+
+## Step 7: Compare Approaches
+
+| Approach | Time | Space |
+|---|---|---|
+| Max-heap size k | O(n log k) | O(k) |
+| Sort by dist, take first k | O(n log n) | O(n) |
+| Binary search on window | O(log(n-k) + k) | O(k) |
+
+Binary search wins because it exploits the sorted structure of the input. The other approaches treat the input as unsorted, which is a missed opportunity.
+
+For interviews, mentioning the heap approach first (general, works on unsorted input) and then the binary search optimization (exploits sortedness) shows range.
+
+----------------------------------------
+
+## Step 8: Name It
+
+This is **binary search on a sliding window boundary**. The decision variable isn't an index in the array — it's the **left index of the chosen window**. We binary-search over possible window positions using a comparison that tells us which direction to shift.
+
+The same meta-technique (binary searching over a parameter that isn't an array index) appears in:
+- Capacity to Ship Packages Within D Days.
+- Koko Eating Bananas.
+- Split Array Largest Sum.
+
+The trick is recognizing the monotonic structure.
+
+----------------------------------------
+
+## Step 9: Complexity
+
+Binary search on window: **O(log(n - k) + k)**.
+- Binary search: O(log(n - k)).
+- Extract k elements: O(k).
+
+Space: O(k) for the output.
+
+----------------------------------------
+
+## Step 10: C++ Implementation
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-
 vector<int> findClosestElements(vector<int>& arr, int k, int x) {
     int lo = 0, hi = arr.size() - k;
     while (lo < hi) {
-        int mid = (lo + hi) / 2;
+        int mid = lo + (hi - lo) / 2;
         if (x - arr[mid] > arr[mid + k] - x) lo = mid + 1;
         else hi = mid;
     }
-    return vector<int>(arr.begin()+lo, arr.begin()+lo+k);
+    return vector<int>(arr.begin() + lo, arr.begin() + lo + k);
 }
 ```
 
-A few notes about the style:
+The binary search is the key. Everything else is just slicing the k-length window out of arr.
 
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Edge cases handled naturally:
+- k = n: loop doesn't execute (lo = hi = 0). Returns the whole array.
+- x smaller than all elements: `x - arr[mid]` is very negative, never > right side, so hi shrinks to 0. Returns first k.
+- x larger than all: `arr[mid+k] - x` is very negative, condition is true, lo grows to n-k. Returns last k.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 11: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- If array is unsorted, sort first or use a max-heap by |a - x|.
-- What if there are duplicates? Behavior unchanged.
-- Solve with two pointers shrinking from both ends.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Unsorted input.** Use the heap approach: O(n log k).
+- **Return the k closest sorted by distance (not value).** Use a heap and don't re-sort by value.
+- **Streaming input.** Heap approach with lazy updates.
+- **Closest-k in 2D (points in a plane).** Different problem — requires KD-tree or spatial index.
+- **Unusual distance metric.** Binary search works if the metric preserves the "contiguous window" property (typically requires monotonic distance along the array).
+- **What if duplicates exist?** Algorithm works unchanged — the binary search shifts over tied elements according to the tie-break rule (prefer smaller values).

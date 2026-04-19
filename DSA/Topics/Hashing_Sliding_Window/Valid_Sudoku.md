@@ -4,183 +4,187 @@
 https://leetcode.com/problems/valid-sudoku/
 
 **Topic:**
-Hashing Sliding Window
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Three tracking sets — rows, cols, 3×3 boxes.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> Standard valid Sudoku → true.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Hashing / Sliding Window
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: What Makes a Sudoku Valid?
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+A 9×9 grid with digits 1-9 and `.` (empty). Check if it's a valid state (not necessarily solvable or complete). Three rules:
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+- **Row rule**: each row contains each digit at most once (ignoring '.').
+- **Column rule**: each column contains each digit at most once.
+- **Box rule**: each of the nine 3×3 sub-boxes contains each digit at most once.
 
-So ask yourself:
+We only check existing digits. `.`s don't contribute.
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Three tracking sets — rows, cols, 3×3 boxes.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
+Return true if all rules hold; false otherwise.
 
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-The default is to enumerate every subarray or substring. That's O(n²). Two techniques collapse this: prefix-sum + hashmap for counting subarrays with a property, or a sliding window whose left and right pointers advance monotonically.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-For each filled cell, record it in row, column, and box; any duplicate means invalid.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Unlike Sudoku Solver, we're not filling anything — just verifying.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: Brute-Force Thinking
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+For each digit in the grid, check that:
+- It doesn't appear elsewhere in its row.
+- Doesn't appear elsewhere in its column.
+- Doesn't appear elsewhere in its 3×3 box.
 
-**The concept:** Three tracking sets — rows, cols, 3×3 boxes.
-
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**'Subarray sum equals k' or 'count of something in windows' → think Prefix Sum + HashMap or Sliding Window.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+Could scan the whole grid for each filled cell. O(81) cells × O(81) checks = ~6500 ops. Fast enough, but there's a cleaner way.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 3: The Hashset Approach
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+Maintain three sets per "unit":
+- 9 sets for rows.
+- 9 sets for columns.
+- 9 sets for boxes.
 
-Use boolean[9][9] for row, col, box. For (i,j): d = board[i][j]-'1'; b = (i/3)*3 + j/3. If any of the three already true → invalid. Else mark them true.
+Walk through every cell in the grid once. For each filled cell (r, c) with value v:
+- If v is already in `row_set[r]`, `col_set[c]`, or `box_set[b]` (where b is the 3×3 box index), return false.
+- Else, insert v into all three sets.
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
+If we finish without conflict, return true.
 
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Single pass.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+Cell's box index: `b = (r / 3) * 3 + c / 3`. This maps each (r, c) to one of 9 boxes (0 to 8).
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 4: Compact Via Encoded Strings
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+Instead of three separate sets per row/col/box (27 sets total), use one big hashset with **encoded strings**.
 
-Standard valid Sudoku → true.
+For each filled cell with value v:
+- Insert "v in row r": encoded as `"v@row" + to_string(r)`.
+- Insert "v in col c": encoded as `"v@col" + to_string(c)`.
+- Insert "v in box b": encoded as `"v@box" + to_string(b)`.
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+Before inserting, check if any of these three keys already exists. If yes, conflict.
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+This trades 27 small sets for one big set. Memory-wise similar; code slightly cleaner.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 5: Bitmask Approach (Fastest)
 
-Complexity isn't magic — it's just counting the work.
+For each row/col/box, use a 9-bit integer. Bit d-1 is set if digit d is present.
 
-Time: O(81). Space: O(81).
+For cell (r, c) with digit v:
+- bit = 1 << (v - 1).
+- Check: `rowMask[r] & bit`, `colMask[c] & bit`, `boxMask[b] & bit`. If any are non-zero, conflict.
+- Else: `rowMask[r] |= bit; colMask[c] |= bit; boxMask[b] |= bit`.
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+This is the tightest implementation — no hash overhead, bit operations are constant-time.
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+----------------------------------------
 
+## Step 6: Trace
+
+Valid partial Sudoku:
+```
+5 3 . . 7 . . . .
+6 . . 1 9 5 . . .
+. 9 8 . . . . 6 .
+...
+```
+
+Process (0, 0): value 5. Masks empty. No conflict. Set bit 4 in rowMask[0], colMask[0], boxMask[0].
+
+Process (0, 1): value 3. rowMask[0] has bit 4 only. Bit 2 not set. No conflict. Set bit 2 in all three (row 0, col 1, box 0).
+
+... continue ...
+
+Process (0, 4): value 7. rowMask[0] is (bits 2, 4). Bit 6 not set. Set bit 6 in row 0, col 4, box 1 (since col 4, row 0 → box = 0*3 + 4/3 = 1).
+
+The check-and-set pattern proceeds. If any check ever finds the bit already set, return false.
+
+Suppose there were a conflict at (1, 0) with value 5 (already in col 0). Then `colMask[0] & (1 << 4) != 0`, conflict, return false.
+
+----------------------------------------
+
+## Step 7: Name It
+
+**Hashset / bitmask per constraint group.** Same pattern appears in:
+- Sudoku Solver (combines this with backtracking).
+- N-Queens (row, col, two diagonals as constraint groups).
+- Graph coloring validation.
+
+The key insight: when constraints say "some set of elements must be unique within specific groups," maintain a membership tracker per group.
+
+----------------------------------------
+
+## Step 8: Complexity
+
+Time: **O(1)** — the grid is fixed 9×9, so we do at most 81 cell-checks, each O(1). Constant time!
+
+Space: **O(1)** for masks or sets (9 rows + 9 cols + 9 boxes, each O(9)).
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+**Bitmask version:**
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-bool isValidSudoku(vector<vector<char>>& b) {
-    bool r[9][9] = {}, c[9][9] = {}, bx[9][9] = {};
-    for (int i = 0; i < 9; ++i) for (int j = 0; j < 9; ++j) if (b[i][j] != '.') {
-        int d = b[i][j] - '1', k = (i/3)*3 + j/3;
-        if (r[i][d] || c[j][d] || bx[k][d]) return false;
-        r[i][d] = c[j][d] = bx[k][d] = true;
+bool isValidSudoku(vector<vector<char>>& board) {
+    int rows[9] = {0};
+    int cols[9] = {0};
+    int boxes[9] = {0};
+
+    for (int r = 0; r < 9; ++r) {
+        for (int c = 0; c < 9; ++c) {
+            if (board[r][c] == '.') continue;
+            int d = board[r][c] - '1';   // 0..8
+            int bit = 1 << d;
+            int b = (r / 3) * 3 + c / 3;
+
+            if ((rows[r] & bit) || (cols[c] & bit) || (boxes[b] & bit)) {
+                return false;
+            }
+            rows[r] |= bit;
+            cols[c] |= bit;
+            boxes[b] |= bit;
+        }
     }
     return true;
 }
 ```
 
-A few notes about the style:
+Clean. The "check-then-set" pattern fits every filled cell.
 
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
+**Hashset version:**
 
+```cpp
+bool isValidSudoku(vector<vector<char>>& board) {
+    unordered_set<string> seen;
+    for (int r = 0; r < 9; ++r) {
+        for (int c = 0; c < 9; ++c) {
+            char ch = board[r][c];
+            if (ch == '.') continue;
+            string rowKey = string(1, ch) + "@row" + to_string(r);
+            string colKey = string(1, ch) + "@col" + to_string(c);
+            string boxKey = string(1, ch) + "@box" + to_string((r / 3) * 3 + c / 3);
+
+            if (!seen.insert(rowKey).second) return false;
+            if (!seen.insert(colKey).second) return false;
+            if (!seen.insert(boxKey).second) return false;
+        }
+    }
+    return true;
+}
+```
+
+`insert().second` is false if the key already existed. Neat shorthand for check-and-insert.
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Sudoku solver (backtracking).
-- Bigger boards (16x16).
-- Partial validation.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Validate a 4×4 or 16×16 Sudoku variant.** Adjust constants.
+- **Check if Sudoku is complete (no empty cells) and valid.** Add a pass to verify no '.'s remain.
+- **Return which cell is conflicting.** Modify to output coordinates and value when conflict detected.
+- **Count the number of violations.** Don't return on first violation; tally instead.
+- **Partial Sudoku validity across updates.** Maintain the masks incrementally: update on each cell change.
+- **What if the grid is huge (hypothetical)?** Same algorithm — constant per cell, linear in grid size.

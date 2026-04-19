@@ -4,186 +4,191 @@
 https://leetcode.com/problems/regular-expression-matching/
 
 **Topic:**
-Dynamic Programming DP
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** DP over (i,j) handling '.' and '*'.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> s='aab', p='c*a*b' → true.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Dynamic Programming (DP)
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: The Mini Regex Language
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+We implement a **stripped-down** regex that supports two metacharacters:
+- `.` matches any single character.
+- `*` matches **zero or more** of the *preceding* element.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Given a string `s` and a pattern `p`, return whether `p` matches the **entire** `s`.
 
-So ask yourself:
+Examples:
+- `s = "aa"`, `p = "a"` → false (p only matches one `a`).
+- `s = "aa"`, `p = "a*"` → true (`a*` matches zero or more a's).
+- `s = "ab"`, `p = ".*"` → true (`.*` matches any sequence).
+- `s = "aab"`, `p = "c*a*b"` → true (`c*` matches zero c's, `a*` matches two a's, `b` matches b).
+- `s = "mississippi"`, `p = "mis*is*p*."` → false.
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: DP over (i,j) handling '.' and '*'.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-Your very first thought is often recursion. That's actually the right start — but naive recursion re-computes the same subproblems exponentially. The fix is memoization (top-down) or tabulation (bottom-up). The hard part is identifying the state that captures all we need to know about the past.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-dp[i][j] = s[0..i-1] matches p[0..j-1]. '.' matches any char; '*' allows zero or more of preceding char.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+The trick is that `*` doesn't match anything on its own — it applies to the preceding character. `a*` is treated as a unit meaning "any number of a's including zero."
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: Try to Match By Hand
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+`s = "aab"`, `p = "c*a*b"`.
 
-**The concept:** DP over (i,j) handling '.' and '*'.
+- `c*` at start: zero c's, consume no chars of s. Pattern advances 2 chars (past `c*`). s at 0.
+- `a*` next: two a's match, consume s[0] and s[1]. Pattern advances 2. s at 2.
+- `b` next: matches s[2]='b'. s at 3, end.
+- Pattern fully consumed, s fully consumed. Match.
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
+That worked. But notice there were choices: `c*` could match zero or one or more c's. `a*` could match zero, one, two, or three a's (bounded by how many a's are actually in s at that position). The algorithm has to explore choices.
 
-**Pattern recognition cue:**
+What if we tried `s = "aa"`, `p = "a*a"`? `a*` could greedily match both a's, but then `a` has nothing left to match. Backing off, `a*` matches just one a, leaving the second for `a`. Match.
 
-**Whenever a brute-force recursion has overlapping subproblems → think DP. Identify state first, then transition.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-If p[j-1]=='*': dp[i][j] = dp[i][j-2] || (match(s[i-1], p[j-2]) && dp[i-1][j]). Else: dp[i][j] = match && dp[i-1][j-1].
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
+Choices matter. We need a principled way to handle them.
 
 ----------------------------------------
 
-## Step 6: Final Approach
+## Step 3: Define the DP State
 
-Now let's crystallize everything we've learned into a clean algorithm.
+Let `f(i, j)` = true if `p[0..j-1]` matches `s[0..i-1]` entirely.
 
-Bottom-up DP.
+Transitions depend on what `p[j-1]` is:
 
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
+**Case A: `p[j-1]` is a regular char or `.`** (not `*`).
 
-**Before coding, it's worth asking:**
+Then we need `s[i-1]` to match `p[j-1]`:
+- If `p[j-1] == '.'` or `p[j-1] == s[i-1]`: the last chars match. Reduce to `f(i-1, j-1)`.
+- Else: mismatch. `f(i, j) = false`.
 
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
+**Case B: `p[j-1]` is `*`.**
 
-Get those clear in your head, and the code almost writes itself.
+This `*` applies to `p[j-2]`. We have two sub-options:
+- **Match zero occurrences**: skip the `x*` pair in the pattern. `f(i, j) = f(i, j-2)`.
+- **Match one or more**: requires `p[j-2]` to match `s[i-1]` (either `.` or same char). Then consume one char of s: `f(i, j) = f(i-1, j)`. (Notice: we don't advance j yet — because `x*` might match even more of s.)
 
+Take the OR of these two.
 
-----------------------------------------
+**Base case: `f(0, 0) = true`** (empty pattern matches empty string).
+**For `f(0, j)` with j > 0:** only true if pattern is of the form `x*y*z*...` — all star-pairs that match zero chars. Handle this by computing row 0 using the Case B rule.
 
-## Step 7: Dry Run (Detailed)
-
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
-
-s='aab', p='c*a*b' → true.
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+**For `f(i, 0)` with i > 0:** `false` — empty pattern can't match non-empty string.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 4: Why Two Sub-options for `*`?
 
-Complexity isn't magic — it's just counting the work.
+This is the tricky part. Let me explain concretely.
 
-Time: O(n·m). Space: O(n·m).
+Suppose `p[j-2..j-1] = "a*"` and we're computing `f(i, j)`.
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+- **"Match zero a's":** the `a*` contributes nothing. Pattern progresses past it. So the matching reduces to `p[0..j-3]` against `s[0..i-1]` — that's `f(i, j-2)`.
+- **"Match at least one more a":** s[i-1] must match `a` (literal or via `.`). If so, we've used one more `a`. The `a*` is still available to match more. Pattern stays at j; s drops by 1. So `f(i, j) = f(i-1, j)`.
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+These cover all possibilities because a `*` matches some **integer count ≥ 0** of the preceding element. "Zero" is one option; "at least one" covers 1, 2, 3, ... and the recursion unrolls into those via iterated `f(i-1, j)`, `f(i-2, j)`, etc.
 
+----------------------------------------
+
+## Step 5: Trace "aab" vs "c*a*b"
+
+n = 3, m = 5. `p = "c*a*b"` (indices 0..4).
+
+Let me fill `f`.
+
+Row 0 (i=0):
+- f(0, 0) = T.
+- f(0, 1): p[0]='c', not `*`. f = false (i=0, can't consume).
+- f(0, 2): p[1]='*'. Try "match zero c's": f(0, 0) = T. → T.
+- f(0, 3): p[2]='a', not `*`. F.
+- f(0, 4): p[3]='*'. Try zero: f(0, 2) = T. → T.
+- f(0, 5): p[4]='b', not `*`. F.
+
+Row 1 (i=1, s[0]='a'):
+- f(1, 0) = F.
+- f(1, 1): p[0]='c'. s[0]='a' != 'c'. F.
+- f(1, 2): p[1]='*'. Zero option: f(1, 0) = F. At-least-one: p[0]='c' vs s[0]='a'. Mismatch. F.
+- f(1, 3): p[2]='a'. s[0]='a'. Match. f(0, 2) = T. → T.
+- f(1, 4): p[3]='*'. Zero: f(1, 2) = F. At-least-one: p[2]='a' vs s[0]='a', match, f(0, 4) = T. → T.
+- f(1, 5): p[4]='b'. s[0]='a' != 'b'. F.
+
+Row 2 (i=2, s[1]='a'):
+- f(2, 0) = F.
+- f(2, 1): p[0]='c' vs s[1]='a'. F.
+- f(2, 2): p[1]='*'. Zero: f(2, 0) = F. AL1: c vs a. F. F.
+- f(2, 3): p[2]='a' vs s[1]='a'. Match. f(1, 2) = F. → F.
+- f(2, 4): p[3]='*'. Zero: f(2, 2) = F. AL1: p[2]='a' vs s[1]='a', match, f(1, 4) = T. → T.
+- f(2, 5): p[4]='b' vs s[1]='a'. F.
+
+Row 3 (i=3, s[2]='b'):
+- f(3, 0) = F.
+- f(3, 1): c vs b. F.
+- f(3, 2): Zero: f(3, 0) = F. AL1: c vs b. F.
+- f(3, 3): p[2]='a' vs s[2]='b'. F.
+- f(3, 4): p[3]='*'. Zero: f(3, 2) = F. AL1: p[2]='a' vs s[2]='b'. Mismatch. F.
+- f(3, 5): p[4]='b' vs s[2]='b'. Match. f(2, 4) = T. → T.
+
+f(3, 5) = **T**. ✓ Matches the hand analysis.
+
+----------------------------------------
+
+## Step 6: Why This Handles All Star Expansions
+
+The recursion `f(i, j) = f(i-1, j)` for the "at-least-one more" branch is self-referential — the same `f(i-1, j)` itself recursively evaluates by trying both branches, including a further "at-least-one" branch that consumes another char, and so on.
+
+So effectively, the DP considers all possible numbers of chars matched by `x*`: 0, 1, 2, ..., up to however many chars of s remain. We don't have to loop over these explicitly — the recurrence unrolls them implicitly.
+
+----------------------------------------
+
+## Step 7: Name the Pattern
+
+This is the classic **regex-matching DP** — a standard interview problem that stress-tests your ability to handle multi-case transitions. The core skill: recognizing that the `*` operator introduces branching, and handling both branches explicitly in the recurrence.
+
+The same 2D-DP shape solves wildcard matching (`*` matches any sequence, `?` matches any one char), where the cases differ slightly.
+
+----------------------------------------
+
+## Step 8: Complexity
+
+Time: filling `(n+1)(m+1)` cells with O(1) work each. **O(n·m)**.
+Space: **O(n·m)** for the table. Optimizable to O(m) with careful row-by-row updates.
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
-
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
 bool isMatch(string s, string p) {
     int n = s.size(), m = p.size();
-    vector<vector<bool>> dp(n+1, vector<bool>(m+1, false));
-    dp[0][0] = true;
-    for (int j = 1; j <= m; ++j) if (p[j-1] == '*') dp[0][j] = dp[0][j-2];
-    auto match = [&](int i, int j){ return p[j-1]=='.' || s[i-1]==p[j-1]; };
-    for (int i = 1; i <= n; ++i) for (int j = 1; j <= m; ++j) {
-        if (p[j-1] == '*') dp[i][j] = dp[i][j-2] || (match(i, j-1) && dp[i-1][j]);
-        else dp[i][j] = match(i, j) && dp[i-1][j-1];
+    vector<vector<bool>> f(n + 1, vector<bool>(m + 1, false));
+    f[0][0] = true;
+    // row 0: only x* patterns can match empty s
+    for (int j = 2; j <= m; ++j) {
+        if (p[j - 1] == '*') f[0][j] = f[0][j - 2];
     }
-    return dp[n][m];
+    for (int i = 1; i <= n; ++i) {
+        for (int j = 1; j <= m; ++j) {
+            if (p[j - 1] == '*') {
+                // zero occurrences
+                f[i][j] = f[i][j - 2];
+                // one or more — if preceding pattern char matches s[i-1]
+                if (p[j - 2] == '.' || p[j - 2] == s[i - 1]) {
+                    f[i][j] = f[i][j] || f[i - 1][j];
+                }
+            } else {
+                if (p[j - 1] == '.' || p[j - 1] == s[i - 1]) {
+                    f[i][j] = f[i - 1][j - 1];
+                }
+            }
+        }
+    }
+    return f[n][m];
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Reading the code: the first loop initializes row 0 with the "x* patterns that match empty" special case. The double loop then handles each cell: if the pattern char is `*`, apply the two-branch rule; otherwise, single-char match.
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Wildcard matching (?,* simpler).
-- NFA-based general regex.
-- Greedy + backtrack implementation.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Wildcard matching (`?` matches any char, `*` matches any sequence).** Similar DP, but `*` now greedily or non-greedily matches — different recurrence.
+- **Support `+` (one or more).** Straightforward extension: `x+` is the same as `x` then `x*`.
+- **Support `?` (zero or one).** Add a case: `f(i, j) = f(i, j-2) || (match && f(i-1, j-2))`.
+- **Full regex (character classes, alternation, groups).** Much harder — use Thompson's NFA construction or backtracking.
+- **Return the matched substring in s (not full match).** Change the semantics: `f(0, j) = true` for all j (match starts anywhere); answer is any `f(i, m) = true`.
+- **Reconstruct matching groups.** Track parent pointers; walk back through the DP.

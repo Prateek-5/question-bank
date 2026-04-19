@@ -4,181 +4,181 @@
 https://leetcode.com/problems/path-sum/
 
 **Topic:**
-Trees Binary Trees
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** DFS decrementing target along root-to-leaf paths.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> Tree 5,4,8,11,_,13,4,7,2, target=22. Path 5→4→11→2 sums 22 → true.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Trees / Binary Trees
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Define "Path" Precisely
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Given a binary tree and a target integer `targetSum`, return `true` if there exists a **root-to-leaf path** whose values sum exactly to `targetSum`.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Three things to nail down:
+- **Root-to-leaf**: starts at the root, ends at a leaf. Not "any path" in the tree, and not "root to any node."
+- **Leaf**: a node with no children (both left and right are null).
+- **Sum**: add up every node's value on the path.
 
-So ask yourself:
+Example:
+```
+         5
+        / \
+       4   8
+      /   / \
+     11  13  4
+    /  \      \
+   7    2      1
+```
+targetSum = 22.
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: DFS decrementing target along root-to-leaf paths.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
+Possible root-to-leaf sums:
+- 5 → 4 → 11 → 7 = 27.
+- 5 → 4 → 11 → 2 = 22. ✓
+- 5 → 8 → 13 = 26.
+- 5 → 8 → 4 → 1 = 18.
 
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
+One of them hits 22 → return true.
 
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-A natural first instinct is to traverse the tree many times — once per query, once per property. That works, but it usually does too much. A single recursive traversal can often compute everything post-order with the child results combined at each node.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Check if any root-to-leaf path sums to target. At each node, subtract its value and recurse; at a leaf, check if remaining equals zero.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+If targetSum were 100, none would match → false.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: How Would I Solve by Hand?
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+I'd start at the root, explore down, keeping a running sum. When I reach a leaf, check if the running sum equals the target. If yes, done. If not, backtrack and try a different branch.
 
-**The concept:** DFS decrementing target along root-to-leaf paths.
-
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever data is hierarchical or you can compute something per-subtree → think Binary Tree DFS.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+This is exactly **recursion**. Each branch corresponds to "go left" or "go right." The base case is "we're at a leaf — does our current running sum match?"
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 3: Craft the Recurrence
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+Let `check(node, remaining)` = true if there's a path starting at `node` going down to a leaf with total equal to `remaining` (what's left to match).
 
-hasPath(node, sum): if null return false. If leaf: return node.val == sum. Else return hasPath(left, sum-node.val) || hasPath(right, sum-node.val).
+- If `node` is null: no path exists from a null node. Return false.
+- If `node` is a leaf (both children null): we've reached the end. Return true iff `node.val == remaining`.
+- Else: recurse on children with a reduced remaining. Return true if either child can finish the job.
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
+```
+check(node, remaining):
+    if node is null: return false
+    if node is leaf: return node.val == remaining
+    return check(node.left,  remaining - node.val)
+        or check(node.right, remaining - node.val)
+```
 
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
+Initial call: `check(root, targetSum)`.
 
+Subtle point: the null check returns false, but what does it mean at an internal node with one missing child? If node has a left child but no right, we'd recurse into the right (null) and get false — that's correct, because there's no path via a non-existent child. The left recurse could return true if the left path works.
 
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Recursion.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+The **leaf check** is what makes this "root-to-leaf" rather than "root-to-any-node." Without it, we'd accept any prefix summing to the target.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 4: Trace on the Example
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+targetSum = 22.
 
-Tree 5,4,8,11,_,13,4,7,2, target=22. Path 5→4→11→2 sums 22 → true.
+```
+check(5, 22):
+  not leaf.
+  check(4, 22-5=17) or check(8, 17).
+    check(4, 17):
+      not leaf.
+      check(11, 17-4=13) or check(None, 13)=false.
+        check(11, 13):
+          not leaf.
+          check(7, 13-11=2) or check(2, 2).
+            check(7, 2):
+              leaf. 7 == 2? No. Return false.
+            check(2, 2):
+              leaf. 2 == 2? YES. Return true.
+          check(11, 13) = true.
+        check(4, 17) = true.
+      check(5, 22) = true. Return true early.
+```
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+Got it in the second leaf we checked (path 5-4-11-2). ✓
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 5: Why This Pattern Works
 
-Complexity isn't magic — it's just counting the work.
+The recursion mirrors the tree structure:
+- At each node, we consume `node.val` from the remaining target.
+- At leaves, we check if the exact amount remains.
+- At internal nodes, we try both children.
 
-Time: O(n). Space: O(h).
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
+Each node is visited at most once (by the recursion). We never visit the same subtree twice for the same remaining value. So total work is O(n).
 
 ----------------------------------------
 
-## Step 9: C++ Implementation
+## Step 6: An Alternative — Track Running Sum
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+Instead of decrementing `targetSum`, we could add as we go and compare at the leaf:
+
+```
+check(node, currentSum):
+    if node is null: return false
+    currentSum += node.val
+    if node is leaf: return currentSum == targetSum
+    return check(node.left, currentSum) or check(node.right, currentSum)
+```
+
+Mathematically identical. Some people prefer the decrementing form (fewer parameters to think about); some prefer the accumulating form (easier to debug, running sum matches intuition).
+
+----------------------------------------
+
+## Step 7: Naming What We Did
+
+This is a standard **DFS with a running accumulator** — a ubiquitous tree pattern. Each recursive call contributes a bit of state (the current node's value) that the subtree uses to make its decision. The same shape solves:
+- Path Sum II (return all matching paths).
+- Path Sum III (count paths with any starting/ending node matching a sum).
+- Sum Root to Leaf Numbers (accumulate via digit concatenation instead of sum).
+- Max root-to-leaf path sum (replace equality with max).
+
+----------------------------------------
+
+## Step 8: Edge Cases
+
+- **Empty tree (root is null):** no root-to-leaf path exists. Return false. The base case handles this automatically.
+- **Single node tree:** it's both root and leaf. Return `root.val == targetSum`.
+- **Negative values / target:** the arithmetic still works — no restriction.
+
+----------------------------------------
+
+## Step 9: Complexity
+
+Time: every node is visited at most once. **O(n)** where n is the node count.
+Space: the recursion depth is the tree's height. For balanced trees, O(log n). Worst case (skewed), O(n).
+
+----------------------------------------
+
+## Step 10: C++ Implementation
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-struct TreeNode { int val; TreeNode *left,*right; };
-
-bool hasPathSum(TreeNode* r, int s) {
-    if (!r) return false;
-    if (!r->left && !r->right) return s == r->val;
-    return hasPathSum(r->left, s - r->val) || hasPathSum(r->right, s - r->val);
+bool hasPathSum(TreeNode* root, int targetSum) {
+    if (!root) return false;
+    // leaf: no children
+    if (!root->left && !root->right) {
+        return root->val == targetSum;
+    }
+    int remaining = targetSum - root->val;
+    return hasPathSum(root->left,  remaining)
+        || hasPathSum(root->right, remaining);
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Reading the code:
+- The null check is the base for recursion into missing children — we just return false, no path possible.
+- The leaf check is what makes the semantic "root-to-leaf" correct.
+- We use `||` short-circuit evaluation: if the left subtree finds a match, we never recurse into the right.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 11: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Return the path values.
-- Count all paths with sum = target.
-- Path from any node to any descendant.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Path Sum II.** Return all root-to-leaf paths with the target sum. Use backtracking — build a path as you descend, copy it at leaves.
+- **Path Sum III.** Count paths from any node to any descendant that sum to target. Prefix-sum + hashmap DFS: O(n).
+- **Maximum root-to-leaf sum.** Replace the equality check with a running max.
+- **Paths of length exactly k (node count).** Track depth along with sum.
+- **Support weighted edges instead of node values.** Adjust the accumulation accordingly.
+- **Trees with more than two children (N-ary).** Same recursion pattern, loop over children instead of two recursive calls.

@@ -6,180 +6,156 @@ https://leetcode.com/problems/daily-temperatures/
 **Topic:**
 Stack
 
+----------------------------------------
+
+## Step 1: Read the Problem Carefully
+
+You have an array `T` of daily temperatures. For each day `i`, return the number of days you have to wait until a warmer day. If no future day is warmer, return 0 for that day.
+
+Example: `T = [73, 74, 75, 71, 69, 72, 76, 73]` → `[1, 1, 4, 2, 1, 1, 0, 0]`.
+
+Let me read the expected output for day 0: `T[0] = 73`, `T[1] = 74`, and 74 > 73, so we wait 1 day. ✓
+Day 2: `T[2] = 75`. Looking forward, `T[3], T[4], T[5] = 71, 69, 72` are all ≤ 75. `T[6] = 76 > 75`. So we wait `6 - 2 = 4` days. ✓
+
+So we're essentially asking, for each index, "where's the nearest later index with a strictly larger value?"
 
 ----------------------------------------
 
-## Step 1: Understand the Problem (Beginner Friendly)
+## Step 2: The Obvious Approach
 
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
+For each index `i`, scan right until we find a larger value. That's two nested loops.
 
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
+```cpp
+for (int i = 0; i < n; ++i)
+    for (int j = i + 1; j < n; ++j)
+        if (T[j] > T[i]) { ans[i] = j - i; break; }
+```
 
-**In plain words:** Monotonic decreasing stack of indices.
+Time: O(n²). Fine for small inputs, too slow for `n = 10^5`.
 
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
+What's wasteful here? Suppose I'm at day 2 (temp 75). I scan forward through 71, 69, 72 and find nothing larger yet. Now I move to day 3 (temp 71). I scan forward again through 69, 72... but 72 is larger than 71, so I stop quickly. The inefficiency is not huge in this case, but in a *descending* array like `[5, 4, 3, 2, 1]`, every day re-scans the entire rest of the array even though they all return 0.
 
-> T=[73,74,75,71,69,72,76,73]. Answer [1,1,4,2,1,1,0,0].
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
-
-----------------------------------------
-
-## Step 2: Break Down the Problem
-
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
-
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
-
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Monotonic decreasing stack of indices.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
+Can we avoid re-scanning? That's the key question.
 
 ----------------------------------------
 
-## Step 3: Build Intuition (VERY IMPORTANT)
+## Step 3: Flip the Question
 
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
+Instead of thinking "for each day, find the next warmer day", flip it:
 
-You might try to scan multiple times, or use recursion to handle nested structure. A stack lets you remember just enough of the past to resolve it efficiently — especially 'next greater' or 'matching brackets' questions.
+> "When a new day arrives, which previous days does it *resolve*?"
 
-So how do we get smarter? Let's build the correct intuition step by step.
+Think of the days we've seen so far as a waiting list — days that haven't yet found a warmer day. When today's temperature comes in, it might be warmer than some of those waiting days, and for those, today is the answer.
 
-For each day, look ahead for the next warmer day. A stack of unresolved indices works: whenever a warmer day appears, pop and record distance.
+Example. Suppose I've just seen days with temperatures `75, 71, 69`. All three are waiting for a warmer day. Today is 72. Then:
+- Is 72 > 69? Yes → day with temp 69 is resolved. Today is the warmer day for it.
+- Is 72 > 71? Yes → day with temp 71 is resolved too.
+- Is 72 > 75? No → day with temp 75 still waits.
 
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
+So today resolved two days. Notice something important: the waiting days in order (75, 71, 69) are **decreasing**. That's not a coincidence — any day that was *at most* as warm as some earlier waiting day would have been resolved *by* that earlier day on arrival. Since the later day is still waiting, it means no earlier waiting day was larger than it. So the waiting list is always in strictly decreasing temperature order (reading from oldest to newest).
 
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+That structure — "always decreasing" — is a hint.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 4: We Need a Decreasing Stack of Indices
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+Let's maintain a stack of indices whose temperatures are still waiting for a warmer day. As we walk through each new index `i`:
 
-**The concept:** Monotonic decreasing stack of indices.
+1. While the stack is non-empty and `T[i] > T[stack.top()]`, the current day resolves the day on top of the stack. Pop it, record `ans[popped] = i - popped`.
+2. Push `i` onto the stack.
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
+At the end, whatever indices remain on the stack never found a warmer day — their `ans` stays `0`.
 
-**Pattern recognition cue:**
-
-**Whenever you see nested structure, matching brackets, or 'next greater element' → think Stack / Monotonic Stack.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+Each index is pushed exactly once and popped at most once. Total work is O(n), even though at first glance there's a "while" loop inside the "for" loop.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 5: Trace It on the Example
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+`T = [73, 74, 75, 71, 69, 72, 76, 73]`, `ans = [0,0,0,0,0,0,0,0]` initially.
 
-Iterate i; while stack non-empty and T[i]>T[stack.top()], pop j and set res[j]=i-j. Push i.
+Stack stores indices; I'll show the temperatures next to them for clarity.
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
+```
+i=0, T=73: stack empty, push 0.                stack = [0:73]
+i=1, T=74: 74 > 73, pop 0, ans[0] = 1-0 = 1.   stack = []
+           push 1.                              stack = [1:74]
+i=2, T=75: 75 > 74, pop 1, ans[1] = 2-1 = 1.   stack = []
+           push 2.                              stack = [2:75]
+i=3, T=71: 71 < 75, don't pop. push 3.         stack = [2:75, 3:71]
+i=4, T=69: 69 < 71, don't pop. push 4.         stack = [2:75, 3:71, 4:69]
+i=5, T=72: 72 > 69, pop 4, ans[4] = 5-4 = 1.   stack = [2:75, 3:71]
+           72 > 71, pop 3, ans[3] = 5-3 = 2.   stack = [2:75]
+           72 < 75, stop. push 5.              stack = [2:75, 5:72]
+i=6, T=76: 76 > 72, pop 5, ans[5] = 6-5 = 1.   stack = [2:75]
+           76 > 75, pop 2, ans[2] = 6-2 = 4.   stack = []
+           push 6.                              stack = [6:76]
+i=7, T=73: 73 < 76, don't pop. push 7.         stack = [6:76, 7:73]
+```
 
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
+End of array. Stack is `[6, 7]`. Their `ans` values stay `0`.
 
+Final: `ans = [1, 1, 4, 2, 1, 1, 0, 0]`. ✓
 
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Monotonic stack.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
-
-----------------------------------------
-
-## Step 7: Dry Run (Detailed)
-
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
-
-T=[73,74,75,71,69,72,76,73]. Answer [1,1,4,2,1,1,0,0].
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+Look at what happened at `i=5` — one iteration resolved *two* old days in a row. That's the magic of the stack: the amortized cost is O(1) per index, because each index gets popped at most once across the entire run.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 6: Why This Works — The Invariant
 
-Complexity isn't magic — it's just counting the work.
+The stack always holds indices in **strictly decreasing** temperature order from bottom to top. Here's why that invariant is maintained:
 
-Time: O(n). Space: O(n).
+- Before pushing `i`, we pop every index on top whose temperature is ≤ `T[i]`.
+- What's left on top is either the stack was empty (nothing to pop), or some index whose temperature is strictly greater than `T[i]`.
+- So when we push `i`, the new top is `T[i]`, and the one below (if any) is strictly greater. Invariant holds.
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+This invariant is what makes the algorithm work. When a new `T[i]` arrives, the indices on the stack whose temperatures are less than `T[i]` are exactly contiguous from the top. We pop them all.
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+----------------------------------------
 
+## Step 7: Naming What We Built
+
+This is the classic **monotonic stack** pattern — a stack where elements are kept in monotonic order (increasing or decreasing) by popping violators on insertion. Monotonic stacks are the go-to technique for "next greater / previous smaller"-style problems. The name isn't what matters; the invariant does.
+
+But again, notice: we didn't start by saying "oh this needs a monotonic stack". We started by asking "why re-scan?" and "who does today resolve?" The monotonic-decreasing structure emerged from those questions.
+
+----------------------------------------
+
+## Step 8: Complexity
+
+Time: each index is pushed once and popped at most once. The total work across the entire loop is **O(n)**, even though the inner `while` looks like it could make things quadratic.
+
+Space: the stack can hold up to n indices (all decreasing). **O(n)**.
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
-
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
 vector<int> dailyTemperatures(vector<int>& T) {
-    int n = T.size(); vector<int> res(n, 0); stack<int> st;
+    int n = T.size();
+    vector<int> ans(n, 0);
+    stack<int> st;                   // indices of days waiting for a warmer day
     for (int i = 0; i < n; ++i) {
-        while (!st.empty() && T[i] > T[st.top()]) { res[st.top()] = i - st.top(); st.pop(); }
+        while (!st.empty() && T[i] > T[st.top()]) {
+            int j = st.top(); st.pop();
+            ans[j] = i - j;
+        }
         st.push(i);
     }
-    return res;
+    return ans;
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+The `while` loop looks scary but, as argued, is amortized O(1).
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Next colder day.
-- Previous warmer day.
-- Circular day array.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Next *strictly smaller* day.** Flip the comparison to `T[i] < T[st.top()]` and keep the stack monotonically increasing.
+- **Next greater or equal (not strictly greater).** Change `>` to `>=`.
+- **Circular array (next greater element II).** Run the loop twice (indices 0 to 2n-1, mod n). Don't push the second time around — just resolve.
+- **What if temperatures can be updated later (streaming)?** Harder problem — you'd need segment tree with monotonic queries, or an indexed structure.
+- **Previous warmer day instead of next warmer?** Run the same idea right-to-left, or swap "next" and "previous" by iterating in reverse.

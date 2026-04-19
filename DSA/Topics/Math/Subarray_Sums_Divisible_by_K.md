@@ -6,184 +6,149 @@ https://leetcode.com/problems/subarray-sums-divisible-by-k/
 **Topic:**
 Math
 
+----------------------------------------
+
+## Step 1: Read the Problem
+
+Given an array `nums` (can contain negatives) and integer `k`, return the **count of non-empty contiguous subarrays** whose sum is divisible by k.
+
+Example: `nums = [4, 5, 0, -2, -3, 1]`, k = 5.
+
+Subarrays with sums divisible by 5:
+- [4, 5, 0, -2, -3, 1] sum = 5. ✓
+- [5] sum = 5. ✓
+- [5, 0] sum = 5. ✓
+- [5, 0, -2, -3] sum = 0. ✓ (0 is divisible by anything)
+- [0] sum = 0. ✓
+- [0, -2, -3] sum = -5. ✓
+- [-2, -3] sum = -5. ✓
+
+Count: 7.
 
 ----------------------------------------
 
-## Step 1: Understand the Problem (Beginner Friendly)
+## Step 2: Modular Arithmetic Sets the Stage
 
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
+Sum of subarray `nums[l..r]` divisible by k iff `(prefix[r+1] - prefix[l]) % k == 0` iff `prefix[r+1] % k == prefix[l] % k`.
 
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
+So: **two prefix sums with the same remainder mod k mean the subarray between them is divisible by k**.
 
-**In plain words:** Prefix-sum + modulo bucket counting.
+This turns "find subarrays divisible by k" into "count pairs of prefix sums sharing the same remainder mod k."
 
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> nums=[4,5,0,-2,-3,1], k=5. Prefix mods: 4,4,4,2,4,0. count[0]=1 initial. Step 1: r=4, add 0, count[4]=1. Step 2: r=4, add 1, count[4]=2. Step 3: r=4, add 2, count[4]=3. Step 4: r=2, add 0, count[2]=1. Step 5: r=4, add 3, count[4]=4. Step 6: r=0, add 1, count[0]=2. Total=7.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Similar to Subarray Sum Equals K, but using the remainder as the bucket key.
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 3: Algorithm
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+```
+count = 0
+remainders = {0: 1}   # sentinel for empty prefix (sum 0)
+prefix = 0
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+for x in nums:
+    prefix += x
+    r = ((prefix % k) + k) % k   # non-negative mod
+    count += remainders.get(r, 0)   # pair with all previous prefixes sharing remainder r
+    remainders[r] = remainders.get(r, 0) + 1
 
-So ask yourself:
+return count
+```
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Prefix-sum + modulo bucket counting.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-When you see an arithmetic puzzle, there's a temptation to simulate it step by step. That's honest, and often correct — but it's worth asking first: is there a closed-form shortcut? Mathematical invariants and modular arithmetic frequently collapse a loop into an O(1) formula.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-If two prefix sums have the same remainder mod k, the subarray between them sums to a multiple of k. Count how many prefix sums share each remainder and combine in pairs.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+For each prefix, check how many previous prefixes had the same remainder. Each such pair represents a valid subarray.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 4: The Non-Negative Modulo Fix
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+Be careful: in many languages, `-3 % 5` is `-3` (the result keeps the dividend's sign). We want a non-negative remainder (0 to k-1) for consistent bucket lookups.
 
-**The concept:** Prefix-sum + modulo bucket counting.
-
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever you see digits, divisibility, primes, or modular structure → think Math/Number Theory.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+The trick: `((prefix % k) + k) % k`. The inner `% k` may give negative; adding `k` makes it positive; the outer `% k` normalizes to [0, k).
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 5: Trace
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+`nums = [4, 5, 0, -2, -3, 1]`, k = 5.
 
-Maintain count[r] = number of prefix sums with remainder r. Initialize count[0]=1 (empty prefix). For each element, update running sum, compute r = ((sum % k) + k) % k to handle negatives, add count[r] to the answer, then increment count[r].
+```
+remainders = {0: 1}. prefix = 0. count = 0.
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
+x = 4. prefix = 4. r = 4. remainders[4] = 0. count += 0. remainders[4] = 1.
+x = 5. prefix = 9. r = 4. remainders[4] = 1. count += 1. Total 1. remainders[4] = 2.
+x = 0. prefix = 9. r = 4. count += 2. Total 3. remainders[4] = 3.
+x = -2. prefix = 7. r = 2. count += 0. remainders[2] = 1.
+x = -3. prefix = 4. r = 4. count += 3. Total 6. remainders[4] = 4.
+x = 1. prefix = 5. r = 0. remainders[0] = 1 (the sentinel). count += 1. Total 7. remainders[0] = 2.
+```
 
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
+Return 7. ✓
 
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-One pass with a size-k bucket; uses pigeonhole over prefix remainders.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+The sentinel `remainders[0] = 1` represents the empty prefix. When we first hit a prefix sum divisible by k, it pairs with the sentinel, counting the subarray from index 0.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 6: Why the Sentinel
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+A subarray `nums[0..r]` has sum divisible by k iff `prefix[r+1] % k == 0`. There's no explicit "earlier" prefix to pair with — we're pairing with the "empty prefix" (sum 0, implicitly at index -1).
 
-nums=[4,5,0,-2,-3,1], k=5. Prefix mods: 4,4,4,2,4,0. count[0]=1 initial. Step 1: r=4, add 0, count[4]=1. Step 2: r=4, add 1, count[4]=2. Step 3: r=4, add 2, count[4]=3. Step 4: r=2, add 0, count[2]=1. Step 5: r=4, add 3, count[4]=4. Step 6: r=0, add 1, count[0]=2. Total=7.
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+By pre-seeding `remainders[0] = 1`, the algorithm correctly counts these "starts from index 0" subarrays.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 7: Name It
 
-Complexity isn't magic — it's just counting the work.
+**Prefix-sum modulo + hashmap counting.** Same pattern as Subarray Sum Equals K and Largest Subarray With 0 Sum, but with modular arithmetic.
 
-Time: O(n). Space: O(k).
+The big idea: **congruent prefix sums define divisible subarrays**.
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+Related:
+- Count Subarrays with Sum = k (non-divisibility version).
+- Continuous Subarray Sum (check if any such subarray exists with extra length constraint).
+- Subarray Product Less Than K (different technique — sliding window).
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+----------------------------------------
 
+## Step 8: Complexity
+
+Time: **O(n)** — single pass, O(1) hashmap ops (or O(1) with array of size k).
+Space: **O(k)** for the remainder table.
+
+If k is small (say ≤ 10^4), use a plain array `int count[k]` for better cache performance.
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
-
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-
 int subarraysDivByK(vector<int>& nums, int k) {
-    vector<int> cnt(k, 0); cnt[0] = 1;
-    int sum = 0, ans = 0;
+    vector<int> remainders(k, 0);
+    remainders[0] = 1;   // sentinel for empty prefix
+    int prefix = 0;
+    int count = 0;
+
     for (int x : nums) {
-        sum += x;
-        int r = ((sum % k) + k) % k;
-        ans += cnt[r];
-        cnt[r]++;
+        prefix += x;
+        int r = ((prefix % k) + k) % k;
+        count += remainders[r];
+        remainders[r]++;
     }
-    return ans;
+
+    return count;
 }
 ```
 
-A few notes about the style:
+Clean. Array indexed by remainder is both fast and simple.
 
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+The non-negative mod `((prefix % k) + k) % k` is essential for correctness with negative sums.
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Return the actual subarrays (not just count).
-- Subarray sums divisible by K with minimum length.
-- What if we want sums divisible by any of several ks?
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Count subarrays with sum = k (not divisibility).** Different key: use prefix sum directly, not mod.
+- **Find (not just count) the actual subarrays.** Track indices of prefix sums per remainder; output pairs.
+- **Minimum-length subarray divisible by k.** Track earliest index per remainder.
+- **Largest subarray divisible by k.** Track first-seen-index per remainder; compute `i - first_occurrence`.
+- **Product divisible by k.** Different approach — prime factorization.
+- **Two arrays, count subarrays (l, r) with combined sum div by k.** More complex; double prefix-sum.

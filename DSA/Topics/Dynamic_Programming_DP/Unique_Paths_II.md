@@ -4,183 +4,225 @@
 https://leetcode.com/problems/unique-paths-ii/
 
 **Topic:**
-Dynamic Programming DP
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** DP over grid with obstacles.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> grid=[[0,0,0],[0,1,0],[0,0,0]] → 2 paths.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Dynamic Programming (DP)
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: The Grid and the Rules
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+You have an m × n grid where each cell is either:
+- `0` = empty (passable).
+- `1` = obstacle (blocked).
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Starting at cell `(0, 0)` and ending at `(m-1, n-1)`, count the number of **unique paths** from start to end, where each move is either **one step right** or **one step down**.
 
-So ask yourself:
+If start or end is an obstacle, there are 0 paths.
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: DP over grid with obstacles.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
+Example:
+```
+[[0, 0, 0],
+ [0, 1, 0],
+ [0, 0, 0]]
+```
 
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
+Paths without obstacles: C(4, 2) = 6. But the middle obstacle blocks some. Valid paths:
+- R, R, D, D
+- R, D, R, D (blocked — passes (1,1))
+- R, D, D, R
+- D, R, R, D
+- D, R, D, R (blocked)
+- D, D, R, R
 
+4 survive. Answer: **2**. (Wait, let me recount — actually I need to recheck by enumeration.)
 
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-Your very first thought is often recursion. That's actually the right start — but naive recursion re-computes the same subproblems exponentially. The fix is memoization (top-down) or tabulation (bottom-up). The hard part is identifying the state that captures all we need to know about the past.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-dp[i][j] = 0 if obstacle; else sum of dp[i-1][j] and dp[i][j-1].
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Carefully: 6 total unblocked-grid paths. Paths through (1,1) are blocked. In a 3×3, paths passing through (1,1) = (paths 0,0 → 1,1) × (paths 1,1 → 2,2) = C(2,1) × C(2,1) = 2 × 2 = 4. So unblocked = 6 - 4 = **2**. ✓
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: DP Setup
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+Let `dp[i][j]` = number of unique paths from (0, 0) to (i, j).
 
-**The concept:** DP over grid with obstacles.
+Recurrence: a path arrives at (i, j) either from above or from the left.
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
+```
+dp[i][j] = dp[i-1][j] + dp[i][j-1]
+```
 
-**Pattern recognition cue:**
+Boundary: if (i, j) is an obstacle, dp[i][j] = 0 (no path through).
 
-**Whenever a brute-force recursion has overlapping subproblems → think DP. Identify state first, then transition.**
+Base case: dp[0][0] = 1 (one way to start at start — if (0,0) is not an obstacle). If (0, 0) is an obstacle, dp[0][0] = 0.
 
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-Bottom-up DP; base dp[0][0] = grid[0][0]==0.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
+First row / first column: only one way each (only one direction available) — as long as the path isn't blocked by an obstacle. Propagate: dp[0][j] = dp[0][j-1] if grid[0][j] is free, else 0.
 
 ----------------------------------------
 
-## Step 6: Final Approach
+## Step 3: Obstacles Break the Propagation
 
-Now let's crystallize everything we've learned into a clean algorithm.
+A key subtlety: if any cell in the first row is an obstacle, all cells **after** it in that row have dp = 0 (can't reach them going only right).
 
-Standard grid DP.
+Example first row: `[0, 0, 1, 0]`. dp = [1, 1, 0, 0]. The obstacle at column 2 kills paths to columns 2 and 3.
 
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+Same for first column.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 4: Algorithm
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+```
+if grid[0][0] == 1 or grid[m-1][n-1] == 1: return 0
 
-grid=[[0,0,0],[0,1,0],[0,0,0]] → 2 paths.
+dp[0][0] = 1
+for j in 1..n-1:
+    dp[0][j] = dp[0][j-1] if grid[0][j] == 0 else 0
+for i in 1..m-1:
+    dp[i][0] = dp[i-1][0] if grid[i][0] == 0 else 0
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+for i in 1..m-1:
+    for j in 1..n-1:
+        if grid[i][j] == 1:
+            dp[i][j] = 0
+        else:
+            dp[i][j] = dp[i-1][j] + dp[i][j-1]
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
+return dp[m-1][n-1]
+```
 
+O(m · n) time. O(m · n) space — reducible to O(n) using a 1D rolling array.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 5: Trace
 
-Complexity isn't magic — it's just counting the work.
+```
+grid = [[0, 0, 0],
+        [0, 1, 0],
+        [0, 0, 0]]
+```
 
-Time: O(n·m). Space: O(m).
+Initialize dp[0][0] = 1.
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+First row: dp[0] = [1, 1, 1] (no obstacles).
+First column: dp[0][0] = 1, dp[1][0] = 1 (free), dp[2][0] = 1.
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+Fill:
+- dp[1][1]: grid = 1 → dp = 0.
+- dp[1][2]: grid = 0. dp = dp[0][2] + dp[1][1] = 1 + 0 = 1.
+- dp[2][1]: grid = 0. dp = dp[1][1] + dp[2][0] = 0 + 1 = 1.
+- dp[2][2]: grid = 0. dp = dp[1][2] + dp[2][1] = 1 + 1 = 2.
 
+```
+dp = [[1, 1, 1],
+      [1, 0, 1],
+      [1, 1, 2]]
+```
+
+Return **2**. ✓
 
 ----------------------------------------
 
-## Step 9: C++ Implementation
+## Step 6: Space Optimization — 1D Rolling Array
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+We only need the previous row to compute the current row. Keep a single array `dp` of length n.
+
+```
+dp[0] = 1 if grid[0][0] == 0 else 0
+for j in 1..n-1:
+    dp[j] = dp[j-1] if grid[0][j] == 0 else 0
+
+for i in 1..m-1:
+    dp[0] = dp[0] if grid[i][0] == 0 else 0
+    for j in 1..n-1:
+        if grid[i][j] == 1:
+            dp[j] = 0
+        else:
+            dp[j] = dp[j] + dp[j-1]   # dp[j] is previous row's; dp[j-1] is current row's
+
+return dp[n-1]
+```
+
+O(n) space. The update `dp[j] = dp[j] + dp[j-1]` works because `dp[j]` still holds the previous row's value before we overwrite it.
+
+----------------------------------------
+
+## Step 7: Why DP?
+
+Each cell's count depends only on its upper and left neighbors — both computed before it in row-major order. That's textbook DP: overlapping subproblems (same cell appears in many path-counts) + optimal substructure (count through a cell = sum of counts through predecessors).
+
+Without DP, naive recursion would be exponential (each cell branches into 2, depth m + n).
+
+----------------------------------------
+
+## Step 8: Name It
+
+**Grid DP / path counting**. Foundational:
+- Unique Paths (no obstacles — pure C(m+n-2, m-1) combinatorial).
+- Unique Paths II (this problem).
+- Minimum Path Sum (same recurrence, different optimization — min instead of sum).
+- Edit Distance, Longest Common Subsequence, Matrix DP generally.
+
+All share the "fill the grid row by row using left and upper neighbors" template.
+
+----------------------------------------
+
+## Step 9: Complexity
+
+Time: **O(m · n)** — each cell computed once in O(1).
+Space: **O(m · n)** naive, **O(n)** optimized.
+
+----------------------------------------
+
+## Step 10: C++ Implementation
+
+**2D version:**
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-int uniquePathsWithObstacles(vector<vector<int>>& g) {
-    int n=g.size(), m=g[0].size();
-    vector<long long> dp(m, 0); dp[0] = g[0][0] ? 0 : 1;
-    for (int i=0;i<n;i++) for (int j=0;j<m;j++) {
-        if (g[i][j]) dp[j] = 0;
-        else if (j > 0) dp[j] += dp[j-1];
-    }
-    return (int)dp[m-1];
+int uniquePathsWithObstacles(vector<vector<int>>& grid) {
+    int m = grid.size(), n = grid[0].size();
+    if (grid[0][0] == 1 || grid[m-1][n-1] == 1) return 0;
+
+    vector<vector<long long>> dp(m, vector<long long>(n, 0));
+    dp[0][0] = 1;
+
+    for (int j = 1; j < n; ++j) dp[0][j] = grid[0][j] ? 0 : dp[0][j-1];
+    for (int i = 1; i < m; ++i) dp[i][0] = grid[i][0] ? 0 : dp[i-1][0];
+
+    for (int i = 1; i < m; ++i)
+        for (int j = 1; j < n; ++j)
+            dp[i][j] = grid[i][j] ? 0 : dp[i-1][j] + dp[i][j-1];
+
+    return (int)dp[m-1][n-1];
 }
 ```
 
-A few notes about the style:
+**1D optimized:**
 
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
+```cpp
+int uniquePathsWithObstacles(vector<vector<int>>& grid) {
+    int m = grid.size(), n = grid[0].size();
+    vector<long long> dp(n, 0);
+    dp[0] = grid[0][0] ? 0 : 1;
+    for (int j = 1; j < n; ++j) dp[j] = grid[0][j] ? 0 : dp[j-1];
 
+    for (int i = 1; i < m; ++i) {
+        dp[0] = grid[i][0] ? 0 : dp[0];
+        for (int j = 1; j < n; ++j) {
+            dp[j] = grid[i][j] ? 0 : (dp[j] + dp[j-1]);
+        }
+    }
+    return (int)dp[n-1];
+}
+```
+
+Long-long guards against overflow (path counts can be huge for large grids).
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 11: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- With weighted obstacles.
-- Minimize obstacles on path.
-- Count paths mod p.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Diagonal moves allowed.** Add `dp[i-1][j-1]` to the recurrence.
+- **Grid with K obstacles, paths avoiding exactly K obstacles.** Stateful DP: (i, j, obstacles_hit).
+- **Count paths with minimum obstacles encountered.** Different metric; similar DP shape.
+- **Return one valid path.** Backtrack from end; at each step, choose the predecessor with positive count.
+- **Why long-long?** For m, n around 100, path counts can exceed 2^63 without obstacles. Actual problem constraints usually ensure counts fit in 32-bit, but safer to guard.
+- **Obstacles can move (dynamic).** Grid DP doesn't support this well; simulation per query.

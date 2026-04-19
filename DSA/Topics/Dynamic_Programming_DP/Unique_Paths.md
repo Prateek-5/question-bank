@@ -4,148 +4,157 @@
 https://leetcode.com/problems/unique-paths/
 
 **Topic:**
-Dynamic Programming DP
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Combinations C(m+n-2, m-1) or DP.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> m=3,n=7 → C(8,2)=28.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Dynamic Programming (DP)
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: The Setup
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+You're on an `m × n` grid, standing at the top-left corner `(0, 0)`. You want to reach the bottom-right corner `(m-1, n-1)`. At each step, you can only move **right** or **down**. How many distinct paths are there?
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Example: `m = 3, n = 2`.
 
-So ask yourself:
+```
+start . .
+.     . .
+.     . end
+```
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Combinations C(m+n-2, m-1) or DP.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
+I could go: RDD, DRD, DDR. That's 3 paths. Let me sanity-check by brute force.
 
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
+Any path consists of some rights and some downs. To reach (2, 1) from (0, 0), I need exactly 2 downs and 1 right — in any order. Number of arrangements = C(3, 1) = 3. ✓
 
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-Your very first thought is often recursion. That's actually the right start — but naive recursion re-computes the same subproblems exponentially. The fix is memoization (top-down) or tabulation (bottom-up). The hard part is identifying the state that captures all we need to know about the past.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Every path consists of (m-1) downs and (n-1) rights — total (m+n-2) moves chosen from either.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+So the closed-form answer is `C((m-1) + (n-1), m-1) = C(m + n - 2, m - 1)`. But let's see how we'd *derive* that, because the DP way teaches a more transferable technique.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: Try a Small Grid by Hand
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+Let me count paths to each cell for a 3×3 grid.
 
-**The concept:** Combinations C(m+n-2, m-1) or DP.
+```
+(0,0) (0,1) (0,2)
+(1,0) (1,1) (1,2)
+(2,0) (2,1) (2,2)
+```
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
+Paths to `(0, 0)`: 1 (already there).
 
-**Pattern recognition cue:**
+Paths to cells in the top row `(0, j)`: only way is all rights. 1 path each.
 
-**Whenever a brute-force recursion has overlapping subproblems → think DP. Identify state first, then transition.**
+Paths to cells in the left column `(i, 0)`: only way is all downs. 1 path each.
 
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
+Paths to `(1, 1)`: I can come from `(0, 1)` (move down) or `(1, 0)` (move right). So paths to `(1, 1)` = paths to `(0, 1)` + paths to `(1, 0)` = 1 + 1 = 2.
 
+Paths to `(1, 2)`: from `(0, 2)` or `(1, 1)` = 1 + 2 = 3.
 
-----------------------------------------
+Paths to `(2, 1)`: from `(1, 1)` or `(2, 0)` = 2 + 1 = 3.
 
-## Step 5: Visual / Step-by-Step Explanation
+Paths to `(2, 2)`: from `(1, 2)` or `(2, 1)` = 3 + 3 = 6.
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+Let me write out the grid:
 
-Compute binomial coefficient iteratively to avoid overflow.
+```
+1 1 1
+1 2 3
+1 3 6
+```
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Iterative nCr.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+And for any cell `(i, j)` with `i, j > 0`: `paths(i, j) = paths(i-1, j) + paths(i, j-1)`.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 3: The Recurrence Is the Reasoning
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+This recurrence isn't arbitrary. It says: "the number of ways to reach `(i, j)` is the number of ways to arrive from the cell directly above, plus the number of ways to arrive from the cell directly to the left." That's because those are the *only* two incoming moves. No overlap (a path is either its-last-move-was-down or its-last-move-was-right, not both), and it covers everything.
 
-m=3,n=7 → C(8,2)=28.
+So the DP is exact, not an approximation.
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+```
+paths(i, j) = 1                               if i == 0 or j == 0
+            = paths(i-1, j) + paths(i, j-1)   otherwise
+```
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
-
-----------------------------------------
-
-## Step 8: Time and Space Complexity
-
-Complexity isn't magic — it's just counting the work.
-
-Time: O(min(m,n)). Space: O(1).
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
+With this recurrence, fill the table row by row (or column by column) and read off `paths(m-1, n-1)`.
 
 ----------------------------------------
 
-## Step 9: C++ Implementation
+## Step 4: Table for m=3, n=7 (the Classic Example)
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+Expected answer is 28.
+
+```
+1 1 1 1 1 1 1
+1 2 3 4 5 6 7
+1 3 6 10 15 21 28
+```
+
+Each cell is the sum of the cell above and the cell to the left. Bottom-right is 28. ✓
+
+Hmm, look at row 2: `1 3 6 10 15 21 28`. Those are triangular-number-like values. Row 1 is the identity. This is Pascal's triangle on its side — and that's not a coincidence. It leads us to the closed form.
+
+----------------------------------------
+
+## Step 5: Closed Form via Combinatorics
+
+As noted in Step 1, any path has exactly `(m - 1)` down-moves and `(n - 1)` right-moves. The total is `(m + n - 2)` moves. We're choosing which of those are downs (equivalently, which are rights). So:
+
+```
+paths(m, n) = C(m + n - 2, m - 1) = C(m + n - 2, n - 1)
+```
+
+That's O(min(m, n)) to compute with a running product:
+
+```cpp
+long long r = 1;
+int small = min(m, n) - 1;
+for (int i = 1; i <= small; ++i) r = r * (m + n - 1 - i) / i;
+return (int)r;
+```
+
+Beautiful, but the DP version has the advantage that it generalizes — if we add obstacles (Unique Paths II) or weighted cells, the recurrence still works but the combinatorial formula doesn't.
+
+----------------------------------------
+
+## Step 6: Space-Optimized DP
+
+Look at the recurrence: `paths(i, j) = paths(i-1, j) + paths(i, j-1)`. Only the *previous row* and the *current row* (for the left neighbor) matter. So we can compute in place with one row:
+
+```cpp
+vector<int> dp(n, 1);   // top row: all 1s
+for (int i = 1; i < m; ++i) {
+    for (int j = 1; j < n; ++j) {
+        dp[j] += dp[j - 1];    // dp[j] is "from above", dp[j-1] is "from left"
+    }
+}
+return dp[n - 1];
+```
+
+This is the same algorithm as the 2D table, but stored as a single row that updates row by row. O(n) space.
+
+Let me trace this briefly for m=3, n=3. Expected answer 6.
+
+```
+Row 0: dp = [1, 1, 1]
+Row 1: update j=1: dp[1] = 1 + 1 = 2. update j=2: dp[2] = 1 + 2 = 3. dp = [1, 2, 3].
+Row 2: update j=1: dp[1] = 2 + 1 = 3. update j=2: dp[2] = 3 + 3 = 6. dp = [1, 3, 6].
+```
+
+`dp[n-1] = 6`. ✓
+
+----------------------------------------
+
+## Step 7: Complexity
+
+Time: `m · n` cells, O(1) per cell. **O(m · n)** for DP, **O(min(m, n))** for the combinatorial formula.
+
+Space: **O(n)** with the 1D optimization, **O(1)** for the combinatorial version.
+
+----------------------------------------
+
+## Step 8: C++ Implementation
+
+Combinatorial (fastest):
 
 ```cpp
 int uniquePaths(int m, int n) {
@@ -155,26 +164,26 @@ int uniquePaths(int m, int n) {
 }
 ```
 
-A few notes about the style:
+1D DP (more instructive, handles generalizations):
 
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
+```cpp
+int uniquePaths(int m, int n) {
+    vector<int> dp(n, 1);
+    for (int i = 1; i < m; ++i)
+        for (int j = 1; j < n; ++j)
+            dp[j] += dp[j - 1];
+    return dp[n - 1];
+}
+```
 
+Either is fine. The combinatorial version is an algorithmic flex; the DP is the one you build on for harder variants.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 9: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- With obstacles (Unique Paths II).
-- Paths with k moves.
-- Unique paths in 3D.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Unique Paths II (obstacles).** DP with `dp[i][j] = 0` if the cell is an obstacle; combinatorial formula no longer works.
+- **Unique Paths III (visit every empty cell exactly once, start/end given).** This is NP-hard in general — backtracking with bitmask DP when board is small.
+- **What if you can move in more directions (up, left too)?** Changes the problem entirely — might introduce cycles, making "count paths" infinite without extra constraints.
+- **3D grid.** Extend the recurrence: `paths(i, j, k) = paths(i-1, j, k) + paths(i, j-1, k) + paths(i, j, k-1)`. Combinatorial: `C(m+n+p-3, m-1, n-1, p-1)` (multinomial).
+- **What if cells have costs, and you want the minimum-cost path?** Minimum Path Sum — replace addition with min and add cell cost.

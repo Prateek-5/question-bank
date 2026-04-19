@@ -4,191 +4,243 @@
 https://leetcode.com/problems/binary-tree-right-side-view/
 
 **Topic:**
-Binary Search Tree BST
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** BFS level-order, pick last node of each level.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> Tree 1,2,3,_,5,_,4. Levels [1],[2,3],[5,4]. Right view: [1,3,4].
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Binary Search Tree (BST)
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Visualize the Problem
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Imagine standing to the **right** of a binary tree and looking at it. What do you see?
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+At each "height level" (depth), you see the **rightmost** node. Every other node at that level is blocked by the rightmost one.
 
-So ask yourself:
+Return the list of visible node values, top to bottom.
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: BFS level-order, pick last node of each level.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
+Example:
+```
+     1
+    / \
+   2   3
+    \   \
+     5   4
+```
 
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
+Standing on the right:
+- Level 0: only node 1. See 1.
+- Level 1: nodes 2 and 3. Rightmost is 3. See 3.
+- Level 2: nodes 5 and 4. Rightmost is 4. See 4.
 
+Result: `[1, 3, 4]`.
 
-----------------------------------------
+Another example:
+```
+     1
+    /
+   2
+  /
+ 3
+```
 
-## Step 3: Build Intuition (VERY IMPORTANT)
+- Level 0: 1.
+- Level 1: 2 (only node).
+- Level 2: 3 (only node).
 
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
+Result: `[1, 2, 3]`.
 
-Many people's first instinct on a tree problem is to flatten it into an array and then work there. Sometimes that works — but it throws away the structural property of BSTs that makes them special: left < node < right. The right solutions exploit that property directly.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Right view shows the rightmost node at each depth.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
-
-----------------------------------------
-
-## Step 4: Connect to Concept
-
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
-
-**The concept:** BFS level-order, pick last node of each level.
-
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever you need ordered operations (k-th smallest, range queries, predecessor/successor) → think BST.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+"Rightmost" really means the last node encountered at each level in left-to-right order — not just right children.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 2: Natural Fit — BFS by Level
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+For "last at each level," BFS level-order traversal is the canonical tool.
 
-Level-by-level BFS; in each level push only the last node's value. Alternatively reverse-preorder DFS.
+```
+queue = [root]
+result = []
+while queue is non-empty:
+    level_size = len(queue)
+    for i in 0..level_size - 1:
+        node = queue.pop_front()
+        if i == level_size - 1:
+            result.append(node.val)   # the last in this level
+        if node.left:  queue.push_back(node.left)
+        if node.right: queue.push_back(node.right)
+return result
+```
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-BFS level size.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+Each iteration of the outer while processes one level. We remember how many nodes are in this level (via `level_size`), iterate through them, and the last one we process is the rightmost.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 3: Trace on Example 1
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+Tree:
+```
+     1
+    / \
+   2   3
+    \   \
+     5   4
+```
 
-Tree 1,2,3,_,5,_,4. Levels [1],[2,3],[5,4]. Right view: [1,3,4].
+```
+queue: [1]. result: [].
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+Level 0: size=1.
+  i=0: pop 1. It's the last (i == size-1). Append to result. result=[1].
+  Push 2 and 3.
+queue: [2, 3].
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
+Level 1: size=2.
+  i=0: pop 2. Not last. Push 5 (only right child).
+  i=1: pop 3. Last. Append. result=[1, 3]. Push 4.
+queue: [5, 4].
 
+Level 2: size=2.
+  i=0: pop 5. Not last.
+  i=1: pop 4. Last. Append. result=[1, 3, 4].
+queue: [].
+
+Done.
+```
+
+Output: `[1, 3, 4]`. ✓
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 4: DFS Alternative — Right-First Preorder
 
-Complexity isn't magic — it's just counting the work.
+There's another approach that feels different but produces the same output.
 
-Time: O(n). Space: O(n).
+Do a preorder DFS, but recurse on the **right** child **first**. At each node, if we're seeing a deeper level than recorded so far, this node is the first to visit at its level — which, because we recursed right-first, is the rightmost node at that level.
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+```
+def dfs(node, depth):
+    if node is null: return
+    if depth == len(result):   # first node at this depth
+        result.append(node.val)
+    dfs(node.right, depth + 1)
+    dfs(node.left, depth + 1)
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+dfs(root, 0)
+return result
+```
 
+This works because DFS going right-first reaches each level's rightmost node before any other. So the first node we see at any given depth is that depth's rightmost.
+
+Trace on example 1:
+```
+dfs(1, 0): len(result)=0. Append 1. result=[1].
+  dfs(3, 1): len=1. Append 3. result=[1, 3].
+    dfs(4, 2): len=2. Append 4. result=[1, 3, 4].
+    dfs(null, 3).
+  dfs(null, 2).
+  dfs(2, 1): len=3, depth=1. len != 1, don't append.
+    dfs(5, 2): len=3, depth=2. Don't append.
+    dfs(null, 3).
+  dfs(null, 2).
+```
+
+Output: `[1, 3, 4]`. ✓
+
+Shorter code but less intuitive than BFS. Both are valid.
+
+----------------------------------------
+
+## Step 5: Which Approach Is "Better"?
+
+BFS is more direct (literally "traverse by levels, emit the last per level"). DFS with right-first recursion is a bit more elegant in code but requires the subtle "first-at-depth" insight.
+
+Complexity is the same: O(n) time, O(h) or O(n) space depending on tree shape.
+
+For interviews, BFS is usually the clearer answer. DFS with right-first is a nice alternative that shows conceptual flexibility.
+
+----------------------------------------
+
+## Step 6: Edge Cases
+
+- **Empty tree:** queue never fills. Result is `[]`.
+- **Single node:** Level 0 has one node, which is trivially rightmost. Result is `[root.val]`.
+- **Single-child chain (all lefts):** each level has one node — seen from the right, that one node is what's visible. Result: all values in order.
+
+----------------------------------------
+
+## Step 7: Name It
+
+**Level-order (BFS) traversal with per-level last-element collection**. Same template solves:
+- Left side view: pick the **first** node per level.
+- Binary Tree Level Averages: collect the average per level.
+- Largest Value in Each Tree Row: track the max per level.
+
+Whenever the problem is "something per level," BFS with level-size snapshot is the go-to pattern.
+
+----------------------------------------
+
+## Step 8: Complexity
+
+Time: **O(n)** — each node visited once.
+Space: **O(n)** for the queue in the worst case (complete binary tree has ~n/2 at the bottom level).
+
+For DFS: O(h) recursion depth.
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+**BFS version:**
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-struct TreeNode { int val; TreeNode *left,*right; };
-
 vector<int> rightSideView(TreeNode* root) {
-    vector<int> res;
-    if (!root) return res;
-    queue<TreeNode*> q; q.push(root);
+    vector<int> result;
+    if (!root) return result;
+    queue<TreeNode*> q;
+    q.push(root);
+
     while (!q.empty()) {
-        int sz = q.size();
-        for (int i = 0; i < sz; ++i) {
-            auto* n = q.front(); q.pop();
-            if (i == sz - 1) res.push_back(n->val);
-            if (n->left) q.push(n->left);
-            if (n->right) q.push(n->right);
+        int levelSize = q.size();
+        for (int i = 0; i < levelSize; ++i) {
+            TreeNode* node = q.front(); q.pop();
+            if (i == levelSize - 1) {
+                result.push_back(node->val);
+            }
+            if (node->left) q.push(node->left);
+            if (node->right) q.push(node->right);
         }
     }
-    return res;
+    return result;
 }
 ```
 
-A few notes about the style:
+**DFS version (right-first preorder):**
 
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
+```cpp
+class Solution {
+    vector<int> result;
+    void dfs(TreeNode* node, int depth) {
+        if (!node) return;
+        if ((int)result.size() == depth) result.push_back(node->val);
+        dfs(node->right, depth + 1);
+        dfs(node->left, depth + 1);
+    }
 
+public:
+    vector<int> rightSideView(TreeNode* root) {
+        dfs(root, 0);
+        return result;
+    }
+};
+```
+
+Both are ~10 lines. Pick the one that feels clearer to you.
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Variation: both left and right views combined.
-- Column-wise view.
-- Top view.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Left side view.** Symmetric — BFS picks first per level, or DFS with left-first recursion.
+- **Top view / bottom view.** Track by horizontal distance from root, not level.
+- **Boundary traversal of a binary tree.** Combines left view, leaves, and right view.
+- **Right view with N-ary tree.** Rightmost means the last child in each level's list.
+- **Return the visible node objects (not just values).** Same algorithm, append the node instead.
+- **Tree that's been serialized — compute right view without reconstructing.** Can be done directly on the serialized form if it's level-order.

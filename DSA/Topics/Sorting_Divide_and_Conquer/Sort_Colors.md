@@ -4,182 +4,158 @@
 https://leetcode.com/problems/sort-colors/
 
 **Topic:**
-Sorting Divide and Conquer
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Dutch National Flag — three-way partition.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> nums=[2,0,2,1,1,0] → [0,0,1,1,2,2].
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Sorting / Divide & Conquer
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Read the Problem
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+You're given an array where each element is **0, 1, or 2** (representing red, white, blue). Sort it in place so all 0s come first, then all 1s, then all 2s.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+The challenge: can you do this in **one pass** with **O(1) extra memory** and **O(n) time**?
 
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Dutch National Flag — three-way partition.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
+Example: `[2, 0, 2, 1, 1, 0]` → `[0, 0, 1, 1, 2, 2]`.
 
 ----------------------------------------
 
-## Step 3: Build Intuition (VERY IMPORTANT)
+## Step 2: Easy Two-Pass Approaches
 
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
+Before tackling the one-pass challenge, let's note some simpler approaches:
 
-Sorting first is often the most useful preprocessing step in algorithms. Divide-and-conquer generalizes that idea: split the problem in halves, solve each recursively, and merge. The merge step is where insights like inversion counting live.
+**Counting sort.** Count the number of 0s, 1s, and 2s. Overwrite the array with that many 0s, then 1s, then 2s.
 
-So how do we get smarter? Let's build the correct intuition step by step.
+```cpp
+int count[3] = {0, 0, 0};
+for (int x : nums) count[x]++;
+int idx = 0;
+for (int c = 0; c < 3; ++c)
+    for (int i = 0; i < count[c]; ++i) nums[idx++] = c;
+```
 
-Partition array into <1, ==1, >1 using three pointers lo, mid, hi. Swap nums[mid] with nums[lo] or nums[hi] depending on value.
+O(n) time, O(1) extra space, **but two passes**. Easy and efficient; perfectly valid unless the problem asks for one pass.
 
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
+**Standard sort.** Just call `sort(nums.begin(), nums.end())`. O(n log n). Simplest code but asymptotically slower.
 
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
-
-----------------------------------------
-
-## Step 4: Connect to Concept
-
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
-
-**The concept:** Dutch National Flag — three-way partition.
-
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever the problem smells like 'count inversions' or 'k-th statistic' → think Merge Sort variants or Quickselect.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+The challenge is: can we do it in **one pass**?
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 3: Set Up Three Regions
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+One pass implies we're moving elements as we see them, not counting first. As we scan, we partition the array into three regions:
+- **Left region**: all 0s, already sorted.
+- **Middle region**: all 1s, already sorted.
+- **Right region**: all 2s, already sorted.
 
-lo=0, mid=0, hi=n-1. While mid<=hi: if nums[mid]==0 swap(lo,mid), lo++,mid++; ==1 mid++; ==2 swap(mid,hi), hi--.
+Let's formalize with three pointers:
+- `lo` = index where the next 0 should go (the boundary between the 0s-region and the 1s-region).
+- `mid` = the current cursor, examining the element at `mid`.
+- `hi` = index where the next 2 should go, filling from the right.
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
+Invariant at any moment:
+- `nums[0..lo)` are all 0s.
+- `nums[lo..mid)` are all 1s.
+- `nums[mid..hi]` are unexamined (could be anything).
+- `nums[hi+1..n)` are all 2s.
 
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Three-pointer partition.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+Initially, `lo = 0`, `mid = 0`, `hi = n - 1`. The unexamined region is the whole array.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 4: The Three Cases
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+At each step, we look at `nums[mid]`:
 
-nums=[2,0,2,1,1,0] → [0,0,1,1,2,2].
+**Case `nums[mid] == 0`:** it belongs in the 0s-region. Swap it with `nums[lo]` (whatever was there was a 1 from the 1s-region, so swapping keeps the invariant). Then advance both `lo` and `mid`.
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+**Case `nums[mid] == 1`:** it's already in the right place (the 1s-region just extends). Advance `mid` only.
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
+**Case `nums[mid] == 2`:** it belongs in the 2s-region. Swap with `nums[hi]`. But don't advance `mid` — the value that just came from the right (`nums[hi]`) is unexamined; we need to check it next. Decrement `hi`.
 
+The loop continues while `mid <= hi`. When `mid > hi`, the unexamined region is empty and we're done.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 5: Why the Asymmetric Pointer Update on `2`s
 
-Complexity isn't magic — it's just counting the work.
+When we swap `nums[mid] == 0` with `nums[lo]`, the value that comes to `mid` was previously at `lo`, inside the 1s-region — so it's a 1. Advancing `mid` is safe because we know the swapped-in value is correctly placed (it's a 1 at the start of the 1s-region, which just extended).
 
-Time: O(n). Space: O(1).
+When we swap `nums[mid] == 2` with `nums[hi]`, the value that comes to `mid` was from the unexamined region — it could be anything. So we must not advance `mid`; examine this new value on the next iteration.
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+This is the subtlety that makes the algorithm work. Getting it wrong (e.g., always advancing mid) introduces bugs.
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+----------------------------------------
 
+## Step 6: Trace on `[2, 0, 2, 1, 1, 0]`
+
+```
+lo=0, mid=0, hi=5. Array: [2, 0, 2, 1, 1, 0]
+
+mid=0, val=2: swap with hi=5. Array: [0, 0, 2, 1, 1, 2]. hi=4. mid stays.
+mid=0, val=0: swap with lo=0 (no-op). Array unchanged. lo=1, mid=1.
+mid=1, val=0: swap with lo=1 (no-op). lo=2, mid=2.
+mid=2, val=2: swap with hi=4. Array: [0, 0, 1, 1, 2, 2]. hi=3. mid stays.
+mid=2, val=1: advance. mid=3.
+mid=3, val=1: advance. mid=4.
+mid=4, hi=3. Loop exits (mid > hi).
+```
+
+Final array: `[0, 0, 1, 1, 2, 2]`. ✓
+
+Note the moment at mid=0 after swapping the 2 with hi=5: the value that came to position 0 was `nums[5] = 0`. We didn't advance mid — and correctly so, because the next iteration needs to process this 0.
+
+----------------------------------------
+
+## Step 7: Name It
+
+This is the classic **Dutch National Flag algorithm**, devised by Edsger Dijkstra. The name comes from the Dutch flag having three colored horizontal stripes (red, white, blue), matching the three values we're partitioning.
+
+The algorithm's core trick — three pointers maintaining three regions — generalizes to any **3-way partition** problem: sort 0/1/2, split array around a pivot into less/equal/greater, etc.
+
+For **quicksort with 3-way partitioning** (handling arrays with many duplicate keys), this is the partition step.
+
+----------------------------------------
+
+## Step 8: Complexity
+
+Time: each element is examined at most twice (once when it's at mid, possibly once more after being swapped to mid from hi). **O(n)**.
+Space: three pointers. **O(1)**.
+Passes: **one**.
+
+Beats counting sort's two-pass by being single-pass, though both are O(n).
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
-
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-void sortColors(vector<int>& a) {
-    int lo = 0, mid = 0, hi = a.size() - 1;
+void sortColors(vector<int>& nums) {
+    int lo = 0, mid = 0, hi = nums.size() - 1;
     while (mid <= hi) {
-        if (a[mid] == 0) swap(a[lo++], a[mid++]);
-        else if (a[mid] == 1) mid++;
-        else swap(a[mid], a[hi--]);
+        if (nums[mid] == 0) {
+            swap(nums[lo], nums[mid]);
+            lo++;
+            mid++;
+        } else if (nums[mid] == 1) {
+            mid++;
+        } else {   // nums[mid] == 2
+            swap(nums[mid], nums[hi]);
+            hi--;
+            // don't advance mid — we need to examine the new value
+        }
     }
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+The three branches mirror the three cases. Clean. The critical detail: **don't increment mid in the `== 2` branch**.
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- k colors (k-way partition).
-- Stable partition.
-- Sort 0s/1s only.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **More than 3 distinct values (e.g., 0, 1, 2, 3).** Dutch flag doesn't directly extend. Use counting sort (O(n + k)) or multi-pass Dutch flag.
+- **What if values are arbitrary ints with a known pivot?** 3-way partition around the pivot: less, equal, greater. Same structure.
+- **Handle arrays with very few distinct values (say k distinct).** Counting sort still O(n + k). For small k, fast.
+- **Stable sort (preserve relative order among equal elements).** Dutch flag is not stable. Use counting sort or stable_sort.
+- **In a streaming setting where the array size is unknown.** Buffer chunks; sort each. Less clean.
+- **External sort for massive arrays on disk.** Partition and sort chunks that fit in memory; merge.

@@ -1,190 +1,254 @@
-# Range Sum Query – Mutable
+# Range Sum Query — Mutable
 
 **Problem Link:**
 https://leetcode.com/problems/range-sum-query-mutable/
 
 **Topic:**
-Segment Tree Range Queries
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Fenwick Tree (Binary Indexed Tree) for O(log n) update and query.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> nums=[1,3,5]. After build: query(2)=9. update(1,2): array=[1,5,5]. query(2)=11. sumRange(0,2)=11.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Segment Tree / Range Queries
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: What's the Problem?
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Given an integer array, support two operations many times:
+- `update(i, v)`: set `nums[i] = v`.
+- `sumRange(l, r)`: return sum of `nums[l..r]` (inclusive).
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Naively, each operation is O(n). For many operations, that's O(n²), which doesn't scale.
 
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Fenwick Tree (Binary Indexed Tree) for O(log n) update and query.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
+We want both operations in **O(log n)**.
 
 ----------------------------------------
 
-## Step 3: Build Intuition (VERY IMPORTANT)
+## Step 2: Why Prefix Sums Don't Work Here
 
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
+Prefix sums give O(1) range sum queries — great! But updating a single element requires re-building the prefix array, which is O(n). If updates are frequent, prefix sums lose.
 
-A naive approach is to recompute the query from scratch every time — O(n) per query. When updates and queries mix, that becomes O(nq), which is often too slow. Segment trees and BITs compute both in O(log n) by precomputing partial results over carefully-chosen ranges.
+So we need a data structure that:
+- Answers range sums fast.
+- Supports point updates fast.
 
-So how do we get smarter? Let's build the correct intuition step by step.
+Two standard options: **Segment Tree** and **Binary Indexed Tree (Fenwick)**. Both give O(log n) for both operations.
 
-BIT maintains partial sums under point updates in O(log n) — the implicit binary structure uses each index's lowest set bit to skip efficiently.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+I'll walk through **Segment Tree** — the more general tool.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 3: Segment Tree Intuition
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+Partition the array into halves recursively. Each node of the tree represents a **range** of the array:
+- Root: the entire array.
+- Root's left child: left half.
+- Root's right child: right half.
+- Leaves: single elements.
 
-**The concept:** Fenwick Tree (Binary Indexed Tree) for O(log n) update and query.
+Each internal node stores the **sum** of its range.
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
+```
+       [0, n-1]
+      /        \
+  [0, mid]   [mid+1, n-1]
+   /    \     /       \
+  ...   ...  ...     ...
+                        leaves: single-element ranges
+```
 
-**Pattern recognition cue:**
+For a range sum query `[l, r]`:
+- If the current node's range is entirely inside [l, r]: return the node's sum (single O(1) read).
+- If entirely outside: return 0.
+- Else: recurse on both children, sum results.
 
-**Whenever you have both updates *and* range queries on the same array → think Segment Tree or BIT.**
+For a point update at index i:
+- Walk down to the leaf covering i, update it.
+- On the way back up, recompute each ancestor's sum.
 
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-update(i, d): i++ then while i<=n: tree[i]+=d; i+=i&-i. query(i): s=0; i++; while i>0: s+=tree[i]; i-=i&-i. sumRange = query(r) - query(l-1).
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-BIT with 1-indexed internal array.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+Both operations touch O(log n) nodes. Done.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 4: Array-Based Segment Tree
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+Store the tree in an array `tree[]` of size ~4n (safe upper bound). Node at index v has:
+- Left child at index `2*v`.
+- Right child at index `2*v + 1`.
 
-nums=[1,3,5]. After build: query(2)=9. update(1,2): array=[1,5,5]. query(2)=11. sumRange(0,2)=11.
+Root at index 1 (makes indexing arithmetic clean). Leaves are at some depth, depending on n.
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+Build:
+```
+build(v, lo, hi, nums):
+    if lo == hi:
+        tree[v] = nums[lo]
+        return
+    mid = (lo + hi) / 2
+    build(2*v, lo, mid, nums)
+    build(2*v+1, mid+1, hi, nums)
+    tree[v] = tree[2*v] + tree[2*v+1]
+```
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
+Update:
+```
+update(v, lo, hi, i, val):
+    if lo == hi:
+        tree[v] = val
+        return
+    mid = (lo + hi) / 2
+    if i <= mid: update(2*v, lo, mid, i, val)
+    else: update(2*v+1, mid+1, hi, i, val)
+    tree[v] = tree[2*v] + tree[2*v+1]
+```
 
+Query:
+```
+query(v, lo, hi, ql, qr):
+    if qr < lo or ql > hi: return 0       # no overlap
+    if ql <= lo and hi <= qr: return tree[v]  # full overlap
+    mid = (lo + hi) / 2
+    return query(2*v, lo, mid, ql, qr) + query(2*v+1, mid+1, hi, ql, qr)
+```
+
+All three are recursive and O(log n).
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 5: Why O(log n)?
 
-Complexity isn't magic — it's just counting the work.
+For **update**: we walk from root to a single leaf. Height = O(log n). On the way up, each node does O(1) work.
 
-Update/query O(log n).
+For **query**: at each level, the range `[l, r]` can split into at most 2 fully-covered subranges and some partial overlap. The recursion explores at most O(log n) nodes.
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
+More intuitively: [l, r] can be broken into O(log n) "canonical" subranges that correspond to complete segment-tree nodes. Summing these is O(log n).
 
 ----------------------------------------
 
-## Step 9: C++ Implementation
+## Step 6: Trace a Small Example
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+`nums = [1, 3, 5, 7, 9, 11]`. n = 6.
+
+Build the tree. I'll sketch the conceptual structure:
+
+```
+[0..5] sum = 36
+├── [0..2] sum = 9
+│   ├── [0..1] sum = 4
+│   │   ├── [0] = 1
+│   │   └── [1] = 3
+│   └── [2] = 5
+└── [3..5] sum = 27
+    ├── [3..4] sum = 16
+    │   ├── [3] = 7
+    │   └── [4] = 9
+    └── [5] = 11
+```
+
+`sumRange(2, 4)` — want sum of nums[2..4] = 5 + 7 + 9 = 21.
+
+Query traversal:
+- Root [0..5]: partial overlap with [2..4]. Recurse both.
+- [0..2]: partial with [2..4]. Recurse.
+  - [0..1]: no overlap with [2..4]. Return 0.
+  - [2]: full overlap. Return 5.
+  - Total: 5.
+- [3..5]: partial with [2..4]. Recurse.
+  - [3..4]: full overlap. Return 16.
+  - [5]: no overlap. Return 0.
+  - Total: 16.
+- Root returns 5 + 16 = 21. ✓
+
+`update(3, 2)` — change nums[3] from 7 to 2.
+
+Walk:
+- Root → [3..5] → [3..4] → [3]. Leaf [3]: tree[...] = 2.
+- Recompute [3..4]: 2 + 9 = 11.
+- Recompute [3..5]: 11 + 11 = 22.
+- Recompute root [0..5]: 9 + 22 = 31.
+
+After update, sumRange queries use the new values.
+
+----------------------------------------
+
+## Step 7: Implementation Choices
+
+- **Segment tree size:** `4 * n` is safe. Tighter bounds exist but not worth the complexity.
+- **1-indexed tree:** conventions in competitive programming. Makes 2*v, 2*v+1 clean.
+- **Class-based:** wrap build, update, query in a class for cleaner client code.
+
+----------------------------------------
+
+## Step 8: Name It
+
+**Segment tree with point updates and range sum queries** — the classical "range-tree" structure. Variants:
+- Range min/max query (replace sum with min/max).
+- Range update, point query (with lazy propagation or difference technique).
+- Range update, range query (full lazy propagation).
+
+**Binary Indexed Tree (BIT)** — simpler, smaller constant factors, but less flexible. Works for sum-like operations. Good to know as an alternative.
+
+----------------------------------------
+
+## Step 9: Complexity
+
+Build: **O(n)**.
+Update: **O(log n)**.
+Query: **O(log n)**.
+Space: **O(n)** (with the 4n upper bound, O(n)).
+
+----------------------------------------
+
+## Step 10: C++ Implementation
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
 class NumArray {
-    vector<int> bit, a;
+    vector<int> tree;
     int n;
-    void add(int i, int d) { for (++i; i <= n; i += i & -i) bit[i] += d; }
-    int q(int i) { int s = 0; for (++i; i > 0; i -= i & -i) s += bit[i]; return s; }
-public:
-    NumArray(vector<int>& nums) : a(nums), n(nums.size()) {
-        bit.assign(n+1, 0);
-        for (int i = 0; i < n; ++i) add(i, nums[i]);
+
+    void build(int v, int lo, int hi, vector<int>& nums) {
+        if (lo == hi) { tree[v] = nums[lo]; return; }
+        int mid = (lo + hi) / 2;
+        build(2*v, lo, mid, nums);
+        build(2*v+1, mid+1, hi, nums);
+        tree[v] = tree[2*v] + tree[2*v+1];
     }
-    void update(int i, int v) { add(i, v - a[i]); a[i] = v; }
-    int sumRange(int l, int r) { return q(r) - (l > 0 ? q(l-1) : 0); }
+
+    void updateHelper(int v, int lo, int hi, int i, int val) {
+        if (lo == hi) { tree[v] = val; return; }
+        int mid = (lo + hi) / 2;
+        if (i <= mid) updateHelper(2*v, lo, mid, i, val);
+        else updateHelper(2*v+1, mid+1, hi, i, val);
+        tree[v] = tree[2*v] + tree[2*v+1];
+    }
+
+    int queryHelper(int v, int lo, int hi, int ql, int qr) {
+        if (qr < lo || ql > hi) return 0;
+        if (ql <= lo && hi <= qr) return tree[v];
+        int mid = (lo + hi) / 2;
+        return queryHelper(2*v, lo, mid, ql, qr) + queryHelper(2*v+1, mid+1, hi, ql, qr);
+    }
+
+public:
+    NumArray(vector<int>& nums) : n(nums.size()), tree(4 * nums.size(), 0) {
+        if (n > 0) build(1, 0, n - 1, nums);
+    }
+
+    void update(int index, int val) {
+        updateHelper(1, 0, n - 1, index, val);
+    }
+
+    int sumRange(int left, int right) {
+        return queryHelper(1, 0, n - 1, left, right);
+    }
 };
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Clean. The private helpers take tree indices; public interface is clean.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 11: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Range update + point query (use difference array BIT).
-- 2D BIT for matrix updates.
-- Persistent BIT.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Range min / max instead of sum.** Same structure; replace `tree[2*v] + tree[2*v+1]` with `min` or `max`. Neutral element changes: 0 → INF or -INF.
+- **Range update (add k to all in [l, r]) with range query.** Lazy propagation — store pending updates at nodes, push down on descent.
+- **2D segment tree.** Tree of trees. O(log² n) per operation.
+- **Persistent segment tree.** Keep all historical versions. Useful for offline queries.
+- **Binary Indexed Tree (Fenwick).** Simpler alternative for point-update + prefix-sum. O(log n), smaller constant.
+- **Why size 4n?** Safe upper bound on total nodes. Tighter bounds (2 × next-power-of-2 of n) work too but are more error-prone.

@@ -4,184 +4,164 @@
 https://leetcode.com/problems/subsequence-of-size-k-with-the-largest-sum/
 
 **Topic:**
-Number Theory Misc
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Partition-based selection of k largest keeping original order.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> nums=[2,1,3,3], k=2. Top 2 values: 3,3 (indices 2,3). Output [3,3].
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Number Theory / Misc (really sorting / selection)
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: The Task
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Given array `nums` and integer k, return a subsequence of length k whose **sum is maximum**.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+"Subsequence" here means "subset" — we pick k elements without requiring contiguity. Importantly, the problem asks us to preserve the **original order** of the picked elements in the returned array.
 
-So ask yourself:
+Example: `nums = [2, 1, 3, 3]`, k = 2.
+Biggest two values: 3 and 3 (indices 2 and 3). In original order: [3, 3]. Return.
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Partition-based selection of k largest keeping original order.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
+Example: `nums = [-1, -2, 3, 4]`, k = 3.
+Biggest three values: 4, 3, -1. In original order: [-1, 3, 4].
 
 ----------------------------------------
 
-## Step 3: Build Intuition (VERY IMPORTANT)
+## Step 2: Which K Elements to Pick?
 
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
+To maximize sum, we pick the **k largest elements**. That's clear.
 
-A brute-force factor check or a digit-by-digit loop is usually the first attempt. Cleverer approaches exploit modular arithmetic, parity, or digit-DP recurrences to get O(1) or O(log n) from what looks like an O(n) problem.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-The largest-sum subsequence is the k largest values. We need to preserve original order — so record their indices.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+The twist: the output preserves the elements' **original order in nums**, not descending-by-value order. So we need to know which indices were picked, then emit them in original order.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 3: Approach — Find K Largest, Then Re-Order
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+Simplest approach:
+1. Copy nums with indices attached: `[(nums[0], 0), (nums[1], 1), ...]`.
+2. Sort by value descending.
+3. Take first k — these are the k largest, each with their original index.
+4. Re-sort these k by index ascending.
+5. Emit values in this order.
 
-**The concept:** Partition-based selection of k largest keeping original order.
+```
+indexed = [(nums[i], i) for i in 0..n-1]
+indexed.sort(key = -value)                   # descending by value
+picked = indexed[:k]
+picked.sort(key = index)                      # ascending by index
+return [value for (value, index) in picked]
+```
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever digits, GCD, primes, or modular properties appear → check for closed-form solutions before coding loops.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-Pair values with indices. nth_element by value descending to get top k by value. Sort those k by original index. Output values.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
+O(n log n) time, O(n) space.
 
 ----------------------------------------
 
-## Step 6: Final Approach
+## Step 4: Faster with Quickselect / Heap
 
-Now let's crystallize everything we've learned into a clean algorithm.
+**Quickselect** to find the k-th largest in O(n) average. Then scan nums, emit elements ≥ threshold in original order. Requires care with duplicates at the threshold (might pick too few or too many).
 
-Selection + sort by index.
+**Min-heap** of size k as we scan nums: keep the k largest so far. After scanning, iterate nums and emit those present in the heap (watch duplicates).
 
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+The sort approach is cleanest. For n up to 1000 or so (typical constraints), O(n log n) is fine.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 5: Handle Duplicates at the Threshold
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+Consider `nums = [1, 1, 2, 1]`, k = 2. Two largest: 2, 1 (some 1). Which 1?
 
-nums=[2,1,3,3], k=2. Top 2 values: 3,3 (indices 2,3). Output [3,3].
+Any choice is valid as long as the sum is maximal (2 + 1 = 3). The problem typically accepts any valid answer.
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+If we use the "sort by value, take top k, resort by index" approach:
+- Sort descending: [(2, 2), (1, 0), (1, 1), (1, 3)].
+- Top 2: [(2, 2), (1, 0)].
+- Sort by index: [(1, 0), (2, 2)].
+- Return [1, 2].
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
-
-----------------------------------------
-
-## Step 8: Time and Space Complexity
-
-Complexity isn't magic — it's just counting the work.
-
-Time: O(n log k). Space: O(n).
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
+Fine.
 
 ----------------------------------------
 
-## Step 9: C++ Implementation
+## Step 6: Trace
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+`nums = [2, 1, 3, 3]`, k = 2.
+
+- Indexed: [(2, 0), (1, 1), (3, 2), (3, 3)].
+- Sort desc by value: [(3, 2), (3, 3), (2, 0), (1, 1)].
+- Top 2: [(3, 2), (3, 3)].
+- Sort by index: [(3, 2), (3, 3)].
+- Output: [3, 3]. ✓
+
+`nums = [-1, -2, 3, 4]`, k = 3.
+
+- Indexed: [(-1, 0), (-2, 1), (3, 2), (4, 3)].
+- Sort desc: [(4, 3), (3, 2), (-1, 0), (-2, 1)].
+- Top 3: [(4, 3), (3, 2), (-1, 0)].
+- Sort by index: [(-1, 0), (3, 2), (4, 3)].
+- Output: [-1, 3, 4]. ✓
+
+----------------------------------------
+
+## Step 7: Why Not Just Sort Descending and Take k?
+
+If the problem accepted any order, we'd just return nums sorted descending, truncated to k. But the problem says "subsequence" — order matters.
+
+A "subsequence" in the strict sense preserves the original positional order of the chosen elements. So we need to re-sort by index after selection.
+
+----------------------------------------
+
+## Step 8: Name It
+
+**Top-K selection with order preservation** — a combination of top-k (select) and reordering.
+
+Related problems:
+- Kth Largest Element.
+- Top K Frequent Elements.
+- Top K Closest Points to Origin.
+- K Smallest Pairs.
+
+The pattern "select k best, then emit in original order" appears in streaming / online scenarios.
+
+----------------------------------------
+
+## Step 9: Complexity
+
+Time: **O(n log n)** (dominated by the first sort).
+Space: **O(n)** for the indexed array.
+
+For constraints up to ~1000, this is instantaneous.
+
+----------------------------------------
+
+## Step 10: C++ Implementation
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-vector<int> maxSubsequence(vector<int>& a, int k) {
-    int n = a.size();
-    vector<int> idx(n); iota(idx.begin(), idx.end(), 0);
-    nth_element(idx.begin(), idx.begin()+k, idx.end(), [&](int x, int y){ return a[x] > a[y]; });
-    vector<int> pick(idx.begin(), idx.begin()+k);
-    sort(pick.begin(), pick.end());
-    vector<int> r;
-    for (int i : pick) r.push_back(a[i]);
-    return r;
+vector<int> maxSubsequence(vector<int>& nums, int k) {
+    int n = nums.size();
+    vector<pair<int, int>> indexed;
+    indexed.reserve(n);
+    for (int i = 0; i < n; ++i) indexed.push_back({nums[i], i});
+
+    // Sort descending by value, break ties arbitrarily
+    sort(indexed.begin(), indexed.end(), greater<pair<int, int>>());
+
+    // Take top k
+    indexed.resize(k);
+
+    // Re-sort by original index
+    sort(indexed.begin(), indexed.end(), [](auto& a, auto& b) { return a.second < b.second; });
+
+    vector<int> result;
+    result.reserve(k);
+    for (auto& [val, idx] : indexed) result.push_back(val);
+    return result;
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Two sorts: one on value (to select top-k), one on index (to restore original order).
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 11: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Minimum-sum subsequence.
-- Tie-break by earliest indices.
-- Streaming version.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Smallest k sum instead.** Same idea, sort ascending.
+- **Subsequence with sum exactly = S.** Subset sum; NP-hard for general S.
+- **Contiguous subarray of length k with max sum.** Sliding window — different problem.
+- **Return the indices instead of values.** Skip the final extraction step.
+- **Streaming input.** Use a min-heap of size k to maintain the top-k, but preserving order is harder.
+- **Why sort by index at the end?** Because "subsequence" preserves original order; if we skipped this, the output would be in descending-value order, which is not a subsequence.

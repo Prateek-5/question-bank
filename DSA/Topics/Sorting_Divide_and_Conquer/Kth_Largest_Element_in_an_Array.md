@@ -1,192 +1,173 @@
-# Kth Largest Element in an Array
+# Kth Largest Element in an Array (Sorting / Divide and Conquer)
 
 **Problem Link:**
 https://leetcode.com/problems/kth-largest-element-in-an-array/
 
 **Topic:**
-Sorting Divide and Conquer
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Quickselect partition around a pivot.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> nums=[3,2,1,5,6,4], k=2 → target idx = 4. Quickselect returns 5.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Sorting / Divide and Conquer
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: The Problem
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Given `nums` and integer k, return the **k-th largest** element. Duplicates count as distinct entries.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Example: `nums = [3, 2, 1, 5, 6, 4]`, k = 2. Sorted descending: [6, 5, 4, 3, 2, 1]. 2nd largest = **5**.
+Example: `nums = [3, 2, 3, 1, 2, 4, 5, 5, 6]`, k = 4. Sorted descending: [6, 5, 5, 4, ...]. 4th = **4**.
 
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Quickselect partition around a pivot.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
+This note focuses on the **divide-and-conquer (Quickselect) approach**. The heap-based version appears in the Heap topic notes.
 
 ----------------------------------------
 
-## Step 3: Build Intuition (VERY IMPORTANT)
+## Step 2: Full Sort Baseline
 
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
+Sort `nums` in ascending order, return `nums[n - k]`. O(n log n). Simple but wasteful — we're computing the entire ordering when we need just one rank.
 
-Sorting first is often the most useful preprocessing step in algorithms. Divide-and-conquer generalizes that idea: split the problem in halves, solve each recursively, and merge. The merge step is where insights like inversion counting live.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Hoare's partition places the pivot in its final sorted position; if that's the target rank, done. Else recurse into the correct side.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Can we find the k-th largest without sorting everything?
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 3: Borrow From Quicksort
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+Quicksort's key operation is **partition**: choose a pivot, rearrange the array so that all elements ≥ pivot come first, then all elements < pivot. After partition, the pivot ends up at its final position in the sorted order.
 
-**The concept:** Quickselect partition around a pivot.
+If after partitioning, the pivot sits exactly at index `n - k` (from the left, in ascending sort), it's the k-th largest. Done.
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
+If the pivot is at a smaller index (too far left), the k-th largest lies somewhere to its right — recurse right.
 
-**Pattern recognition cue:**
+If the pivot is at a larger index, recurse left.
 
-**Whenever the problem smells like 'count inversions' or 'k-th statistic' → think Merge Sort variants or Quickselect.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+Unlike quicksort, **we only recurse into ONE side** — the one containing the target rank. That's where the speedup comes from.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 4: Average-Case Linear Time
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+With random pivots, each recursion works on roughly half the size:
+- n + n/2 + n/4 + ... ≈ 2n = O(n).
 
-Pick random pivot, partition, compare pivot index with target (n-k). Recurse on the appropriate side.
+Average time: **O(n)**. Much better than O(n log n).
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
+Worst case (adversarial pivots on a sorted array): O(n²). Mitigate by choosing the pivot randomly, or by using median-of-medians for a deterministic O(n).
 
 ----------------------------------------
 
-## Step 6: Final Approach
+## Step 5: Algorithm
 
-Now let's crystallize everything we've learned into a clean algorithm.
+```
+def quickselect(nums, lo, hi, targetIdx):
+    if lo == hi: return nums[lo]
+    pivot_idx = random index in [lo, hi]
+    pivot_idx = partition(nums, lo, hi, pivot_idx)
+    if pivot_idx == targetIdx: return nums[targetIdx]
+    elif pivot_idx < targetIdx: return quickselect(nums, pivot_idx + 1, hi, targetIdx)
+    else: return quickselect(nums, lo, pivot_idx - 1, targetIdx)
 
-Randomized quickselect.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
-
-----------------------------------------
-
-## Step 7: Dry Run (Detailed)
-
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
-
-nums=[3,2,1,5,6,4], k=2 → target idx = 4. Quickselect returns 5.
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
-
-----------------------------------------
-
-## Step 8: Time and Space Complexity
-
-Complexity isn't magic — it's just counting the work.
-
-Time: O(n) avg, O(n²) worst. Space: O(log n).
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
-
-----------------------------------------
-
-## Step 9: C++ Implementation
-
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
-
-```cpp
-#include <bits/stdc++.h>
-using namespace std;
-int findKthLargest(vector<int>& nums, int k) {
-    int n = nums.size(), target = n - k, lo = 0, hi = n - 1;
-    while (true) {
-        int pivot = nums[lo + rand() % (hi - lo + 1)];
-        int i = lo, j = hi, p = lo;
-        while (p <= j) {
-            if (nums[p] < pivot) swap(nums[p++], nums[i++]);
-            else if (nums[p] > pivot) swap(nums[p], nums[j--]);
-            else p++;
-        }
-        if (target < i) hi = i - 1;
-        else if (target > j) lo = j + 1;
-        else return pivot;
-    }
-}
+return quickselect(nums, 0, n - 1, n - k)      # n - k in ascending order
 ```
 
-A few notes about the style:
+The `partition` function:
+1. Move pivot to `hi`.
+2. Walk `i` from `lo`; if `nums[i] < pivot`, swap with position `store_idx`, advance.
+3. At the end, swap pivot into `store_idx`. Return `store_idx`.
 
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+This classic Lomuto partition places elements < pivot left of store_idx, ≥ pivot to the right, with the pivot at store_idx.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 6: Trace on `[3, 2, 1, 5, 6, 4]`, k = 2
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
+We want the 2nd largest → ascending index n - k = 6 - 2 = 4.
 
-- Median-of-medians for O(n) worst.
-- Bucket for bounded ranges.
-- Streaming median.
+```
+quickselect(nums, 0, 5, 4).
+Say random pivot_idx = 3 (value 5). Partition around 5.
+  After partition: smaller values left, pivot at some store_idx.
+  Walk: 3 < 5 ✓ (stays), 2 < 5 ✓, 1 < 5 ✓, 4 < 5 ✓, 6 ≥ 5 (stays right).
+  Pivot ends at index 4.
+store_idx = 4 == targetIdx 4. Return nums[4] = 5.
+```
 
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
+Return **5**. ✓ (No recursion needed since the first partition landed on the target.)
 
----
+If the random pivot had been 0 (value 3), after partitioning, nums would be like [1, 2, 3, 5, 6, 4] (3 at index 2). pivot_idx = 2 < 4. Recurse into [3, 5]: quickselect(nums, 3, 5, 4). That's a small subarray; one more partition would finish it.
 
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+----------------------------------------
+
+## Step 7: Why Randomize?
+
+Without randomization, on a pre-sorted input `[1, 2, 3, 4, 5]` with pivot = last, each partition only shaves one element off — O(n²).
+
+Random pivot makes worst-case inputs improbable. Over time, the expected running time is O(n).
+
+Even better (for guaranteed O(n)): **median-of-medians** — a deterministic pivot choice guaranteeing ≥ 30% of elements fall on each side. In practice, randomization is preferred for its simpler implementation and better constants.
+
+----------------------------------------
+
+## Step 8: Name It
+
+**Quickselect** — a classical divide-and-conquer selection algorithm, introduced by Hoare (same Hoare as quicksort).
+
+Applications:
+- Median (k = n/2).
+- Top-k queries (find the cutoff, then partition around it).
+- Weighted selection.
+
+The heap-based approach (min-heap of size k) has complementary strengths: better when n is huge and streaming, worse for in-memory bulk data.
+
+----------------------------------------
+
+## Step 9: Complexity
+
+Average: **O(n)**.
+Worst: O(n²) (without precautions) or O(n) (with median-of-medians).
+Space: **O(log n)** recursion depth on average.
+
+----------------------------------------
+
+## Step 10: C++ Implementation
+
+```cpp
+class Solution {
+    int partition(vector<int>& nums, int lo, int hi, int pivotIdx) {
+        int pivot = nums[pivotIdx];
+        swap(nums[pivotIdx], nums[hi]);
+        int store = lo;
+        for (int i = lo; i < hi; ++i) {
+            if (nums[i] < pivot) {
+                swap(nums[store], nums[i]);
+                store++;
+            }
+        }
+        swap(nums[store], nums[hi]);
+        return store;
+    }
+
+    int quickselect(vector<int>& nums, int lo, int hi, int targetIdx) {
+        if (lo == hi) return nums[lo];
+        int pivotIdx = lo + rand() % (hi - lo + 1);
+        pivotIdx = partition(nums, lo, hi, pivotIdx);
+        if (pivotIdx == targetIdx) return nums[targetIdx];
+        if (pivotIdx < targetIdx) return quickselect(nums, pivotIdx + 1, hi, targetIdx);
+        return quickselect(nums, lo, pivotIdx - 1, targetIdx);
+    }
+
+public:
+    int findKthLargest(vector<int>& nums, int k) {
+        return quickselect(nums, 0, nums.size() - 1, nums.size() - k);
+    }
+};
+```
+
+Key detail: `nums.size() - k` is the index in **ascending** order where the k-th largest sits.
+
+----------------------------------------
+
+## Step 11: Follow-up Questions
+
+- **k-th smallest.** Target index = k - 1.
+- **Duplicates at the pivot.** Lomuto partition handles them but packs duplicates on one side. Hoare or three-way partition avoids lopsidedness.
+- **Return the top k elements (not just the k-th).** After quickselect on index n - k, the subarray [n-k .. n-1] contains the top k (unsorted).
+- **Deterministic O(n) worst case.** Median-of-medians pivot — introsort, BFPRT.
+- **Streaming / external memory.** Quickselect needs random access; switch to heap-based approach.
+- **Why recurse only into one side?** Because the pivot's final position reveals the target's side definitively — no need to explore the other.

@@ -6,183 +6,197 @@ https://leetcode.com/problems/k-diff-pairs-in-an-array/
 **Topic:**
 Two Pointers
 
+----------------------------------------
+
+## Step 1: Define "K-diff Pair"
+
+Given an array `nums` and a non-negative integer `k`, count the number of **unique** pairs `(a, b)` from the array satisfying:
+- `|a - b| == k`.
+- i < j (different array positions).
+
+"Unique" means if `(a, b)` and `(a', b')` have the same unordered values, count once.
+
+Example: `nums = [3, 1, 4, 1, 5]`, k = 2. Pairs with difference 2:
+- (3, 1), (1, 3): same unordered pair {1, 3}. Count once.
+- (3, 5), (5, 3): pair {3, 5}. Count once.
+- Nothing else.
+
+Answer: **2**.
+
+Example: `nums = [1, 3, 1, 5, 4]`, k = 0. Difference 0 means pair of equal values.
+- The two 1's form pair (1, 1). Only one unique value "1" has duplicates — count = 1.
+
+Answer: **1**.
 
 ----------------------------------------
 
-## Step 1: Understand the Problem (Beginner Friendly)
+## Step 2: Two Cases — k > 0 and k = 0
 
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
+The problem splits into two shapes:
 
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
+**k > 0:** we need two *different* values differing by k. For each distinct value `x` in the array, check if `x + k` also appears. Every such pair contributes 1.
 
-**In plain words:** Hashmap frequency count — special-case k=0 for duplicates.
+**k = 0:** we need two copies of the *same* value. For each distinct value, if it appears **≥ 2 times**, count 1.
 
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> nums=[3,1,4,1,5], k=2. Unique pairs (1,3),(3,5). Answer=2.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Handling k < 0: the problem guarantees k ≥ 0, but if not, we'd return 0 (absolute difference is always ≥ 0).
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 3: Hashmap Approach
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Build a frequency map: `count[x] = number of times x appears`.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Then:
+- If k > 0: for each key x in count, if `x + k` is also a key, increment answer.
+- If k = 0: for each key x with `count[x] >= 2`, increment answer.
 
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Hashmap frequency count — special-case k=0 for duplicates.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
+One pass to build count, one pass over keys. O(n) time, O(n) space.
 
 ----------------------------------------
 
-## Step 3: Build Intuition (VERY IMPORTANT)
+## Step 4: Sorted + Two Pointers Approach
 
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
+Alternative: sort nums, then use two pointers `lo` and `hi`:
 
-Double loops are your first thought — and for unsorted data, often unavoidable. But when the array is sorted or the problem has a monotonic structure, two pointers sliding toward each other or in the same direction collapse the work to linear.
+```
+sort(nums)
+lo = 0, hi = 1
+while hi < n:
+    if lo == hi or nums[hi] - nums[lo] < k:
+        hi++
+    elif nums[hi] - nums[lo] > k:
+        lo++
+    else:   # equals k
+        count++
+        lo++
+        while lo < hi and nums[lo] == nums[lo - 1]: lo++   # skip duplicates
+```
 
-So how do we get smarter? Let's build the correct intuition step by step.
+Each pointer moves forward only, so O(n log n) with the sort.
 
-Count unique values. For k>0, count pairs (v, v+k) both present. For k=0, count values with frequency ≥ 2.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
-
-----------------------------------------
-
-## Step 4: Connect to Concept
-
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
-
-**The concept:** Hashmap frequency count — special-case k=0 for duplicates.
-
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever the array is sorted or the constraint is monotonic in a sliding sense → think Two Pointers.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+The hashmap is usually faster in practice; two-pointers is nicer when in-place or when we also want to enumerate the pairs in sorted order.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 5: Hashmap Algorithm
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+```
+count = frequency map of nums
+answer = 0
+if k == 0:
+    for x, c in count.items():
+        if c >= 2: answer++
+else:
+    for x in count.keys():
+        if (x + k) in count: answer++
+return answer
+```
 
-Build count map. If k==0: answer = number of keys with count>=2. Else: for each key v, if cnt contains v+k, answer++.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Single hashmap pass.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+One subtle thing: when k > 0, we only check `x + k`, not also `x - k`, because every pair {x, y} with y = x + k is captured exactly once when we iterate x = smaller element.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 6: Trace
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+**`nums = [3, 1, 4, 1, 5]`, k = 2.**
 
-nums=[3,1,4,1,5], k=2. Unique pairs (1,3),(3,5). Answer=2.
+count = {3:1, 1:2, 4:1, 5:1}.
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+k > 0 branch. Iterate keys:
+- x = 3: 3 + 2 = 5 in count? Yes. answer = 1.
+- x = 1: 1 + 2 = 3 in count? Yes. answer = 2.
+- x = 4: 4 + 2 = 6 in count? No.
+- x = 5: 5 + 2 = 7 in count? No.
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
+Answer: **2**. ✓
 
+**`nums = [1, 3, 1, 5, 4]`, k = 0.**
+
+count = {1:2, 3:1, 5:1, 4:1}.
+
+k = 0 branch. Iterate:
+- x = 1: count = 2 ≥ 2. answer = 1.
+- Others: count = 1. Skip.
+
+Answer: **1**. ✓
+
+**Edge case: `nums = [1, 2, 3, 4, 5]`, k = 1.**
+
+count = {1:1, 2:1, 3:1, 4:1, 5:1}.
+
+Iterate:
+- x = 1: x + 1 = 2 in count. answer = 1.
+- x = 2: 3 in count. answer = 2.
+- x = 3: 4. answer = 3.
+- x = 4: 5. answer = 4.
+- x = 5: 6 no.
+
+Answer: **4**. ✓
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 7: Why Not Enumerate All Pairs?
 
-Complexity isn't magic — it's just counting the work.
+Brute force: nested loops, check |a - b| = k. O(n²). For n = 10⁴ that's 10⁸ — borderline. For n = 10⁵, too slow.
 
-Time: O(n). Space: O(n).
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
+Hashmap reduces to O(n). The saving comes from "lookup by value" instead of "lookup by index."
 
 ----------------------------------------
 
-## Step 9: C++ Implementation
+## Step 8: Name It
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+**Frequency map for pair counting.** A generic tool:
+- Two-sum counting variants.
+- Pairs with given difference.
+- Pairs with given sum.
+
+The "difference" and "sum" variants both boil down to: "for each x, is the complement (x ± k or target - x) present?" A hashmap answers in O(1).
+
+Related: sliding window works when "k-diff" means consecutive. Here order doesn't matter — pure set/map.
+
+----------------------------------------
+
+## Step 9: Complexity
+
+Hashmap: Time **O(n)**, Space **O(n)**.
+Two pointers: Time **O(n log n)** (due to sort), Space **O(1)** (ignoring sort stack).
+
+For numeric comparison of "unique pairs," hashmap is the common choice.
+
+----------------------------------------
+
+## Step 10: C++ Implementation
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
 int findPairs(vector<int>& nums, int k) {
     if (k < 0) return 0;
-    unordered_map<int,int> c;
-    for (int x : nums) c[x]++;
-    int ans = 0;
-    for (auto& [v, f] : c) {
-        if (k == 0 && f >= 2) ans++;
-        if (k > 0 && c.count(v + k)) ans++;
+
+    unordered_map<int, int> count;
+    for (int x : nums) count[x]++;
+
+    int answer = 0;
+    if (k == 0) {
+        for (auto& [x, c] : count) {
+            if (c >= 2) answer++;
+        }
+    } else {
+        for (auto& [x, c] : count) {
+            if (count.count(x + k)) answer++;
+        }
     }
-    return ans;
+    return answer;
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Three cases baked in: k < 0 → 0, k = 0 → duplicate values, k > 0 → check presence of x + k.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 11: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Count ordered pairs instead of unique.
-- |diff|=k with two arrays.
-- k-diff triples.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Count ordered pairs (a, b) with i < j and a - b = k.** More involved; track positions.
+- **Count pairs with |a - b| ≤ k.** Sort; sliding window on sorted array.
+- **Return the pairs themselves, not just count.** Store (x, x + k) tuples; deduplicate.
+- **Why absolute difference? Signed difference?** If problem asks signed a - b = k, the trick still works: `count[x + k]` counts pairs where y = x + k. No absolute-value double-counting.
+- **Multiple differences (list of k's).** For each k, run the pair count. Or precompute all pairwise differences in a frequency map.
+- **Why O(n) instead of O(n²) brute force?** Hashmap lookups are amortized O(1); no need to check all n² pairs individually.

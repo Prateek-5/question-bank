@@ -4,187 +4,190 @@
 https://leetcode.com/problems/decode-ways/
 
 **Topic:**
-Dynamic Programming DP
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** DP over string index — valid one-digit and two-digit decodings.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> '226'. dp[3]=1. dp[2]=1 (from 6). dp[1]=dp[2]+dp[3]=2 (2 or 26). dp[0]=dp[1]+dp[2]=3.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Dynamic Programming (DP)
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Understand the Mapping
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Letters are encoded as `A=1, B=2, ..., Z=26`. Given a string of digits, count **how many distinct ways** it can be decoded back into letters.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+`"12"` could mean:
+- `"AB"` (1 then 2)
+- `"L"` (12 — which is L)
 
-So ask yourself:
+That's 2 ways.
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: DP over string index — valid one-digit and two-digit decodings.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
+`"226"`:
+- `"BBF"` (2, 2, 6)
+- `"BZ"` (2, 26)
+- `"VF"` (22, 6)
 
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
+That's 3 ways.
 
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-Your very first thought is often recursion. That's actually the right start — but naive recursion re-computes the same subproblems exponentially. The fix is memoization (top-down) or tabulation (bottom-up). The hard part is identifying the state that captures all we need to know about the past.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-At position i, ways(i) = ways(i+1) if s[i] is valid (1–9) + ways(i+2) if s[i..i+1] is valid (10–26).
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+And an annoying edge case: `"06"`. Leading zero? `0` doesn't map to anything (letters start at 1). And `06` isn't a valid two-digit decode either. So this decodes 0 ways.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: Try to Enumerate by Hand
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+**s = "1":** One digit, maps to `A`. 1 way.
 
-**The concept:** DP over string index — valid one-digit and two-digit decodings.
+**s = "11":** `"AA"` or `"K"` (since 11 = K). 2 ways.
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
+**s = "12":** `"AB"` or `"L"`. 2 ways.
 
-**Pattern recognition cue:**
+**s = "27":** `"BG"` (2, 7). Can I read "27" as a two-digit? 27 > 26, no. So just 1 way.
 
-**Whenever a brute-force recursion has overlapping subproblems → think DP. Identify state first, then transition.**
+**s = "10":** `"J"` (since 10 = J). Can I split as "1" then "0"? No — "0" has no decode. So only the two-digit split works. 1 way.
 
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
+**s = "100":** let's see. `"1" + "00"` fails (no decode for "00" or "0"). `"10" + "0"` fails (standalone "0" has no decode). `"100"` isn't a single-letter decode (letters go 1-26). So 0 ways.
 
+**s = "226":** already did — 3 ways.
 
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-dp[i] = (s[i]!='0' ? dp[i+1] : 0) + (valid(s[i..i+1]) ? dp[i+2] : 0). Base dp[n]=1.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
+Patterns appearing:
+- A leading `0` or an isolated `0` kills a branch entirely.
+- Each position, we look at either the current digit alone or the current digit paired with the previous one.
 
 ----------------------------------------
 
-## Step 6: Final Approach
+## Step 3: What Happens at Each Position?
 
-Now let's crystallize everything we've learned into a clean algorithm.
+Let me think recursively. Suppose I've got the string `s` and I want to count decodings. At the very beginning:
 
-Bottom-up DP.
+- If `s[0] != '0'`, I can consume `s[0]` alone as a letter (1 through 9) and then decode the rest.
+- If `s[0..1]` forms a valid two-digit number between 10 and 26, I can consume two digits as one letter, and decode the rest.
 
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
+Each choice is independent (after the choice, the rest of the string is smaller). The total is the sum over all valid starting choices.
 
-**Before coding, it's worth asking:**
+So the recurrence is:
 
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
+```
+decode(s, i) = 
+    (1 if s[i] != '0' else 0) * decode(s, i+1)
+  + (1 if 10 <= s[i..i+1] as int <= 26 else 0) * decode(s, i+2)
+```
 
-Get those clear in your head, and the code almost writes itself.
+Base case: `decode(s, len(s)) = 1` (empty suffix = one valid decoding, the empty one — think of it as "all characters consumed successfully").
 
-
-----------------------------------------
-
-## Step 7: Dry Run (Detailed)
-
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
-
-'226'. dp[3]=1. dp[2]=1 (from 6). dp[1]=dp[2]+dp[3]=2 (2 or 26). dp[0]=dp[1]+dp[2]=3.
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+Why does the empty suffix count as 1 and not 0? Because reaching the end successfully represents one completed decoding. If we said 0, we'd never accumulate a count. Think of it as "there's exactly one way to decode nothing: do nothing."
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 4: Does the Recurrence Revisit Subproblems?
 
-Complexity isn't magic — it's just counting the work.
+For `s = "226"`:
 
-Time: O(n). Space: O(1).
+- decode(0) = decode(1) + decode(2) (both splits valid at position 0)
+- decode(1) = decode(2) + decode(3)
+- decode(2) = decode(3) + 0 (no two-digit starting at index 2; the string ends)
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+decode(2) gets called from both decode(0)-via-two-digit and decode(1)-via-one-digit. And decode(3) is called from both decode(1) and decode(2). Classic overlap.
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+For a longer string, this overlap grows exponentially — every split creates branches that reconverge. So we'd benefit from remembering each `decode(i)` the first time we compute it. That turns the exponential recursion into linear by eliminating re-work.
 
+----------------------------------------
+
+## Step 5: Bottom-Up Table
+
+Let `dp[i]` = number of ways to decode the suffix `s[i..]`. We compute from right to left.
+
+- `dp[n] = 1` (empty suffix).
+- For `i` from `n-1` down to `0`:
+  - If `s[i] != '0'`, `dp[i] += dp[i+1]`.
+  - If the two-digit number `s[i..i+1]` is in `[10, 26]`, `dp[i] += dp[i+2]`.
+
+Return `dp[0]`.
+
+Notice we only ever need `dp[i+1]` and `dp[i+2]` to compute `dp[i]`. So we can keep just two variables.
+
+----------------------------------------
+
+## Step 6: Trace on "226"
+
+We go right-to-left. n = 3.
+
+```
+dp[3] = 1 (empty suffix)
+
+dp[2]: s[2] = '6'. Single-digit works → dp[2] += dp[3] = 1.
+       Two-digit s[2..3] doesn't exist (i+1 = 3 = n).
+       dp[2] = 1.
+
+dp[1]: s[1] = '2'. Single-digit works → dp[1] += dp[2] = 1.
+       Two-digit s[1..2] = "26", in [10, 26] → dp[1] += dp[3] = 1.
+       dp[1] = 2.
+
+dp[0]: s[0] = '2'. Single-digit works → dp[0] += dp[1] = 2.
+       Two-digit s[0..1] = "22", in [10, 26] → dp[0] += dp[2] = 1.
+       dp[0] = 3.
+```
+
+Answer: **3**. ✓
+
+Trace on "06":
+
+```
+dp[2] = 1
+dp[1]: s[1]='6'. dp[1] += dp[2] = 1. No two-digit (end). dp[1] = 1.
+dp[0]: s[0]='0'. Single-digit fails (zero has no decode). 
+       Two-digit s[0..1]="06", 6 < 10 → not valid. No addition.
+       dp[0] = 0.
+```
+
+Answer: 0. ✓
+
+----------------------------------------
+
+## Step 7: Name the Pattern Now
+
+This is a textbook **linear DP on index**, with two branches per state (take 1 digit or take 2). The recurrence `dp[i] = dp[i+1] + dp[i+2]` (when both branches are valid) looks suspiciously like Fibonacci — and it is, but with conditions that can zero out either branch when digits don't form valid letters.
+
+The teaching lesson: whenever you have a sequence where each position has a small number of "commit k characters" choices, an index-based DP of this shape is often the answer.
+
+----------------------------------------
+
+## Step 8: Complexity
+
+Time: one pass over the string, O(1) work per position. **O(n)**.
+Space: two rolling variables. **O(1)**.
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
-
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
 int numDecodings(string s) {
     int n = s.size();
-    if (n == 0 || s[0] == '0') return 0;
-    int two = 1, one = 1;
-    for (int i = 1; i < n; ++i) {
+    if (n == 0 || s[0] == '0') return 0;   // empty or leading zero — no decoding
+
+    int two_ahead = 1;    // dp[i+2]
+    int one_ahead = 1;    // dp[i+1] — starts as "dp[n]"
+
+    // Iterate from n-1 down to 0
+    for (int i = n - 1; i >= 0; --i) {
         int cur = 0;
-        if (s[i] != '0') cur += one;
-        int v = (s[i-1]-'0')*10 + (s[i]-'0');
-        if (v >= 10 && v <= 26) cur += two;
-        two = one; one = cur;
+        if (s[i] != '0') cur += one_ahead;                     // take one digit
+        if (i + 1 < n) {
+            int pair = (s[i] - '0') * 10 + (s[i+1] - '0');
+            if (pair >= 10 && pair <= 26) cur += two_ahead;    // take two digits
+        }
+        two_ahead = one_ahead;
+        one_ahead = cur;
     }
-    return one;
+
+    return one_ahead;
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+The two rolling vars mirror `dp[i+1]` and `dp[i+2]` as we sweep from right to left. The `pair >= 10` check is crucial: it rejects "06" (invalid because of the leading zero) and anything under 10 that would only be a one-digit code.
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Decode Ways II (wildcard '*').
-- Count unique decoded strings.
-- Decoding with a custom alphabet.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Decode Ways II (the input contains `*`, which represents any digit 1-9).** Messier case analysis — `*` can be any of 9 digits for the one-digit branch, and can pair with the next/previous to form various two-digit numbers. More cases, same structure.
+- **Print all decodings, not just count.** Switch from DP counting to backtracking; at each index, branch on the valid choices and record the full letter sequence.
+- **Count modulo M.** Wrap each addition in `% M` to avoid overflow.
+- **Input might contain non-digits — return -1.** Add validation; zero out the count on invalid characters.
+- **Streaming version — count decodings so far after each digit arrives.** Same recurrence, but read left to right: `dp[i] = (one-digit contribution) * dp[i-1] + (two-digit contribution) * dp[i-2]`.

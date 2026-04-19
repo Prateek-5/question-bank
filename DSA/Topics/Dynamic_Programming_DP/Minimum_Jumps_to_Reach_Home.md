@@ -1,192 +1,200 @@
 # Minimum Jumps to Reach Home
 
 **Problem Link:**
-https://leetcode.com/problems/minimum-jumps-to-reach-home/description/
+https://leetcode.com/problems/minimum-jumps-to-reach-home/
 
 **Topic:**
-Dynamic Programming DP
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** BFS on (position, direction) with forbidden squares.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> forbidden=[14,4,18,1,15], a=3,b=15, x=9. BFS finds 3 jumps.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Dynamic Programming (DP)
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Read the Problem
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+A bug is at position 0 on a number line. It wants to reach home at position `x`. Each move, the bug can:
+- **Jump forward** `a` units (always allowed).
+- **Jump backward** `b` units (allowed only if the previous move was not also a backward jump).
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Some positions are **forbidden**: a list `forbidden[]` of integers the bug can never land on. Also, positions must be ≥ 0.
 
-So ask yourself:
+Return the **minimum number of jumps** to reach x, or -1 if impossible.
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: BFS on (position, direction) with forbidden squares.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
+Example: `forbidden = [14, 4, 18, 1, 15]`, a = 3, b = 15, x = 9.
 
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-Your very first thought is often recursion. That's actually the right start — but naive recursion re-computes the same subproblems exponentially. The fix is memoization (top-down) or tabulation (bottom-up). The hard part is identifying the state that captures all we need to know about the past.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Bug's state is (pos, lastDir). BFS expands forward b or backward a (only once consecutively). Track visited pairs.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+The bug can do: 0 → 3 → 6 → 9. Three forward jumps of size 3. Zero backward jumps needed. Answer: **3**.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: Think About the State
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+Each moment, we track:
+- **Current position.**
+- **Whether the previous jump was backward** (because we can't do two backward jumps in a row).
 
-**The concept:** BFS on (position, direction) with forbidden squares.
+So state is a pair `(position, last_was_backward)`. Minimum-jumps question in a state graph = BFS (unweighted shortest path).
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
+Transitions from state (p, b):
+- Forward: (p + a, false). Always allowed if p + a is not forbidden and in bounds.
+- Backward: (p - b, true). Allowed if `b == false` (last was not backward) and `p - b >= 0` and not forbidden.
 
-**Pattern recognition cue:**
-
-**Whenever a brute-force recursion has overlapping subproblems → think DP. Identify state first, then transition.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-Queue (pos, backJust, steps). Forward move: pos+a; if valid push. Backward move: pos-b if backJust==0 and pos-b>=0 and not forbidden. Upper bound pos<=6000 approx.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
+BFS from (0, false). Find shortest path to any state (x, *).
 
 ----------------------------------------
 
-## Step 6: Final Approach
+## Step 3: Bounded Search Space
 
-Now let's crystallize everything we've learned into a clean algorithm.
+Positions in theory can be unbounded. In practice, there's an upper bound we don't need to exceed.
 
-BFS with (position, last-direction) state.
+**Claim:** we never need to reach positions beyond some limit L. What's L?
 
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
+Intuition: forward jumps increase position by a; backward by b. If we go too far forward, we can only go back one step (then a forward again). The constraint "no two backward in a row" limits how much we can go back after going forward.
 
-**Before coding, it's worth asking:**
+A reasonable safe bound: `L = max(x + b, max_forbidden + a + b) + some_safety`. Most solutions use `L = 6000` or compute tighter bounds analytically. The exact proof is beyond the scope, but the key idea: we never benefit from going past x by more than (a + b) times the forbidden-array size.
 
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+For simplicity, we'll use L = 6000 (LeetCode's constraint range is small).
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 4: BFS Algorithm
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+```
+forbidden_set = set(forbidden)
+visited = {(0, false)}
+queue = [(0, false, 0)]   # (position, last_backward, jumps)
 
-forbidden=[14,4,18,1,15], a=3,b=15, x=9. BFS finds 3 jumps.
+while queue not empty:
+    (p, b, j) = queue.pop_front()
+    if p == x: return j
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+    # forward jump
+    next_p = p + a
+    if next_p <= LIMIT and next_p not in forbidden_set and (next_p, false) not in visited:
+        visited.add((next_p, false))
+        queue.push((next_p, false, j + 1))
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
+    # backward jump (only if last was not backward)
+    if not b:
+        back_p = p - b
+        if back_p >= 0 and back_p not in forbidden_set and (back_p, true) not in visited:
+            visited.add((back_p, true))
+            queue.push((back_p, true, j + 1))
 
+return -1
+```
+
+BFS guarantees shortest number of jumps.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 5: Why We Need Position × LastMove State, Not Just Position
 
-Complexity isn't magic — it's just counting the work.
+If we tracked only position, we'd lose information about what jumps are currently legal. Two paths arriving at the same position with different "last-was-backward" flags have different future options. So we must track both.
 
-Time: O(bound). Space: O(bound).
+This is a common DP / BFS pattern: **state dimension matches the facts that affect future moves**.
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+----------------------------------------
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+## Step 6: Trace on the Example
 
+`forbidden = {14, 4, 18, 1, 15}`, a = 3, b = 15, x = 9.
+
+```
+Start: (0, F, 0). visited = {(0, F)}.
+
+Pop (0, F, 0).
+  Forward: (3, F). Not forbidden, not visited. Enqueue. visited += (3, F).
+  Backward: last wasn't backward, so OK. But 0 - 15 = -15 < 0. Skip.
+
+Pop (3, F, 1).
+  Forward: (6, F). Enqueue.
+  Backward: 3 - 15 = -12. Skip.
+
+Pop (6, F, 2).
+  Forward: (9, F). Enqueue.
+  Backward: -9. Skip.
+
+Pop (9, F, 3). p == x = 9. Return 3.
+```
+
+✓ Matches.
+
+For harder examples involving backward jumps, the state machine correctly models the restriction. E.g., if we jumped back once, we can't jump back again immediately — we must jump forward first.
+
+----------------------------------------
+
+## Step 7: Complexity
+
+Time: BFS over O(L) positions × 2 (for the last-direction flag) = O(L). Each state explores O(1) neighbors. **O(L)** total.
+Space: O(L) for the visited set and queue.
+
+With L = 6000, this is extremely fast.
+
+----------------------------------------
+
+## Step 8: Name It
+
+This is **BFS on a state graph** where the state is richer than just "position" — it also encodes recent-history information ("was my last jump backward?").
+
+The trick of adding a state dimension for "last move" applies widely:
+- Knight tour with "no three of the same move in a row."
+- Paint House (where each color depends on previous).
+- Cooldown-based stock trading DP.
+
+Whenever a problem says "you can't do X twice in a row" or similar, add a state flag for "did I just do X?"
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
-
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-int minimumJumps(vector<int>& f, int a, int b, int x) {
-    set<int> forb(f.begin(), f.end());
-    const int LIM = 6000;
-    queue<tuple<int,int,int>> q; q.push({0, 0, 0});
-    set<pair<int,int>> seen; seen.insert({0, 0});
+int minimumJumps(vector<int>& forbidden, int a, int b, int x) {
+    unordered_set<int> forbiddenSet(forbidden.begin(), forbidden.end());
+    const int LIMIT = 6000;   // safe upper bound
+    
+    // Visited: (position, last_was_backward) → encoded as position * 2 + (last_backward ? 1 : 0)
+    unordered_set<int> visited;
+    visited.insert(0);   // (0, false)
+    
+    queue<tuple<int, bool, int>> q;
+    q.push({0, false, 0});
+
     while (!q.empty()) {
-        auto [p, back, s] = q.front(); q.pop();
-        if (p == x) return s;
-        int nf = p + a;
-        if (nf <= LIM && !forb.count(nf) && !seen.count({nf, 0})) { seen.insert({nf,0}); q.push({nf,0,s+1}); }
-        int nb = p - b;
-        if (!back && nb >= 0 && !forb.count(nb) && !seen.count({nb, 1})) { seen.insert({nb,1}); q.push({nb,1,s+1}); }
+        auto [p, backLast, jumps] = q.front(); q.pop();
+        if (p == x) return jumps;
+
+        // forward
+        int fp = p + a;
+        if (fp <= LIMIT && !forbiddenSet.count(fp)) {
+            int key = fp * 2 + 0;   // forward: lastBackward = false
+            if (!visited.count(key)) {
+                visited.insert(key);
+                q.push({fp, false, jumps + 1});
+            }
+        }
+        // backward (only if last was not backward)
+        if (!backLast) {
+            int bp = p - b;
+            if (bp >= 0 && !forbiddenSet.count(bp)) {
+                int key = bp * 2 + 1;
+                if (!visited.count(key)) {
+                    visited.insert(key);
+                    q.push({bp, true, jumps + 1});
+                }
+            }
+        }
     }
     return -1;
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Visited set encodes (position, lastBackward) as a single integer. The BFS runs until we reach x or exhaust the state space.
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Tighten the limit.
-- Continuous variant.
-- Weighted jumps.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Allow k backward jumps in a row (not 1).** Extend state to (position, consecutive_backward).
+- **Dynamic forbidden list.** Each jump, some cells become forbidden. Use a dynamic data structure.
+- **Weighted jumps (different costs).** Use Dijkstra instead of BFS.
+- **Return the actual sequence of jumps.** Track parent pointers during BFS.
+- **Prove the L bound more carefully.** Related to worst-case oscillation between forward and backward jumps.
+- **What if a = b?** Doesn't fundamentally change the problem; same algorithm.

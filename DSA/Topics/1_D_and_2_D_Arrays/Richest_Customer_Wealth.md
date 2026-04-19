@@ -4,179 +4,115 @@
 https://leetcode.com/problems/richest-customer-wealth/
 
 **Topic:**
-1 D and 2 D Arrays
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Max of row sums.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> accounts=[[1,2,3],[3,2,1]]. Sums 6 and 6 → 6.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+1-D & 2-D Arrays
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: What's Asked
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+You have an m × n matrix `accounts` where `accounts[i][j]` is the money in customer i's j-th bank account.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+A customer's **wealth** is the sum of money across their accounts. Return the wealth of the **richest** customer.
 
-So ask yourself:
+Example: `accounts = [[1, 2, 3], [3, 2, 1]]`.
+- Customer 0: 1 + 2 + 3 = 6.
+- Customer 1: 3 + 2 + 1 = 6.
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Max of row sums.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
+Max: 6.
 
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
+Example: `accounts = [[1, 5], [7, 3], [3, 5]]`.
+- Customer 0: 6. Customer 1: 10. Customer 2: 8.
 
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-Your first instinct might be to loop over every possible subarray or sub-rectangle. That's cubic or worse. Often a prefix-sum precomputation, a clever index mapping, or a running-state scan collapses the work to linear time.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Each customer's wealth is the sum of their row; answer is the maximum row sum.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Max: 10.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: Direct Approach
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+For each row (customer), sum the values. Track the max.
 
-**The concept:** Max of row sums.
+```
+max_wealth = 0
+for each row in accounts:
+    wealth = sum(row)
+    max_wealth = max(max_wealth, wealth)
+return max_wealth
+```
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever you need range sums or running aggregates → think Prefix Sum. Whenever you need fixed-size windows → Sliding Window.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-Iterate rows, accumulate sum, track max.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
+O(m · n). Absolutely nothing clever.
 
 ----------------------------------------
 
-## Step 6: Final Approach
+## Step 3: Trace
 
-Now let's crystallize everything we've learned into a clean algorithm.
+accounts = [[1, 5], [7, 3], [3, 5]].
 
-Straightforward double loop.
+```
+max_wealth = 0.
 
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
+Row [1, 5]: wealth = 6. max = 6.
+Row [7, 3]: wealth = 10. max = 10.
+Row [3, 5]: wealth = 8. max = 10.
+```
 
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+Return 10. ✓
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 4: Name It
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
-
-accounts=[[1,2,3],[3,2,1]]. Sums 6 and 6 → 6.
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+This is the most basic matrix processing: **row-wise aggregation with a running max**. Not algorithmically interesting, but it exercises:
+- 2D array iteration.
+- Accumulation within rows.
+- Running max.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 5: Complexity
 
-Complexity isn't magic — it's just counting the work.
-
-Time: O(n*m). Space: O(1).
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
+Time: **O(m · n)** — touch each cell once.
+Space: **O(1)** extra.
 
 ----------------------------------------
 
-## Step 9: C++ Implementation
-
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+## Step 6: C++ Implementation
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-int maximumWealth(vector<vector<int>>& a) {
-    int best = 0;
-    for (auto& r : a) best = max(best, accumulate(r.begin(), r.end(), 0));
-    return best;
+int maximumWealth(vector<vector<int>>& accounts) {
+    int maxWealth = 0;
+    for (const auto& row : accounts) {
+        int wealth = accumulate(row.begin(), row.end(), 0);
+        maxWealth = max(maxWealth, wealth);
+    }
+    return maxWealth;
 }
 ```
 
-A few notes about the style:
+Five lines. `std::accumulate` sums a range; `std::max` for the running max.
 
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
+Hand-rolled version:
 
+```cpp
+int maximumWealth(vector<vector<int>>& accounts) {
+    int maxWealth = 0;
+    for (const auto& row : accounts) {
+        int wealth = 0;
+        for (int x : row) wealth += x;
+        if (wealth > maxWealth) maxWealth = wealth;
+    }
+    return maxWealth;
+}
+```
+
+Either works. Use whichever you find clearer.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 7: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Tie-breaking by customer index.
-- Online updates to accounts.
-- Top-k richest customers.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Return the index of the richest customer.** Track the argmax during the scan.
+- **Second richest customer.** Track top-2 during iteration.
+- **Top-k richest customers.** Use a heap of size k, or sort customers by wealth.
+- **Customer with most accounts.** Count non-zero entries per row and take max.
+- **Average wealth across customers.** Sum all cells, divide by m.
+- **Wealth distribution / percentiles.** Compute all wealths, then statistics.

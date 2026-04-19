@@ -4,192 +4,187 @@
 https://leetcode.com/problems/binary-tree-level-order-traversal/
 
 **Topic:**
-Trees Binary Trees
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** BFS using a queue, collecting each level.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> Tree 3,9,20,_,_,15,7. Levels: [[3],[9,20],[15,7]].
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Trees / Binary Trees
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: The Task
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Given a binary tree, return its values grouped by **level** — that is, by depth from the root. Level 0 is just the root, level 1 is both children, etc. The output is a list of lists.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Example:
+```
+        3
+       / \
+      9   20
+          / \
+         15  7
+```
 
-So ask yourself:
+Levels:
+- Level 0: `[3]`
+- Level 1: `[9, 20]`
+- Level 2: `[15, 7]`
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: BFS using a queue, collecting each level.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-A natural first instinct is to traverse the tree many times — once per query, once per property. That works, but it usually does too much. A single recursive traversal can often compute everything post-order with the child results combined at each node.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Level-by-level iteration — process one level fully before moving to the next. A queue naturally achieves this.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Output: `[[3], [9, 20], [15, 7]]`.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: Think About Structure
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+A tree, visited depth-first, gives us a mess of nodes in some order (preorder, inorder, postorder). None of those naturally group by level.
 
-**The concept:** BFS using a queue, collecting each level.
+What does group things by level? A **queue**.
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
+Think of it like ripples from a stone dropped in water. The first ripple is the root. The next ripple is its children. The next is their children. Each ripple is a level.
 
-**Pattern recognition cue:**
+To simulate ripples:
+1. Put the root in a queue.
+2. Pop the queue; that's the current level.
+3. The children of all nodes in the current level form the next level.
+4. Repeat.
 
-**Whenever data is hierarchical or you can compute something per-subtree → think Binary Tree DFS.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-Push root. While queue non-empty: record current level size; for that many iterations pop, record value, push children. Append level vector to result.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
+This is BFS — breadth-first search. But in standard BFS we just emit nodes one at a time; here we need to know **where one level ends and the next begins**. That's the small twist.
 
 ----------------------------------------
 
-## Step 6: Final Approach
+## Step 3: Separating Levels — Three Techniques
 
-Now let's crystallize everything we've learned into a clean algorithm.
+### Technique A — Level size snapshot
 
-BFS with level-size bookkeeping.
+Before processing each level, note how many nodes are currently in the queue. That count is exactly the number of nodes in this level. Pop that many, collect them as the level, pushing their children for later.
 
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
+```
+q = [root]
+while q not empty:
+    size = q.size()
+    level = []
+    for _ in range(size):
+        n = q.pop_front()
+        level.append(n.val)
+        if n.left:  q.push_back(n.left)
+        if n.right: q.push_back(n.right)
+    result.append(level)
+```
 
-**Before coding, it's worth asking:**
+This is the cleanest approach for most cases.
 
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
+### Technique B — Sentinels
 
-Get those clear in your head, and the code almost writes itself.
+Push a `null` (or sentinel) after each level. When you pop a sentinel, you know the level has ended — start a new list and push another sentinel. Workable but messier.
 
+### Technique C — Two queues
 
-----------------------------------------
+Maintain a current-level queue and a next-level queue. Swap them each round. Clean but slightly more bookkeeping.
 
-## Step 7: Dry Run (Detailed)
-
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
-
-Tree 3,9,20,_,_,15,7. Levels: [[3],[9,20],[15,7]].
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
-
-----------------------------------------
-
-## Step 8: Time and Space Complexity
-
-Complexity isn't magic — it's just counting the work.
-
-Time: O(n). Space: O(n).
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
+Technique A is the idiomatic one. Let's use it.
 
 ----------------------------------------
 
-## Step 9: C++ Implementation
+## Step 4: Trace on the Example
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+Queue and result, step by step.
+
+```
+Initial: q = [3], result = [].
+
+Outer iter 1: size = 1.
+  level = []
+  pop 3: level = [3]. Push 9, 20.
+  End of inner: q = [9, 20].
+  result = [[3]].
+
+Outer iter 2: size = 2.
+  level = []
+  pop 9: level = [9]. No children.
+  pop 20: level = [9, 20]. Push 15, 7.
+  End of inner: q = [15, 7].
+  result = [[3], [9, 20]].
+
+Outer iter 3: size = 2.
+  level = []
+  pop 15: level = [15]. No children.
+  pop 7: level = [15, 7]. No children.
+  End: q = [].
+  result = [[3], [9, 20], [15, 7]].
+
+Outer iter 4: q empty. Stop.
+```
+
+Matches expected. The "snapshot size" trick is what cleanly separates the levels.
+
+----------------------------------------
+
+## Step 5: Why This Works — The Invariant
+
+**Invariant:** at the start of each outer iteration, the queue contains exactly the nodes of the next level to process, and nothing else.
+
+- True initially: queue = [root], which is level 0.
+- Preserved: during the inner loop, we pop all `size` nodes of the current level and push their children (which are the next level's nodes). After the inner loop finishes, the queue contains only those children.
+
+That invariant is what makes the size-snapshot technique correct.
+
+----------------------------------------
+
+## Step 6: DFS Alternative with Depth Parameter
+
+You can also solve this with depth-first recursion, carrying a depth argument:
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-struct TreeNode { int val; TreeNode *left,*right; };
+void dfs(TreeNode* n, int depth, vector<vector<int>>& res) {
+    if (!n) return;
+    if ((int)res.size() == depth) res.push_back({});
+    res[depth].push_back(n->val);
+    dfs(n->left, depth + 1, res);
+    dfs(n->right, depth + 1, res);
+}
+```
 
+Start with `dfs(root, 0, res)`. Each time we visit a node at depth d, we add it to `res[d]` (creating `res[d]` lazily if it doesn't exist yet).
+
+This works, but the output order within a level depends on traversal order. Preorder DFS happens to give left-to-right order at each level because both left and right subtrees get fully explored in that order. Reliable, but less obvious than the BFS version.
+
+----------------------------------------
+
+## Step 7: Complexity
+
+Time: every node is enqueued and dequeued once. **O(n)**.
+
+Space: the queue can hold up to the widest level at a time. For balanced trees, that's `n/2`. For skewed trees, it's O(1). Worst-case **O(n)**.
+
+----------------------------------------
+
+## Step 8: C++ Implementation
+
+```cpp
 vector<vector<int>> levelOrder(TreeNode* root) {
     vector<vector<int>> res;
     if (!root) return res;
-    queue<TreeNode*> q; q.push(root);
+    queue<TreeNode*> q;
+    q.push(root);
     while (!q.empty()) {
-        int sz = q.size(); vector<int> level;
+        int sz = q.size();
+        vector<int> level;
         while (sz--) {
             auto* n = q.front(); q.pop();
             level.push_back(n->val);
-            if (n->left) q.push(n->left);
+            if (n->left)  q.push(n->left);
             if (n->right) q.push(n->right);
         }
-        res.push_back(level);
+        res.push_back(move(level));
     }
     return res;
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+The `sz--` in the inner while does two things: it controls loop iterations and decrements after the check, so the loop runs exactly `sz` times. Clear and idiomatic.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 9: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Zigzag level order.
-- Bottom-up level order.
-- Level order with separators for null.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Zigzag level order.** Alternate left-to-right and right-to-left per level. Same BFS; just reverse every other level before pushing to `res`.
+- **Level order from bottom up (deepest level first).** Collect the levels normally, then reverse `res` at the end.
+- **Average value of each level.** Accumulate a sum during the inner loop; divide at the end.
+- **Find the right-most node at each level (Right Side View).** During the inner loop, emit only the last node.
+- **Serialize a tree using level order.** Include null markers to represent missing children, so deserialization works.

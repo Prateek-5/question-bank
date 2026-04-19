@@ -4,179 +4,160 @@
 https://leetcode.com/problems/min-cost-climbing-stairs/
 
 **Topic:**
-Dynamic Programming DP
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** DP dp[i] = cost[i] + min(dp[i-1], dp[i-2]).
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> cost=[10,15,20] → 15.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Dynamic Programming (DP)
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Read the Problem Twice — Really
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+There's a staircase. Each step has a cost `cost[i]`. You can start from either step 0 or step 1 **for free**. From any step you stand on, you pay that step's cost, then move 1 or 2 steps forward. The **top** is not the last step of the array — it's the position *just past* the array.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
-
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: DP dp[i] = cost[i] + min(dp[i-1], dp[i-2]).
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
+That last detail trips up almost everyone on their first read. Let me emphasize it. If `cost = [10, 15, 20]` has 3 entries, "the top" is position **3** (out of bounds). You don't need to pay the cost of the final array step unless you actually land on it.
 
 ----------------------------------------
 
-## Step 3: Build Intuition (VERY IMPORTANT)
+## Step 2: Play With a Ridiculously Small Case
 
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
+`cost = [1, 100]`. The top is position 2.
 
-Your very first thought is often recursion. That's actually the right start — but naive recursion re-computes the same subproblems exponentially. The fix is memoization (top-down) or tabulation (bottom-up). The hard part is identifying the state that captures all we need to know about the past.
+List all possible paths:
+- Start at step 0 (free). Pay cost[0] = 1. Jump 2. Land at position 2 (top). Total: **1**.
+- Start at step 0 (free). Pay cost[0] = 1. Jump 1. Land at step 1. Pay cost[1] = 100. Jump 1 or 2 (either overshoots or reaches top). Total: 1 + 100 = **101**.
+- Start at step 1 (free). Pay cost[1] = 100. Jump 1. Land at top. Total: **100**.
+- Start at step 1 (free). Pay cost[1] = 100. Jump 2. Overshoots — if overshooting is allowed as "reached the top," still 100.
 
-So how do we get smarter? Let's build the correct intuition step by step.
+Minimum: **1**.
 
-Reach top by stepping one or two at a time; minimize the sum of step costs incurred.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Notice something interesting: the cheapest path doesn't even touch step 1. The free start at step 0 plus a 2-jump skips it entirely. This is what "free start" gives us — the ability to bypass one early step.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 3: A Slightly Bigger Case
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+`cost = [10, 15, 20]`. Top is position 3.
 
-**The concept:** DP dp[i] = cost[i] + min(dp[i-1], dp[i-2]).
+Paths:
+- Start 0, pay 10, jump 2 → top. Cost: 10.
+- Start 0, pay 10, jump 1 → step 1, pay 15, jump 2 → top. Cost: 25.
+- Start 0, pay 10, jump 1 → step 1, pay 15, jump 1 → step 2, pay 20, jump 1 or 2 → top. Cost: 45.
+- Start 0, pay 10, jump 2 → step 2, pay 20, jump 1 → top. Cost: 30.
+- Start 1, pay 15, jump 2 → top. Cost: 15.
+- Start 1, pay 15, jump 1 → step 2, pay 20, jump 1 → top. Cost: 35.
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
+Minimum: **10** — start 0, skip step 1.
 
-**Pattern recognition cue:**
+Wait, the expected answer is 15? Let me re-check... `[10, 15, 20]`, pay 10 then jump 2 → land at index 2 (which costs 20, must pay) → jump to top. That's 30. Or pay 10, jump 1, pay 15, jump 2 → top. That's 25. Or start at 1, pay 15, jump 2 → top. That's 15. So minimum is **15** actually.
 
-**Whenever a brute-force recursion has overlapping subproblems → think DP. Identify state first, then transition.**
+I confused myself! Let me re-read the rules: from a step, you **pay its cost then move**. Jumping 2 from step 0 lands you at step 2 — which is on the staircase still, not past it. You don't instantly reach the top. You'd have to *land* at position 3 to have reached the top.
 
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
+So "jumping 2 from step 0" lands on step 2 — you have to pay that too before moving on. My correction: minimum is 15.
 
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-Iterate; a=b=0 initially (free at start). For each i: c = cost[i] + min(a, b); a = b; b = c. Answer min(a, b) at end.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
+This confusion is actually useful. It forces me to be precise about what "reaching the top" means: the top is position n (if indices run 0..n-1), and we reach it only when we make a move that ends at position n or beyond.
 
 ----------------------------------------
 
-## Step 6: Final Approach
+## Step 4: The Key Realization From the Confusion
 
-Now let's crystallize everything we've learned into a clean algorithm.
+OK let me now rephrase: **"reaching the top" means being at position n after a jump from position n-1 or n-2 (which are the only positions that can jump to n)**. You don't pay anything at position n — there's no step there.
 
-Rolling DP.
+So to reach the top, your last move is either:
+- From step n-1: pay cost[n-1], jump 1, arrive at n.
+- From step n-2: pay cost[n-2], jump 2, arrive at n.
 
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
+Total cost to reach the top = `min(costToReach(n-1) + cost[n-1], costToReach(n-2) + cost[n-2])`.
 
-**Before coding, it's worth asking:**
+Now I need `costToReach(i)` — the minimum total paid to stand at step i (before paying cost[i] itself, just to arrive there).
 
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
+- `costToReach(0) = 0` (free start).
+- `costToReach(1) = 0` (also a free start).
+- `costToReach(i)` for i ≥ 2: came from step i-1 (paying cost[i-1]) or step i-2 (paying cost[i-2]).
 
-Get those clear in your head, and the code almost writes itself.
+```
+costToReach(i) = min(costToReach(i-1) + cost[i-1], costToReach(i-2) + cost[i-2])
+```
 
-
-----------------------------------------
-
-## Step 7: Dry Run (Detailed)
-
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
-
-cost=[10,15,20] → 15.
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+That's the recurrence. And the final answer is `costToReach(n)`.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 5: Verify on `[10, 15, 20]`
 
-Complexity isn't magic — it's just counting the work.
+```
+costToReach(0) = 0
+costToReach(1) = 0
+costToReach(2) = min(0 + 15, 0 + 10) = 10.
+costToReach(3) = min(10 + 20, 0 + 15) = 15.
+```
 
-Time: O(n). Space: O(1).
+Answer: 15. ✓ Matches our enumeration above.
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+And on `[1, 100]`:
+```
+costToReach(0) = 0
+costToReach(1) = 0
+costToReach(2) = min(0 + 100, 0 + 1) = 1.
+```
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+Answer: 1. ✓
 
+The recurrence is right, and I now understand it from hand-enumeration rather than blind formula.
+
+----------------------------------------
+
+## Step 6: Only Two Things Matter at Each Step
+
+Look at the recurrence: `costToReach(i)` only depends on `costToReach(i-1)` and `costToReach(i-2)`. Nothing earlier. So we don't need a full array — just two variables rolling forward.
+
+```
+prev2 = 0     # costToReach(0)
+prev1 = 0     # costToReach(1)
+for i from 2 to n:
+    cur = min(prev1 + cost[i-1], prev2 + cost[i-2])
+    prev2 = prev1
+    prev1 = cur
+return prev1
+```
+
+----------------------------------------
+
+## Step 7: What We Just Derived
+
+If you squint, the recurrence `f(i) = min(f(i-1) + a, f(i-2) + b)` looks like the Climbing Stairs Fibonacci cousin — but with weighted edges. Each "jump" has a cost, and we're finding the cheapest way to reach the end.
+
+We didn't start with "this is a DP problem." We hand-traced paths, got confused about rules, corrected ourselves, and arrived at a recurrence by asking "what's the last move?" That question is the entire trick — it reduces the global optimization to a small local choice.
+
+----------------------------------------
+
+## Step 8: Complexity
+
+Time: one pass, **O(n)**.
+Space: two rolling variables, **O(1)**.
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
-
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-int minCostClimbingStairs(vector<int>& c) {
-    int a = 0, b = 0;
-    for (int x : c) { int cur = x + min(a, b); a = b; b = cur; }
-    return min(a, b);
+int minCostClimbingStairs(vector<int>& cost) {
+    int n = cost.size();
+    int prev2 = 0, prev1 = 0;
+    for (int i = 2; i <= n; ++i) {
+        int cur = min(prev1 + cost[i - 1], prev2 + cost[i - 2]);
+        prev2 = prev1;
+        prev1 = cur;
+    }
+    return prev1;
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Reading it carefully: when `i` equals `n` (the top), we compute the final answer. The loop runs exactly `n - 1` times. `prev1` holds the value of `costToReach(i-1)` through each iteration, and `prev2` is the one before that.
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- k steps per move.
-- Stochastic costs (expected).
-- Reach exactly step n.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Steps of 1, 2, or 3 allowed.** Recurrence becomes `f(i) = min(f(i-1) + cost[i-1], f(i-2) + cost[i-2], f(i-3) + cost[i-3])`. Roll three variables instead of two.
+- **Must stop at a specific "checkpoint" step.** Split into sub-problems: minimum cost from start to checkpoint, plus checkpoint to top.
+- **Variable step sizes (can take any of `{1, 2, ..., k}` steps).** Recurrence widens to `k` terms — for large `k`, a sliding-window minimum keeps it O(n).
+- **Recover the actual path.** Record which predecessor won at each step; walk back from position `n`.
+- **Some steps are broken (can't land on them).** Set `cost[broken] = infinity`. The min-recurrence naturally avoids them.

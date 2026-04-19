@@ -6,186 +6,147 @@ https://leetcode.com/problems/evaluate-reverse-polish-notation/
 **Topic:**
 Stack
 
+----------------------------------------
+
+## Step 1: What Is RPN?
+
+Reverse Polish Notation is a way of writing arithmetic without any parentheses. Instead of `3 + 4`, you write `3 4 +`. Instead of `(3 + 4) * 5`, you write `3 4 + 5 *`.
+
+The rule: operators appear **after** their operands. When you see an operator, it applies to the **two most recent** numbers.
+
+Given a list of RPN tokens (like `["2", "1", "+", "3", "*"]`), compute the result.
+
+`["2", "1", "+", "3", "*"]` reads as: compute `2 + 1 = 3`, then multiply by 3 → `9`.
 
 ----------------------------------------
 
-## Step 1: Understand the Problem (Beginner Friendly)
+## Step 2: Let Me Simulate By Hand
 
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
+Take a slightly bigger example: `["10", "6", "9", "3", "+", "-11", "*", "/", "*", "17", "+", "5", "+"]`.
 
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
+Standard math translation: `(10 * ((6 + (9 + 3)) / (-11))) + 17 + 5`. But let's not peek ahead — the whole point of RPN is to go left-to-right.
 
-**In plain words:** Stack of operands; on operator pop two, apply, push result.
+Reading left-to-right, what should happen at each token?
 
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
+- `"10"` — a number. Remember it.
+- `"6"` — another number. Remember it.
+- `"9"` — remember.
+- `"3"` — remember.
+- `"+"` — combine the two most recent numbers: 9 and 3. Result 12. Forget the two, remember 12.
+- `"-11"` — remember.
+- `"*"` — combine the two most recent: 12 and -11. Result: -132. Remember that.
+- `"/"` — combine the two most recent: 6 and -132. Result: 6 / -132 = 0 (integer division rounds toward zero).
 
-> tokens=['2','1','+','3','*']. Stack 2,1 → 3 → 3,3 → 9.
+Wait, let me be careful about operand order. When we see `"/"`, the two most recent are stored in the order they were added. For `a b /`, the meaning is `a / b` (the first-added is the dividend, the second the divisor). So here the first-added is 6, second is -132 — we compute `6 / -132`.
 
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
+Hmm actually wait. Let me re-check which came first. We remembered 6 first, then later 12, then -132. So when `"/"` fires, the two most recent are -132 (last in) and 12 is no longer there... Let me re-trace more carefully.
 
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
-
-----------------------------------------
-
-## Step 2: Break Down the Problem
-
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
-
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
-
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Stack of operands; on operator pop two, apply, push result.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
+OK this is getting complicated by hand. Let me formalize the rule.
 
 ----------------------------------------
 
-## Step 3: Build Intuition (VERY IMPORTANT)
+## Step 3: The Rule Is Exactly Like a Stack
 
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
+Numbers go onto a pile (last-in on top). When an operator arrives, it consumes the **top two numbers**, performs the operation, and pushes the result back.
 
-You might try to scan multiple times, or use recursion to handle nested structure. A stack lets you remember just enough of the past to resolve it efficiently — especially 'next greater' or 'matching brackets' questions.
+Operand order: when you see `a b <op>`, the first-pushed is `a`, second-pushed is `b`. When we pop, we get `b` first (since it's on top), then `a`. So the computation is `a <op> b`, not `b <op> a`.
 
-So how do we get smarter? Let's build the correct intuition step by step.
+In code:
+```
+b = stack.pop()
+a = stack.pop()
+result = a OP b
+stack.push(result)
+```
 
-RPN naturally evaluates with a stack — operators act on the top two values.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+That's critical. The order matters for non-commutative operators like `-` and `/`.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 4: Retrace More Carefully
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+`["10", "6", "9", "3", "+", "-11", "*", "/", "*", "17", "+", "5", "+"]`
 
-**The concept:** Stack of operands; on operator pop two, apply, push result.
+```
+"10"   stack: [10]
+"6"    stack: [10, 6]
+"9"    stack: [10, 6, 9]
+"3"    stack: [10, 6, 9, 3]
+"+"    b=3, a=9, 9+3=12.  stack: [10, 6, 12]
+"-11"  stack: [10, 6, 12, -11]
+"*"    b=-11, a=12, 12*(-11)=-132. stack: [10, 6, -132]
+"/"    b=-132, a=6, 6/(-132)=0 (integer div toward zero). stack: [10, 0]
+"*"    b=0, a=10, 10*0=0. stack: [0]
+"17"   stack: [0, 17]
+"+"    b=17, a=0, 0+17=17. stack: [17]
+"5"    stack: [17, 5]
+"+"    b=5, a=17, 17+5=22. stack: [22]
+```
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
+Answer: **22**.
 
-**Pattern recognition cue:**
-
-**Whenever you see nested structure, matching brackets, or 'next greater element' → think Stack / Monotonic Stack.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-For each token: if numeric push; else pop b, a, compute a OP b, push result.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
+Notice how the stack shrinks each time an operator fires, and grows each time a number arrives. At the very end, there should be exactly one value on the stack — the answer. If there's more than one, the input was malformed.
 
 ----------------------------------------
 
-## Step 6: Final Approach
+## Step 5: Why the Stack Is Natural
 
-Now let's crystallize everything we've learned into a clean algorithm.
+Think about how RPN matches evaluation order. Operators apply to the most recent two operands. "Most recent" is LIFO — the defining property of a stack. So the stack isn't a clever choice; it's the *definition* of how RPN works. No other structure would be simpler.
 
-Stack simulation.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+Put another way: RPN is unambiguous *because* of this mechanic. There's never any question about "which operands does this operator apply to" — it's always the last two on the stack.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
-
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
-
-tokens=['2','1','+','3','*']. Stack 2,1 → 3 → 3,3 → 9.
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
-
-----------------------------------------
-
-## Step 8: Time and Space Complexity
-
-Complexity isn't magic — it's just counting the work.
-
-Time: O(n). Space: O(n).
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
-
-----------------------------------------
-
-## Step 9: C++ Implementation
-
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+## Step 6: Translating to Code
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-int evalRPN(vector<string>& t) {
+int evalRPN(vector<string>& tokens) {
     stack<long long> st;
-    for (auto& x : t) {
-        if (x == "+" || x == "-" || x == "*" || x == "/") {
+    for (auto& t : tokens) {
+        if (t == "+" || t == "-" || t == "*" || t == "/") {
             long long b = st.top(); st.pop();
             long long a = st.top(); st.pop();
-            if (x == "+") st.push(a + b);
-            else if (x == "-") st.push(a - b);
-            else if (x == "*") st.push(a * b);
-            else st.push(a / b);
-        } else st.push(stoll(x));
+            long long r;
+            if (t == "+") r = a + b;
+            else if (t == "-") r = a - b;
+            else if (t == "*") r = a * b;
+            else                r = a / b;    // integer division
+            st.push(r);
+        } else {
+            st.push(stoll(t));
+        }
     }
     return (int)st.top();
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+A few implementation choices:
+- `long long` to avoid overflow on intermediate multiplications. If the problem constraints say all values fit in 32 bits, you can downgrade.
+- `stoll` converts string to `long long`. It handles negative numbers like `"-11"` correctly (unlike just parsing digits naively).
+- I use a chain of `if/else if` for the four operators. You could use a `switch` or a lookup map; doesn't matter at this scale.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 7: Edge Cases
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
+- **Single number input** like `["42"]`. No operator fires; stack ends with just `42`. Return 42. ✓
+- **Negative operands.** `"-11"` is a valid number token. `stoll` handles it.
+- **Division rounding.** C++ `/` on integers rounds toward zero, which matches the problem spec. (Be aware: Python's `//` rounds toward negative infinity — different semantics.)
+- **Division by zero.** Not specified in the problem; typically inputs are guaranteed valid. Add a guard if in doubt.
 
-- Convert infix to postfix.
-- Handle unary minus.
-- Add parentheses/precedence parser.
+----------------------------------------
 
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
+## Step 8: Complexity
 
----
+Time: we visit each token exactly once; each stack op is O(1). **O(n)** where n is the number of tokens.
+Space: the stack holds at most the number of numbers seen before the next operator — at most O(n) in pathological inputs like `[1, 1, 1, +, +]` vs. short on well-balanced RPNs. Worst case **O(n)**.
 
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+----------------------------------------
+
+## Step 9: Follow-up Questions
+
+- **Parse and evaluate an infix expression (standard math notation).** Two-stack approach (values + operators) with operator precedence, or convert to RPN first via the shunting-yard algorithm.
+- **Support more operators (exponent, modulo, unary minus).** Add cases. Unary minus is tricky in RPN — usually handled by requiring the token to be a signed number.
+- **Mixed int/float arithmetic.** Store a variant or use doubles throughout.
+- **Evaluate an RPN stream (tokens arrive over time).** Same algorithm — works incrementally.
+- **Generate RPN from an infix expression.** Shunting-yard. Output has exactly the token order our stack evaluator expects.

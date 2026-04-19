@@ -1,187 +1,187 @@
 # Largest Subarray With 0 Sum
 
 **Problem Link:**
-https://www.geeksforgeeks.org/problems/largest-subarray-with-0-sum/1
+https://www.geeksforgeeks.org/find-the-largest-subarray-with-0-sum/
 
 **Topic:**
-Hashing Sliding Window
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Prefix-sum + hashmap of first occurrence.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> arr=[15,-2,2,-8,1,7,10,23]. Prefix sums include a repeat → longest subarray length 5.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Hashing / Sliding Window
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Read the Problem
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Given an integer array (may contain negatives), find the **length of the longest contiguous subarray** whose elements sum to 0.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Example: `[15, -2, 2, -8, 1, 7, 10, 23]`.
 
-So ask yourself:
+Subarrays summing to 0:
+- `[-2, 2]` (indices 1-2): sum 0, length 2.
+- `[-2, 2, -8, 1, 7]` (indices 1-5): sum = -2+2-8+1+7 = 0. Length 5.
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Prefix-sum + hashmap of first occurrence.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
+Longest: **5**.
 
 ----------------------------------------
 
-## Step 3: Build Intuition (VERY IMPORTANT)
+## Step 2: Brute Force
 
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
+For each starting index i, accumulate sum as we extend j. If sum ever hits 0, record length j - i + 1. Track max.
 
-The default is to enumerate every subarray or substring. That's O(n²). Two techniques collapse this: prefix-sum + hashmap for counting subarrays with a property, or a sliding window whose left and right pointers advance monotonically.
+```
+for i in 0..n-1:
+    s = 0
+    for j in i..n-1:
+        s += arr[j]
+        if s == 0: best = max(best, j - i + 1)
+```
 
-So how do we get smarter? Let's build the correct intuition step by step.
+O(n²). Fine for small inputs. For n ≥ 10^5, slow.
 
-Subarray with zero sum means two prefix sums are equal. Track earliest index of each sum; at later index compute length.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+The inefficiency: we re-accumulate sum for each i. Can we share work?
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 3: Prefix Sums
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+Define prefix sum `P[i] = arr[0] + arr[1] + ... + arr[i-1]`. So `P[0] = 0`.
 
-**The concept:** Prefix-sum + hashmap of first occurrence.
+Sum of subarray arr[l..r] = P[r+1] - P[l].
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
+A subarray sums to 0 iff `P[r+1] == P[l]`. So we're looking for **two equal prefix sums** — the subarray between them (exclusive of l, inclusive through r) has sum 0.
 
-**Pattern recognition cue:**
+To maximize length r - l + 1 = (r + 1) - l, we want to find two indices in the prefix-sum sequence with the **same value**, maximally far apart.
 
-**'Subarray sum equals k' or 'count of something in windows' → think Prefix Sum + HashMap or Sliding Window.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+Equivalent problem: given a sequence `P[0], P[1], ..., P[n]`, find the pair (i, j) with P[i] == P[j] and j - i maximal.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 4: Hashmap of First Occurrences
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+Walk through prefix sums. For each `P[i]`:
+- If we've seen `P[i]` before at index `first[P[i]]`, the subarray between those positions sums to 0. Length = i - first[P[i]].
+- If we haven't seen `P[i]`, record `first[P[i]] = i`.
 
-m[0]=-1. Running sum; if sum seen earlier update best = i - m[sum]. Else record m[sum]=i.
+Why "first occurrence"? Because we want the longest subarray. Given two occurrences of the same prefix sum, the earlier index pairs with the current one to give a longer subarray.
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
+```
+first = {0: -1}   # prefix sum 0 at "index -1" (representing empty prefix)
+sum = 0
+best = 0
 
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
+for i in 0..n-1:
+    sum += arr[i]
+    if sum in first:
+        best = max(best, i - first[sum])
+    else:
+        first[sum] = i
 
+return best
+```
 
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Hashmap.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+The trick `first[0] = -1` handles the case where the subarray starts from index 0. The prefix sum before any element is 0, conceptually at index -1.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 5: Trace on the Example
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+`arr = [15, -2, 2, -8, 1, 7, 10, 23]`.
 
-arr=[15,-2,2,-8,1,7,10,23]. Prefix sums include a repeat → longest subarray length 5.
+```
+first = {0: -1}. sum = 0. best = 0.
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+i=0, arr[0]=15. sum = 15. Not in map. first[15] = 0.
+i=1, arr[1]=-2. sum = 13. Not in map. first[13] = 1.
+i=2, arr[2]=2. sum = 15. In map at 0. best = max(0, 2 - 0) = 2.
+i=3, arr[3]=-8. sum = 7. Not in map. first[7] = 3.
+i=4, arr[4]=1. sum = 8. Not in map. first[8] = 4.
+i=5, arr[5]=7. sum = 15. In map at 0. best = max(2, 5 - 0) = 5.
+i=6, arr[6]=10. sum = 25. Not in map. first[25] = 6.
+i=7, arr[7]=23. sum = 48. Not in map. first[48] = 7.
+```
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
+Return 5. ✓
 
-
-----------------------------------------
-
-## Step 8: Time and Space Complexity
-
-Complexity isn't magic — it's just counting the work.
-
-Time: O(n). Space: O(n).
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
+Notice at i = 5, we found sum = 15 which was first seen at i = 0. The subarray from i=1 to i=5 (indices 1, 2, 3, 4, 5) sums to 0, length 5. ✓
 
 ----------------------------------------
 
-## Step 9: C++ Implementation
+## Step 6: Why "First Occurrence" Specifically
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+Suppose we stored the **latest** index instead. For two prefix sums equal to, say, 15 — at indices 0 and 2 — we'd store index 2. Then at i = 5 (also prefix sum 15), we'd compute 5 - 2 = 3. But the real longest subarray with sum 0 is between index 0 and 5 (length 5).
+
+Storing first occurrence gives us maximum span. Storing latest would give shortest span. First wins.
+
+----------------------------------------
+
+## Step 7: Sentinel `first[0] = -1`
+
+The sentinel is important. Consider `arr = [1, 2, -3, 4]`. Prefix sums: 1, 3, 0, 4.
+
+Subarray arr[0..2] = [1, 2, -3] sums to 0. Length 3.
+
+Without the sentinel:
+- i=0, sum=1. first[1]=0.
+- i=1, sum=3. first[3]=1.
+- i=2, sum=0. Not in map. first[0]=2.
+- i=3, sum=4. Not in map. first[4]=3.
+
+best stays 0. Wrong!
+
+With the sentinel `first[0] = -1`:
+- i=2, sum=0. In map at -1. best = 2 - (-1) = 3. ✓
+
+The sentinel captures "the subarray starts at the beginning."
+
+----------------------------------------
+
+## Step 8: Name It
+
+**Prefix sum + hashmap of first occurrence.** A ubiquitous technique for "longest subarray with some sum-based property." Related:
+- Subarray Sum Equals K (count or detect).
+- Longest Subarray with Equal 0s and 1s (convert 0s to -1s, find 0-sum subarrays).
+- Contiguous Array with equal count of two values.
+
+Whenever a contiguous-subarray question maps to "equal prefix values," this pattern applies.
+
+----------------------------------------
+
+## Step 9: Complexity
+
+Time: **O(n)** — single pass, O(1) per hashmap op.
+Space: **O(n)** for the hashmap.
+
+----------------------------------------
+
+## Step 10: C++ Implementation
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-int largestZeroSumSubarray(vector<int>& a) {
-    unordered_map<int,int> m; m[0] = -1;
-    int s = 0, best = 0;
-    for (int i = 0; i < (int)a.size(); ++i) {
-        s += a[i];
-        if (m.count(s)) best = max(best, i - m[s]);
-        else m[s] = i;
+int maxLen(vector<int>& arr) {
+    unordered_map<int, int> first;
+    first[0] = -1;   // sentinel: empty prefix has sum 0 "at index -1"
+    int sum = 0;
+    int best = 0;
+
+    for (int i = 0; i < (int)arr.size(); ++i) {
+        sum += arr[i];
+        auto it = first.find(sum);
+        if (it != first.end()) {
+            best = max(best, i - it->second);
+        } else {
+            first[sum] = i;
+        }
     }
     return best;
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Clean 10 lines. Running sum + hashmap = length of longest subarray with sum 0.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 11: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Count zero-sum subarrays.
-- Target-sum variant.
-- 2D zero sum submatrix.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Longest subarray with sum k.** Replace the check: look for `sum - k` in the map instead of `sum`.
+- **Count all subarrays with sum 0 (not longest).** Accumulate counts instead of tracking first occurrence.
+- **Longest subarray with sum ≥ threshold.** Harder; involves sorted prefix sums or sliding window for non-negatives.
+- **Longest with sum divisible by k.** Use `sum % k` as the hashmap key (mind negative mod).
+- **Longest with equal 0s and 1s.** Replace 0s with -1s, then find longest zero-sum subarray.
+- **Dynamic updates to arr.** Hashmap technique doesn't trivially handle updates; use a segment tree.

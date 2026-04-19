@@ -4,174 +4,161 @@
 https://www.geeksforgeeks.org/problems/number-of-open-doors1552/1
 
 **Topic:**
-Number Theory Misc
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Perfect-square toggles — i doors open iff i is a perfect square.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> n=10 → sqrt=3 → 3 doors open (1,4,9).
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Number Theory / Misc
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: The Puzzle
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+There are N doors, numbered 1 to N, all initially **closed**. N passes are made:
+- On pass `i` (i = 1, 2, ..., N): toggle every door whose number is divisible by i. ("Toggle" = close if open, open if closed.)
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+After all N passes, how many doors are **open**?
 
-So ask yourself:
+Example: N = 5.
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Perfect-square toggles — i doors open iff i is a perfect square.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
+| Door | Pass 1 | Pass 2 | Pass 3 | Pass 4 | Pass 5 |
+|---|---|---|---|---|---|
+| 1 | Open | — | — | — | — |
+| 2 | Open | Close | — | — | — |
+| 3 | Open | — | Close | — | — |
+| 4 | Open | Close | — | Open | — |
+| 5 | Open | — | — | — | Close |
 
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-A brute-force factor check or a digit-by-digit loop is usually the first attempt. Cleverer approaches exploit modular arithmetic, parity, or digit-DP recurrences to get O(1) or O(log n) from what looks like an O(n) problem.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Door i is toggled once per divisor. Divisors pair up symmetrically except for perfect squares — which have an odd divisor count, leaving them toggled (open).
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Final state: doors 1 and 4 are open. Answer: **2**.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: Reframe — How Many Toggles Per Door?
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+Door `d` is toggled on pass `i` iff `i` divides `d`. So the number of toggles on door `d` = number of divisors of `d`.
 
-**The concept:** Perfect-square toggles — i doors open iff i is a perfect square.
+A door is **open** at the end iff it was toggled an **odd** number of times (starting closed → odd flips → open).
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever digits, GCD, primes, or modular properties appear → check for closed-form solutions before coding loops.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+So: count how many numbers in [1, N] have an **odd number of divisors**.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 3: Which Numbers Have Odd Divisor Count?
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+Divisors of `d` come in pairs: for each divisor x, `d / x` is also a divisor. If x ≠ d / x, they pair up and contribute 2 to the count.
 
-Count of open doors after n passes = floor(sqrt(n)).
+The only exception: when `x = d / x`, i.e., `x² = d` — this means `d` is a **perfect square**, and x appears only once (not as a pair).
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
+**So d has an odd number of divisors iff d is a perfect square.**
 
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Closed form.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+Example: 4 has divisors 1, 2, 4 — count 3 (odd). 4 = 2². ✓
+Example: 36 has divisors 1, 2, 3, 4, 6, 9, 12, 18, 36 — count 9 (odd). 36 = 6². ✓
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 4: Count Perfect Squares ≤ N
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+Perfect squares ≤ N: 1, 4, 9, 16, ..., floor(√N)². There are exactly **floor(√N)** of them.
 
-n=10 → sqrt=3 → 3 doors open (1,4,9).
+So the answer is `floor(√N)`.
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+Example: N = 5. floor(√5) = 2. Answer: **2**. ✓
+Example: N = 100. floor(√100) = 10. Answer: 10. (Doors 1, 4, 9, 16, 25, 36, 49, 64, 81, 100.)
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 5: Algorithm
 
-Complexity isn't magic — it's just counting the work.
-
-O(1).
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
-
-----------------------------------------
-
-## Step 9: C++ Implementation
-
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
-
-```cpp
-#include <cmath>
-int openDoors(int n) { return (int)sqrt((double)n); }
+```
+return floor(sqrt(N))
 ```
 
-A few notes about the style:
+Literally one operation. O(1) time, O(1) space.
 
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+For integer-exact answer, avoid floating-point square root for large N. Use integer sqrt or binary search.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 6: Trace
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
+N = 10.
+- Perfect squares ≤ 10: 1, 4, 9 → 3.
+- floor(√10) = 3. ✓
 
-- Which doors are open (list).
-- K-pass toggling variant.
-- Prime-indexed toggling.
+N = 100. Answer = 10.
+N = 99. floor(√99) = 9 (since 10² = 100 > 99). ✓
 
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
+----------------------------------------
 
----
+## Step 7: Why the Pairing Insight Is Beautiful
 
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+The naive approach would be:
+1. For each d in [1, N], count divisors: O(√d) per door.
+2. Check if count is odd.
+3. Total: O(N · √N).
+
+For N = 10⁹, that's 10^13.5 — impossibly slow.
+
+The divisor-pairing observation collapses this to **O(1)**: just take the integer square root. The abstract insight ("perfect squares have odd divisor counts") transforms a simulation into a closed-form formula.
+
+This is the kind of elegance that makes number theory problems rewarding.
+
+----------------------------------------
+
+## Step 8: Name It
+
+**Classical "divisor count is odd iff perfect square" theorem.** A staple of number theory. Applications:
+- This "doors" / "bulb switcher" type puzzle.
+- Divisor-counting sieves.
+- Counting perfect squares in ranges.
+- Problems built around multiplicative function parity.
+
+Related: the sum of divisors (σ) and totient (φ) functions. All multiplicative, with clean formulas for prime powers.
+
+----------------------------------------
+
+## Step 9: Complexity
+
+Time: **O(1)** — just an integer square root.
+Space: **O(1)**.
+
+No loops, no data structures.
+
+----------------------------------------
+
+## Step 10: C++ Implementation
+
+```cpp
+int numberOfOpenDoors(int N) {
+    // Integer sqrt using binary search for precision on large N.
+    long long lo = 0, hi = N;
+    while (lo < hi) {
+        long long mid = lo + (hi - lo + 1) / 2;
+        if (mid * mid <= N) lo = mid;
+        else hi = mid - 1;
+    }
+    return (int)lo;
+}
+```
+
+For small N, `(int)sqrt((double)N)` works (double precision is enough up to ~2^53). For very large N, binary search avoids float rounding errors.
+
+**Shorter (safe up to 32-bit):**
+
+```cpp
+int numberOfOpenDoors(int N) {
+    int r = (int)sqrt((double)N);
+    while ((long long)(r + 1) * (r + 1) <= N) r++;
+    while ((long long)r * r > N) r--;
+    return r;
+}
+```
+
+Correct the rounding near the boundary.
+
+----------------------------------------
+
+## Step 11: Follow-up Questions
+
+- **K passes instead of N, where K may differ from N.** Door d is toggled on pass i iff i ≤ K and i | d. So count divisors of d that are ≤ K. Parity check per door → not collapsible to a formula.
+- **Doors of size 2N (start the other way).** If they start open, toggling an odd number of times makes them closed. Swap "odd" with "even."
+- **Count closed doors at the end.** N minus the open count = N - floor(√N).
+- **Three-state doors** (e.g., 0 → 1 → 2 → 0). Modular toggling; requires divisor counts mod 3.
+- **Why does the theorem work?** Because divisors pair into (d, N/d) — either distinct (even count) or coincident (perfect square, odd count).
+- **Can we efficiently check if an integer is a perfect square?** Yes: compute integer sqrt, square it, compare.

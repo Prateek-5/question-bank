@@ -4,179 +4,144 @@
 https://leetcode.com/problems/max-consecutive-ones/
 
 **Topic:**
-Number Theory Misc
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Running counter reset on 0.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> nums=[1,1,0,1,1,1]. Streaks 2 then 3 → best=3.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Number Theory / Misc
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: The Task
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Given a binary array `nums` (0's and 1's), return the length of the **longest run of consecutive 1's**.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
-
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Running counter reset on 0.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
+Example: `nums = [1, 1, 0, 1, 1, 1]`. Runs of 1s: lengths 2 and 3. Max = **3**.
+Example: `nums = [1, 0, 1, 1, 0, 1]`. Runs: 1, 2, 1. Max = **2**.
+Example: `nums = [0, 0, 0]`. No 1s anywhere. Max = **0**.
 
 ----------------------------------------
 
-## Step 3: Build Intuition (VERY IMPORTANT)
+## Step 2: Walk the Array Once
 
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
+Think about what information we need at each index:
+- The **length of the current run** we're inside.
+- The **maximum run length** seen so far.
 
-A brute-force factor check or a digit-by-digit loop is usually the first attempt. Cleverer approaches exploit modular arithmetic, parity, or digit-DP recurrences to get O(1) or O(log n) from what looks like an O(n) problem.
+As we walk left to right:
+- If the current element is 1, the current run extends by 1.
+- If the current element is 0, the current run resets to 0.
+- After each step, update the maximum with the current run's length.
 
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Track the length of the current streak of 1s; update the max when it grows.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Single pass. O(n) time, O(1) extra space.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 3: Algorithm
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+```
+cur = 0
+best = 0
+for x in nums:
+    if x == 1:
+        cur += 1
+        best = max(best, cur)
+    else:
+        cur = 0
+return best
+```
 
-**The concept:** Running counter reset on 0.
-
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever digits, GCD, primes, or modular properties appear → check for closed-form solutions before coding loops.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-cur=0, best=0. For each x: cur = x?cur+1:0; best=max(best,cur).
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
+That's it. No tricks — it's just a straightforward scan with two counters.
 
 ----------------------------------------
 
-## Step 6: Final Approach
+## Step 4: Trace
 
-Now let's crystallize everything we've learned into a clean algorithm.
+`nums = [1, 1, 0, 1, 1, 1]`:
 
-Single pass.
+```
+x=1: cur=1, best=1.
+x=1: cur=2, best=2.
+x=0: cur=0, best=2.
+x=1: cur=1, best=2.
+x=1: cur=2, best=2.
+x=1: cur=3, best=3.
+```
 
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
+Return **3**. ✓
 
-**Before coding, it's worth asking:**
+Try `nums = [1, 0, 1, 1, 0, 1]`:
+```
+x=1: cur=1, best=1.
+x=0: cur=0, best=1.
+x=1: cur=1, best=1.
+x=1: cur=2, best=2.
+x=0: cur=0, best=2.
+x=1: cur=1, best=2.
+```
 
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
-
-----------------------------------------
-
-## Step 7: Dry Run (Detailed)
-
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
-
-nums=[1,1,0,1,1,1]. Streaks 2 then 3 → best=3.
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+Return **2**. ✓
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 5: Why the Reset?
 
-Complexity isn't magic — it's just counting the work.
+Every 0 ends the current run. The next 1 starts a fresh run of length 1. If we didn't reset, we'd be counting across 0s — wrong.
 
-Time: O(n). Space: O(1).
+This is the characteristic shape of "longest run" problems: maintain a **current streak**, reset on a boundary, track the max.
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
+Same pattern applies to:
+- Longest run of any character.
+- Longest monotonic subarray.
+- Longest valid region (the streak criterion just changes).
 
 ----------------------------------------
 
-## Step 9: C++ Implementation
+## Step 6: Name It
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+**Single-pass streak counting**. One of the most fundamental array idioms.
+
+Related problems:
+- Max Consecutive Ones II (allow flipping one 0 to 1; use sliding window).
+- Max Consecutive Ones III (flip up to k 0's; same sliding-window technique).
+- Longest subarray with all equal elements.
+- Longest increasing run.
+
+The **basic** version (this problem) has no flips, so there's no sliding-window state to maintain — a single counter suffices.
+
+----------------------------------------
+
+## Step 7: Complexity
+
+Time: **O(n)**. Single pass.
+Space: **O(1)** extra.
+
+Optimal — we must read every element at least once.
+
+----------------------------------------
+
+## Step 8: C++ Implementation
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-int findMaxConsecutiveOnes(vector<int>& a) {
+int findMaxConsecutiveOnes(vector<int>& nums) {
     int cur = 0, best = 0;
-    for (int x : a) { cur = x ? cur + 1 : 0; best = max(best, cur); }
+    for (int x : nums) {
+        if (x == 1) {
+            cur++;
+            best = max(best, cur);
+        } else {
+            cur = 0;
+        }
+    }
     return best;
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Three lines of logic. Hard to simplify further.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 9: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Flip at most k zeros (sliding window).
-- Longest run of any value.
-- 2D grid variant.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Allow flipping up to k 0's to 1's (Max Consecutive Ones III).** Sliding window with "at most k zeros inside" constraint.
+- **Return the starting index of the longest run too.** Track `start_of_current_run` and save it when `cur > best`.
+- **Count runs of length ≥ L.** Add a counter that increments whenever a run reaches length L.
+- **Streaming / online input.** Same algorithm — just two counters in memory.
+- **Count of runs (instead of longest length).** Count transitions from 0 to 1.
+- **Why reset `cur = 0` rather than decrement?** Because a 0 doesn't reduce the current run by 1; it ends it entirely. A single 0 between two groups of 1s separates them completely.

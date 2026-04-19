@@ -4,158 +4,173 @@
 https://leetcode.com/problems/longest-valid-parentheses/
 
 **Topic:**
-Queues Deque Monotonic Queue
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Stack of indices with sentinel base.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> '(()' → stack starts [-1]. '(': [-1,0]. '(': [-1,0,1]. ')': pop 1 → [-1,0]; len=2-0=2. Best=2.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Queues / Deque / Monotonic Queue (also: Stack, DP)
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Define "Valid"
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Given a string containing only `(` and `)`, find the length of the **longest contiguous substring** that forms a valid parentheses expression.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Valid = well-formed: every `(` has a matching `)` later, with proper nesting.
 
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Stack of indices with sentinel base.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
+Example: `"(()"`. Valid substrings: `"()"` at positions 1-2. Longest = **2**.
+Example: `")()())"`. Valid substrings: `"()"` (pos 1-2), `"()"` (pos 3-4), `"()()"` (pos 1-4). Longest = **4**.
+Example: `"()(())"`. Entire string valid. Longest = **6**.
 
 ----------------------------------------
 
-## Step 3: Build Intuition (VERY IMPORTANT)
+## Step 2: Tracking with a Stack
 
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
+Classic idea: a stack of **indices**. Push `i` when we see `(`. Pop when we see `)`.
 
-A nested loop over each window is the obvious approach. But each element enters and leaves the window exactly once, so a deque that maintains only 'useful' candidates gives us the answer in amortized O(1) per position.
+But naive popping loses length information. Trick: store **indices of unmatched positions** in the stack. After scanning, unmatched positions divide the string into "valid runs" — distances between consecutive unmatched indices give run lengths.
 
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Push -1 initially. On '(' push index. On ')' pop; if stack empty push current index as new base; else current length = i - stack.top().
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Even cleaner approach: **pre-populate the stack with -1** as a "floor" index (one before the start). Then:
+- Push `i` when seeing `(`.
+- On seeing `)`: pop. If the stack is now empty, push `i` (marks this `)` as a new "floor"). Otherwise, the current run's length = `i - stack.top()`.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 3: Why the -1 Floor?
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+The valid run after an unmatched close-paren starts just **after** that close-paren. To compute the length of the valid run ending at index `i`, we need to know where it started — which is just after the most recent unmatched position.
 
-**The concept:** Stack of indices with sentinel base.
+The stack's top, after processing index `i`, holds the index of the most recent unmatched position (either an open-paren still awaiting a match, or a close-paren that had no match). The run ending at `i` has length `i - stack.top()`.
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever you need sliding window max/min in O(n) → think Monotonic Deque.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+The initial -1 handles the case where the valid run starts from the very beginning of the string (index 0). Without it, we'd need a special case for "run from position 0."
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 4: Algorithm
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+```
+stack = [-1]          # floor
+best = 0
 
-Track best as we iterate.
+for i in 0..n-1:
+    if s[i] == '(':
+        push(i)
+    else:             # s[i] == ')'
+        pop()
+        if stack is empty:
+            push(i)              # ')' has no match; becomes new floor
+        else:
+            best = max(best, i - stack.top())
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
+return best
+```
 
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Stack indexing.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+Single pass. O(n) time, O(n) space (stack).
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 5: Trace on `")()())"`
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+Indices: 0=')', 1='(', 2=')', 3='(', 4=')', 5=')'.
 
-'(()' → stack starts [-1]. '(': [-1,0]. '(': [-1,0,1]. ')': pop 1 → [-1,0]; len=2-0=2. Best=2.
+```
+stack = [-1]. best = 0.
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+i=0, s=')': pop (removes -1). Stack empty. Push 0. stack = [0].
+i=1, s='(': push 1. stack = [0, 1].
+i=2, s=')': pop (removes 1). stack = [0]. Not empty. best = max(0, 2 - 0) = 2.
+i=3, s='(': push 3. stack = [0, 3].
+i=4, s=')': pop (removes 3). stack = [0]. best = max(2, 4 - 0) = 4.
+i=5, s=')': pop (removes 0). Stack empty. Push 5. stack = [5].
+```
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
+Return **4**. ✓
 
-
-----------------------------------------
-
-## Step 8: Time and Space Complexity
-
-Complexity isn't magic — it's just counting the work.
-
-Time: O(n). Space: O(n).
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
+Walk-through check: the valid substring `"()()"` at positions 1..4 has length 4. ✓
 
 ----------------------------------------
 
-## Step 9: C++ Implementation
+## Step 6: Trace on `"()(())"`
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+Indices: 0='(', 1=')', 2='(', 3='(', 4=')', 5=')'.
+
+```
+stack = [-1]. best = 0.
+
+i=0, s='(': push 0. stack = [-1, 0].
+i=1, s=')': pop (removes 0). stack = [-1]. best = max(0, 1 - (-1)) = 2.
+i=2, s='(': push 2. stack = [-1, 2].
+i=3, s='(': push 3. stack = [-1, 2, 3].
+i=4, s=')': pop (removes 3). stack = [-1, 2]. best = max(2, 4 - 2) = 2.
+i=5, s=')': pop (removes 2). stack = [-1]. best = max(2, 5 - (-1)) = 6.
+```
+
+Return **6**. ✓ (Entire string is valid.)
+
+Key moment: at i=5, pop clears out the index 2 (the outer `(`); stack.top() now = -1 (the floor). Length = 5 - (-1) = 6. The floor remembers "everything from index 0 onward is part of a run."
+
+----------------------------------------
+
+## Step 7: Alternative — DP
+
+Define `dp[i]` = length of the longest valid substring ending at index i.
+
+```
+if s[i] == '(':
+    dp[i] = 0   # can't end a valid substring with '('
+
+elif s[i] == ')':
+    if s[i-1] == '(':
+        dp[i] = dp[i-2] + 2   # "()" extends the valid run from i-2
+    elif s[i-1] == ')' and s[i - dp[i-1] - 1] == '(':
+        dp[i] = dp[i-1] + 2 + dp[i - dp[i-1] - 2]
+        # Close matches the '(' before the inner run, and we extend with anything before that
+    else:
+        dp[i] = 0
+```
+
+Same O(n) complexity, O(n) space. The stack version is usually cleaner to implement.
+
+----------------------------------------
+
+## Step 8: Alternative — Two-Pass Counting
+
+Walk left-to-right tracking open/close counts; when close > open, reset. When equal, record the length (2 × open).
+
+Walk right-to-left similarly; when open > close, reset. This catches cases like `"(()"` where left-to-right leaves open > close at the end without recording.
+
+O(n) time, O(1) space — the most memory-efficient solution.
+
+----------------------------------------
+
+## Step 9: Name It
+
+**Stack-based bracket matching with index floors**. A staple of parsing / compiler problems.
+
+Related:
+- Valid Parentheses (simpler: "is the whole string valid?").
+- Generate Parentheses (enumerate valid strings).
+- Score of Parentheses (evaluate nested expressions).
+
+The "sentinel / floor" trick (-1 at the start) reduces edge-case clutter. General pattern in interval problems.
+
+----------------------------------------
+
+## Step 10: Complexity
+
+Time: **O(n)**.
+Space: **O(n)** for the stack. (O(1) for the two-pass counting variant.)
+
+----------------------------------------
+
+## Step 11: C++ Implementation (Stack Version)
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
 int longestValidParentheses(string s) {
-    stack<int> st; st.push(-1);
+    stack<int> st;
+    st.push(-1);
     int best = 0;
+
     for (int i = 0; i < (int)s.size(); ++i) {
-        if (s[i] == '(') st.push(i);
-        else {
+        if (s[i] == '(') {
+            st.push(i);
+        } else {
             st.pop();
             if (st.empty()) st.push(i);
             else best = max(best, i - st.top());
@@ -165,26 +180,37 @@ int longestValidParentheses(string s) {
 }
 ```
 
-A few notes about the style:
+Six lines of loop body. Key invariant: stack top holds the index just before the current valid run's start — or -1 if we're still in the initial run.
 
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
+## Step 12: Two-Pass Alternative
 
+```cpp
+int longestValidParentheses(string s) {
+    int best = 0, open = 0, close = 0;
+    for (char c : s) {
+        if (c == '(') open++; else close++;
+        if (open == close) best = max(best, 2 * close);
+        else if (close > open) open = close = 0;
+    }
+    open = close = 0;
+    for (int i = s.size() - 1; i >= 0; --i) {
+        if (s[i] == '(') open++; else close++;
+        if (open == close) best = max(best, 2 * open);
+        else if (open > close) open = close = 0;
+    }
+    return best;
+}
+```
+
+No stack. The two passes handle asymmetric failures (more opens-than-closes is caught in the reverse pass, more closes than opens in the forward pass).
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 13: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Return the actual substring.
-- Count valid substrings.
-- Multiple bracket types.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Multiple bracket types ({}, [], ()).** Stack pairs types; longest valid substring tracks accordingly.
+- **Return the valid substring itself.** Track the start of the best run; slice at the end.
+- **Longest **sub-sequence** (non-contiguous) valid parens.** Different, simpler: count pairs of matched parens = min(opens, closes) × 2 (roughly).
+- **Count how many longest valid substrings.** Track ties in best length.
+- **Why does the stack's top always point to the "floor"?** Because when we pop on a match and something remains, what remains is the most recent unmatched opening *before* the current valid run. Extending the run "ends at i, starts just after stack.top()."
+- **Edge case: empty string.** best stays 0. Correct.

@@ -6,173 +6,125 @@ https://leetcode.com/problems/determine-color-of-a-chessboard-square/
 **Topic:**
 Math
 
+----------------------------------------
+
+## Step 1: The Task
+
+Given a string like `"a1"` or `"h8"` representing a chessboard square, return `true` if the square is **white**, `false` if **black**.
+
+Chessboard convention:
+- Columns are letters `a` through `h` (left to right from White's perspective).
+- Rows are digits `1` through `8` (bottom to top).
+- The **bottom-left corner `a1` is black**. The **bottom-right `h1` is white**. Colors alternate like a checker.
+
+Example: `"a1"` → black → `false`. `"h3"` → ? Let's figure it out.
 
 ----------------------------------------
 
-## Step 1: Understand the Problem (Beginner Friendly)
+## Step 2: Study the Alternation Pattern
 
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
+On a chessboard, adjacent squares (sharing an edge) have different colors. So if we move one step horizontally or vertically, the color flips.
 
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
+Let's assign coordinates: column `a` = 1, `b` = 2, ..., `h` = 8. Row is already 1..8.
 
-**In plain words:** Parity of (column_letter + row_number).
+- `a1` = (1, 1). Black.
+- `b1` = (2, 1). Adjacent to a1 horizontally — white.
+- `a2` = (1, 2). Adjacent to a1 vertically — white.
+- `b2` = (2, 2). Adjacent to both b1 and a2 — black.
 
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
+Notice the pattern:
+- `a1` (1+1=2, even) → black.
+- `b1` (2+1=3, odd) → white.
+- `a2` (1+2=3, odd) → white.
+- `b2` (2+2=4, even) → black.
 
-> 'a1': c=0, r=0, sum=0, even → black (false). 'h3': c=7, r=2, sum=9, odd → white (true).
+**Column + row is even → black. Odd → white.**
 
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
-
-----------------------------------------
-
-## Step 2: Break Down the Problem
-
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
-
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
-
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Parity of (column_letter + row_number).
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
+That's the rule. We can verify with `h1`: column h = 8, row 1 → 8+1 = 9 (odd) → white. ✓
 
 ----------------------------------------
 
-## Step 3: Build Intuition (VERY IMPORTANT)
+## Step 3: Parse the Input
 
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
+The input is a 2-character string:
+- First char: letter `a`..`h`. Column = `s[0] - 'a' + 1`, so 1..8.
+- Second char: digit `1`..`8`. Row = `s[1] - '0'`.
 
-When you see an arithmetic puzzle, there's a temptation to simulate it step by step. That's honest, and often correct — but it's worth asking first: is there a closed-form shortcut? Mathematical invariants and modular arithmetic frequently collapse a loop into an O(1) formula.
+Sum them. If the sum is **odd**, the square is white; if **even**, black.
 
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Chessboard colors alternate along both axes. A square is white if column index + row number is even — or equivalently, if their sum is odd when taking 'a'=1 the known rule inverts; careful with conventions.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Return `(col + row) % 2 == 1`.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 4: Trace
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+- `"a1"`: col = 1, row = 1. Sum = 2. Even. Black. Return `false`. ✓
+- `"h3"`: col = 8, row = 3. Sum = 11. Odd. White. Return `true`.
+- `"c7"`: col = 3, row = 7. Sum = 10. Even. Black. Return `false`.
+- `"h8"`: col = 8, row = 8. Sum = 16. Even. Black. Return `false`.
 
-**The concept:** Parity of (column_letter + row_number).
+Check `h8` against the board: the top-right corner on a standard board is white... wait, is that right?
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
+Reference rule: *"white on the right"* — the bottom-right of the board (from White's perspective) is a **white** square. That's `h1`, sum = 9, odd → white by our rule. ✓
 
-**Pattern recognition cue:**
+`h8` is diagonally opposite to `a1`. In 7 column-steps and 7 row-steps from `a1`, we flip color 14 times — back to black. So `h8` = black. ✓
 
-**Whenever you see digits, divisibility, primes, or modular structure → think Math/Number Theory.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-Let c = coords[0] - 'a' (0-indexed column), r = coords[1] - '1' (0-indexed row). Return (c + r) % 2 == 0 ? false : true, where 'a1' is black (false). Alternatively: if (c + r) is odd → white.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
+Our formula matches.
 
 ----------------------------------------
 
-## Step 6: Final Approach
+## Step 5: Why Parity Works
 
-Now let's crystallize everything we've learned into a clean algorithm.
+Start at `a1`. Moving one step horizontally OR one step vertically flips the color. After k total steps (any mix), the color has flipped k times — same as `a1` iff k is even, opposite iff k is odd.
 
-O(1) parity check.
+From `a1 = (1, 1)` to `(col, row)`, the Manhattan distance is `(col - 1) + (row - 1) = col + row - 2`. The **parity** of this distance matches the parity of `col + row` (the −2 doesn't change parity).
 
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
+So: `col + row` even → same color as `a1` (black). Odd → opposite (white).
 
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+Pure parity argument. No case work, no lookup table.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 6: Name It
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+**Parity of coordinates** — the universal trick for checkerboard coloring. Applications:
+- Determining 2-colorability of a bipartite grid.
+- Knight's-tour problems (knight always moves between opposite colors).
+- Problems like "domino tiling of a board" (a domino covers one black + one white; infeasibility follows from parity imbalance).
+- Conway's Game of Life and cellular automata parity invariants.
 
-'a1': c=0, r=0, sum=0, even → black (false). 'h3': c=7, r=2, sum=9, odd → white (true).
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
-
-----------------------------------------
-
-## Step 8: Time and Space Complexity
-
-Complexity isn't magic — it's just counting the work.
-
-O(1).
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
+Whenever you see a grid with alternating structure, `(row + col) % 2` is your friend.
 
 ----------------------------------------
 
-## Step 9: C++ Implementation
+## Step 7: Complexity
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+Time: **O(1)**. Just arithmetic on the two characters.
+Space: **O(1)**.
+
+----------------------------------------
+
+## Step 8: C++ Implementation
 
 ```cpp
-bool squareIsWhite(string c) {
-    return (c[0] + c[1]) % 2 == 1;
+bool squareIsWhite(string coordinates) {
+    int col = coordinates[0] - 'a' + 1;
+    int row = coordinates[1] - '0';
+    return (col + row) % 2 == 1;
 }
 ```
 
-A few notes about the style:
+Parse → sum → parity. Three lines.
 
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+**Even shorter:** since we're checking parity and `'a' - '0'` is some constant, you can XOR the two chars' low bits directly. But the above is clearer.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 9: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Generalize to rectangular boards.
-- Count squares of each color on an N×M grid.
-- Knight's color-changing property between moves.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Return the color as a string ("white"/"black").** Trivial modification.
+- **Generalize to an N×N board with same checker pattern.** Same formula; no dependence on board size.
+- **What color is `a1` exactly? Why black by convention?** Standard chess convention: dark square in the bottom-left corner from White's perspective.
+- **Color of two squares: are they the same color?** Compare parities: `(c1 + r1) % 2 == (c2 + r2) % 2`.
+- **On a 3D board (e.g., for 3D chess variants).** Color = `(x + y + z) % 2`. Same parity trick, extra dimension.
+- **Why doesn't column case (uppercase vs lowercase) matter?** Problem specifies lowercase, but `A - a = 32` doesn't affect parity since 32 is even.

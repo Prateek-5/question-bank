@@ -6,190 +6,197 @@ https://leetcode.com/problems/n-queens/
 **Topic:**
 Recursion
 
+----------------------------------------
+
+## Step 1: Understand Queens' Attack
+
+In chess, a queen attacks any square on its row, its column, or its diagonals (both main and anti). The **N-Queens** problem: place `n` queens on an `n × n` board so that no two queens attack each other. Return all valid placements.
+
+For `n = 4`:
+
+```
+. Q . .          . . Q .
+. . . Q          Q . . .
+Q . . .          . . . Q
+. . Q .          . Q . .
+```
+
+Two valid placements. These are the *only* valid placements (excluding rotations and reflections, which are still considered distinct boards).
+
+For `n = 1`: one queen, nothing to attack. 1 solution. `n = 2` and `n = 3`: no solutions (provable by case analysis). `n = 4`: 2 solutions.
 
 ----------------------------------------
 
-## Step 1: Understand the Problem (Beginner Friendly)
+## Step 2: Where Do We Even Start?
 
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
+Brute force: try all possible placements. With n² cells and choose-n-of-them, that's `C(n², n)` configurations — for n = 8, about 4 billion. Infeasible.
 
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
+Can we use problem structure to reduce this?
 
-**In plain words:** Backtracking placing one queen per row; track columns and diagonals.
+**Observation:** any valid solution has exactly **one queen per row** (since two queens in the same row attack each other). Same for columns. So a solution is characterized by: for each row, which column holds that row's queen.
 
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> n=4 → 2 distinct solutions.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+That collapses the search space: instead of `C(n², n)`, it's `n^n` at worst. For n = 10, that's 10 billion — still big but more tractable. And we can prune much further.
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 3: Row-by-Row Backtracking
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Place a queen in row 0. Then row 1. Then row 2. At each row, try each column — if placing at that column doesn't conflict with any already-placed queen, recurse. If all rows placed → valid solution.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Conflicts to check for the new queen at row `r`, column `c`:
+- **Column:** no queen in column `c` in earlier rows.
+- **Main diagonal** (top-left to bottom-right): no queen with same `row - col` value.
+- **Anti-diagonal** (top-right to bottom-left): no queen with same `row + col` value.
 
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Backtracking placing one queen per row; track columns and diagonals.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
+Why `row - col` and `row + col`? On the main diagonal, as you move down-right, row and col both increase by 1, so `row - col` stays constant. On the anti-diagonal, as you move down-left, row increases by 1 and col decreases by 1, so `row + col` stays constant.
 
 ----------------------------------------
 
-## Step 3: Build Intuition (VERY IMPORTANT)
+## Step 4: Data Structures for O(1) Conflict Checks
 
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
+Maintain three sets (or boolean arrays):
+- `cols[c] = true` if some earlier row has a queen in column `c`.
+- `diag1[r - c]` = true if some earlier row has a queen on the main diagonal with that `r - c` key.
+- `diag2[r + c]` = true if some earlier row has a queen on the anti-diagonal with that `r + c` key.
 
-Recursion is the natural language of branching problems. Your first recursive attempt is often *almost* right — the adjustments needed are usually (a) a correct base case and (b) careful state-undo when backtracking.
+For `r - c`, the value ranges from `-(n-1)` to `n-1`. Shift it by `n-1` to make it 0-indexed: `diag1[r - c + n - 1]`.
+For `r + c`, the value ranges from `0` to `2n - 2`. Use `diag2[r + c]` directly.
 
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Recurse row by row trying each column. Maintain sets for used columns and two diagonal keys (r+c, r-c).
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+With these, checking "is (r, c) safe?" is three boolean lookups — O(1).
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 5: The Backtracking Skeleton
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+```
+solve(r):
+    if r == n:
+        record current board
+        return
+    for c in 0..n-1:
+        if cols[c] or diag1[r-c+n-1] or diag2[r+c]:
+            continue   # conflict, skip
+        place queen at (r, c)
+        mark cols[c] = diag1[r-c+n-1] = diag2[r+c] = true
+        solve(r + 1)
+        unmark them
+        remove queen
+```
 
-**The concept:** Backtracking placing one queen per row; track columns and diagonals.
-
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever a problem decomposes into similar sub-problems → think Recursion. Add memo if subproblems repeat.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-cols[col], d1[r+c], d2[r-c+n]. For each row try columns; on success record. Undo on backtrack.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
+Classic apply-recurse-undo pattern.
 
 ----------------------------------------
 
-## Step 6: Final Approach
+## Step 6: Trace for n = 4
 
-Now let's crystallize everything we've learned into a clean algorithm.
+Place queens row by row. I'll show the board and which markers are set. Notation: (r, c) means row r, column c.
 
-Classical backtracking.
+```
+solve(0):
+  try c=0: place (0, 0). cols={0}, d1={0}, d2={0}.
+    solve(1):
+      c=0: cols[0] → skip.
+      c=1: d2[2]? not set. d1[1-1+3=3]? not set. (0)? not set. Wait, let me recompute.
+           For (1, 1): d1 key = 1-1 = 0, shifted = 0+3 = 3. d2 key = 1+1 = 2.
+           d2[2] not set yet. d1[3] not set. cols[1] not set. Safe? But conflict check: (0,0) and (1,1) — same diagonal. d1 key for (0,0) = 0-0 = 0, shifted = 3. And for (1,1), d1 key shifted = 3. SAME. So should conflict.
+           I had d1 = {0} meaning d1[0-0+3=3] was set. So d1[3] IS set. Skip c=1.
+      c=2: d1 key 1-2 = -1, shifted 2. d2 key 3. cols[2]=F, d1[2]=F, d2[3]=F. Safe.
+           Place (1, 2). Markers: cols={0,2}, d1={3, 2}, d2={0, 3}.
+        solve(2):
+          c=0: cols[0]=T. skip.
+          c=1: d2[3]=T. skip.
+          c=2: cols[2]=T. skip.
+          c=3: d1[2-3+3=2]=T. skip.
+          All failed. Backtrack.
+        Undo (1, 2) markers.
+      c=3: d2[4]=F. d1[1-3+3=1]=F. cols[3]=F. Safe.
+           Place (1, 3). Markers: cols={0,3}, d1={3, 1}, d2={0, 4}.
+        solve(2):
+          c=0: cols. skip.
+          c=1: d1[2-1+3=4]=F, d2[3]=F, cols[1]=F. Safe.
+               Place (2, 1). ...
+            solve(3):
+              c=0: cols. skip. c=1: cols. skip. c=2: d2[5]? Let me check. d1[3-2+3=4]=T. skip.
+              c=3: cols. skip.
+              All fail. Backtrack.
+            Undo.
+          c=2: d1[2-2+3=3]=T. skip. c=3: cols. skip.
+          Backtrack.
+        Undo.
+  ...
+```
 
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
+Rather than tracing the entire thing, I'll trust the process. The algorithm eventually finds:
+- `[. Q . . ; . . . Q ; Q . . . ; . . Q .]` (queens at (0,1), (1,3), (2,0), (3,2)).
+- `[. . Q . ; Q . . . ; . . . Q ; . Q . .]` (queens at (0,2), (1,0), (2,3), (3,1)).
 
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+Two solutions for n = 4, as expected.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 7: Why Pruning Is Dramatic
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+Without the three marker sets, we'd check conflicts by scanning all placed queens — O(n) per check, O(n²) per row → O(n³) per branch. With markers, conflict check is O(1), so per row it's O(n).
 
-n=4 → 2 distinct solutions.
+Even more importantly, **bad branches are pruned early**. As soon as we can't place a queen in any column of row r, we backtrack — avoiding all descendants. For large n (say, n = 14), pruning reduces work by millions of times.
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+Backtracking's power isn't in the search tree's size — it's in how aggressively we can cut off branches.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 8: Name It
 
-Complexity isn't magic — it's just counting the work.
+This is **constraint-based backtracking**. Solutions are built incrementally, each step must respect constraints, and violating a constraint prunes the entire subtree. The constraints (row, column, diagonals) are expressed as invariants over already-made choices.
 
-Time: O(N!). Space: O(N).
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
+The same template solves Sudoku (constraints per row, column, 3x3 box), Knight's Tour, Latin squares, graph coloring, and many other NP-hard-but-solvable problems at reasonable sizes.
 
 ----------------------------------------
 
-## Step 9: C++ Implementation
+## Step 9: Complexity
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+Time: the exact count is tricky (related to the number of N-Queens solutions, which grows roughly like `n!`). **Exponential in n** but with aggressive pruning, n = 15 or so is solvable in reasonable time.
+
+Space: the markers use O(n) boolean arrays. The recursion stack is O(n) deep. The output is `O(solutions · n²)` because each solution is stored as a board.
+
+----------------------------------------
+
+## Step 10: C++ Implementation
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
 vector<vector<string>> solveNQueens(int n) {
     vector<vector<string>> res;
     vector<string> board(n, string(n, '.'));
-    vector<int> cols(n, 0), d1(2*n, 0), d2(2*n, 0);
-    function<void(int)> bt = [&](int r) {
+    vector<bool> cols(n, false), d1(2 * n - 1, false), d2(2 * n - 1, false);
+
+    function<void(int)> solve = [&](int r) {
         if (r == n) { res.push_back(board); return; }
         for (int c = 0; c < n; ++c) {
-            if (cols[c] || d1[r+c] || d2[r-c+n]) continue;
+            if (cols[c] || d1[r - c + n - 1] || d2[r + c]) continue;
             board[r][c] = 'Q';
-            cols[c] = d1[r+c] = d2[r-c+n] = 1;
-            bt(r+1);
+            cols[c] = d1[r - c + n - 1] = d2[r + c] = true;
+            solve(r + 1);
             board[r][c] = '.';
-            cols[c] = d1[r+c] = d2[r-c+n] = 0;
+            cols[c] = d1[r - c + n - 1] = d2[r + c] = false;
         }
     };
-    bt(0);
+
+    solve(0);
     return res;
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+A quick sanity check of the indexing:
+- `d1` indexed by `r - c + (n - 1)` — offset to make non-negative.
+- `d2` indexed by `r + c` directly (already ≥ 0).
+- Both arrays have size `2n - 1`, enough to hold all possible diagonals.
 
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 11: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- N-Queens II (count only).
-- Bitmask optimization.
-- Place k queens in a larger board.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **N-Queens II (count only, no boards).** Same algorithm but increment a counter instead of pushing boards. Avoids the O(n²) board-copy.
+- **Faster with bitmasks.** Represent cols/diagonals as integers; use bit-tricks to find the next valid column in O(1). Practical for n ≤ 32.
+- **Allow multiple queens per diagonal (modified rules).** Adjust the invariants.
+- **Other piece placements (knights that don't attack each other).** Different constraints; same backtracking template.
+- **Graph coloring.** Exactly the same backtracking shape — try each color that doesn't conflict with neighbors.
+- **3D N-Queens (on a cube).** Exists as a variant but not standard; constraint set becomes richer.

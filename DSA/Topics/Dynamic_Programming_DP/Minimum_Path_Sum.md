@@ -4,184 +4,175 @@
 https://leetcode.com/problems/minimum-path-sum/
 
 **Topic:**
-Dynamic Programming DP
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** DP from top-left: dp[i][j] = grid[i][j] + min(dp[i-1][j], dp[i][j-1]).
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> grid=[[1,3,1],[1,5,1],[4,2,1]] → 7 (1→3→1→1→1).
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Dynamic Programming (DP)
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Paint the Picture
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+An `m × n` grid, each cell holding a non-negative number. Starting from the top-left, you want to reach the bottom-right, moving only **right** or **down**. The "cost" of a path is the sum of numbers in the cells you pass through (including both endpoints). Minimize it.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Example:
+```
+1 3 1
+1 5 1
+4 2 1
+```
 
-So ask yourself:
+One possible path: 1 → 3 → 1 → 1 → 1 (top row, then rightmost column). Sum: 7.
+Another: 1 → 1 → 4 → 2 → 1 (left column, then bottom row). Sum: 9.
+Another: 1 → 1 → 5 → 2 → 1. Sum: 10.
+Another: 1 → 1 → 5 → 1 → 1. Sum: 9.
+Another: 1 → 3 → 5 → 1 → 1. Sum: 11.
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: DP from top-left: dp[i][j] = grid[i][j] + min(dp[i-1][j], dp[i][j-1]).
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-Your very first thought is often recursion. That's actually the right start — but naive recursion re-computes the same subproblems exponentially. The fix is memoization (top-down) or tabulation (bottom-up). The hard part is identifying the state that captures all we need to know about the past.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-At each cell the best path either came from above or from the left — take the cheaper.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+The minimum I see: **7**. (1 → 3 → 1 → 1 → 1.)
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: Brute Force First
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+Enumerate every path. How many paths are there? In an `m × n` grid we must make `(m-1)` downs and `(n-1)` rights, any order — that's `C(m+n-2, m-1)` paths, which is exponential-ish. For a 20×20 grid, it's already 68 billion. Not feasible to enumerate.
 
-**The concept:** DP from top-left: dp[i][j] = grid[i][j] + min(dp[i-1][j], dp[i][j-1]).
-
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever a brute-force recursion has overlapping subproblems → think DP. Identify state first, then transition.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+OK so brute force is out. Let me think about what makes paths easier.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 3: Every Cell's "Best Path to It" Idea
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+Instead of thinking about full paths, let's think cell by cell. For each cell `(i, j)`, define:
 
-Iterate rows/cols; handle first row/col separately (only one predecessor).
+`f(i, j)` = minimum sum of any path from `(0, 0)` to `(i, j)`.
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
+If I know this for every cell, I just return `f(m-1, n-1)`.
 
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
+Now the key observation: how can a path arrive at `(i, j)`? Only from above `(i-1, j)` or from the left `(i, j-1)` — those are the only two allowed predecessors (since we move only right or down).
 
+So:
+```
+f(i, j) = grid[i][j] + min(f(i-1, j), f(i, j-1))
+```
 
-----------------------------------------
+We take whichever predecessor gave a smaller sum, and add the current cell.
 
-## Step 6: Final Approach
+Base cases:
+- `f(0, 0) = grid[0][0]`.
+- Top row (`i = 0, j > 0`): only the from-left predecessor exists. `f(0, j) = f(0, j-1) + grid[0][j]`.
+- Left column (`i > 0, j = 0`): only from-above. `f(i, 0) = f(i-1, 0) + grid[i][0]`.
 
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Bottom-up in-place.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+This fully specifies the DP.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 4: Trace on the Example
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+Grid:
+```
+1 3 1
+1 5 1
+4 2 1
+```
 
-grid=[[1,3,1],[1,5,1],[4,2,1]] → 7 (1→3→1→1→1).
+Build `f` left-to-right, top-to-bottom.
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+Row 0: `f(0,0)=1. f(0,1)=1+3=4. f(0,2)=4+1=5.`
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
+Row 1: 
+- `f(1,0)=1+1=2`.
+- `f(1,1)=5 + min(4, 2) = 5 + 2 = 7`.
+- `f(1,2)=1 + min(5, 7) = 1 + 5 = 6`.
 
+Row 2:
+- `f(2,0)=4 + 2 = 6`.
+- `f(2,1)=2 + min(7, 6) = 2 + 6 = 8`.
+- `f(2,2)=1 + min(6, 8) = 1 + 6 = 7`.
+
+`f(2, 2) = 7`. ✓
+
+`f` table:
+```
+1 4 5
+2 7 6
+6 8 7
+```
+
+By reading this back, we can even recover the path: at `(2,2)` we came from `(1,2)=6`; at `(1,2)` from `(0,2)=5`; at `(0,2)` from `(0,1)=4`; at `(0,1)` from `(0,0)=1`. Path: (0,0)→(0,1)→(0,2)→(1,2)→(2,2). Values: 1,3,1,1,1. Sum 7.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 5: Why This Recurrence Is Right
 
-Complexity isn't magic — it's just counting the work.
+We've implicitly used the **optimality principle**: if the best path from `(0,0)` to `(i,j)` goes through some predecessor `(i-1, j)` (say), then its prefix from `(0,0)` to `(i-1, j)` must also be a best path to `(i-1, j)`. If there were a cheaper path to `(i-1, j)`, swapping it in would give an even cheaper path to `(i, j)` — contradiction.
 
-Time: O(n·m). Space: O(1) if in-place.
+So `f(i, j)` depends only on the best values at the two predecessors. No need to remember entire paths, just per-cell best sums.
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+This is the defining property that makes dynamic programming work. If you saw the grid and your first instinct was "this looks like something where local optimality stitches to global optimality," you spotted it.
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+----------------------------------------
 
+## Step 6: Space Optimization
+
+The full `f` table takes O(m·n) space. But each row only depends on the previous row (and cells within the same row to the left). So we can overwrite the grid in place, or keep a single row of size `n`.
+
+In-place mutation — which modifies the input — is acceptable in interview settings when the caller doesn't need the original. Let me show both options.
+
+```cpp
+// In-place, O(1) extra space
+for (int i = 0; i < m; ++i) {
+    for (int j = 0; j < n; ++j) {
+        if (i == 0 && j == 0) continue;
+        int up   = (i > 0) ? g[i-1][j] : INT_MAX;
+        int left = (j > 0) ? g[i][j-1] : INT_MAX;
+        g[i][j] += min(up, left);
+    }
+}
+return g[m-1][n-1];
+```
+
+Using `INT_MAX` as a sentinel for "this neighbor doesn't exist" works because we only take `min`. When we reach a cell where both would be `INT_MAX`, we know it's `(0,0)` and we skip.
+
+----------------------------------------
+
+## Step 7: Name It
+
+This is **grid DP** — a 2D tabulation where each cell combines a handful of neighbors. The same shape appears in Unique Paths, Dungeon Game, Maximal Square, Cherry Pickup, and many others. The distinguishing feature: cells have a small, fixed set of predecessors, and the answer at each cell is a simple function of its predecessors' answers.
+
+But again — we got here by asking "how does a path arrive at `(i, j)`?", not by stating "DP." The structure was implied by the problem's own movement rules.
+
+----------------------------------------
+
+## Step 8: Complexity
+
+Time: each of `m·n` cells computed in O(1). **O(m·n)**.
+Space: **O(1)** in-place (modifies input), **O(n)** with a rolling row, **O(m·n)** with a full DP table.
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
-
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
 int minPathSum(vector<vector<int>>& g) {
-    int n=g.size(), m=g[0].size();
-    for (int i = 0; i < n; ++i) for (int j = 0; j < m; ++j) {
-        if (i == 0 && j == 0) continue;
-        int up = i ? g[i-1][j] : INT_MAX;
-        int left = j ? g[i][j-1] : INT_MAX;
-        g[i][j] += min(up, left);
+    int m = g.size(), n = g[0].size();
+    for (int i = 0; i < m; ++i) {
+        for (int j = 0; j < n; ++j) {
+            if (i == 0 && j == 0) continue;
+            int up   = (i > 0) ? g[i - 1][j] : INT_MAX;
+            int left = (j > 0) ? g[i][j - 1] : INT_MAX;
+            g[i][j] += min(up, left);
+        }
     }
-    return g[n-1][m-1];
+    return g[m - 1][n - 1];
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Reading the code: at each cell (other than the origin), we add the min of its two possible predecessors — using `INT_MAX` as a sentinel for missing neighbors. After the loop, the bottom-right cell holds the answer.
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Return the path.
-- Allow diagonal moves.
-- K-th smallest path sum.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Return the actual path, not just the sum.** Store parent pointers in a separate matrix; walk them back from `(m-1, n-1)`.
+- **Allow diagonal moves.** Add a third predecessor `(i-1, j-1)`.
+- **Allow moving in all four directions (up, down, left, right).** It becomes a shortest-path problem on a weighted graph — Dijkstra with cell weight as edge cost.
+- **Maximum path sum (same movement rules).** Swap `min` for `max`.
+- **Negative cell values?** The algorithm works as long as there are no negative cycles (moves are acyclic, so no issue).
+- **K obstacles you can phase through at no cost.** 3D DP with state `(i, j, obstacles_remaining)`.

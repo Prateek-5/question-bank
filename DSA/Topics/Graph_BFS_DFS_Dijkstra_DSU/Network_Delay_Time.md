@@ -4,194 +4,178 @@
 https://leetcode.com/problems/network-delay-time/
 
 **Topic:**
-Graph BFS DFS Dijkstra DSU
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Single-source shortest path (Dijkstra).
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> times=[[2,1,1],[2,3,1],[3,4,1]], k=2. dist[2]=0, [1]=1, [3]=1, [4]=2. Max=2.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Graph (BFS / DFS / Dijkstra / DSU)
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Read the Scenario
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+There are `n` network nodes labeled `1` to `n`. You're given a list of directed, weighted edges `times[i] = [u_i, v_i, w_i]` meaning "a signal from u takes w_i time to reach v." You send a signal from a starting node `k`.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Return the **time it takes** for the signal to reach **all** nodes. If some node is unreachable, return -1.
 
-So ask yourself:
+Example: `times = [[2,1,1], [2,3,1], [3,4,1]]`, `n = 4`, `k = 2`.
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Single-source shortest path (Dijkstra).
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
+From 2:
+- Signal reaches 1 in 1.
+- Signal reaches 3 in 1.
+- Signal reaches 4 via 3, so 1 + 1 = 2.
 
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
+The signal reaches all nodes. Max time to any node = 2. Return **2**.
 
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-A tempting first thought is to try every possible path from the start to the goal. The problem is that graphs have exponentially many paths. We need a traversal that visits each node at most a few times — that's exactly what BFS, DFS, and their weighted cousins give us.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Signal propagates to all reachable nodes; the total time is the max of shortest distances from k. If any node is unreachable, return -1.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+If we change `n = 5` (adding a disconnected node 5), node 5 never gets the signal. Return **-1**.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: Reframe as "Shortest Paths"
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+Reading "time for the signal to reach each node" is the same as asking "what's the shortest path from k to every other node?" (The signal travels along the fastest route.)
 
-**The concept:** Single-source shortest path (Dijkstra).
-
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever nodes have relationships or connectivity matters → think Graph. 'Shortest path' without weights → BFS. With weights → Dijkstra. Just connectivity → DSU.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+So we need single-source shortest paths from k. Once we have distances `d[1], d[2], ..., d[n]`, the answer is `max(d[i])` if all are finite; else -1.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 3: BFS or Something More?
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+If all edge weights were the same (say 1), a plain BFS would suffice: the number of edges on the shortest path equals the distance.
 
-Build adjacency with weights. Run Dijkstra from k. After relaxation, the answer is max of dist[] if all are finite, else -1.
+But here edges have different weights. BFS assumes each step has equal cost; with varying weights, BFS gives wrong answers. Example: `A --10--> B --1--> C`, and also `A --5--> C`. BFS would say A→B→C is "2 hops" and A→C is "1 hop"; BFS picks A→C, distance says the edge weight is 5. But it should compare 5 vs 10+1=11. OK 5 is still better. Let me try a different example.
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
+`A --1--> B --1--> C` and `A --100--> C`. BFS from A visits B at depth 1, C at depth 1 (via A→C direct edge). Says C's distance is 100. But through B it's 2 (which is smaller). Wrong.
 
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Standard min-heap Dijkstra.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+The issue is BFS walks in number-of-edges order. What we actually want is the reverse: traverse in **total-weight order**.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 4: Generalize BFS to Weighted Edges
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+What structure gives us the next-nearest unvisited node in weighted graphs? A **min-heap** keyed by "current best known distance."
 
-times=[[2,1,1],[2,3,1],[3,4,1]], k=2. dist[2]=0, [1]=1, [3]=1, [4]=2. Max=2.
+Algorithm:
+1. Initialize `d[k] = 0`, all others = ∞.
+2. Push `(0, k)` into a min-heap.
+3. While heap not empty:
+   - Pop `(d_u, u)` — the closest unvisited node.
+   - If `d_u > d[u]`, this is a stale entry (we found a better path since pushing it). Skip.
+   - For each outgoing edge `(u, v, w)`: if `d[u] + w < d[v]`, update `d[v] = d[u] + w` and push `(d[v], v)`.
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+This is the canonical **Dijkstra's algorithm** — though I want to emphasize we arrived at it by generalizing BFS to handle variable edge weights.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 5: Why "Stale Entry" Skipping Matters
 
-Complexity isn't magic — it's just counting the work.
+Each push adds an entry; we might push the same node multiple times before any of its entries are popped. The **first time** a node is popped is when we have its true shortest distance (this is the core invariant of Dijkstra). Later pops of the same node are stale — ignore them.
 
-Time: O((V+E) log V). Space: O(V+E).
+Without skipping, the algorithm still gives correct answers but wastes work on outdated entries.
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+The invariant proof: when we pop `u` with distance `d`, every unpopped entry has distance ≥ `d` (because the heap is a min-heap). So any future path to `u` would go through some node with distance ≥ `d`, making total ≥ `d` — can't improve. Hence `d` is optimal for `u`.
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+This invariant is why Dijkstra requires **non-negative edge weights**. With negatives, a later path could subtract and improve — so the "already-popped distance is optimal" assumption fails. (That's when you need Bellman-Ford.)
 
+In our problem, weights are non-negative (transmission times), so Dijkstra is perfect.
+
+----------------------------------------
+
+## Step 6: Trace on the Example
+
+`times = [[2,1,1], [2,3,1], [3,4,1]]`, `n = 4`, `k = 2`.
+
+Graph (directed):
+- 2 → 1 (w=1)
+- 2 → 3 (w=1)
+- 3 → 4 (w=1)
+
+```
+d = [∞, ∞, 0, ∞, ∞] (index 1..4, d[2]=0)
+heap = [(0, 2)]
+
+Pop (0, 2). d[2]=0 matches. Process neighbors:
+  (2, 1, 1): d[2]+1 = 1 < ∞. d[1]=1. Push (1, 1).
+  (2, 3, 1): d[2]+1 = 1 < ∞. d[3]=1. Push (1, 3).
+heap = [(1, 1), (1, 3)]
+
+Pop (1, 1). d[1]=1 matches. Neighbors of 1: none.
+heap = [(1, 3)]
+
+Pop (1, 3). d[3]=1 matches. Neighbors:
+  (3, 4, 1): d[3]+1 = 2 < ∞. d[4]=2. Push (2, 4).
+heap = [(2, 4)]
+
+Pop (2, 4). d[4]=2 matches. Neighbors of 4: none.
+heap empty.
+```
+
+d = [_, 1, 0, 1, 2]. Max = 2. Return **2**. ✓
+
+----------------------------------------
+
+## Step 7: Name It
+
+We derived **Dijkstra's algorithm** by generalizing BFS with a priority queue. The name comes with it, but the key mental move was:
+
+> "BFS assumes uniform edge weights. Replace its FIFO queue with a min-heap keyed by distance, and it generalizes to non-negative weighted graphs."
+
+This generalization is one of the foundational moves in graph algorithms. Recognizing it unlocks Dijkstra, A* (Dijkstra with a heuristic), Prim's MST (similar structure, different key), and more.
+
+----------------------------------------
+
+## Step 8: Complexity
+
+Time: each edge is relaxed at most once (when its endpoint is first popped). Each relaxation might push into the heap, so the heap has O(E) operations. Each heap op is O(log V). Total: **O(E log V)**.
+
+If using `priority_queue` with potentially stale entries, worst-case is O((V+E) log V) — same order.
+
+Space: heap holds O(E) entries worst case. **O(V + E)**.
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
-
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
 int networkDelayTime(vector<vector<int>>& times, int n, int k) {
-    vector<vector<pair<int,int>>> g(n + 1);
-    for (auto& t : times) g[t[0]].push_back({t[1], t[2]});
-    vector<int> dist(n + 1, INT_MAX); dist[k] = 0;
+    // Build adjacency list
+    vector<vector<pair<int,int>>> g(n + 1);      // 1-indexed
+    for (auto& e : times) g[e[0]].push_back({e[1], e[2]});
+
+    vector<int> d(n + 1, INT_MAX);
+    d[k] = 0;
     priority_queue<pair<int,int>, vector<pair<int,int>>, greater<>> pq;
     pq.push({0, k});
+
     while (!pq.empty()) {
-        auto [d, u] = pq.top(); pq.pop();
-        if (d > dist[u]) continue;
-        for (auto [v, w] : g[u]) if (d + w < dist[v]) {
-            dist[v] = d + w; pq.push({dist[v], v});
+        auto [dist, u] = pq.top(); pq.pop();
+        if (dist > d[u]) continue;               // stale entry
+        for (auto [v, w] : g[u]) {
+            if (d[u] + w < d[v]) {
+                d[v] = d[u] + w;
+                pq.push({d[v], v});
+            }
         }
     }
+
     int ans = 0;
     for (int i = 1; i <= n; ++i) {
-        if (dist[i] == INT_MAX) return -1;
-        ans = max(ans, dist[i]);
+        if (d[i] == INT_MAX) return -1;          // unreachable
+        ans = max(ans, d[i]);
     }
     return ans;
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Implementation details:
+- Node indices are 1..n; I size vectors as n+1 and ignore index 0.
+- `priority_queue<..., greater<>>` makes a min-heap.
+- The stale-check `dist > d[u]` avoids re-processing nodes whose better path was found later.
+- At the end, the answer is the max d[i], or -1 if any d[i] is still `INT_MAX`.
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Weighted with negative edges → Bellman-Ford.
-- Return the actual delay tree.
-- Multiple sources → multi-source Dijkstra.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Negative edge weights.** Dijkstra fails. Use Bellman-Ford (O(VE)) or SPFA.
+- **All-pairs shortest paths.** Run Dijkstra from each node (O(V·E log V)) or Floyd-Warshall (O(V³)).
+- **Bounded number of hops (like Cheapest Flights Within K Stops).** Modify Bellman-Ford to stop after K iterations.
+- **Shortest path with specific constraints (e.g., must visit certain nodes).** Harder — often DP on subsets (Held-Karp for TSP).
+- **Grid-based variant (shortest path in a weighted grid).** Same Dijkstra, 4 or 8 directional neighbors.
+- **Why not BFS?** Equal-weighted only. With 0/1 weights, "0-1 BFS" with a deque works.

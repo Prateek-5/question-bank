@@ -4,185 +4,181 @@
 https://leetcode.com/problems/interleaving-string/
 
 **Topic:**
-Dynamic Programming DP
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** 2D DP checking whether s3 can be formed by interleaving s1,s2.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> s1='aab', s2='axy', s3='aaxaby'. dp[3][3]=true.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Dynamic Programming (DP)
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Nail Down What "Interleave" Means
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Given three strings `s1`, `s2`, `s3`, decide whether `s3` can be formed by **interleaving** `s1` and `s2` — keeping each one's relative order intact, but mixing them in any way.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+Concretely, imagine two ribbons `s1` and `s2`. You read characters left-to-right off each (never going back). Each step you pick from whichever ribbon you want. Your output is `s3`.
 
-So ask yourself:
+`s1 = "aab"`, `s2 = "axy"`, `s3 = "aaxaby"`.
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: 2D DP checking whether s3 can be formed by interleaving s1,s2.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
+Is `s3` an interleave? Let me try to reconstruct:
+- `s3[0] = 'a'`. Could come from s1[0]=a or s2[0]=a. Try s1[0].
+- `s3[1] = 'a'`. s1 now at pos 1 (='a'). s2 still at pos 0 (='a'). Either works. Try s1[1].
+- `s3[2] = 'x'`. s1 at 2 (='b'), s2 at 0 (='a'). Neither matches x.
 
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
+Back up. At s3[1], try s2[0] instead.
+- After s3[0] from s1: s1 at 1, s2 at 0.
+- s3[1] = 'a' from s2[0]: s1 at 1, s2 at 1.
+- s3[2] = 'x' from s2[1]: ok. s1 at 1, s2 at 2.
+- s3[3] = 'a' from s1[1]: ok. s1 at 2, s2 at 2.
+- s3[4] = 'b' from s1[2]: ok. s1 at 3, s2 at 2.
+- s3[5] = 'y' from s2[2]: ok. Done.
 
+So yes, `"aaxaby"` interleaves `"aab"` and `"axy"`.
 
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-Your very first thought is often recursion. That's actually the right start — but naive recursion re-computes the same subproblems exponentially. The fix is memoization (top-down) or tabulation (bottom-up). The hard part is identifying the state that captures all we need to know about the past.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-dp[i][j] = true if s3[0..i+j-1] is an interleave of s1[0..i-1] and s2[0..j-1]. Transition from using s1[i-1] or s2[j-1].
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Notice the exploration: at each step we could pick from either string if the next character matches. That branching is where the interesting algorithmic question lives.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: A Pre-Check
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+If `|s1| + |s2| != |s3|`, we can't interleave to form s3 (characters would be missing or extra). Return false immediately. That's the first line of any solution.
 
-**The concept:** 2D DP checking whether s3 can be formed by interleaving s1,s2.
-
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever a brute-force recursion has overlapping subproblems → think DP. Identify state first, then transition.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+From now on assume the length condition holds.
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 3: Try Brute Force
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+At each position in `s3`, we either take a character from `s1` (advance its pointer) or from `s2`. At each step, one or two choices are valid (depends on whether the next characters of `s1` and/or `s2` match `s3`'s next character).
 
-dp[i][j] = (dp[i-1][j] && s1[i-1]==s3[i+j-1]) || (dp[i][j-1] && s2[j-1]==s3[i+j-1]).
+Recursive brute force:
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
+```
+def canInterleave(i, j):   # i = position in s1, j = position in s2
+    if i == len(s1) and j == len(s2): return True
+    k = i + j              # position in s3 we're building
+    ok = False
+    if i < len(s1) and s1[i] == s3[k]:
+        ok |= canInterleave(i+1, j)
+    if j < len(s2) and s2[j] == s3[k]:
+        ok |= canInterleave(i, j+1)
+    return ok
+```
 
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
+At worst we branch at every step. 2^(n+m) branches. Exponential.
 
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Bottom-up 2D DP.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+But the state is just `(i, j)` — there are only `(n+1)(m+1)` distinct states. Many of the recursive calls reach the same state via different paths. That's the DP hook: **memoize on (i, j)**.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 4: The Two-Dimensional DP
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+Let `f(i, j) = True` if `s3[0..i+j)` can be formed by interleaving `s1[0..i)` and `s2[0..j)`.
 
-s1='aab', s2='axy', s3='aaxaby'. dp[3][3]=true.
+Transitions:
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+- `f(i, j)` is true if **either**
+  - `s1[i-1] == s3[i+j-1]` and `f(i-1, j)` is true (the last char came from s1), OR
+  - `s2[j-1] == s3[i+j-1]` and `f(i, j-1)` is true (the last char came from s2).
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
+Base: `f(0, 0) = True` (all empty strings trivially interleave to empty). `f(0, j)` requires s3[0..j) == s2[0..j). `f(i, 0)` requires s3[0..i) == s1[0..i).
 
+Answer: `f(n, m)` where n = |s1|, m = |s2|.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 5: Fill the Table
 
-Complexity isn't magic — it's just counting the work.
+Example: s1 = "aab", s2 = "axy", s3 = "aaxaby". n=3, m=3.
 
-Time: O(n·m). Space: O(n·m) or O(m).
+```
+         ""   'a'    'x'    'y'
+""       T   s2      s2    s2
+         | s3[0]=a | s3[1]=a (match)
+'a'      ?    ?      ?      ?
+'a'      
+'b'
+```
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+Let me fill row by row.
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+Row 0 (i=0 — only from s2):
+- f(0, 0) = T.
+- f(0, 1) requires s3[0] == s2[0]. s3[0]='a', s2[0]='a'. T.
+- f(0, 2) requires previous T and s3[1] == s2[1]. s3[1]='a', s2[1]='x'. Mismatch. F.
+- f(0, 3) = F (prev was F).
 
+Row 1 (i=1, s1[0]='a'):
+- f(1, 0): s3[0] == s1[0]? 'a'=='a' yes. Came from f(0,0)=T. So T.
+- f(1, 1): options — from s1: s1[0]='a'==s3[1]='a' AND f(0,1)=T → T. Or from s2: s2[0]='a'==s3[1]='a' AND f(1,0)=T → T. Either way T.
+- f(1, 2): from s1: s1[0]='a'==s3[2]='x'? no. From s2: s2[1]='x'==s3[2]='x' AND f(1,1)=T → T.
+- f(1, 3): from s1: s1[0]='a'==s3[3]='a' AND f(0,3)=F → F. From s2: s2[2]='y'==s3[3]='a'? no. F.
+
+Row 2 (i=2, s1[1]='a'):
+- f(2, 0): s3[1] == s1[1]? s3[1]='a'==s1[1]='a' AND f(1,0)=T → T.
+- f(2, 1): from s1: s1[1]='a'==s3[2]='x'? no. From s2: s2[0]='a'==s3[2]='x'? no. F.
+- f(2, 2): from s1: s1[1]='a'==s3[3]='a' AND f(1,2)=T → T.
+- f(2, 3): from s1: s1[1]='a'==s3[4]='b'? no. From s2: s2[2]='y'==s3[4]='b'? no. F.
+
+Row 3 (i=3, s1[2]='b'):
+- f(3, 0): s3[2] == s1[2]? s3[2]='x'==s1[2]='b'? no. F.
+- f(3, 1): from s1: s1[2]='b'==s3[3]='a'? no. From s2: s2[0]='a'==s3[3]='a' AND f(3,0)=F → F. F.
+- f(3, 2): from s1: s1[2]='b'==s3[4]='b' AND f(2,2)=T → T.
+- f(3, 3): from s1: s1[2]='b'==s3[5]='y'? no. From s2: s2[2]='y'==s3[5]='y' AND f(3,2)=T → T.
+
+Final: f(3, 3) = T. ✓
+
+Matches our hand exploration — the interleave exists.
+
+----------------------------------------
+
+## Step 6: Why This Is Polynomial
+
+Each cell `(i, j)` has O(1) work (two comparisons, two lookups). Total cells: (n+1)(m+1). Total time: O(n·m). Compared to the O(2^(n+m)) brute force, that's the massive speedup DP buys us here.
+
+The state `(i, j)` captures **everything we need to know about the past** — how many characters of s1 and s2 we've already placed into s3. No other state matters.
+
+----------------------------------------
+
+## Step 7: Name the Shape
+
+This is a **2D DP on two strings** — classic partner problem to LCS, Edit Distance, Regex Matching. The state is "positions into both strings," and transitions consider what happened at the very last character.
+
+Once you've internalized one of these, recognizing the next one becomes quick. The trick is always: "what's the minimal state that determines the future?"
+
+----------------------------------------
+
+## Step 8: Complexity
+
+Time: **O(n · m)**.
+Space: **O(n · m)** full table. Optimizable to **O(min(n, m))** by keeping just the previous row (similar to LCS).
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
-
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
 bool isInterleave(string s1, string s2, string s3) {
     int n = s1.size(), m = s2.size();
     if (n + m != (int)s3.size()) return false;
-    vector<vector<bool>> dp(n+1, vector<bool>(m+1, false));
+    vector<vector<bool>> dp(n + 1, vector<bool>(m + 1, false));
     dp[0][0] = true;
-    for (int i = 0; i <= n; ++i) for (int j = 0; j <= m; ++j) {
-        if (i > 0 && dp[i-1][j] && s1[i-1] == s3[i+j-1]) dp[i][j] = true;
-        if (j > 0 && dp[i][j-1] && s2[j-1] == s3[i+j-1]) dp[i][j] = true;
+    for (int i = 0; i <= n; ++i) {
+        for (int j = 0; j <= m; ++j) {
+            if (i == 0 && j == 0) continue;
+            bool fromS1 = i > 0 && dp[i - 1][j] && s1[i - 1] == s3[i + j - 1];
+            bool fromS2 = j > 0 && dp[i][j - 1] && s2[j - 1] == s3[i + j - 1];
+            dp[i][j] = fromS1 || fromS2;
+        }
     }
     return dp[n][m];
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+Two booleans per cell — one for each "last char came from s1 / s2" option. We OR them together.
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- 3-string interleave.
-- Count of distinct interleavings.
-- With wildcards.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Reconstruct an actual interleave sequence.** Track parent pointers (which direction came from). Walk back from (n, m).
+- **Interleave of three strings.** 3D DP, state (i, j, k).
+- **Count the number of distinct interleaves (not just yes/no).** Change `bool` to `int`: `dp[i][j] = (fromS1 ? dp[i-1][j] : 0) + (fromS2 ? dp[i][j-1] : 0)`.
+- **Interleave with one character swap allowed.** Harder; state grows by one flag.
+- **Streaming s3 (characters arrive one at a time).** Maintain a frontier of valid (i, j) pairs; update per new character.

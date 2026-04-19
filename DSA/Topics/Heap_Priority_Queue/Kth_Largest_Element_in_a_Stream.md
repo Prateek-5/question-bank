@@ -4,188 +4,174 @@
 https://leetcode.com/problems/kth-largest-element-in-a-stream/
 
 **Topic:**
-Heap Priority Queue
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Bounded min-heap of size k maintained across add calls.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> k=3, nums=[4,5,8,2]. Heap=[4,5,8]. add(3): push → [3,4,5,8], pop → [4,5,8], return 4. add(5): push → [4,5,5,8], pop → [5,5,8], return 5.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Heap / Priority Queue
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Understand the Setup
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Design a class `KthLargest`:
+- Constructor: takes `k` and an initial array of integers.
+- `add(val)`: adds a new value to the stream. Returns the **k-th largest** element seen so far.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+The stream grows over time. Each `add` returns a fresh "k-th largest" that reflects everything added so far.
 
-So ask yourself:
+Example: k = 3, initial = `[4, 5, 8, 2]`.
+- After init, sorted values: [2, 4, 5, 8]. The 3rd largest is 4.
+- add(3): stream is now [4, 5, 8, 2, 3]. Sorted: [2, 3, 4, 5, 8]. 3rd largest = 4. Return 4.
+- add(5): stream [4, 5, 8, 2, 3, 5]. Sorted: [2, 3, 4, 5, 5, 8]. 3rd largest = 5. Return 5.
+- add(10): stream adds 10. 3rd largest now 5. Return 5.
+- add(9): 3rd largest now 8. Return 8.
+- add(4): 3rd largest still 8. Return 8.
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Bounded min-heap of size k maintained across add calls.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-Your first instinct is probably to sort the whole array and pick from one end. That works — but it asks for more than we need. We don't care about every element's exact position, only the smallest or the largest at each step. Sorting does O(n log n) work just to reveal one extremum at a time. A heap does the same job with far less overhead per query.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-For any incoming value, we only care about keeping track of the k largest seen so far. A min-heap of size k where the top is the k-th largest is perfect and each add is O(log k).
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Notice: "3rd largest" means third when sorted descending. Not unique — duplicate values count separately.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: What Data Would We Naïvely Track?
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+Keep a growing list of all values. On every `add`, sort (or partial sort) to find the k-th largest.
 
-**The concept:** Bounded min-heap of size k maintained across add calls.
+- Each `add` runs in O(n log n) or O(n) with partial sort.
+- Total cost across m adds: O(m · n log n) or O(m · n).
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
+For long streams this is wasteful. We're re-sorting almost the same data over and over.
 
-**Pattern recognition cue:**
-
-**Whenever you see 'k-th', 'top-k', or 'merge sorted streams' → think Heap.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
+Can we maintain just the "top k" values as we go?
 
 ----------------------------------------
 
-## Step 5: Visual / Step-by-Step Explanation
+## Step 3: A Sharper Observation
 
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
+We don't need all values — we need the k-th largest. At any moment, the only values that could be the "k-th largest" are the **k largest values** seen so far. Everything smaller than that is irrelevant to the answer.
 
-Initialize: push all initial values, pop while size > k. For add(x): push x, pop if size > k, return top. This maintains invariant that heap contains the top-k values and its top is the k-th largest.
+So: maintain a collection of the k largest values. When a new value arrives:
+- If the new value is larger than the smallest in our top-k, include it and kick out the old smallest.
+- Otherwise, ignore it — it can't affect the answer.
 
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
+Either way, after processing, the **smallest in our top-k** is the k-th largest overall (because the top-k has exactly k elements, and its minimum is the k-th when sorted descending).
 
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Min-heap of fixed size k. Only one heap needed.
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
+What structure gives us "quick access to the smallest, and quick insert/remove"? A **min-heap of size k**.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 4: Why a Min-Heap, Specifically?
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+We want to maintain the **k largest values**. The "weakest link" in this collection — the one most likely to be kicked out by a new arrival — is the smallest one. So the heap is organized with the minimum at the top.
 
-k=3, nums=[4,5,8,2]. Heap=[4,5,8]. add(3): push → [3,4,5,8], pop → [4,5,8], return 4. add(5): push → [4,5,5,8], pop → [5,5,8], return 5.
+Operations:
+- `push(x)`: O(log k).
+- `top()`: O(1) — gives us the smallest of the top-k, which **is** the k-th largest overall.
+- `pop()`: O(log k).
 
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
+Insert-and-maybe-kick pattern:
+```
+heap.push(x)
+if heap.size() > k:
+    heap.pop()    # kicks out the smallest
+return heap.top()
+```
 
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
+After the operation, the heap still has exactly k elements (the k largest seen), and its top is the answer.
 
+One edge case to think about: during the first few adds (before the stream has k elements), the heap size is less than k. We don't pop yet; we just accumulate.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 5: Trace on the Example
 
-Complexity isn't magic — it's just counting the work.
+k = 3, initial = [4, 5, 8, 2].
 
-Init: O(n log k). Per add: O(log k). Space: O(k).
+Initialize by adding each in sequence:
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+```
+heap = []
+add(4): push. heap = [4]. size < 3, no pop. (returns 4 since only 1 element, but we don't query).
+add(5): push. heap = [4, 5]. size < 3.
+add(8): push. heap = [4, 5, 8]. size == 3. Top = 4.
+add(2): push. heap = [2, 5, 8, 4]. size > 3, pop 2. heap = [4, 5, 8]. Top = 4.
+```
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+Constructor returns; `.add` queries will run from here.
 
+```
+add(3): push. heap = [3, 4, 8, 5]. Pop 3. heap = [4, 5, 8]. Top = 4. Return 4. ✓
+add(5): push. heap = [4, 5, 8, 5]. Pop 4. heap = [5, 5, 8]. Top = 5. Return 5. ✓
+add(10): push. heap = [5, 5, 8, 10]. Pop 5. heap = [5, 8, 10]. Top = 5. Return 5. ✓
+add(9): push. heap = [5, 8, 9, 10]. Pop 5. heap = [8, 9, 10]. Top = 8. Return 8. ✓
+add(4): push. heap = [4, 8, 9, 10]. Pop 4. heap = [8, 9, 10]. Top = 8. Return 8. ✓
+```
+
+Matches expected. ✓
+
+Notice at add(4): the new value is smaller than the smallest in the heap (8). So pushing and popping is a no-op — we pop the same value we just pushed. Still correct, just slightly wasteful.
+
+We could optimize: only push if `x > heap.top()`. But the simpler "always push-then-pop-if-oversize" is fine and avoids edge-case bugs.
+
+----------------------------------------
+
+## Step 6: Why This Is the Right Data Structure for the Job
+
+The key insight is that we're maintaining a **rolling set of the k largest values**, and the one most vulnerable to eviction is the smallest of them. A min-heap specifically gives us O(1) access to that vulnerable element and O(log k) to swap it out.
+
+If we tried to use a max-heap instead, finding the "k-th largest" would require O(k) time (pop-then-restore) — much slower.
+
+If we tried a sorted array, insertions would be O(k) (shifting elements).
+
+The min-heap-of-size-k is the minimal structure that supports exactly what we need.
+
+----------------------------------------
+
+## Step 7: Name It
+
+This is the classic **"bounded heap" pattern** — maintain a heap of size exactly k as a filter. The polarity (min-heap vs max-heap) is opposite to what you'd naïvely expect:
+- To track top-k largest: use min-heap (smallest is vulnerable).
+- To track top-k smallest: use max-heap (largest is vulnerable).
+
+Same structure, opposite polarity. Mixing these up is a classic interview bug.
+
+----------------------------------------
+
+## Step 8: Complexity
+
+- Constructor: O(n log k) where n = size of initial array.
+- `add`: O(log k) per call.
+- Space: O(k) for the heap.
+
+Elegant and fast.
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
-
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-
 class KthLargest {
-    priority_queue<int, vector<int>, greater<int>> pq;
+    priority_queue<int, vector<int>, greater<int>> heap;   // min-heap
     int k;
 public:
-    KthLargest(int k, vector<int>& nums): k(k) {
+    KthLargest(int k, vector<int>& nums) : k(k) {
         for (int x : nums) add(x);
     }
-    int add(int x) {
-        pq.push(x);
-        if ((int)pq.size() > k) pq.pop();
-        return pq.top();
+
+    int add(int val) {
+        heap.push(val);
+        if ((int)heap.size() > k) heap.pop();
+        return heap.top();
     }
 };
 ```
 
-A few notes about the style:
+Compact. The constructor just calls `add` on each initial element — reuses the same logic for initialization as for streaming updates.
 
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
+One subtle point: the return of `add` from the constructor's loop is discarded (we just care about the side effect of growing the heap). Some implementations skip returning from the init-phase adds, but calling `add(val)` and ignoring the return is cleaner.
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- What if k changes over time?
-- Support delete operations.
-- Return the top-k list on demand.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Kth smallest in a stream.** Swap polarity: use a max-heap of size k. Smallest stays inside; top (largest of the smallest-k) is the answer.
+- **Median in a stream.** Two heaps (low half max-heap, high half min-heap), balanced. See "Find Median from Data Stream."
+- **Kth largest over a sliding window (not everything seen).** Requires lazy deletion or a multiset with an "erase by value" operation.
+- **Top k largest at each step (return the full list).** Heap structure works, but extracting the full heap is O(k log k).
+- **Kth largest with updates to past values.** Much harder; use segment trees or order-statistic trees.
+- **Why not use sort on every add?** O(n log n) per add vs O(log k). Heap wins for large n.

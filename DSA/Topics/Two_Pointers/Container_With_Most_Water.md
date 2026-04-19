@@ -6,180 +6,136 @@ https://leetcode.com/problems/container-with-most-water/
 **Topic:**
 Two Pointers
 
+----------------------------------------
+
+## Step 1: Visualize the Problem
+
+You have an array `h` where `h[i]` is the height of a vertical line at x-coordinate `i`. Pick any two lines. They form the two sides of a rectangular container holding water between them. The water height is limited by the *shorter* of the two lines. The width is the distance between them.
+
+Area formed by lines `i` and `j` (with `i < j`):
+
+```
+area(i, j) = min(h[i], h[j]) * (j - i)
+```
+
+Find the maximum possible area.
+
+Quick sanity check with `h = [1, 8, 6, 2, 5, 4, 8, 3, 7]`:
+
+- Lines at indices 1 and 8: heights 8 and 7, width = 7. Area = min(8,7) * 7 = **49**.
+- Lines at indices 1 and 2: heights 8 and 6, width = 1. Area = 6.
+
+The expected answer for this input is 49. Good.
 
 ----------------------------------------
 
-## Step 1: Understand the Problem (Beginner Friendly)
+## Step 2: Brute Force First
 
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Two pointers — shrink from the side with smaller height.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> h=[1,8,6,2,5,4,8,3,7]. Max area=49 (indices 1..8).
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
-
-----------------------------------------
-
-## Step 2: Break Down the Problem
-
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
-
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
-
-So ask yourself:
-
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Two pointers — shrink from the side with smaller height.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
-
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
-
-
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-Double loops are your first thought — and for unsorted data, often unavoidable. But when the array is sorted or the problem has a monotonic structure, two pointers sliding toward each other or in the same direction collapse the work to linear.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Area is (r-l)*min(h[l],h[r]). Moving the taller pointer inward can never increase the area since the min height won't grow and width shrinks; so always move the smaller side.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
-
-----------------------------------------
-
-## Step 4: Connect to Concept
-
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
-
-**The concept:** Two pointers — shrink from the side with smaller height.
-
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever the array is sorted or the constraint is monotonic in a sliding sense → think Two Pointers.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-l=0, r=n-1. Track max area; while l<r: compute area; if h[l]<h[r] l++ else r--.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
-
-----------------------------------------
-
-## Step 6: Final Approach
-
-Now let's crystallize everything we've learned into a clean algorithm.
-
-Two pointers O(n).
-
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
-
-**Before coding, it's worth asking:**
-
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
-
-Get those clear in your head, and the code almost writes itself.
-
-
-----------------------------------------
-
-## Step 7: Dry Run (Detailed)
-
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
-
-h=[1,8,6,2,5,4,8,3,7]. Max area=49 (indices 1..8).
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
-
-----------------------------------------
-
-## Step 8: Time and Space Complexity
-
-Complexity isn't magic — it's just counting the work.
-
-Time: O(n). Space: O(1).
-
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
-
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
-
-
-----------------------------------------
-
-## Step 9: C++ Implementation
-
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
+Try every pair `(i, j)` with `i < j`:
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
+int best = 0;
+for (int i = 0; i < n; ++i)
+    for (int j = i + 1; j < n; ++j)
+        best = max(best, min(h[i], h[j]) * (j - i));
+```
+
+That's O(n²). For `n = 10^5`, that's 10^10 ops — way too slow.
+
+So we need something faster. But to find a better algorithm, we need an insight about the problem's structure. Let me think about what's true about optimal pairs.
+
+----------------------------------------
+
+## Step 3: A Key Observation Through Experimentation
+
+Imagine the widest possible container — lines at index 0 and index n-1. That gives us the maximum width. The area depends on `min(h[0], h[n-1])`.
+
+Now, suppose we want to try another pair. What happens if we keep one endpoint fixed and shrink the width? Then we sacrifice width. To make up for it, we'd need a taller pair. But at most, the smaller side can rise to as tall as the *other* side — because `min()` caps at the smaller one.
+
+This suggests: **start wide, then greedily move the shorter side inward**. Here's the reasoning that makes this work — and it's the heart of the whole algorithm.
+
+Suppose `h[l] < h[r]` (left side is shorter). The current area is `h[l] * (r - l)`. Now think about any other pair that includes this `l`:
+
+- Any pair `(l, r')` with `r' < r`. The height is `min(h[l], h[r'])`, which is at most `h[l]` (since `h[l]` is already the left, and `min` can't exceed it). So the area is at most `h[l] * (r' - l)`, which is **less than** our current area because `r' - l < r - l`.
+
+In other words, the current `l` can never be part of a better pair — because any pair with `l` and a closer-right has both smaller or equal height and smaller width. Pairs with `l` and a farther-right don't exist (we started at the widest).
+
+So `l` is useless. We should move it inward. The same logic applies symmetrically when the right side is shorter.
+
+**Rule:** always move the *shorter* side inward.
+
+This is the core insight. It's not a lucky guess — we proved that the current shorter side cannot contribute to a better pair, so we can safely discard it.
+
+----------------------------------------
+
+## Step 4: The Algorithm
+
+```
+l = 0, r = n - 1, best = 0
+while l < r:
+    area = min(h[l], h[r]) * (r - l)
+    best = max(best, area)
+    if h[l] < h[r]: l++
+    else: r--
+```
+
+Simple, but the proof we built gives us confidence it's correct. Without that proof, this looks like a suspicious heuristic.
+
+----------------------------------------
+
+## Step 5: Dry Run on `[1, 8, 6, 2, 5, 4, 8, 3, 7]`
+
+```
+l=0, r=8:  h[l]=1, h[r]=7.  area = min(1,7)*8 = 8.   best=8.   h[l]<h[r], l++.
+l=1, r=8:  h[l]=8, h[r]=7.  area = min(8,7)*7 = 49.  best=49.  h[l]>h[r], r--.
+l=1, r=7:  h[l]=8, h[r]=3.  area = min(8,3)*6 = 18.  best=49.  h[l]>h[r], r--.
+l=1, r=6:  h[l]=8, h[r]=8.  area = min(8,8)*5 = 40.  best=49.  tie, move either. Let's say r--.
+l=1, r=5:  h[l]=8, h[r]=4.  area = min(8,4)*4 = 16.  best=49.  r--.
+l=1, r=4:  h[l]=8, h[r]=5.  area = min(8,5)*3 = 15.  best=49.  r--.
+l=1, r=3:  h[l]=8, h[r]=2.  area = min(8,2)*2 = 4.   best=49.  r--.
+l=1, r=2:  h[l]=8, h[r]=6.  area = min(8,6)*1 = 6.   best=49.  r--.
+l=1, r=1: loop ends.
+```
+
+Final: **49**. Matches.
+
+Notice at step 2 (l=1, r=8), we hit the optimal pair. All subsequent iterations just verify that no other pair does better.
+
+**Quick note on ties:** when `h[l] == h[r]`, moving either side is fine. The proof's inequality is non-strict at the boundary, but we don't miss the optimum because if both `l` and `r` were part of an optimum, we'd have already recorded it in `best`.
+
+----------------------------------------
+
+## Step 6: Complexity
+
+Time: `l` and `r` start at opposite ends and move toward each other. Each step advances one pointer by 1, and the loop ends when they meet. So exactly n-1 iterations. **O(n)**.
+
+Space: two pointers and a running max. **O(1)**.
+
+Going from O(n²) brute force to O(n) just from the insight "the shorter side is useless, discard it." That's a good example of how structural reasoning beats fancy data structures.
+
+----------------------------------------
+
+## Step 7: C++ Implementation
+
+```cpp
 int maxArea(vector<int>& h) {
     int l = 0, r = h.size() - 1, best = 0;
     while (l < r) {
-        best = max(best, (r - l) * min(h[l], h[r]));
-        if (h[l] < h[r]) l++; else r--;
+        int area = min(h[l], h[r]) * (r - l);
+        best = max(best, area);
+        if (h[l] < h[r]) l++;
+        else r--;
     }
     return best;
 }
 ```
 
-A few notes about the style:
-
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
-
-
 ----------------------------------------
 
-## Step 10: Follow-up Questions
+## Step 8: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Widths non-uniform between indices.
-- Max area with at most k modifications.
-- 3D container problem.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Trapping Rain Water** is a close cousin: how much water is trapped between all bars (not just two chosen)? Same two-pointer spirit but with running max heights on both sides.
+- **What if the container has a bottom with a uniform height (not zero)?** Subtract the bottom from both heights; same algorithm.
+- **Return the actual indices of the chosen pair.** Track `bestL, bestR` when updating `best`.
+- **What if negative heights are allowed (impossible physically but mathematically)?** The pointer logic still holds — the proof didn't require positivity.
+- **3D version: pick three vertical posts and find the maximum bounded volume.** Much harder — no simple two-pointer analog.

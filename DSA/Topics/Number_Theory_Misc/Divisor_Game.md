@@ -1,176 +1,164 @@
 # Divisor Game
 
 **Problem Link:**
-https://leetcode.com/problems/find-the-divisor-game/
+https://leetcode.com/problems/divisor-game/
 
 **Topic:**
-Number Theory Misc
-
-
-----------------------------------------
-
-## Step 1: Understand the Problem (Beginner Friendly)
-
-Let's start by making sure we *really* understand what this problem is asking — no jargon, no tricks, just plain language.
-
-If you had to explain this problem to a friend who's never heard of algorithms, how would you put it? Often, just rephrasing the question in your own words is half the battle. So let's do that first.
-
-**In plain words:** Parity observation — Alice wins iff n is even.
-
-Before we touch a single line of code, let's look at a small concrete example — the easiest way to build a mental model of the problem:
-
-> n=2 → true. n=3 → false.
-
-Take a moment to trace through that yourself, pen on paper if possible. Notice how the example already hints at the structure of the answer — almost every interview example is chosen to nudge you toward the idea. That's not cheating; that's smart problem-solving.
-
-**Why constraints matter:** Before picking an approach, check the input size and value ranges. If `n ≤ 20`, an exponential brute force is fine. If `n ≤ 10^5`, you need something like O(n log n). If `n ≤ 10^9`, only O(1), O(log n), or a mathematical trick will do. Reading constraints first saves you from writing code that doesn't fit.
-
+Number Theory / Misc
 
 ----------------------------------------
 
-## Step 2: Break Down the Problem
+## Step 1: Understand the Game
 
-Now that we've understood the surface of the problem, let's peel it back and ask: *what is this problem really about?*
+Alice and Bob take turns. Alice goes first. On each turn, a player:
+- Choose any `x` with `0 < x < n` and `n % x == 0` (x is a proper divisor of n).
+- Replace `n` with `n - x`.
 
-Many problems wear different costumes but hide the same core skeleton. Our job as solvers is to strip the costume and recognize the skeleton. Once we do, it becomes one of a few well-known shapes.
+The player who **cannot make a move** loses. Determine if Alice wins (with both playing optimally).
 
-So ask yourself:
+Return true if Alice wins, false otherwise.
 
-- **What am I being asked to optimize, count, or find?** In this case, we're focused on: Parity observation — Alice wins iff n is even.
-- **What information do I truly need at each step?** Often we think we need to track everything — but really, we only need a tiny slice of state to make the next decision. Identifying that slice is the key insight for efficient algorithms.
-- **Can I rephrase the problem using simpler building blocks?** Most problems reduce to one of: traversal, counting, sorting, searching, or recurrence. Can you spot which one this is?
+Example: n = 2.
+- Alice's turn. Divisors of 2 less than 2: {1}. Alice picks 1. n becomes 1.
+- Bob's turn. Divisors of 1 less than 1: {}. Bob can't move. Bob loses. Alice wins.
 
-Right now, try to formulate the problem in one sentence without using the original phrasing. That single-sentence version is usually what your algorithm will solve.
+Return true.
 
+Example: n = 3.
+- Alice: divisors of 3 less than 3: {1}. n becomes 2.
+- Bob: divisors of 2 less than 2: {1}. n becomes 1.
+- Alice: no moves. Alice loses.
 
-----------------------------------------
-
-## Step 3: Build Intuition (VERY IMPORTANT)
-
-This is where we actually *think* about how to solve it — not reach for a data structure or a pattern, just think. Pretend you've never seen this before.
-
-A brute-force factor check or a digit-by-digit loop is usually the first attempt. Cleverer approaches exploit modular arithmetic, parity, or digit-DP recurrences to get O(1) or O(log n) from what looks like an O(n) problem.
-
-So how do we get smarter? Let's build the correct intuition step by step.
-
-Working backward, n=1 loses (no moves). n=2 wins. By induction, even → winning; odd → losing. So answer is n%2==0.
-
-Notice what just happened there: we didn't pull a solution out of thin air. We identified a structural property of the problem and leaned on it. Every efficient algorithm is built on the back of a structural observation like that one. When you encounter a new problem, your first job is to find this kind of observation — not to recall a data structure.
-
-Here's a mental checkpoint. Before continuing, make sure you can answer these:
-
-1. Why does the naive approach waste work?
-2. What specific property of the problem lets us do better?
-3. How does the insight reduce the amount of work needed?
-
-If those three questions are clear in your head, you've built real intuition. The rest is execution.
-
+Return false.
 
 ----------------------------------------
 
-## Step 4: Connect to Concept
+## Step 2: Simulate Small Cases
 
-Now we give our insight a name. Every good intuition maps onto a well-known algorithmic concept — and recognizing that mapping is exactly what interviewers are testing.
+- n = 1: no moves. Current player loses.
+- n = 2: Alice → 1, Bob loses. **Alice wins.**
+- n = 3: Alice → 2, Bob → 1, Alice loses. **Bob wins.**
+- n = 4: Alice can choose 1 (→ 3, Bob in "n=3" position, Bob loses per Step 1) or 2 (→ 2, Bob wins). Alice picks 1. Alice wins.
+- n = 5: Alice's only move is 1 → 4, Bob is at n=4. From Step 1, n=4 means current player wins. So Bob wins. Alice loses.
+- n = 6: Alice can pick 1 → 5 (Bob loses per above), or 2 → 4 (Bob wins), or 3 → 3 (Bob loses). Alice picks 1 or 3. Alice wins.
 
-**The concept:** Parity observation — Alice wins iff n is even.
+Pattern so far:
+- n = 1: lose.
+- n = 2: win.
+- n = 3: lose.
+- n = 4: win.
+- n = 5: lose.
+- n = 6: win.
 
-**Why this concept fits this problem:** The intuition we built in Step 3 is exactly the kind of situation this concept is designed for. Instead of reinventing the wheel, we lean on a tested technique with known complexity and known pitfalls.
-
-**Pattern recognition cue:**
-
-**Whenever digits, GCD, primes, or modular properties appear → check for closed-form solutions before coding loops.**
-
-Bookmark this mental mapping. Interviewers rarely ask a new problem — they ask a variation of a known pattern. If you train yourself to spot the pattern quickly, you can focus your energy on the details that make this version of the problem unique.
-
-
-----------------------------------------
-
-## Step 5: Visual / Step-by-Step Explanation
-
-Let's walk through what our approach is actually doing, step by step, in a way that builds a mental picture.
-
-Return n%2==0 — Alice always picks 1, forcing Bob onto an odd number, and so on.
-
-Take a moment to trace through the mental picture here. A small example visualized is worth ten paragraphs of prose. When you solve practice problems, sketching the first few steps on paper is almost always worth the time.
-
-If at this point you feel like you could explain the approach to someone else — congratulations, you've understood it. If not, re-read Steps 3 and 5 together: they describe the same process from two angles (why it works and how it works).
-
+Alice wins iff n is even.
 
 ----------------------------------------
 
-## Step 6: Final Approach
+## Step 3: Prove "Alice Wins iff n Is Even"
 
-Now let's crystallize everything we've learned into a clean algorithm.
+**Induction on n.**
 
-Parity check.
+Base: n = 1: cannot move, current player loses. (1 is odd, and "current loses" matches the claim.)
 
-That's the entire plan. Notice how it connects back to the intuition: every step of the algorithm is there because our structural observation said it needed to be. We didn't guess — we reasoned.
+Inductive step. Assume the claim holds for all smaller n.
 
-**Before coding, it's worth asking:**
+- If n is **even**: Alice can pick `x = 1`. Now n becomes n - 1, which is **odd**. Bob is now at an odd n — by induction, current player (Bob) loses. Alice wins. ✓
 
-- What's the invariant I'm maintaining across iterations?
-- What corner cases could break my logic (empty input, single element, all-equal, etc.)?
-- Is there any subtle off-by-one that could sneak in?
+- If n is **odd**: every divisor x of n is odd (divisors of odd numbers are odd). So n - x = odd - odd = even. Bob is now at even n. By induction, current player (Bob) wins. Alice loses. ✓
 
-Get those clear in your head, and the code almost writes itself.
-
+Done. Alice wins iff n is even.
 
 ----------------------------------------
 
-## Step 7: Dry Run (Detailed)
+## Step 4: The One-Line Solution
 
-Let's run through a concrete example, narrating what's happening at every step. This is the single most effective way to verify your mental model before writing code.
+```
+return n % 2 == 0
+```
 
-n=2 → true. n=3 → false.
-
-Did every transition make sense? If any step feels hand-wavy, stop and re-derive it. A dry run you can't explain is a dry run you don't really understand — and an interviewer will press on exactly the point you skipped.
-
-Try running the same algorithm in your head on a slightly different example (maybe one with a duplicate, or an empty case). If the algorithm still works, your understanding is robust.
-
+No DP, no simulation. Pure number-theoretic parity.
 
 ----------------------------------------
 
-## Step 8: Time and Space Complexity
+## Step 5: Trace vs. Formula
 
-Complexity isn't magic — it's just counting the work.
+For n = 2, 4, 6, 8 (even): return true. Alice wins.
+For n = 1, 3, 5, 7 (odd): return false. Alice loses.
 
-O(1).
+Matches the pattern and matches the proof.
 
-Let's reason through this. Every operation your algorithm performs costs something. Summing those costs across all iterations gives you the running time. The same logic applies to memory: count the data structures you allocate and how big they can grow in the worst case.
+----------------------------------------
 
-**A good habit:** when you compute complexity, don't just state the final Big-O. State *why*. "Sorting takes O(n log n) because standard comparison sort needs that many comparisons" is a better answer than "O(n log n)" alone. Interviewers love when you explain your reasoning.
+## Step 6: Why the Proof Works Intuitively
 
+Odd numbers have only odd divisors. Subtracting an odd from an odd gives an even.
+
+Even numbers have **both even and odd** divisors (at least 1, which is odd). So from even n, you can always subtract 1 to give the opponent an odd n.
+
+This forces a strict alternation: even → odd → even → odd → ... With Alice starting on even, Alice hands Bob odd every turn, eventually reaching n=1, where Bob loses.
+
+The player at an odd n is "stuck" — they have to hand an even n back. The player at an even n has control — they can force odd.
+
+----------------------------------------
+
+## Step 7: Name It
+
+**Game theory via parity / Grundy-like analysis.** The specific game is Divisor Game, but the method — prove that a simple invariant (parity) decides outcomes — is broadly applicable.
+
+Related:
+- Stone Game variants.
+- Nim-like games.
+- Sprague-Grundy theorem for impartial games.
+
+Sometimes full game-DP is overkill; a parity argument suffices.
+
+----------------------------------------
+
+## Step 8: Complexity
+
+Time: **O(1)**.
+Space: **O(1)**.
+
+Even a DP with memoization (which naive solvers write) is O(n²) or so — dramatically worse than the formula.
 
 ----------------------------------------
 
 ## Step 9: C++ Implementation
 
-Here's the implementation. Notice the comments — they're there to explain *why* a line exists, not *what* it does. If you understand Steps 1–8, the code should read naturally.
-
 ```cpp
-bool divisorGame(int n) { return n % 2 == 0; }
+bool divisorGame(int n) {
+    return n % 2 == 0;
+}
 ```
 
-A few notes about the style:
+One line.
 
-- We use `<bits/stdc++.h>` for brevity; in production, prefer specific headers.
-- `auto` and structured bindings (`auto [x, y] = ...`) keep the code readable without extra type noise.
-- We use `INT_MAX` / `INT_MIN` for sentinel values; if your input can hit those, switch to `long long`.
-- Early returns, clean variable names, and minimal nesting make this code easy to review under time pressure — which is exactly what interviewers want to see.
+For educational purposes, the DP version:
 
+```cpp
+bool divisorGame(int n) {
+    vector<bool> dp(n + 1, false);   // dp[i] = can current player win at state i
+    for (int i = 2; i <= n; ++i) {
+        for (int x = 1; x * x <= i; ++x) {
+            if (i % x == 0) {
+                if (!dp[i - x]) { dp[i] = true; break; }
+                // also check x != i / x
+            }
+        }
+    }
+    return dp[n];
+}
+```
+
+This would compute dp[i] = true iff there's a move leaving the opponent in a losing state. Matches the parity formula but uses O(n · sqrt(n)) work.
 
 ----------------------------------------
 
 ## Step 10: Follow-up Questions
 
-Interviewers almost always have a follow-up ready. Thinking about these now — before you're in the hot seat — builds deeper understanding and pattern fluency.
-
-- Divisor game with different rules.
-- Game DP proof.
-- Mis`ere variant.
-
-For each follow-up, try to answer mentally: *which part of my current solution changes, and which part stays the same?* That mental exercise alone will sharpen your algorithmic thinking faster than solving twenty more problems without reflection.
-
----
-
-*You've now worked through the full teaching arc for this problem: understand → break down → intuit → connect → visualize → formalize → dry run → analyze → implement → extend. If you can do this unassisted on a fresh problem from the same pattern, you've genuinely learned the idea — not just the answer.*
+- **Same rules but start with n = some specific value, different first-player analysis.** Still parity.
+- **Allow x = n (reduce to 0).** Changes the game; re-analyze.
+- **Alice can pick two divisors per turn.** Different parity structure.
+- **3 or more players.** Game theory extends; Grundy values or XOR-like computations.
+- **Why does parity suffice?** Because the state space splits cleanly into "forced bad" (odd) and "good" (even), with the move-rule respecting this partition.
+- **Variant: subtract a PRIME divisor.** Different analysis; prime parity matters.
