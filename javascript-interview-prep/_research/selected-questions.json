@@ -1,0 +1,111 @@
+{
+  "summary": {
+    "totalCrawled": 95,
+    "totalSelected": 77,
+    "sources": {
+      "codedamn": 19,
+      "leetcode": 32,
+      "canonical_fallback": 26
+    },
+    "notes": "codedamn /problem-list/nodejs pages 1-20 were JS-rendered and returned no content via WebFetch; LeetCode /problemset/javascript/ returned 403. Fell back to WebSearch (10+ queries hitting different concept buckets) to surface real /problem/<slug> URLs on codedamn and JS-tagged problems on LeetCode (study-plan 30-days-of-javascript). Buckets with few real problems (hoisting, prototype, event-loop) supplemented with canonical interview items."
+  },
+  "buckets": {
+    "hoisting": [
+      { "title": "Output prediction: var hoisting inside a function", "url": "canonical://hoisting/var-shadowing-output", "source": "canonical", "tests": "Predict output of `var a=1; function f(){console.log(a); var a=2;}` — function-scope var hoisting + TDZ-free undefined" },
+      { "title": "Temporal Dead Zone with let / const", "url": "canonical://hoisting/let-const-tdz", "source": "canonical", "tests": "Accessing `let`/`const` before declaration throws ReferenceError; explain TDZ" },
+      { "title": "Function declaration vs function expression hoisting", "url": "canonical://hoisting/func-decl-vs-expr", "source": "canonical", "tests": "Function declarations are fully hoisted; function expressions are not" },
+      { "title": "Hoisting in JavaScript (codedamn article-as-problem)", "url": "https://codedamn.com/news/javascript/hoisting-in-javascript", "source": "codedamn", "tests": "Explain JS hoisting mechanics for var/let/const/function" },
+      { "title": "What is Hoisting and Scoping in JavaScript?", "url": "https://codedamn.com/news/javascript/what-is-hoisting-and-scoping-in-javascript", "source": "codedamn", "tests": "Scope chain + hoisting interaction; conceptual" },
+      { "title": "Difference between let and var", "url": "https://codedamn.com/news/javascript/difference-between-let-and-var-in-javascript", "source": "codedamn", "tests": "Block vs function scope, hoisting differences, redeclaration rules" },
+      { "title": "Class declaration hoisting", "url": "canonical://hoisting/class-hoisting", "source": "canonical", "tests": "Classes are hoisted but not initialized — TDZ applies; differs from function declarations" }
+    ],
+    "closures": [
+      { "title": "Create Hello World Function", "url": "https://leetcode.com/problems/create-hello-world-function/", "source": "leetcode", "tests": "Basic closure that captures and returns inner function" },
+      { "title": "Counter", "url": "https://leetcode.com/problems/counter/", "source": "leetcode", "tests": "Closure capturing mutable private state across calls" },
+      { "title": "Counter II (increment/decrement/reset)", "url": "https://leetcode.com/problems/counter-ii/", "source": "leetcode", "tests": "Closure returning object with multiple methods sharing state" },
+      { "title": "Allow One Function Call", "url": "https://leetcode.com/problems/allow-one-function-call/", "source": "leetcode", "tests": "`once` HOF using closure to track invocation flag" },
+      { "title": "To Be Or Not To Be (expect)", "url": "https://leetcode.com/problems/to-be-or-not-to-be/", "source": "leetcode", "tests": "Closure capturing val and exposing toBe/notToBe assertion API" },
+      { "title": "Encapsulating Private Data via Closures (counter)", "url": "https://codedamn.com/news/nodejs/encapsulating-private-data-closures", "source": "codedamn", "tests": "Classic createCounter pattern — private state via closure" },
+      { "title": "Loop closure bug with var vs let", "url": "canonical://closures/loop-var-let", "source": "canonical", "tests": "for(var i...) setTimeout(()=>console.log(i)) — explain output and fix with let / IIFE" }
+    ],
+    "prototype": [
+      { "title": "Array Prototype Last", "url": "https://leetcode.com/problems/array-prototype-last/", "source": "leetcode", "tests": "Augmenting Array.prototype safely; `this` inside prototype method" },
+      { "title": "Differences Between Two Objects", "url": "https://leetcode.com/problems/differences-between-two-objects/", "source": "leetcode", "tests": "Recursive object diff respecting types and prototype chain" },
+      { "title": "Prototype chain & inheritance (codedamn)", "url": "https://codedamn.com/news/programming/javascript-prototype-chain-inheritance", "source": "codedamn", "tests": "Walk through __proto__, prototype, constructor, extends semantics" },
+      { "title": "Exploring `this` keyword in Node.js", "url": "https://codedamn.com/news/nodejs/javascript-this-keyword", "source": "codedamn", "tests": "Value of `this` in method, arrow, EventEmitter, module scope" },
+      { "title": "Implement Function.prototype.bind", "url": "canonical://prototype/polyfill-bind", "source": "canonical", "tests": "Polyfill bind preserving partial args + `new` semantics" },
+      { "title": "Implement Function.prototype.call and apply", "url": "canonical://prototype/polyfill-call-apply", "source": "canonical", "tests": "Set `this` explicitly via symbol property trick, return result" },
+      { "title": "Implement `new` operator (myNew)", "url": "canonical://prototype/polyfill-new", "source": "canonical", "tests": "Object.create(Ctor.prototype), call Ctor with this, handle return value" }
+    ],
+    "promises": [
+      { "title": "Sleep", "url": "https://leetcode.com/problems/sleep/", "source": "leetcode", "tests": "Wrap setTimeout in a Promise (delay utility)" },
+      { "title": "Add Two Promises", "url": "https://leetcode.com/problems/add-two-promises/", "source": "leetcode", "tests": "Await + Promise.all to sum resolved values" },
+      { "title": "Promise Time Limit", "url": "https://leetcode.com/problems/promise-time-limit/", "source": "leetcode", "tests": "Race original promise against timeout; classic timeoutPromise pattern" },
+      { "title": "Cache With Time Limit", "url": "https://leetcode.com/problems/cache-with-time-limit/", "source": "leetcode", "tests": "TTL cache class using Map + setTimeout/clearTimeout" },
+      { "title": "Promise Pool", "url": "https://leetcode.com/problems/promise-pool/", "source": "leetcode", "tests": "Limit concurrency of N async tasks (worker-pool / asyncPool)" },
+      { "title": "Execute Asynchronous Functions in Parallel", "url": "https://leetcode.com/problems/execute-asynchronous-functions-in-parallel/", "source": "leetcode", "tests": "Re-implement Promise.all from scratch" },
+      { "title": "Implement Promise.race", "url": "canonical://promises/promise-race", "source": "canonical", "tests": "First settle wins; both resolve and reject propagate" },
+      { "title": "Implement Promise.allSettled", "url": "canonical://promises/promise-allsettled", "source": "canonical", "tests": "Wait for all, return {status,value/reason}[] — never rejects" },
+      { "title": "Retry with exponential backoff", "url": "canonical://promises/retry-backoff", "source": "canonical", "tests": "fn-returning-promise wrapped with N retries + jitter + AbortSignal" }
+    ],
+    "event-loop": [
+      { "title": "Timeout Cancellation", "url": "https://leetcode.com/problems/timeout-cancellation/", "source": "leetcode", "tests": "setTimeout/clearTimeout — macrotask scheduling and cancellation" },
+      { "title": "Interval Cancellation", "url": "https://leetcode.com/problems/interval-cancellation/", "source": "leetcode", "tests": "setInterval/clearInterval — periodic macrotasks" },
+      { "title": "Design Cancellable Function", "url": "https://leetcode.com/problems/design-cancellable-function/", "source": "leetcode", "tests": "Generator + scheduler — pause/resume with await, cancellation token" },
+      { "title": "Event Loop and concurrency (codedamn)", "url": "https://codedamn.com/news/javascript/event-loop-concurrency", "source": "codedamn", "tests": "Conceptual: call stack, queue, microtasks vs macrotasks" },
+      { "title": "JS Event Loop role in Node.js", "url": "https://codedamn.com/news/nodejs/event-loop-role", "source": "codedamn", "tests": "Node phases: timers, pending, poll, check, close; nextTick vs setImmediate" },
+      { "title": "Output order: setTimeout vs Promise.then vs queueMicrotask", "url": "canonical://event-loop/microtask-macrotask-order", "source": "canonical", "tests": "Predict order — microtasks drain between macrotasks" },
+      { "title": "process.nextTick vs setImmediate vs setTimeout(0)", "url": "canonical://event-loop/nexttick-setimmediate", "source": "canonical", "tests": "Phase ordering inside Node libuv loop" }
+    ],
+    "streams": [
+      { "title": "Node.js Stream Pipeline Lab", "url": "https://codedamn.com/problem/ru5OH8OPupFFpOY0AGoMD", "source": "codedamn", "tests": "Build file-transfer with Readable + gzip Transform + Writable via stream.pipeline" },
+      { "title": "Node.js Stream Pipeline Lab II", "url": "https://codedamn.com/problem/3KceNguv5qrbVJ27tnKd3", "source": "codedamn", "tests": "Pipeline error handling and proper teardown" },
+      { "title": "Stream Readable Push Lab", "url": "https://codedamn.com/problem/hCvvVJhuO-Y_a1SxA6P2y", "source": "codedamn", "tests": "Build a Readable stream using push(chunk)/push(null) for EOF" },
+      { "title": "Stream Writable Lab", "url": "https://codedamn.com/problem/OHvS9lh7Ac_Ncg72qGorb", "source": "codedamn", "tests": "Implement _write() with backpressure-aware callbacks" },
+      { "title": "JavaScript Iterator Lab", "url": "https://codedamn.com/problem/LxpOdwQJevoLk9XxtlD1p", "source": "codedamn", "tests": "Build custom iterator with next()/value/done; map/filter iterator helpers" },
+      { "title": "Generate Fibonacci Sequence (generator)", "url": "https://leetcode.com/problems/generate-fibonacci-sequence/", "source": "leetcode", "tests": "function* + yield producing infinite sequence" },
+      { "title": "Async iterator over paginated API (canonical)", "url": "canonical://streams/async-iterator-pagination", "source": "canonical", "tests": "Implement Symbol.asyncIterator that fetches pages on demand" }
+    ],
+    "arrays": [
+      { "title": "Array Reduce Transformation", "url": "https://leetcode.com/problems/array-reduce-transformation/", "source": "leetcode", "tests": "Polyfill Array.prototype.reduce from scratch" },
+      { "title": "Filter Elements from Array", "url": "https://leetcode.com/problems/filter-elements-from-array/", "source": "leetcode", "tests": "Polyfill Array.prototype.filter" },
+      { "title": "Chunk Array", "url": "https://leetcode.com/problems/chunk-array/", "source": "leetcode", "tests": "Slice an array into fixed-size sub-arrays" },
+      { "title": "Lodash _.reduce() Lab", "url": "https://codedamn.com/problem/ApyKwJzkW0be4dtQpP3vK", "source": "codedamn", "tests": "Reduce variant that also works on plain objects" },
+      { "title": "JavaScript Math Object Lab", "url": "https://codedamn.com/problem/sJuBtPemiWmWVbQClaxcR", "source": "codedamn", "tests": "Numeric array ops — min/max/avg using Math + reduce" },
+      { "title": "Polyfill Array.prototype.map", "url": "canonical://arrays/polyfill-map", "source": "canonical", "tests": "Implement map preserving holes and thisArg" },
+      { "title": "Polyfill Array.prototype.flat (with depth)", "url": "canonical://arrays/polyfill-flat", "source": "canonical", "tests": "Iterative flatten honoring depth; classic interview" }
+    ],
+    "maps-sets": [
+      { "title": "Is Object Empty", "url": "https://leetcode.com/problems/is-object-empty/", "source": "leetcode", "tests": "Detect empty object/array via Object.keys / iterator length" },
+      { "title": "Convert Object to JSON String", "url": "https://leetcode.com/problems/convert-object-to-json-string/", "source": "leetcode", "tests": "Recursive serializer — handles arrays, objects, primitives, escaping" },
+      { "title": "Group By", "url": "https://leetcode.com/problems/group-by/", "source": "leetcode", "tests": "Polyfill groupBy on Array.prototype using object/Map" },
+      { "title": "Differences Between Two Objects", "url": "https://leetcode.com/problems/differences-between-two-objects/", "source": "leetcode", "tests": "Deep diff over Map/object keysets" },
+      { "title": "LRU Cache using Map", "url": "canonical://maps-sets/lru-with-map", "source": "canonical", "tests": "Leverage Map's insertion-order iteration for O(1) LRU" },
+      { "title": "WeakMap-backed private fields / memoization key on object", "url": "canonical://maps-sets/weakmap-memoize", "source": "canonical", "tests": "Use WeakMap so cached objects can be GC'd" },
+      { "title": "Object vs Map vs Set — when to use which", "url": "canonical://maps-sets/object-vs-map", "source": "canonical", "tests": "Conceptual: hash-keys, iteration order, performance, JSON-friendliness" }
+    ],
+    "recursion": [
+      { "title": "Flatten Deeply Nested Array (LeetCode)", "url": "https://leetcode.com/problems/flatten-deeply-nested-array/", "source": "leetcode", "tests": "Recursively flatten arrays up to depth n without Array.flat" },
+      { "title": "Flatten Array (codedamn)", "url": "https://codedamn.com/problem/Bj6pjjD2gkDYOUVMrDywr", "source": "codedamn", "tests": "Single-level / arbitrary flatten implementation" },
+      { "title": "Flatten Deeply Nested Arrays (codedamn)", "url": "https://codedamn.com/problem/nM6u_iLTYEQxUl_yFC890", "source": "codedamn", "tests": "Recursive deep flatten with depth parameter" },
+      { "title": "Nested Array Inorder Traversal Generator (codedamn)", "url": "https://codedamn.com/problem/tfvPxjt4OJyqSruK5bNav", "source": "codedamn", "tests": "Generator yielding leaves of nested array in order" },
+      { "title": "Nested Array Generator (LeetCode)", "url": "https://leetcode.com/problems/nested-array-generator/", "source": "leetcode", "tests": "Generator that yields multi-dim array integers in inorder" },
+      { "title": "Recursive deep clone with cycle handling", "url": "canonical://recursion/deep-clone-cycles", "source": "canonical", "tests": "Clone arbitrary object graph; track seen via WeakMap to handle cycles" },
+      { "title": "Tree traversal: BFS + DFS in JS", "url": "canonical://recursion/tree-bfs-dfs", "source": "canonical", "tests": "Implement DFS recursively + iteratively with stack; BFS with queue" }
+    ],
+    "machine-coding-patterns": [
+      { "title": "Debounce", "url": "https://leetcode.com/problems/debounce/", "source": "leetcode", "tests": "Trailing-edge debounce using setTimeout/clearTimeout" },
+      { "title": "Throttle", "url": "https://leetcode.com/problems/throttle/", "source": "leetcode", "tests": "Leading+trailing throttle with `last invocation` time" },
+      { "title": "Memoize", "url": "https://leetcode.com/problems/memoize/", "source": "leetcode", "tests": "Cache by serialized args (sum / fib / factorial test cases)" },
+      { "title": "Memoize II (object-key arguments)", "url": "https://leetcode.com/problems/memoize-ii/", "source": "leetcode", "tests": "Trie / nested Map keyed by argument identity (handles objects)" },
+      { "title": "Function Composition", "url": "https://leetcode.com/problems/function-composition/", "source": "leetcode", "tests": "compose([f,g,h])(x) === f(g(h(x))); reduce-right pattern" },
+      { "title": "Event Emitter", "url": "https://leetcode.com/problems/event-emitter/", "source": "leetcode", "tests": "subscribe/emit + unsubscribe; multi-listener fan-out" },
+      { "title": "Curry Function Implementation (codedamn)", "url": "https://codedamn.com/problem/vqf9CjnUNextjlV5yQ4NP", "source": "codedamn", "tests": "Generic curry(fn) that returns until arity satisfied" },
+      { "title": "Implement Function.prototype.bind (polyfill)", "url": "canonical://patterns/bind-polyfill", "source": "canonical", "tests": "Partial application + correct `this` + support `new` keyword" },
+      { "title": "LRU Cache", "url": "canonical://patterns/lru-cache", "source": "canonical", "tests": "O(1) get/put using Map (or HashMap + DLL)" },
+      { "title": "Rate limiter (token bucket)", "url": "canonical://patterns/rate-limiter-token-bucket", "source": "canonical", "tests": "Refill tokens at fixed rate; allow/deny request" },
+      { "title": "Pub/Sub / Observer", "url": "canonical://patterns/pub-sub", "source": "canonical", "tests": "Topic-based subscribe/publish with unsubscribe handle" },
+      { "title": "Deep clone with cycles", "url": "canonical://patterns/deep-clone", "source": "canonical", "tests": "Handles Date, RegExp, Map, Set, Array, cyclic refs" }
+    ]
+  }
+}

@@ -1,0 +1,106 @@
+{
+  "summary": {
+    "purpose": "Round 2 — 77 NEW questions to bring the total from 77 → 154. Distribution weighted toward backend-heavy buckets.",
+    "totalNew": 77,
+    "perBucket": { "hoisting": 5, "closures": 8, "prototype": 7, "promises": 11, "event-loop": 8, "streams": 5, "arrays": 8, "maps-sets": 6, "recursion": 6, "machine-coding-patterns": 13 }
+  },
+  "newQuestions": {
+    "01-hoisting": [
+      { "filename": "var-in-block.md",                  "title": "var hoisting across if-blocks and loops",                        "tests": "var is function-scoped, not block-scoped — output prediction with if-blocks" },
+      { "filename": "func-expr-in-conditional.md",      "title": "Function expression vs declaration inside if/else",              "tests": "Why named function expressions inside `if` should not be relied on; legacy quirks" },
+      { "filename": "let-in-for-loop-binding.md",       "title": "Per-iteration binding semantics of let in for-loops",            "tests": "Each iteration creates a fresh binding — explains why setTimeout-in-loop with let works" },
+      { "filename": "hoisting-in-try-catch.md",         "title": "Hoisting and scope inside try/catch blocks",                     "tests": "catch parameter is block-scoped; var inside try escapes to function scope" },
+      { "filename": "es-module-live-bindings.md",       "title": "ES module imports — hoisted live bindings",                      "tests": "import declarations are hoisted; bindings are read-only views (not copies) of the exported value" }
+    ],
+    "02-closures": [
+      { "filename": "once-with-cached-return.md",       "title": "Implement once(fn) that caches the first return value",          "tests": "Closure over `called` flag + cached `result`" },
+      { "filename": "memoize-with-ttl.md",              "title": "memoize(fn, { ttl })",                                           "tests": "Map of cached values with expiry; uses closure over Map + Date.now()" },
+      { "filename": "module-pattern-iife.md",           "title": "Revealing Module Pattern (IIFE) for private state",               "tests": "IIFE returning an object of public methods; private vars in closure" },
+      { "filename": "curry-via-closures.md",            "title": "Curry an arity-N function via closures (no fn.length tricks)",   "tests": "Closure over accumulated args, returns inner fn until arity satisfied" },
+      { "filename": "partial-application.md",           "title": "Partial application — partial(fn, ...presetArgs)",                "tests": "Closure over preset args; how partial differs from curry" },
+      { "filename": "setinterval-stale-closure.md",     "title": "Stale closure bug in setInterval — read latest state",            "tests": "setInterval captures stale snapshot; fix with ref/getter/redeclare interval" },
+      { "filename": "create-incrementer.md",            "title": "createIncrement(by) — closure-based incrementer factory",         "tests": "Returns a closure that increments by a configurable step" },
+      { "filename": "closure-memory-leak-dom.md",       "title": "Closure-induced memory leaks in long-lived handlers",             "tests": "Why event listeners + closures retain refs forever in Node servers (and how to break the chain)" }
+    ],
+    "03-prototype": [
+      { "filename": "instanceof-polyfill.md",           "title": "Implement instanceof operator",                                   "tests": "Walk prototype chain; compare with Constructor.prototype" },
+      { "filename": "object-create-polyfill.md",        "title": "Implement Object.create(proto, propsObj?)",                       "tests": "Empty constructor trick; second-arg properties via defineProperties" },
+      { "filename": "class-to-prototype-desugar.md",    "title": "Desugar an ES6 class into prototype-based code",                  "tests": "Show what `class`, `extends`, `super` compile down to (constructor + prototype + reflect.set)" },
+      { "filename": "extends-super-implementation.md",  "title": "Implement extends + super manually (Object.setPrototypeOf)",      "tests": "Inheritance without class keyword — set proto on instance AND constructor" },
+      { "filename": "method-chaining-builder.md",       "title": "Method chaining — return this builder pattern",                   "tests": "Build a chainable QueryBuilder using prototype methods returning this" },
+      { "filename": "tostring-symbol-tag-override.md",  "title": "Customizing toString / Symbol.toPrimitive on a class",            "tests": "Override Object.prototype.toString and Symbol.toPrimitive for printable / coerced objects" },
+      { "filename": "hasownproperty-vs-in.md",          "title": "hasOwnProperty vs in vs Object.hasOwn",                            "tests": "Three operators, three different chain-walking semantics; Object.create(null) gotcha" }
+    ],
+    "04-promises": [
+      { "filename": "build-promise-from-scratch.md",    "title": "Implement a Promise from scratch (state machine + then chaining)", "tests": "PENDING/FULFILLED/REJECTED, then-callback queues, value chaining, microtask scheduling" },
+      { "filename": "promise-any-polyfill.md",          "title": "Implement Promise.any (first fulfilled wins; AggregateError)",     "tests": "Reverse of allSettled — reject only when ALL reject" },
+      { "filename": "promise-finally-polyfill.md",      "title": "Implement Promise.prototype.finally polyfill",                    "tests": "Pass-through resolve/reject while running cleanup fn; rejection in finally takes over" },
+      { "filename": "promisify-node-callback.md",       "title": "Implement util.promisify",                                        "tests": "Convert Node-style cb(err, val) to a returns-Promise fn; preserve `this`" },
+      { "filename": "sequential-vs-parallel-async-map.md", "title": "asyncMap — sequential vs parallel implementations",            "tests": "for...of with await vs Promise.all over .map; when to use each" },
+      { "filename": "async-filter.md",                  "title": "Implement asyncFilter(arr, predicate)",                           "tests": "Run async predicate; preserve input order; parallel vs serial trade-offs" },
+      { "filename": "async-reduce.md",                  "title": "Implement asyncReduce(arr, fn, init)",                            "tests": "Sequential await accumulation; common backend usage (pipeline reduce over async sources)" },
+      { "filename": "priority-async-queue.md",          "title": "Concurrency-limited queue with priority",                          "tests": "Min-heap of tasks; pop highest priority when worker free; backpressure" },
+      { "filename": "fetch-with-abort.md",              "title": "Cancellable fetch with AbortController",                          "tests": "Pass signal; handle AbortError; combine with timeout (race)" },
+      { "filename": "deferred-with-resolvers.md",       "title": "Deferred pattern / Promise.withResolvers (ES2024)",                "tests": "Externalize resolve/reject — when you need to settle a promise from outside its constructor" },
+      { "filename": "async-memoize.md",                 "title": "Memoize an async function (dedupe in-flight calls)",               "tests": "Cache the in-flight Promise itself so concurrent callers share the result" }
+    ],
+    "05-event-loop": [
+      { "filename": "predict-mixed-async-output.md",    "title": "Predict output: mixed setTimeout / Promise / nextTick / queueMicrotask", "tests": "Hard output-prediction puzzle — the senior gotcha" },
+      { "filename": "queuemicrotask-deep-dive.md",      "title": "queueMicrotask — when and why over Promise.resolve().then()",     "tests": "Microtask scheduling; avoiding the promise allocation" },
+      { "filename": "nexttick-starvation.md",           "title": "process.nextTick recursive starvation of I/O",                    "tests": "Infinite nextTick recursion blocks event loop — how to detect + fix" },
+      { "filename": "setimmediate-vs-settimeout-in-io.md", "title": "setImmediate vs setTimeout(0) ordering inside I/O callback",   "tests": "Deterministic inside I/O — setImmediate first; non-deterministic from main module" },
+      { "filename": "messagechannel-microtask.md",      "title": "MessageChannel for cross-realm microtask scheduling",              "tests": "Alternative to queueMicrotask; used by React scheduler" },
+      { "filename": "worker-threads-vs-event-loop.md",  "title": "Worker threads — when the event loop isn't enough",                "tests": "CPU-bound work blocks loop; offload to worker_threads; SharedArrayBuffer basics" },
+      { "filename": "async-hooks-basics.md",            "title": "AsyncLocalStorage / async_hooks for request-scoped context",      "tests": "Per-request context without passing it through every function — backend essential" },
+      { "filename": "top-level-await-modules.md",       "title": "Top-level await in ES modules",                                   "tests": "Halts module evaluation; deadlock risk in cyclic imports" }
+    ],
+    "06-streams": [
+      { "filename": "backpressure-demo.md",             "title": "Demonstrate backpressure — when .write returns false",            "tests": "Producer must pause until 'drain' event; explain mechanically" },
+      { "filename": "transform-line-parser.md",         "title": "Transform stream — line-based parser",                             "tests": "Buffer chunks, split on \\n, emit complete lines downstream" },
+      { "filename": "pipeline-error-propagation.md",    "title": "stream.pipeline — proper error + cleanup semantics",               "tests": "Why pipe leaks on error; pipeline destroys all streams + calls cb once" },
+      { "filename": "callback-api-to-async-iterator.md", "title": "Convert a callback-based API to an async iterator",              "tests": "Wrap any pull-API into for-await-of consumable form" },
+      { "filename": "generator-pipeline.md",            "title": "Build a sync data pipeline with generators",                       "tests": "yield-based stages composed via for...of — like Unix pipes" }
+    ],
+    "07-arrays": [
+      { "filename": "polyfill-some-every.md",           "title": "Polyfill Array.prototype.some and every",                          "tests": "Short-circuit semantics, hole-skip, thisArg" },
+      { "filename": "polyfill-find-findindex.md",       "title": "Polyfill Array.prototype.find / findIndex",                        "tests": "Return value vs index; doesn't skip holes (unlike some/every)" },
+      { "filename": "sort-by-multiple-keys.md",         "title": "Sort an array of objects by multiple keys (asc/desc mix)",         "tests": "Build comparator from field config; stable sort guarantee (ES2019+)" },
+      { "filename": "stable-sort-discussion.md",        "title": "Stable sort — what changed in ES2019",                             "tests": "Pre-2019: impl-defined; now stable. Implications for tie-breaking" },
+      { "filename": "array-dedup.md",                   "title": "Deduplicate an array — Set vs Map vs filter+indexOf",              "tests": "Big-O comparison; deep dedup by key" },
+      { "filename": "zip-unzip.md",                     "title": "zip / unzip arrays (Python-style)",                                "tests": "zip stops at shortest by default; unzip via reduce/spread" },
+      { "filename": "array-set-ops.md",                 "title": "Array intersection / union / difference",                          "tests": "Set-based O(n+m) implementations; vs nested loop O(n*m)" },
+      { "filename": "move-zeros-in-place.md",           "title": "Move all zeros to end (in-place, preserve order)",                  "tests": "Two-pointer technique — classic non-mutation-by-spread trap" }
+    ],
+    "08-maps-sets": [
+      { "filename": "two-sum-map.md",                   "title": "Two-Sum with a Map (O(n))",                                        "tests": "Single-pass; hash complement; canonical interview" },
+      { "filename": "first-non-repeating-char.md",      "title": "First non-repeating character in a string",                        "tests": "Map of char → count; iterate string twice" },
+      { "filename": "group-anagrams.md",                "title": "Group anagrams via Map keyed by sorted string",                    "tests": "Reduce-into-Map pattern; alternative char-count key" },
+      { "filename": "ttl-map.md",                       "title": "TTL Map with auto-eviction (setTimeout vs lazy)",                  "tests": "Active timers vs check-on-read; memory implications" },
+      { "filename": "set-operations-polyfill.md",       "title": "Set.prototype.intersection / union / difference polyfills",        "tests": "ES2025 native; show the polyfill for older Node" },
+      { "filename": "cache-invalidate-by-tag.md",       "title": "Cache invalidation by tag (Redis-style)",                          "tests": "Map<key, value> + Map<tag, Set<key>> — invalidate all entries with a tag" }
+    ],
+    "09-recursion": [
+      { "filename": "permutations.md",                  "title": "Generate all permutations of an array",                            "tests": "Swap-based or pick-and-recurse; n! output size" },
+      { "filename": "power-set.md",                     "title": "Generate the power set (all subsets) of an array",                 "tests": "Include/exclude recursion; bitmask variant" },
+      { "filename": "merge-sort.md",                    "title": "Merge sort — divide and conquer",                                   "tests": "Recursive split + iterative merge; O(n log n)" },
+      { "filename": "quick-sort.md",                    "title": "Quick sort with pivot selection",                                   "tests": "In-place vs functional; pivot strategies; worst-case O(n^2)" },
+      { "filename": "generate-parentheses.md",          "title": "Generate all valid parentheses combinations (n pairs)",            "tests": "Catalan-count output; open/close counter recursion" },
+      { "filename": "climbing-stairs-memoized.md",      "title": "Climbing stairs — recursive with memoization",                     "tests": "Fibonacci-equivalent; memo with array; iterative DP variant" }
+    ],
+    "10-machine-coding-patterns": [
+      { "filename": "once.md",                          "title": "Implement once(fn) (return-value caching)",                        "tests": "Boolean flag + cached return; relationship to throttle{leading:true,trailing:false}" },
+      { "filename": "async-compose-pipe.md",            "title": "compose / pipe for async functions",                                "tests": "Reduce over promises with await; matter of reduce vs reduceRight" },
+      { "filename": "observable-subject.md",            "title": "Tiny Observable / Subject (RxJS-lite)",                            "tests": "subscribe / next / error / complete; teardown function" },
+      { "filename": "set-polyfill.md",                  "title": "Implement a Set polyfill (add, has, delete, size, iteration)",     "tests": "Array-backed with O(n) has — vs Map-backed for O(1)" },
+      { "filename": "json-stringify-polyfill.md",       "title": "JSON.stringify polyfill (handle string/number/bool/null/array/obj/cycles)", "tests": "Escape strings; throw on cycles or use replacer" },
+      { "filename": "json-parse-recursive-descent.md",  "title": "JSON.parse — recursive-descent parser (simplified)",               "tests": "Tokenize + parse value/object/array; build interview-shape parser" },
+      { "filename": "scheduler-idle-callback.md",       "title": "Implement requestIdleCallback-like scheduler",                      "tests": "Defer low-priority tasks; setTimeout fallback; cooperative scheduling" },
+      { "filename": "mini-state-machine.md",            "title": "Mini finite state machine builder",                                 "tests": "transitions: { state: { event: nextState } }; emit events on transition" },
+      { "filename": "dependency-injection-container.md", "title": "Tiny DI container (register / resolve / singleton vs transient)", "tests": "Map<token, factory>; lazy resolution; circular detection" },
+      { "filename": "trie.md",                          "title": "Trie data structure (insert, search, startsWith)",                  "tests": "Children Map; canonical autocomplete; prefix lookups" },
+      { "filename": "min-heap-priority-queue.md",       "title": "MinHeap / Priority queue",                                          "tests": "Array-backed heap; sift up/down; backbone of scheduler/throttle/asyncQueue" },
+      { "filename": "circular-buffer.md",               "title": "Circular buffer (fixed-size ring queue)",                           "tests": "Head/tail indices; overwrite-vs-reject on full" },
+      { "filename": "cancellable-promise-wrapper.md",   "title": "Make a Promise cancellable (token / signal pattern)",              "tests": "Wrap promise with cancel(); discuss why native Promise has no cancel" }
+    ]
+  }
+}
