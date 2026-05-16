@@ -1,5 +1,59 @@
 # Maps, Sets, WeakMaps, WeakSets
 
+## Intuitive primer (read this first)
+
+Before any syntax, sit with the *purpose* of each collection — once intent clicks, the methods read themselves.
+
+- **`Map`** = a **labeled drawer system**. Each drawer (entry) has a label of *any* type (a string, a number, an object reference, even `NaN`). You ask the drawer system "give me what's behind label `X`" and it answers in O(1). Unlike a plain Object — which is more like a folder where labels are silently coerced into strings and integer-looking labels jump to the front — a `Map` keeps your labels untouched and remembers the order you added them.
+- **`Set`** = a **uniqueness gatekeeper**. Imagine a bouncer at a club door who keeps a list of who's already inside; if you try to add someone already on the list, nothing happens. That's it. No values, just membership.
+- **`WeakMap`** = a **sticky note on an object**. You stuck a note on a parked car. The day the car is towed away (garbage-collected), the note goes with it. You can't enumerate sticky notes, you can't count them; you can only ask "is there a note on *this* specific car?". This is exactly why WeakMap exists: per-object metadata that *cannot leak memory*.
+- **`WeakSet`** = a **silent guest list** of objects you don't want to keep alive. Used for "have I already processed this node?" checks in graph traversal where you don't want to extend the lifetime of the graph.
+
+### Why these exist at all (first principles)
+
+JavaScript shipped in 1995 with only Object as a key-value store. Object had three flaws that surfaced as the language grew up:
+1. Keys are silently stringified — so `obj[1]` and `obj["1"]` collide.
+2. Objects inherit from `Object.prototype` — so `obj.toString` exists before you set anything, and a user input of `"__proto__"` can corrupt your dictionary (prototype pollution).
+3. No `.size`, no guaranteed iteration order across all key types, no clean "is this key present?" (you have to write `hasOwnProperty`).
+
+`Map` (ES2015) was the language admitting "we need a real dictionary type." `Set` came along for free because internally a Set is just a Map with values ignored. `WeakMap`/`WeakSet` were added to solve the harder problem of *garbage-collection-friendly metadata*.
+
+### Progression (simplest → interview-grade)
+1. **Simplest:** "I have a list of name → age pairs." Either Object or Map works.
+2. **Intermediate:** "Now keys can be DOM nodes / user objects, not strings." → Map is mandatory.
+3. **Advanced:** "Now I want the map to *not* keep the DOM node alive after it's removed from the page." → WeakMap.
+4. **Interview-grade:** "Build an LRU cache in O(1)." → Map + insertion-order trick. "Cache per request without leaks." → WeakMap.
+
+## Mental Model
+
+Picture a `Map` as **two data structures glued together**:
+
+```
+┌──────────────────────────────────────────────────────────┐
+│  HASH TABLE (for O(1) lookup by key)                     │
+│                                                          │
+│   hash("a") % buckets ─► bucket #3 ─► [entry A]          │
+│   hash(objRef)         ─► bucket #7 ─► [entry B] [E]     │ ← collision chain
+│   hash(NaN)            ─► bucket #1 ─► [entry C]         │
+│                                                          │
+└──────────────────────────────────────────────────────────┘
+        ▲ each entry node also lives in a linked list ▼
+┌──────────────────────────────────────────────────────────┐
+│  INSERTION-ORDER LINKED LIST (for deterministic iter)    │
+│                                                          │
+│   HEAD ─► [A] ─► [C] ─► [B] ─► [E] ─► TAIL               │
+│           ▲ first inserted              ▲ last inserted  │
+└──────────────────────────────────────────────────────────┘
+```
+
+When you `map.set(k, v)`: hash `k`, find bucket, append a node, AND link it to the tail of the order-list. When you `map.delete(k)`: unlink from bucket chain AND from order-list. Both O(1). When you iterate `for (const [k,v] of map)`: walk the order-list. This dual structure is why LRU implementations using Map are so clean — the linked list is *already there*, you don't have to maintain it.
+
+### Hash collision intuition
+
+Two different keys can hash to the same bucket. The Map stores a small chain (or open-addressing probe) inside that bucket and walks it to find the right entry by *strict identity*. You rarely need to think about this — average O(1) holds — but it explains:
+- Why a malicious user dumping crafted strings into your cache could theoretically degrade you to O(n) per op (hash-flooding). V8 mitigates with randomized hash seeds per process.
+- Why iteration order is *insertion* order, not hash order — the linked list overlay decouples them.
+
 ## TL;DR
 - **`Map`**: arbitrary keys (objects, primitives), preserves insertion order, O(1) avg get/set/has/delete, has `.size`.
 - **`Set`**: unique values, insertion order, O(1) ops, has `.size`.
@@ -11,6 +65,11 @@
 - Caching, deduplication, rate-limit counters, in-memory indexes — all map/set territory.
 - Choosing Map vs Object correctly affects perf and correctness (prototype pollution, key types).
 - WeakMap is the canonical answer for "cache per object without leaking memory".
+
+### What they're really testing (decoded)
+- **Map vs Object choice:** can you justify a data-structure decision *for a use case*, or do you reach for `{}` reflexively? Senior engineers articulate trade-offs in seconds.
+- **WeakMap awareness:** signals you've thought about memory lifecycle in long-running Node processes (the #1 cause of "our pod gets OOM-killed at 3am" tickets).
+- **LRU on Map:** signals you understand that Map is *not* a hash table — it's a hash table plus an ordered linked list, and you can exploit that.
 
 ## Core mental model
 A `Map` is conceptually a hash table with an insertion-order linked list overlay. V8 uses an open-addressed hash table; iteration walks the insertion-order list, so iteration is deterministic.
@@ -44,6 +103,57 @@ function parse(node) {
 ```
 
 WeakRefs and FinalizationRegistry exist for advanced cases (typically discouraged in app code; ok for libraries).
+
+### Common beginner confusion: Map vs Object
+
+This is the question interviewers love because most candidates answer poorly. Use this decision tree:
+
+```
+Are your keys ALWAYS strings/symbols, known statically (a fixed schema)?
+├── YES → Object is fine. Bonus: JSON-serializable for free.
+│         e.g. const user = { name, age, email };
+│
+└── NO → Are keys non-strings (numbers stay numbers, objects, NaN)?
+         ├── YES → Map. Always.
+         │
+         └── NO (still strings, but dynamic) → Are keys USER-CONTROLLED?
+                  ├── YES → Map (prototype-pollution safe)
+                  │         or Object.create(null) (no prototype = safer).
+                  │
+                  └── NO → Do you need .size / frequent add+delete /
+                            guaranteed insertion order across mixed key types?
+                            ├── YES → Map
+                            └── NO  → Object (V8 optimizes static shapes via hidden classes)
+```
+
+The mistake beginners make: they hear "Map is faster" or "Map is better" as an absolute. It isn't. Object with a fixed shape can be faster (hidden class optimization). Map wins for *dynamic, mixed-key, grow-shrink* workloads.
+
+### Why WeakMap/WeakSet exist (the GC story)
+
+Imagine you're writing a parser library. Users pass you AST nodes; you want to cache parsed results per node:
+
+```js
+const cache = new Map();           // ← THE LEAK
+function parse(node) {
+  if (cache.has(node)) return cache.get(node);
+  cache.set(node, doWork(node));
+  return cache.get(node);
+}
+```
+
+The user finishes parsing 10,000 nodes and drops their references. The garbage collector wants to reclaim those nodes — but **your `cache` Map is still holding strong references to them**. The nodes stay alive. The 10,000 entries accumulate. Your Node process slowly bloats and eventually OOMs.
+
+Swap `Map` for `WeakMap` and the GC is allowed to remove both the node *and* its cache entry the moment the user's reference drops. You don't have to know when — it just works. That's the entire purpose of WeakMap: **opt out of being a GC root for your keys**.
+
+Consequences (why the API is so restricted):
+- **No iteration / no `.size`** — because if you could iterate, you'd have to "know" what's still there, but entries can disappear non-deterministically.
+- **Keys must be objects** (or symbols ES2023+) — primitives have no identity for GC to track.
+- **No "on cleanup" callback** — GC timing is implementation-defined.
+
+WeakSet is the same idea for "have I seen this object?" sets where you don't want to extend its life.
+
+### Bridge: from "why" to "how"
+You now know *what* each collection is and *why* it exists. The next section drills the exact methods you'll type at the keyboard. Read it as muscle-memory reference; the intuition above is what powers your interview answers, the syntax below is what powers your fingers.
 
 ## Syntax cheat sheet
 ```js
@@ -116,6 +226,9 @@ Object.groupBy(items, x => x.category);
 Map.groupBy(items, x => x.obj);  // when keys are objects
 ```
 
+### Bridge: from API to landmines
+The methods above are the "happy path." The next section is the **trapdoor list** — subtle behaviors that show up in interviews precisely because they catch out engineers who learned Map/Set from a 5-minute YouTube video. Every trap below is a *story* about how JS evolved differently from other languages.
+
 ## Edge cases & interview traps
 1. **`Object` keys are stringified** — `obj[1]` and `obj["1"]` are the same key; `Map` keeps them distinct.
 2. **`map.set(NaN, 1).get(NaN)` works** — SameValueZero.
@@ -144,6 +257,15 @@ Map.groupBy(items, x => x.obj);  // when keys are objects
 
 ## Interview worked examples
 
+### How to think aloud while solving these
+Senior candidates narrate their thought process. Each example below has an "I'd say" block — read it as the literal script you'd speak to the interviewer. The pattern is:
+1. State the brute-force baseline (proves you understand the problem).
+2. Name the trade you're making (usually space for time).
+3. Pick a data structure and justify it in one sentence.
+4. Write code.
+5. State complexity.
+6. Volunteer one edge case.
+
 ### Example 1 — Two-Sum with a Map
 **Asked as:** "Given an array of integers and a target, return indices of two numbers that add up to it."
 
@@ -164,6 +286,13 @@ twoSum([2, 7, 11, 15], 9); // [0, 1]
 
 **What the interviewer is testing:** Hash-map lookup pattern; trading space for time.
 **Sharp follow-up they often ask:** "What if duplicates exist?" → Map stores the latest index; for two-sum where both indices must differ, check `seen.has(complement)` BEFORE inserting the current.
+
+#### Mental walkthrough — twoSum([2, 7, 11, 15], 9)
+```
+i=0  current=2  complement=9-2=7   seen={}            7 not in seen   → seen.set(2, 0) ⇒ {2→0}
+i=1  current=7  complement=9-7=2   seen={2→0}         2 IS in seen!   → return [0, 1]  ✓
+```
+Notice: by checking *before* inserting, we guarantee `i ≠ j`. If we inserted first, `nums = [3, 3], target = 6` would return `[1, 1]` — wrong.
 
 ### Example 2 — WeakMap-keyed memoization
 **Asked as:** "Memoize an expensive function that takes an object argument — without leaking memory."
@@ -187,6 +316,19 @@ function expensive(obj) {
 **Asked as:** "Implement an LRU cache with O(1) get and put."
 
 I'd say: "Map preserves insertion order. On `get`, I delete and re-set to bump to most-recently-used. On `set` over capacity, I evict the first key via `m.keys().next().value`. Both ops O(1) thanks to Map's hash + linked-list overlay."
+
+#### Mental model — why this works
+```
+LRU as a desk with limited papers
+─────────────────────────────────
+Capacity = 3 papers on the desk.
+Each time you READ a paper, you move it to the TOP of the stack (most recently used).
+When you add a NEW paper and the desk is full, you toss the BOTTOM paper (least recently used).
+
+Map's insertion-order list IS the stack. The "top" is the tail (end). The "bottom" is the head (start).
+delete-then-set = "pull out and put on top".
+keys().next().value = "the bottom paper" — O(1) because we walk one step of the linked list.
+```
 
 ```js
 class LRU {
@@ -317,6 +459,16 @@ For application-level caches, prefer Map + an eviction strategy (LRU, TTL) over 
 For high-throughput counters (rate limiters, metrics aggregation in-process), Map's O(1) ops beat repeatedly hashing strings into an Object on hot paths. Externalize to Redis if you have multiple processes.
 
 Be careful with `Map` as cache without bounds — every set grows it. Cap with LRU or TTL.
+
+## Senior storytelling: how to frame "I'd use a Map here"
+When an interviewer hands you any data problem, the *signal* of seniority isn't reaching for a clever data structure — it's narrating *why*. Sample scripts:
+
+- **For caching:** "I'll use a Map, capped at N entries with LRU eviction via `keys().next().value`. If keys were objects with bounded lifetime, I'd swap to WeakMap and let GC handle eviction."
+- **For dedup:** "Set if values are primitives or I dedup by reference. If I need to dedup by content, I'll project each item to a stable key (id, or stringified shape) and dedup with a Set on that projection."
+- **For frequency counts:** "Map keyed by the value, count incremented with `(m.get(x) ?? 0) + 1`. I prefer Map over Object here because the keys might collide with `__proto__`/`toString` if they're user input."
+- **For graph traversal:** "Visited set is a Set of node references — pure identity check. If I were worried about retaining the graph after traversal, I'd use a WeakSet."
+
+Saying any of these gets you 80% of the data-structure question even if your code has a small bug.
 
 ## 60-second revision (day-before)
 ```text

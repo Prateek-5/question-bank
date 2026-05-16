@@ -11,9 +11,65 @@ The fundamentals here aren't about syntax. They're about: **execution order, set
 
 ---
 
+## First principles — why SQL exists at all
+
+Before any syntax, internalize this: **SQL is a declarative language for manipulating sets of tuples.**
+
+Three foundational ideas:
+
+1. **A relation is a set of tuples.** A table is just a (multi-)set of rows. Order is not part of the data; rows have no inherent position. When you write a query, you are describing *which set you want*, not *how to build it*.
+2. **Declarative > imperative for data.** You don't say "loop over rows, check this, then accumulate that." You say "give me the set where these conditions hold." The query planner converts your description into an execution plan. This is the same shift as writing math (`{x | x > 0}`) instead of pseudocode (`for x in S: if x > 0 ...`).
+3. **Set operations compose.** JOIN, UNION, GROUP BY, subqueries — each takes one or more relations and produces a new relation. Because the output of any query is itself a relation, queries compose like Lego.
+
+### Real-world analogies that will stick
+
+| SQL concept | Mental analogy |
+|---|---|
+| Table | A spreadsheet (but unordered) |
+| Row | A single record / receipt |
+| JOIN | Lining up two spreadsheets and matching them by a column |
+| WHERE | Throwing away rows that fail a filter |
+| GROUP BY | Sorting receipts into piles, one pile per category |
+| Aggregate (`SUM`, `COUNT`) | Counting/totaling each pile |
+| HAVING | Throwing away whole piles that don't meet a condition |
+| Subquery | A miniature query whose result feeds another |
+| Index | The alphabetical thumb-tabs in a paper dictionary |
+
+If you keep these analogies in your head while reading the rest of this file, every concept will feel intuitive rather than memorized.
+
+### Why interviewers care about fundamentals
+
+The SDE2 SQL screen is rarely about typing speed. They're probing for:
+
+- **Set-based thinking** — do you reach for `GROUP BY` and joins, or do you mentally loop "for each user, then for each order…"? The former scales, the latter doesn't.
+- **Query planning intuition** — can you predict whether the engine will use a hash join, a nested loop, or an index scan, just by reading the query?
+- **Declarative reasoning** — do you say *what* you want clearly, or do you over-specify the *how* (procedural temp tables, cursors, unnecessary ordering)?
+- **NULL discipline** — three-valued logic trips up almost everyone; if you handle it without prompting, you stand out.
+
+---
+
 ## Core concepts
 
 ### Logical execution order (everyone gets this wrong at first)
+
+#### Mental model
+
+SQL is written in the order you *think* about the answer (`SELECT what I want…`), but it must be *executed* in the order that lets the engine *produce* the answer. You can't filter a `SELECT` alias before `SELECT` has run; you can't aggregate before grouping. The clause-order vs execution-order mismatch is the single biggest source of beginner confusion.
+
+#### ASCII pipeline view
+
+```
+   ┌────────┐   ┌───────┐   ┌──────────┐   ┌────────┐   ┌────────┐   ┌──────────┐   ┌──────────┐   ┌─────────┐
+   │ FROM + │──>│ WHERE │──>│ GROUP BY │──>│ HAVING │──>│ SELECT │──>│ DISTINCT │──>│ ORDER BY │──>│ LIMIT/  │
+   │ JOINs  │   │       │   │          │   │        │   │        │   │          │   │          │   │ OFFSET  │
+   └────────┘   └───────┘   └──────────┘   └────────┘   └────────┘   └──────────┘   └──────────┘   └─────────┘
+   produce      drop bad    bucket into    drop bad     compute      dedupe         sort           slice
+   the row      rows        piles          piles        expressions  rows           rows           result
+   universe                                              (aliases
+                                                          born here)
+```
+
+Every alias you create in `SELECT` is invisible to `WHERE`/`GROUP BY`/`HAVING` (they ran first), but visible to `ORDER BY` (it runs later). This is not a quirk; it's a direct consequence of the pipeline above.
 
 SQL is written `SELECT … FROM … WHERE … GROUP BY … HAVING … ORDER BY … LIMIT`, but it *executes* in this order:
 
@@ -33,6 +89,62 @@ This is *why*:
 
 ### Joins — the algorithms behind them
 
+#### Mental model
+
+A JOIN is **lining up two spreadsheets side-by-side and stapling rows together wherever a column matches**. You start with two sets of tuples; you end with one set of "combined" tuples. The *type* of JOIN only controls **what happens to rows that have no match on the other side** — keep them (with NULLs), drop them, or include both sides' orphans.
+
+#### Progressive build-up
+
+```sql
+-- Level 0: cartesian — every row of A paired with every row of B (rarely useful)
+SELECT * FROM users, orders;
+
+-- Level 1: inner — only matched pairs
+SELECT u.name, o.id FROM users u JOIN orders o ON o.user_id = u.id;
+
+-- Level 2: left — every user, with NULL for orders if they have none
+SELECT u.name, o.id FROM users u LEFT JOIN orders o ON o.user_id = u.id;
+
+-- Level 3: anti-join — users with NO orders (a left join + IS NULL)
+SELECT u.name FROM users u LEFT JOIN orders o ON o.user_id = u.id WHERE o.id IS NULL;
+
+-- Interview level: semi-join — "users who have at least one order, but don't duplicate them"
+SELECT u.* FROM users u WHERE EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id);
+```
+
+#### ASCII Venn diagrams — visualising each JOIN
+
+```
+   INNER JOIN                LEFT JOIN                  RIGHT JOIN                 FULL OUTER JOIN
+                                                                                  
+       L         R               L         R                L         R               L         R
+    ┌────┬─────┐            ┌────┬─────┐                ┌────┬─────┐               ┌────┬─────┐
+    │    │█████│            │████│█████│                │    │█████│               │████│█████│
+    │    │█████│            │████│█████│                │    │█████│               │████│█████│
+    │    │█████│ R-only     │████│█████│   R-only       │    │█████│ ███ R-only    │████│█████│ ████
+    └────┴─────┘            └────┴─────┘                └────┴─────┘               └────┴─────┘
+                                                                                  
+   only the                 all of L plus               all of R plus              everything: rows on
+   overlap                  matching R                  matching L                 either side, NULLs
+                            (L-only rows                (R-only rows               where no match
+                             keep NULLs                  keep NULLs
+                             on right)                   on left)
+
+
+   CROSS JOIN                ANTI-JOIN                  SEMI-JOIN
+   (cartesian)               (L without match)          (L with at least one match)
+
+       L  ×  R                  L         R                L         R
+    ┌──────────┐             ┌────┐                     ┌────┐
+    │ every    │             │████│  (R is              │████│  (R is checked
+    │ pair     │             │████│   merely            │████│   merely for
+    │ of       │             │████│   probed,           │████│   existence;
+    │ rows     │             └────┘   not joined)       └────┘   not duplicated)
+    └──────────┘
+```
+
+Read the diagrams: shaded = "this region is returned"; unshaded = "this region is dropped". The same Venn diagram with a different shading pattern explains every JOIN.
+
 | Type | Returns | Algorithm options |
 |---|---|---|
 | INNER | rows matching on both sides | nested loop / hash / sort-merge |
@@ -48,7 +160,60 @@ The planner picks the algorithm:
 - **Hash join** — good for large, unsorted inputs with an equi-join
 - **Sort-merge** — good when both sides are already sorted on the join key
 
+#### Indexed vs unindexed lookups (ASCII)
+
+```
+  Unindexed lookup (full scan)            Indexed lookup (B-tree)
+  -----------------------------           --------------------------
+   ┌──┬──┬──┬──┬──┬──┬──┬──┬──┐                    [50]
+   │ 9│42│13│ 7│50│21│ 1│77│33│ scan all          /     \
+   └──┴──┴──┴──┴──┴──┴──┴──┴──┘                 [21]    [77]
+       ↑ ↑ ↑ ↑ ↑ ↑ ↑ ↑ ↑                       /   \    /  \
+       O(N) comparisons                       [9]  [42][50] [77]
+                                              /                \
+                                             [1] ...           [99]
+                                             O(log N) jumps
+```
+
+This is why a nested-loop join becomes a problem on a big inner table without an index: you re-scan the whole inner table for every outer row.
+
+#### Common beginner confusion — JOINs are set-based, not procedural
+
+- **JOIN order doesn't matter to the result** (only to the plan). `A JOIN B` and `B JOIN A` produce the same logical set; the planner chooses the cheaper one.
+- **The `ON` clause is a filter on the *combined* row**, not on either side individually. `LEFT JOIN o ON o.status = 'PAID'` is *not* the same as `LEFT JOIN o ... WHERE o.status = 'PAID'`. The first keeps users with no paid orders (status side is NULL); the second silently demotes the LEFT JOIN into an INNER JOIN.
+- **A LEFT JOIN does not automatically de-duplicate.** If a user has 5 orders, you get 5 rows for that user.
+
+#### Interview storytelling — how to talk about a JOIN at the whiteboard
+
+> "I want every user, plus their most recent order if any. So it's a LEFT JOIN — I keep all users. The join condition is the user-id equality. Because I want 'most recent', I need a tiebreaker, which I'll do with a window function or LATERAL. The right-side predicate `status = 'PAID'` goes in the `ON` clause, not `WHERE`, otherwise I'd lose users who never paid — which would silently turn this into an INNER JOIN."
+
+That paragraph alone scores you points; it shows declarative thinking *and* JOIN-vs-WHERE awareness.
+
 ### NULL is not a value — it's "unknown"
+
+#### Mental model
+
+Think of `NULL` as the answer **"I don't know."** Two unknowns aren't equal — they might be the same, they might be different, we don't know. That's why `NULL = NULL` is itself `NULL`, not `TRUE`. SQL's logic isn't two-valued (true/false); it's **three-valued (TRUE / FALSE / UNKNOWN)** and `WHERE` only keeps rows whose predicate evaluates to `TRUE`. `UNKNOWN` rows fall off the side.
+
+#### Truth table — the source of every NULL bug
+
+```
+   AND │ T │ F │ N             OR  │ T │ F │ N             NOT
+   ────┼───┼───┼───            ────┼───┼───┼───            ─────
+    T  │ T │ F │ N              T  │ T │ T │ T             T → F
+    F  │ F │ F │ F              F  │ T │ F │ N             F → T
+    N  │ N │ F │ N              N  │ T │ N │ N             N → N
+```
+
+Every weird NULL behaviour falls out of this table. For example: `col NOT IN (1, 2, NULL)` expands to `col<>1 AND col<>2 AND col<>NULL`. The last term is always `NULL` → the whole expression is at best `NULL`, never `TRUE` → zero rows.
+
+#### Common beginner confusion — `COUNT(*)` vs `COUNT(col)` vs `COUNT(DISTINCT col)`
+
+- `COUNT(*)` — "how many rows in the bucket?" — counts everything, even all-NULL rows.
+- `COUNT(col)` — "how many *non-NULL* values of `col` in the bucket?" — silently drops NULLs.
+- `COUNT(DISTINCT col)` — same, but de-duplicates first; expensive.
+
+Useful trick: `COUNT(*) - COUNT(col)` gives you the number of NULLs in `col` — handy for data-quality queries.
 
 - `NULL = NULL` is **NULL**, not true
 - `NULL <> NULL` is **NULL**, not false
@@ -59,11 +224,64 @@ The planner picks the algorithm:
 
 ### GROUP BY semantics
 
+#### Mental model
+
+`GROUP BY` is **sorting your receipts into piles**, one pile per unique combination of the group-by columns. Each pile collapses into a single output row. Aggregate functions (`SUM`, `COUNT`, `AVG`, `MIN`, `MAX`) operate *per pile*.
+
+```
+   Raw rows:                     After GROUP BY category:
+   ┌────────────┬───────┐         ┌──────────┬──────────────┐
+   │ category   │ price │         │ category │ SUM(price)   │
+   ├────────────┼───────┤         ├──────────┼──────────────┤
+   │ books      │  20   │   →     │ books    │     50       │  ← pile of 2 books rows collapsed
+   │ books      │  30   │         │ shoes    │    175       │  ← pile of 2 shoes rows collapsed
+   │ shoes      │ 100   │         └──────────┴──────────────┘
+   │ shoes      │  75   │
+   └────────────┴───────┘
+```
+
+Once the piles exist, you can either:
+- ask the engine to *describe* each pile (an aggregate column in `SELECT`), or
+- ask it to *throw away* piles you don't like (`HAVING`).
+
+You **cannot** ask for a non-grouped detail column directly, because the row no longer exists — the pile collapsed.
+
+#### Common beginner confusion — `WHERE` vs `HAVING`
+
+| | WHERE | HAVING |
+|---|---|---|
+| Runs… | **before** GROUP BY | **after** GROUP BY |
+| Operates on… | individual rows | piles (groups) |
+| Can use aggregates? | No | Yes |
+| Can use group key? | Yes | Yes |
+
+> Rule of thumb: if your condition could be evaluated **on a single row in isolation**, it's a `WHERE`. If it needs to look at the whole pile (`COUNT(*) > 5`, `SUM(amount) > 1000`), it's a `HAVING`.
+
 - Every non-aggregated column in `SELECT` must appear in `GROUP BY` (Postgres-strict). MySQL was historically lenient (`ONLY_FULL_GROUP_BY` now defaults on).
 - `HAVING` runs *after* `GROUP BY` and can reference aggregates.
 - `GROUP BY ()` returns 1 row (the global aggregate).
 
 ### Subqueries
+
+#### Mental model
+
+A subquery is **a query whose answer is fed into another query**. Since every SQL query produces a relation (a set), and most SQL clauses accept a relation as input, subqueries compose anywhere a relation can sit: `FROM`, `WHERE`, `SELECT`, `HAVING`.
+
+Two flavors that look similar but execute very differently:
+
+- **Non-correlated** — independent of the outer query. The engine runs it *once* and reuses the result. Cheap.
+- **Correlated** — references a column from the outer row. Conceptually re-runs *per outer row*. Often expensive, but the planner may rewrite it into a join.
+
+```
+   Non-correlated (run once):                  Correlated (run per outer row):
+   ┌────────────────────┐                      ┌──────────┐    ┌──────────────┐
+   │ outer query        │                      │ outer    │───>│ inner runs   │
+   │  uses pre-computed │<── single result ──  │ row 1    │    │ for row 1    │
+   │  inner result      │   (one execution)    ├──────────┤    ├──────────────┤
+   └────────────────────┘                      │ outer    │───>│ inner runs   │
+                                               │ row 2    │    │ for row 2    │
+                                               └──────────┘    └──────────────┘
+```
 
 - **Scalar subquery** — returns one value: `SELECT (SELECT MAX(x) FROM t)`
 - **Correlated subquery** — references the outer row; runs per outer row → often slow → can usually be rewritten as a join
@@ -88,6 +306,20 @@ The planner picks the algorithm:
 
 ---
 
+## Bridge — from concepts to queries
+
+The next section is examples. Don't just read them; *trace them* using the FROM → WHERE → GROUP BY → HAVING → SELECT → ORDER BY → LIMIT pipeline. For each query ask:
+
+1. What's the starting universe of rows after the joins?
+2. What does `WHERE` throw away?
+3. What are the piles after `GROUP BY`?
+4. Which piles does `HAVING` drop?
+5. What does the engine project in `SELECT`?
+
+Once you can verbally narrate any query through those five questions, you're at the SDE2 level.
+
+---
+
 ## Real examples
 
 ### E-commerce — daily revenue per category
@@ -105,6 +337,16 @@ WHERE o.status = 'PAID'
 GROUP BY c.name, DATE(o.created_at)
 ORDER BY day DESC, revenue DESC;
 ```
+
+#### Walk-through (the way you'd narrate this to an interviewer)
+
+1. **FROM + JOINs.** Start with `orders`, staple `order_items` to it by `order_id`, then `products` by `product_id`, then `categories` by `category_id`. The result is one row per *order-line*, fattened with category info.
+2. **WHERE.** Keep only paid orders from the last 30 days. Anything else evaporates.
+3. **GROUP BY.** Pile rows by `(category, day)`. Every pile = "everything sold in this category on this day."
+4. **SELECT.** For each pile, emit the category, the day, and `SUM(quantity * unit_price)` — the pile's revenue.
+5. **ORDER BY.** Sort newest-first; within a day, highest revenue first.
+
+Notice we never wrote a loop. We described the set we wanted; the engine figured out the loops.
 
 ### Payments — find duplicate-charge candidates
 
@@ -130,6 +372,8 @@ HAVING p.qty_on_hand - COALESCE(SUM(oi.quantity), 0) < 0;
 
 ### Chat — last message per conversation
 
+> **Pattern recognition:** "Per X, give me the latest/highest/top-1 Y" is the **top-N-per-group** pattern. Memorize the three idioms below — interviewers love this exact shape because there's no single "best" answer; the right choice depends on data shape and indexes.
+
 ```sql
 -- Approach 1: window function (clean)
 SELECT conv_id, body, sent_at
@@ -153,6 +397,25 @@ LEFT JOIN LATERAL (
   WHERE m.conv_id = c.id ORDER BY sent_at DESC LIMIT 1
 ) lm ON true;
 ```
+
+---
+
+## How to talk through SQL at the whiteboard
+
+When asked "walk me through what this query returns," the high-signal answer follows a fixed script:
+
+1. **Identify the row universe.** Say out loud what the FROM/JOIN produces. "After the joins, each row is one order-line plus its product, category, and parent order."
+2. **State the filter.** "We keep only paid orders from the last 30 days."
+3. **State the grouping.** "We pile by `(category, day)`, so each output row is one (category, day) pair."
+4. **State the aggregation.** "We sum `quantity * price` over each pile — that's revenue for that bucket."
+5. **State the ordering / limiting.** "Most recent days first; within a day, the biggest revenue first."
+
+If they ask about performance, jump to:
+- "Index on `orders(status, created_at)` cuts the filter cost."
+- "If `order_items` is huge, the planner probably hash-joins it."
+- "I'd watch for skew if one category dominates."
+
+That structure works for almost any SQL question.
 
 ---
 
@@ -350,6 +613,14 @@ WHERE NOT EXISTS (
 - **NULL-vs-absent vs sentinel** — should "unknown phone" be NULL, empty string, or '__UNKNOWN__'? NULL preserves SQL semantics; sentinels enable unique constraints; discuss the trade-off.
 - **`COUNT(*)` cost** — in Postgres it requires a scan because MVCC tuples aren't centrally counted; in MySQL InnoDB it's the same. For dashboards, cache the count or use approximate methods.
 - **Keyset vs offset pagination** — offset = O(N+offset), keyset = O(log N). Mention this unprompted.
+
+---
+
+## One-line summary of fundamentals
+
+> **SQL is "declare the set you want." Filters reduce rows, joins combine relations, GROUP BY collapses piles, NULL is unknown, and the engine — not you — decides the loops.**
+
+If everything above clicks, you have the mental scaffolding. The next file (`02-advanced-sql.md`) layers window functions, CTEs, and recursion on top of these same primitives — same set-based thinking, sharper tools.
 
 ---
 

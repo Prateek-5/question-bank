@@ -11,6 +11,65 @@ This file pairs tightly with `07-isolation-levels.md` and `08-locks-concurrency.
 
 ---
 
+## Why interviewers care
+
+Interviewers don't ask about transactions because they want a definition of ACID. They ask because transactions are the **only test of whether you can reason about correctness under concurrency**. Anyone can write code that works when called once on an empty database. Senior engineers write code that's right when:
+
+- Two requests arrive in the same millisecond
+- The DB crashes mid-write
+- A worker retries an operation after a timeout
+- A network blip cuts the response after the DB succeeded
+- Three services need to agree on a single business outcome
+
+If you don't understand transactions, every one of these scenarios is a future incident. If you do, you have a vocabulary (atomicity, isolation, idempotency, outbox, saga, 2PC) to discuss the trade-offs.
+
+A senior interviewer is listening for: do you instinctively wrap multi-step state changes? Do you know what `ROLLBACK` does and doesn't undo? Do you separate transactional guarantees from retry-safety (idempotency)? Can you reason about what survives a crash and what doesn't?
+
+---
+
+## The intuitive picture — ACID as a contract
+
+A transaction is a **promise the database makes to your code**: "I will treat this group of statements as a single unit. Either you'll see all the effects, or none of them — never half."
+
+The classic mental anchor is a bank transfer. Sending ₹100 from Asha to Bilal is actually two writes:
+
+```
+1. Debit Asha   (-100)
+2. Credit Bilal (+100)
+```
+
+If only step 1 succeeds, ₹100 vanishes from the universe. If only step 2 succeeds, ₹100 was minted from nothing. Both outcomes are unacceptable. A transaction is the contract that says: *both happen, or neither does, and no one in between sees half.*
+
+That contract has four guarantees — **ACID** — each addressing a different failure mode:
+
+- **Atomicity** answers: *"What if the server crashes between step 1 and step 2?"* → Treat the group as one indivisible operation. On crash, partial work is undone.
+- **Consistency** answers: *"What if a step violates a rule like 'balance ≥ 0'?"* → Constraints fire at commit; bad state is rejected and the transaction aborts.
+- **Isolation** answers: *"What if Bilal queries his balance during the transfer?"* → He sees the before-state or the after-state, never the half-state. (Strength varies — file 07.)
+- **Durability** answers: *"What if the power dies one second after I told the user it worked?"* → If the DB acknowledged COMMIT, the change survives any crash short of disk destruction.
+
+```
+ACID layered on a transfer:
+
+  Time ──►
+  ┌─────────┐  ┌─────────┐         ┌────────┐
+  │ DEBIT   │──│ CREDIT  │── ... ──│ COMMIT │  ← durability begins here
+  └─────────┘  └─────────┘         └────────┘
+       ▲            ▲                   ▲
+       │            │                   │
+   atomicity:   isolation:           consistency:
+   neither      no other tx          constraints
+   visible      sees half-state      checked at commit
+   until commit
+```
+
+### A transaction in one sentence
+
+> A transaction is **a group of statements the database treats as one logical operation**, with guarantees about what happens during failure and concurrency.
+
+The moment you say `COMMIT`, you've crossed a threshold: before that point, everything is reversible and invisible to others; after it, the change is permanent and observable. That single moment — the **commit point** — is the most important instant in transactional systems.
+
+---
+
 ## Core concepts
 
 ### ACID
@@ -24,6 +83,91 @@ This file pairs tightly with `07-isolation-levels.md` and `08-locks-concurrency.
 
 Most interviewers test A and I most heavily.
 
+#### Mental Model — Atomicity
+
+Atomicity means **"the database has only two stable states for your transaction: before, and after"**. The intermediate states exist only inside the database engine's bookkeeping; they never become reality.
+
+How is this achieved? Not by magic — by the **write-ahead log (WAL)**. Every change is first written to a sequential append-only log on disk with two pieces of metadata: *what changed* and *to which transaction it belongs*. The actual data pages (the heap) can lag behind the log.
+
+When you `COMMIT`, the DB flushes the log up to a "commit record" for your transaction. If the server crashes:
+- Transactions with a commit record in the log → **redo** (replay them).
+- Transactions without a commit record → **undo** (their log entries are discarded; data pages either never changed, or are reverted).
+
+The atomicity boundary is therefore: *the commit record's position in the log*. Before that byte exists, you didn't happen. After it, you definitely did.
+
+```
+The hardware/software boundary that makes atomicity possible:
+
+Application ──► DB engine ──► WAL (append-only file) ──► fsync ──► disk platter
+                    │
+                    └─► Heap pages (lazy flush; may lag)
+
+The atomic act is: writing & fsyncing the COMMIT record.
+Everything else is reversible.
+```
+
+#### Mental Model — Consistency
+
+Consistency is the **"the database refuses to enter an illegal state"** guarantee. It's not about concurrency (that's I); it's about constraints.
+
+Constraints checked at commit (Postgres can defer them):
+- Foreign keys (`ON COMMIT`, when DEFERRABLE)
+- UNIQUE
+- CHECK
+- NOT NULL
+
+A subtle point: "C" in ACID is partly the application's job. The database enforces the rules you declared, but only the rules you declared. If you forgot to add a CHECK constraint, the DB will happily store nonsense.
+
+Mental shortcut: **A and D are about the engine. C is about your schema. I is about concurrency.**
+
+#### Mental Model — Isolation
+
+Isolation is **"the illusion that you're the only user"**. Real implementations weaken this in exchange for throughput — that's what isolation levels are for (file 07).
+
+The mental anchor: imagine you and a colleague are simultaneously editing a shared spreadsheet. Isolation determines how much of each other's in-progress work you see:
+
+- **Read uncommitted** — you see their typing live (allows dirty reads).
+- **Read committed** — you only see what they've saved (default in Postgres).
+- **Repeatable read** — once you start reading, the spreadsheet freezes for you.
+- **Serializable** — it's as if the two of you took turns, never overlapping.
+
+Isolation costs throughput because higher levels require more locks or more aborts/retries.
+
+#### Mental Model — Durability
+
+Durability is **"if I told the user 'success', it survived"**. Implemented by `fsync` on the WAL at commit time: the OS confirms the bytes are on the persistent medium before COMMIT returns.
+
+The subtlety: durability is binary, but at *what cost*. `synchronous_commit=off` in Postgres trades durability for throughput — COMMIT returns before fsync, risking a tiny window of loss on power failure. Useful for non-critical writes; lethal for payments.
+
+Replication adds another layer: synchronous replication waits for a replica to ack the WAL before COMMIT returns, so even disk loss on the primary doesn't lose data.
+
+#### Mental Model — Write-Ahead Log (WAL)
+
+The WAL is the single most important data structure in a transactional database. Three things make it powerful:
+
+1. **Sequential append** — writing to the end of a file is the fastest disk pattern.
+2. **Records intent before action** — every modification is logged *before* it's applied to data pages. This is why it's called "write-ahead".
+3. **Single source of truth for recovery** — on restart, the engine replays the WAL to bring data pages up to date.
+
+```
+Anatomy of a COMMIT:
+
+  BEGIN
+   ├─ UPDATE accounts SET ...   ─► WAL record: "tx42: page 17 row 3 was X, now Y"
+   ├─ UPDATE accounts SET ...   ─► WAL record: "tx42: page 22 row 1 was A, now B"
+   ├─ INSERT INTO transactions  ─► WAL record: "tx42: insert page 91 row 5: ..."
+   └─ COMMIT                    ─► WAL record: "tx42: COMMIT"  ◄── fsync here
+                                                                  │
+                                                                  └─ durability boundary
+   Background:
+       checkpoint process flushes dirty data pages to disk lazily
+       (heap may be hours behind the WAL — that's fine)
+```
+
+If the server dies right after the fsync, on restart the engine reads the WAL, finds the commit record for tx42, replays the changes onto data pages, and your transaction is recovered.
+
+If the server dies right before the fsync, the commit record isn't there. On restart, tx42 is treated as never having existed, and any partial WAL records for it are ignored. Atomicity preserved.
+
 ### Transaction lifecycle
 
 ```
@@ -36,6 +180,63 @@ ROLLBACK;  -- undo
 ```
 
 In Postgres, a transaction without `BEGIN` is implicit (autocommit per statement).
+
+#### Mental Model — the lifecycle as a state machine
+
+```
+   ┌──────────────────────────────────────┐
+   │                                      ▼
+ ┌─────────────┐  BEGIN   ┌─────────────────┐  COMMIT  ┌────────────┐
+ │  no tx      │ ───────► │  active tx      │ ───────► │  committed │
+ │  (idle)     │          │  (snapshot,     │          │  (durable) │
+ └─────────────┘          │   locks held)   │          └────────────┘
+        ▲                 └──────┬───┬──────┘
+        │                        │   │
+        │              ROLLBACK  │   │ error (constraint, deadlock,
+        │                        │   │        statement_timeout)
+        │                        ▼   ▼
+        │                  ┌──────────────────┐
+        └──────────────────│  aborted         │
+            implicit       │  (must rollback) │
+            cleanup        └──────────────────┘
+```
+
+Key invariants:
+- Only **two terminal states**: committed (durable, visible) or aborted (gone, undone).
+- An active transaction holds **resources**: a snapshot, locks, WAL space, possibly an XID. Long-running transactions are expensive.
+- After an error inside a transaction (Postgres), all subsequent statements are rejected until you ROLLBACK. (MySQL behaves slightly differently.)
+
+#### What BEGIN actually does
+
+`BEGIN` doesn't physically reserve much — it just tags subsequent statements with a transaction ID and freezes a snapshot. The expensive things happen lazily: locks are taken when you touch rows, WAL records are written when you modify data, and the XID is assigned on first write.
+
+#### What COMMIT actually does
+
+COMMIT is the moment of **permanence**. In sequence:
+
+1. The engine writes a COMMIT record to the WAL buffer.
+2. It calls `fsync` (or equivalent) to push the WAL up to and including the COMMIT record to durable storage.
+3. Only after the OS confirms the write does the engine return success to the client.
+4. Locks are released.
+5. Other transactions can now see your changes (subject to their snapshots).
+
+Heap pages may still be dirty in memory — that's fine. The WAL is the source of truth until the next checkpoint flushes them.
+
+#### What ROLLBACK actually does
+
+ROLLBACK is *cheap* in normal cases — but the answer to "what does it undo?" is more subtle than beginners realize.
+
+- If you only **read** rows: nothing on disk needs undoing.
+- If you **modified** rows: the heap pages may already have the new values (MVCC stores new tuple versions in-place); rollback just marks those tuple versions as never-committed. They become invisible and will be reaped by VACUUM.
+- The WAL is **not erased** — it still contains your records. They're simply unreachable because there's no commit record.
+
+So "what does ROLLBACK undo if the disk already wrote?" — at a logical level, **the new versions are tagged as invisible and the WAL's incomplete tx is ignored on replay.** Nothing is physically erased; the system simply forgets the changes happened.
+
+Side effects ROLLBACK **cannot** undo:
+- Sequence advances (`SERIAL`/`IDENTITY` numbers consumed)
+- External calls already made (Kafka, HTTP, emails)
+- Logs and traces already emitted
+- Other connections that have already observed (in lower isolation) any phantom you produced — but those connections would be operating on a dirty read, which RC and above prevent.
 
 ### What lives inside a transaction
 

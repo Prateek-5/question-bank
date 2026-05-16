@@ -11,9 +11,97 @@ This is the topic that **separates "writes SQL" from "owns the data layer."**
 
 ---
 
+## First principles — what's new vs fundamentals
+
+`01-sql-fundamentals.md` ended with: *SQL is "declare the set you want," GROUP BY collapses rows into piles.*
+
+Advanced SQL adds three superpowers that all share one theme — **looking at neighbors without collapsing the row**:
+
+1. **Window functions** — "For each row, also tell me something about its neighbors in some ordering."
+2. **CTEs (recursive especially)** — "Define a relation in terms of itself; let the engine iterate until fixpoint."
+3. **LATERAL / correlated FROM-clause** — "For each outer row, run this little query and staple the result on."
+
+If GROUP BY is "*collapse* each pile into one row," window functions are "*walk* each pile in order and annotate every row with context." That single distinction is the heart of advanced SQL.
+
+### Why interviewers care
+
+- **Set-based thinking under pressure** — the candidate who reaches for a window function instead of three self-joins is the candidate who can ship the analytics layer.
+- **Query planning intuition** — windowing has a cost model (partition + sort). Can you explain when it'll be expensive?
+- **Modeling recursion declaratively** — recursive CTEs test whether you can express a fixed-point computation without writing a loop.
+- **Recognising patterns** — top-N-per-group, gaps and islands, running totals, sessionisation, retention. These are not memorized queries; they're a vocabulary.
+
+### Real-world analogies that will stick
+
+| Concept | Analogy |
+|---|---|
+| Window function | Standing in a parade and noting who is to your left and right, without leaving your place in line |
+| `PARTITION BY` | Splitting one big parade into separate parallel parades (one per group) |
+| `ORDER BY` inside `OVER` | Deciding which direction is "forward" within your parade |
+| Frame (`ROWS BETWEEN …`) | Choosing how many neighbors you can see — a sliding cone of vision |
+| CTE | Labeling intermediate work on a whiteboard ("call this set `paid_orders`") |
+| Recursive CTE | A fractal: define a tree level in terms of the previous level until nothing new appears |
+| LATERAL | Running a small custom query *per outer row* — like asking each customer "tell me your last 3 purchases" |
+| Pivot | Rotating a long-skinny table into a short-wide spreadsheet |
+
+---
+
 ## Core concepts
 
 ### Window functions
+
+#### Mental model
+
+Imagine every row of your result set is **standing in line**. A window function lets each row **look around at its neighbors** (rows within the same partition, within a defined frame) and compute something based on what it sees — but the row itself stays put. No row is collapsed.
+
+Three knobs control what each row sees:
+
+```
+   OVER (
+     PARTITION BY  ── which "queue" am I in?   (rows outside my partition are invisible)
+     ORDER BY      ── which direction is "forward" inside my queue?
+     ROWS/RANGE …  ── how many neighbors can I see? (the frame — a sliding window)
+   )
+```
+
+#### GROUP BY vs Window — visual comparison
+
+```
+   GROUP BY user_id, SUM(amount)            SUM(amount) OVER (PARTITION BY user_id)
+   ───────────────────────────────          ────────────────────────────────────────
+   user_id │ amount                          user_id │ amount │ sum_for_user
+   ────────┼──────                           ────────┼────────┼─────────────
+     1     │  10                               1     │   10   │     30        ← row preserved
+     1     │  20                               1     │   20   │     30        ← row preserved
+     2     │  50          →   COLLAPSES         2     │   50   │     50
+                              into:             ────────┴────────┴─────────────
+                            user_id │ sum       (3 rows in, 3 rows out — annotated)
+                            ────────┼─────
+                              1     │  30
+                              2     │  50
+                            (3 rows in, 2 rows out)
+```
+
+Same aggregate function, totally different output shape. **GROUP BY shrinks. Window functions annotate.**
+
+#### Sliding window frame — ASCII visualisation
+
+For `SUM(amount) OVER (ORDER BY day ROWS BETWEEN 2 PRECEDING AND CURRENT ROW)`:
+
+```
+   day:    Mon  Tue  Wed  Thu  Fri  Sat  Sun
+   amt:    10   20   30   40   50   60   70
+
+   row=Mon:  [10]                              → sum = 10
+   row=Tue:  [10  20]                          → sum = 30
+   row=Wed:  [10  20  30]                      → sum = 60
+   row=Thu:       [20  30  40]                 → sum = 90        ← window slides forward
+   row=Fri:            [30  40  50]            → sum = 120       ← window slides forward
+   row=Sat:                 [40  50  60]       → sum = 150
+   row=Sun:                      [50  60  70]  → sum = 180
+                                                ↑ a 3-row "cone of vision" walks across the partition
+```
+
+That's literally a sliding window. `ROWS` counts physical rows; `RANGE` counts logical values (so a gap day wouldn't be included even if it's the previous-physical-row, because its date-value falls outside the range).
 
 A window function computes a value **per row** using a window of other rows — *without* collapsing rows (that's what GROUP BY does).
 
@@ -61,7 +149,61 @@ SUM(qty) OVER (ORDER BY created_at ROWS BETWEEN 4 PRECEDING AND CURRENT ROW)
 
 `ROWS` = physical rows. `RANGE` = logical (by value). They differ on ties — `ROWS` includes 1 row even if ties exist; `RANGE` includes all ties.
 
+#### Common beginner confusion — window functions
+
+- **"`PARTITION BY` is GROUP BY."** — No. GROUP BY collapses. PARTITION BY only fences off the visible neighbors for the per-row computation.
+- **"Window functions work in `WHERE`."** — No. They run *after* `WHERE`/`GROUP BY`/`HAVING` (they're effectively part of `SELECT`). To filter on a window result, wrap in a subquery or CTE.
+- **"`LAST_VALUE` returns the last row of the partition."** — No, not by default. The default frame ends at the *current row*, so `LAST_VALUE` is just the current row's value. You must spell out `ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING`.
+- **"`ROWS` and `RANGE` are interchangeable."** — Not when there are ties. With `ORDER BY day`, if two rows share the same day, `ROWS 1 PRECEDING` includes exactly 1 prior row; `RANGE 1 PRECEDING` includes all rows with the same prior date-value.
+
+#### Progressive build-up — window functions
+
+```sql
+-- Level 0: just rank rows globally
+SELECT name, salary, RANK() OVER (ORDER BY salary DESC) AS rk FROM employees;
+
+-- Level 1: rank per department (partition)
+SELECT name, dept, salary,
+       RANK() OVER (PARTITION BY dept ORDER BY salary DESC) AS rk_in_dept
+FROM employees;
+
+-- Level 2: running total per user
+SELECT user_id, ts, amount,
+       SUM(amount) OVER (PARTITION BY user_id ORDER BY ts) AS running_total
+FROM transactions;
+
+-- Level 3: 7-day moving average per user (explicit frame)
+SELECT user_id, day, revenue,
+       AVG(revenue) OVER (
+         PARTITION BY user_id
+         ORDER BY day
+         RANGE BETWEEN INTERVAL '6 days' PRECEDING AND CURRENT ROW
+       ) AS revenue_7d
+FROM daily_user_revenue;
+
+-- Interview level: gaps & islands using LAG + cumulative SUM (sessionisation)
+-- (see "Real examples" below)
+```
+
 ### CTEs (Common Table Expressions)
+
+#### Mental model
+
+A CTE is **labeling intermediate work**. Instead of nesting subqueries five levels deep, you give each step a name and read top-to-bottom. The CTE doesn't change *what* runs (modern planners inline it); it changes *what you see when you read the query*.
+
+```
+   WITHOUT CTE (nested):                          WITH CTE (named steps):
+                                                  ─────────────────────────
+   SELECT ... FROM (                              WITH paid_orders AS (...),
+     SELECT ... FROM (                                 recent       AS (...)
+       SELECT ... FROM (                          SELECT ... FROM recent;
+         SELECT ... FROM orders ...
+       )                                          Reads like a recipe:
+     )                                            "first compute X,
+   );                                              then compute Y from X,
+                                                   then return Z."
+   You read inside-out.                           You read top-to-bottom.
+```
 
 ```sql
 WITH paid_orders AS (
@@ -79,6 +221,23 @@ SELECT user_id, COUNT(*) FROM recent GROUP BY user_id;
 
 #### Recursive CTE — hierarchy / graph traversal
 
+##### Mental model
+
+Recursive CTEs are how SQL expresses **"keep doing this until nothing new appears."** They have exactly the same shape as recursion in any language: a **base case** + a **recursive case**, glued by `UNION ALL`. The engine runs the base case, feeds its rows back into the recursive case, appends new rows, repeats — until a step produces zero rows. Then it stops and returns the accumulated result.
+
+```
+   Base case        ──┐
+   (depth 0 rows)     │
+                      ├──> UNION ALL ──> grow set ──> recursive case sees new rows ──┐
+   Recursive case ────┘                                                              │
+   (depth N + 1 rows                                                                 │
+    derived from                                                                     │
+    depth N rows)                                                                    │
+                      ◄──────────────────────  feed back until no new rows  ─────────┘
+```
+
+This is **fixed-point iteration**, expressed declaratively. Use cases: org charts, comment threads, category trees, dependency graphs, BOM (bill of materials), shortest-paths.
+
 ```sql
 -- Find all reports under a manager
 WITH RECURSIVE reports AS (
@@ -93,6 +252,22 @@ SELECT * FROM reports;
 Use cases: org charts, comment threads, category trees, dependency graphs, BOM (bill of materials).
 
 ### LATERAL joins (Postgres)
+
+#### Mental model
+
+A normal subquery in `FROM` is sealed: it can't see the outer row. `LATERAL` punches a hole in that seal — **the subquery is re-evaluated for each outer row, with that row's columns visible inside**. Think of it as "for each customer, please run this little query and bring back what you found."
+
+This is precisely the **correlated subquery pattern, but in the FROM clause**, which means you can return multiple columns and multiple rows per outer row — something a scalar correlated subquery can't.
+
+```
+   For each user u:                       The result of the LATERAL is stapled to u.
+   ┌──────┐    ┌─────────────────────┐    Outer row 1 ┐── inner rows for user 1
+   │ u    │ ──>│ SELECT … FROM msg   │    Outer row 2 ┤── inner rows for user 2
+   │ row  │    │  WHERE msg.uid=u.id │    Outer row 3 ┤── inner rows for user 3
+   └──────┘    │  ORDER BY ts DESC   │
+               │  LIMIT 3            │
+               └─────────────────────┘
+```
 
 A `LATERAL` subquery can reference columns from preceding `FROM` items — useful for **top-N-per-group**, *per-row* aggregation, and unnesting arrays.
 
@@ -110,6 +285,25 @@ LEFT JOIN LATERAL (
 This is often the **fastest** way to do top-N-per-group, especially with an index on `(user_id, sent_at DESC)`.
 
 ### Pivots / unpivots
+
+#### Mental model
+
+A pivot **rotates** a tall narrow table into a short wide one. Each *distinct value* in some "category" column becomes its own *column* in the output. Unpivot is the reverse: take many columns and stack them back into rows.
+
+```
+   LONG (tidy) form:                       WIDE (pivoted) form:
+   ──────────────────                      ────────────────────────────────
+   user │ month │ amount                   user │ jan │ feb │ mar
+   ─────┼───────┼────────                  ─────┼─────┼─────┼─────
+    A   │   1   │  10                       A   │ 10  │ 20  │  0
+    A   │   2   │  20                       B   │  5  │  0  │ 30
+    B   │   1   │   5
+    B   │   3   │  30
+```
+
+The trick in SQL (since standard SQL has no `PIVOT`) is to **GROUP BY the row-key and use conditional aggregates** (`SUM(CASE WHEN month = 1 THEN amount END)`). The `CASE` keeps only matching rows in each sum; the rest become NULL and `SUM` ignores NULLs.
+
+`FILTER (WHERE …)` is just syntactic sugar over the same idea, and it's much cleaner in Postgres.
 
 PostgreSQL doesn't have a native `PIVOT` keyword. Patterns:
 
@@ -150,6 +344,27 @@ GROUP BY GROUPING SETS ((region, product), (region), ());
 Common in reporting/analytics dashboards.
 
 ### Set operations
+
+#### Mental model
+
+Set operations treat two query results as **pure mathematical sets of tuples** and apply elementary set algebra.
+
+```
+   UNION (dedup)            UNION ALL (multiset concat)    INTERSECT              EXCEPT (A − B)
+                                                                                  
+       A ∪ B                  A ⊎ B (bag)                    A ∩ B                  A \ B
+   ┌────────────┐            ┌─────────────────┐            ┌───┬───┬───┐          ┌────────┬───┐
+   │ a, b, c, d │            │ a, b, b, c, d, d│            │   │ x │   │          │ a, b   │   │
+   └────────────┘            └─────────────────┘            └───┴───┴───┘          └────────┴───┘
+   (duplicates                (everything kept,
+    removed)                   even repeats)
+```
+
+Practical rules:
+
+- Same number of columns in each query, with compatible types, in the same order.
+- `UNION` sorts to dedup → CPU cost; prefer `UNION ALL` unless you actually need uniqueness.
+- `EXCEPT`/`INTERSECT` dedup too — that's part of their set semantics.
 
 - `UNION` — concat + dedup (sort cost)
 - `UNION ALL` — concat
@@ -246,6 +461,20 @@ FROM (
 
 This pattern — `LAG` for gap detection, then a running `SUM` to create groups — is the **session/gaps-and-islands** technique. Comes up in interviews repeatedly.
 
+#### Step-by-step walk-through (sessionisation)
+
+Imagine messages from one user at times `t1, t2, t3, t4` with `t3 - t2 > 1 hour`:
+
+```
+   ts:       t1   t2   t3   t4         ← raw rows
+   LAG(ts):  -    t1   t2   t3
+   gap:      NULL small BIG  small
+   new?:      1     0    1     0       ← (gap > 1h OR NULL) → 1, else 0
+   session:   1     1    2     2       ← running SUM of "new?" inside the partition
+```
+
+The cumulative `SUM` of the boolean "starts a new session here?" flag becomes the **session id**. Same trick, generalised: any time you want to *bucket consecutive rows*, build a boolean "new bucket starts here", then `SUM(...) OVER (ORDER BY ...)` to label them.
+
 ### Analytics — funnel conversion
 ```sql
 WITH steps AS (
@@ -279,6 +508,30 @@ SELECT product_id, sale_id, ts,
          ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS last_sale
 FROM sales;
 ```
+
+---
+
+## How to talk through an advanced query at the whiteboard
+
+For window-function questions, follow this script:
+
+1. **Identify the per-row output you need.** "I want each row annotated with the running total / its rank / the previous row's value."
+2. **Choose `PARTITION BY`.** "I want this annotation reset for each user → `PARTITION BY user_id`." If you don't say `PARTITION BY`, the window is the entire result.
+3. **Choose `ORDER BY`.** "Inside each user's partition, I want chronological order → `ORDER BY ts`."
+4. **Choose the frame, *if* aggregating.** "Running total → `ROWS UNBOUNDED PRECEDING`. 7-day average → `RANGE BETWEEN INTERVAL '6 days' PRECEDING AND CURRENT ROW`."
+5. **Mention cost.** "This needs a sort of each partition; if I have an index on `(user_id, ts)` the engine can stream it for free."
+
+For recursive CTEs:
+
+1. **Base case** — "Start at the root (or a known seed set)."
+2. **Recursive case** — "Each step joins the previous level back to the table to find children."
+3. **Stop condition** — "When the recursive case returns zero rows, we stop. I'll add `WHERE depth < N` for safety."
+4. **Mention cycles** — "If the graph might cycle, I need an explicit visited-set or the `CYCLE` clause in Postgres 14+."
+
+For "top-N-per-group" framing, always offer two options:
+
+- `ROW_NUMBER()` + filter — clear, costs a full partition sort.
+- `LATERAL` with `LIMIT` — fastest with `(group, order_key)` index; per-row probing.
 
 ---
 
@@ -478,6 +731,14 @@ SELECT * FROM tree;
 - **Recursive CTE cycle detection** — Postgres 14+ supports `CYCLE` clause.
 - **Read replicas for heavy analytics** queries to protect OLTP; or move to OLAP store (ClickHouse, BigQuery).
 - **`pg_stat_statements`** to find regressing queries after a deploy.
+
+---
+
+## One-line summary of advanced SQL
+
+> **Window functions annotate without collapsing; CTEs label intermediate work; recursion is fixed-point iteration; LATERAL is "for each outer row, run this query." Recognise the pattern (top-N-per-group, gaps & islands, running totals, sessions, retention), and the query writes itself.**
+
+If the fundamentals file gave you the *grammar* of SQL, this file gave you the *idioms*. Interviewers test idioms.
 
 ---
 
