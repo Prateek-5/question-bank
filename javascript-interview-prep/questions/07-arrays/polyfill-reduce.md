@@ -1,138 +1,256 @@
 # Polyfill `Array.prototype.reduce`
 
-## Source
-- LeetCode #2626 "Array Reduce Transformation" — https://leetcode.com/problems/array-reduce-transformation/
-- Canonical interview problem (BFE.dev #18, Frontend Masters, GreatFrontEnd).
+> **Difficulty:** Foundation   |   **Time:** ~15 min   |   **Prereqs:** [polyfill-map.md](./polyfill-map.md), [lodash-reduce.md](./lodash-reduce.md)
+>
+> **Source:** BFE.dev #18, GreatFrontEnd. LeetCode #2626.
 
-## Why this question matters in interviews
-`reduce` is the most powerful and most misunderstood array method. Asking you to reimplement it tests four things at once: **closures over an accumulator**, **handling the "no initial value" edge case** (which silently shifts the start index by 1), **sparse-array hole semantics**, and the discipline to throw `TypeError` on the empty-no-initial case. Senior backend engineers fold/aggregate data constantly — event aggregation, log rollups, RPC fan-in. If you can re-derive `reduce`, you can re-derive every group-by, sum-by, index-by helper you'll ever need. It's also the warm-up before harder ones like `flat` and `groupBy`.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+Re-implement `Array.prototype.reduce` honoring no-initial-value seed handling, hole-skipping, and TypeError on empty-no-initial.
+
+**Verification examples**
+
 ```js
-// Spec signature
-arr.reduce(callback, [initialValue]);
-// callback(accumulator, currentValue, currentIndex, array)
+[1, 2, 3].myReduce((acc, x) => acc + x, 0);     // 6
+[1, 2, 3].myReduce((acc, x) => acc + x);        // 6 (acc = 1, starts at i=1)
+[, , 3, 4].myReduce((a, b) => a + b);           // 7 (seed = first defined = 3)
+[].myReduce((a, b) => a + b);                   // TypeError
+[1, , 3].myReduce((acc, x) => acc + x, 0);      // 4 (hole skipped)
 ```
 
-### The spec rules people forget
-1. **No `initialValue`** → accumulator starts as the **first defined element**, and iteration begins at the index *after* it. Crucial nuance: if `arr` is sparse like `[, , 3, 4]`, the first defined element is `3` at index 2, so iteration starts at index 3.
-2. **Empty array + no `initialValue`** → throw `TypeError("Reduce of empty array with no initial value")`. Real spec text.
-3. **Holes are skipped.** `[1, , 3].reduce(fn, 0)` only invokes `fn` twice, not three times. Use `if (i in this)` — NOT `this[i] !== undefined` (which mis-skips legitimate `undefined` entries).
-4. **Length is read once at the start.** Pushing during reduce does *not* extend the iteration.
-5. The fourth callback argument is the **original array** (`this` inside the polyfill).
+**Constraints**
+- 4-arg callback: `(acc, current, index, array)`.
+- No initial value → seed = first defined element, start at next index.
+- Empty + no initial → `TypeError`.
+- Skip holes via `i in this`.
+- Length snapshotted.
 
-### Code-smell warning
-Adding to `Array.prototype` pollutes every array in the runtime and can break `for...in` loops (which enumerate prototype props by default). Mitigate with `Object.defineProperty(..., { enumerable: false })`. In production code, prefer a standalone function — but interviewers explicitly want the prototype attachment to test your understanding of `this` binding.
+---
 
-## Brute force approach
-A `for` loop that always starts at `i = 0` and treats the first call as "use `initialValue` if defined, else `arr[0]`". It works for dense arrays with an initial value, but quietly breaks on:
-- Sparse arrays (calls callback on holes with `undefined`).
-- No-initial-value case with sparse leading holes (uses `undefined` as the seed).
-- Empty array + no init (returns `undefined` instead of throwing).
+## 2. Plain-English restatement
 
-Brute force fails the spec tests. Don't ship it.
+Fold an array into a single value. With initial value: `acc = init, i = 0`. Without: `acc = first non-hole element, i = its index + 1`. Skip holes. Throw on empty-no-initial.
 
-## Optimal approach
-One pass, O(n) time, O(1) extra space. Branch up front on "did the caller pass an initial value?" — that decides the seed and the starting index. Inside the loop, gate the callback on `i in this` so holes are skipped exactly as the spec dictates.
+---
 
-## Solution (JavaScript)
+## 3. Why this matters in interviews
+
+`reduce` tests closures-over-accumulator + no-initial edge case + sparse semantics + `TypeError` discipline. Senior backend engineers fold constantly (event aggregation, log rollups, RPC fan-in).
+
+---
+
+## 4. Mental model
+
+```
+   arr.reduce(cb, init?):
+     len = ToLength
+     i = 0
+     if init given:
+       acc = init
+     else:
+       // find first non-hole index
+       while i < len && !(i in this): i++
+       if i >= len: throw TypeError("Reduce of empty array with no initial value")
+       acc = this[i]; i++
+     
+     while i < len:
+       if i in this:
+         acc = cb(acc, this[i], i, this)
+       i++
+     return acc
+
+   No initial + sparse:
+     [, , 3, 4].reduce((a,b)=>a+b)
+     i=0 hole, i=1 hole, i=2 → seed=3, i=3.
+     i=3 (4): acc = 3+4 = 7.
+     return 7.
+
+   No initial + empty:
+     [].reduce(fn) → TypeError.
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. `[].reduce((a,b)=>a+b)` — what happens?
+> 2. `[, , 3].reduce((a,b)=>a+b)` — what's the seed?
+> 3. Are holes invoked?
+
+---
+
+## 6. Brute force — walked through
+
+```js
+arr.reduce = function(cb, init) {
+  let acc = init !== undefined ? init : this[0];
+  for (let i = 0; i < this.length; i++) acc = cb(acc, this[i], i, this);
+  return acc;
+};
+```
+
+Bugs: passing `0` as init triggers `[0].reduce` to use `this[0]` (wrong); double-counts seed; invokes on holes; no TypeError.
+
+---
+
+## 7. The unlocking insight
+
+> **Branch on `arguments.length >= 2` for seed selection. Skip holes via `i in this`. Throw on empty-no-initial.**
+
+Three properties:
+
+1. **`arguments.length >= 2`** distinguishes "init passed" from "omitted" — not `init !== undefined`.
+2. **First defined as seed** when no init.
+3. **`TypeError` on empty-no-initial.**
+
+---
+
+## 8. Solution (annotated)
 
 ```js
 Object.defineProperty(Array.prototype, 'myReduce', {
-  value: function (callback, initialValue) {
-    if (typeof callback !== 'function') {
-      throw new TypeError(callback + ' is not a function');
-    }
+  enumerable: false,
+  value: function (callback, ...rest) {
+    if (this == null) throw new TypeError('myReduce on null/undefined');
+    if (typeof callback !== 'function') throw new TypeError('cb not callable');
 
-    const len = this.length >>> 0;          // ToUint32, matches spec
-    let i = 0;
+    const O = Object(this);
+    const len = O.length >>> 0;
+    const hasInit = rest.length >= 1;                                    // step 1: distinguish passed vs omitted
     let acc;
-    const hasInitial = arguments.length >= 2;
+    let i = 0;
 
-    if (hasInitial) {
-      acc = initialValue;
+    if (hasInit) {
+      acc = rest[0];                                                     // step 2: explicit init
     } else {
-      // Find first defined element (skip holes)
-      while (i < len && !(i in this)) i++;
+      while (i < len && !(i in O)) i++;                                  // step 3: find first non-hole
       if (i >= len) {
         throw new TypeError('Reduce of empty array with no initial value');
       }
-      acc = this[i++];
+      acc = O[i];
+      i++;                                                                // step 4: start AFTER seed
     }
 
     while (i < len) {
-      if (i in this) {                       // skip holes
-        acc = callback(acc, this[i], i, this);
+      if (i in O) {                                                       // step 5: skip holes
+        acc = callback(acc, O[i], i, O);
       }
       i++;
     }
     return acc;
   },
-  writable: true,
-  configurable: true,
-  enumerable: false,                          // critical for for...in safety
 });
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
-Input:
 ```js
-const sparse = [10, , 20, 30];   // length=4, indices 0,2,3 present; 1 is a hole
-sparse.myReduce((a, b) => a + b);          // no initial value
+[1, 2, 3, 4].myReduce((a, b) => a + b, 0);                   // 10
+[1, 2, 3, 4].myReduce((a, b) => a + b);                      // 10 (no init)
+[, , 3, 4].myReduce((a, b) => a + b);                        // 7 (seed=3, i starts at 3)
+
+// Empty cases
+[].myReduce((a, b) => a + b, 0);                              // 0 (init returned)
+[].myReduce((a, b) => a + b);                                 // TypeError
+
+// Holes skipped
+[1, , 3].myReduce((acc, x) => acc + x, 0);                   // 4 (hole not invoked)
+
+// Object grouping
+const grouped = items.myReduce((acc, item) => {
+  (acc[item.type] ??= []).push(item);
+  return acc;
+}, {});
+
+// Right reduce (separate method)
+[1, 2, 3].myReduceRight((a, b) => `${a}-${b}`);              // '3-2-1'
 ```
 
-Trace:
-- `len = 4`, `hasInitial = false`.
-- Hole-skip loop: `i=0`, `0 in this` → true. `acc = this[0] = 10`. `i = 1`.
-- Main loop, `i=1`: `1 in this` → **false** (it's a hole). Skip. `i = 2`.
-- `i=2`: `2 in this` → true. `acc = cb(10, 20, 2, sparse) = 30`. `i = 3`.
-- `i=3`: `3 in this` → true. `acc = cb(30, 30, 3, sparse) = 60`. `i = 4`.
-- Return `60`.
+---
 
-Now with `[].myReduce((a,b)=>a+b)` — empty array, no initial:
-- `len = 0`, `hasInitial = false`. Hole-skip loop exits immediately with `i = 0 >= len`. Throws `TypeError`. Matches native behavior.
+## 9. Step-by-step dry run
 
-And `[1, 2, 3].myReduce((a,b)=>a+b, 100)`:
-- `acc = 100`, `i = 0`. Three callback invocations: 101, 103, 106. Return `106`.
+```
+[, , 3, 4].myReduce((a, b) => a + b):
+  hasInit = false.
+  i = 0: 0 in arr false → i = 1.
+  i = 1: 1 in arr false → i = 2.
+  i = 2: 2 in arr true → acc = 3. i = 3.
+  
+  Main loop:
+  i = 3: 3 in arr true → acc = cb(3, 4, 3, arr) = 7. i = 4.
+  i = 4: loop exit.
+  
+  Return 7.
 
-## Important takeaways
+[1, , 3].myReduce((a, b) => a + b, 0):
+  hasInit = true. acc = 0. i = 0.
+  i = 0: 0 in arr true → acc = cb(0, 1) = 1. i = 1.
+  i = 1: 1 in arr false → skip. i = 2.
+  i = 2: 2 in arr true → acc = cb(1, 3) = 4. i = 3.
+  Return 4. (Hole not double-counted nor invoked.)
 
-**Syntax to memorize**
-- `arguments.length >= 2` is the only reliable way to detect "initial value was passed." Don't use `initialValue === undefined` — the caller might pass `undefined` deliberately.
-- `i in this` for hole detection. NOT `this[i] !== undefined` and NOT `Object.prototype.hasOwnProperty.call(this, i)` (the latter works but is slower and noisier).
-- `this.length >>> 0` is the ToUint32 coercion the spec mandates. Handles weird length values like negatives or non-integers.
+[].myReduce(fn):
+  hasInit = false.
+  while loop: 0 in [] false, i = 1. 1 >= 0... wait, len=0. So while condition: i < 0 = false immediately.
+  i = 0 = len. Throw TypeError.
+```
 
-**Patterns to reuse**
-- The "branch on `arguments.length` for the seed" pattern reappears in `reduceRight`, `findLast`, and many lodash helpers.
-- `Object.defineProperty(..., { enumerable: false })` is the standard way to extend a prototype without breaking enumeration. Same trick the polyfill libraries use.
+---
 
-**Common mistakes**
-- Iterating with `forEach` inside the polyfill (cheating + forEach skips holes differently than you might expect; also can't break early).
-- Calling `callback.call(undefined, ...)` and assuming `this` inside the callback. The spec leaves callback `this` unbound — don't force it.
-- Forgetting the empty + no-init throw. Interviewer will hand you `[].reduce(fn)` and watch your face.
+## 10. Common confusion + traps
 
-**Related questions**
-- Polyfill `map`, `filter`, `forEach`, `flat`, `flatMap`.
-- Implement `reduceRight` (start from the end, decrement `i`).
-- Implement lodash `_.reduce` which also works on objects (separate file in this bucket).
+1. **`init !== undefined`** as "init passed" check — fails when init=undefined intentionally. Use `arguments.length >= 2`.
+2. **Empty + no init → returns undefined** — should throw.
+3. **Holes invoked** — skip via `i in this`.
+4. **No-init double-counts seed** — start at index AFTER seed.
+5. **No-init with all holes → seed undefined** — should be TypeError too.
+6. **Callback fourth arg missed** — `cb(acc, v, i, array)`.
+7. **Mutate during iteration** — length snapshotted; extra pushes ignored.
 
-## Variants
+---
 
-1. **`reduceRight`** — iterate `i = len - 1` down to `0`. Same hole/initial rules but mirrored. Common follow-up.
-2. **Async reduce** — `await`-aware version: `for...of` with `await callback(...)`. Becomes a great event-loop question because parallel `Promise.all + map` is *wrong* when reductions are sequential.
-3. **`reduce` on object** — lodash variant that iterates `Object.keys(obj)`. Different `this` semantics; see `lodash-reduce.md`.
+## 11. Senior follow-ups & variants
 
-## Revision notes
+### Variant 1 — `reduceRight`
+Same logic, iterate from `len-1` down. Seed = last non-hole when no init.
 
-> **reduce polyfill — 60 second recap**
-> - Signature: `cb(acc, cur, i, arr)`, optional `initialValue`.
-> - Detect initial via `arguments.length >= 2` — never `=== undefined`.
-> - No initial → seed with first **defined** element (skip leading holes), start loop at next index.
-> - Empty array + no initial → throw `TypeError("Reduce of empty array with no initial value")`.
-> - Skip holes with `if (i in this)`.
-> - Read `length` once, coerce with `>>> 0`.
-> - Attach via `Object.defineProperty(Array.prototype, 'myReduce', { enumerable: false })` so `for...in` stays clean.
-> - **Trap:** treating `undefined` array entries as holes. They're not — only true holes (missing indices) are skipped.
+### Variant 2 — Transducers
+Compose reduce+map+filter into single pass.
+
+### Variant 3 — `groupBy` via reduce
+`arr.reduce((acc, x) => ({...acc, [key(x)]: (acc[key(x)]||[]).concat(x)}), {})`.
+
+### Variant 4 — async reduce
+Not native; manual loop with `await cb(acc, v, i, arr)` chained.
+
+### Variant 5 — `Array.from` + reduce
+Convert array-like, then reduce.
+
+---
+
+## 12. How to think aloud
+
+> "`reduce` polyfill must handle the no-initial-value seed and TypeError discipline. Step 1: check `arguments.length >= 2` (or rest array length) to distinguish passed-undefined from omitted. Step 2: if init given, `acc = init, i = 0`. Else find first non-hole via `while (i < len && !(i in this)) i++`; if all holes/empty, throw `TypeError('Reduce of empty array with no initial value')`. Seed = `this[i]`, then `i++` to start AFTER seed. Step 3: main loop, skip holes via `i in this`, call `cb(acc, this[i], i, this)`. Length snapshotted via `>>> 0` once. Tests: `[].reduce(fn)` throws; `[,,3,4].reduce((a,b)=>a+b)` returns 7 (seed=3, sums in 4); `[1,,3].reduce((a,b)=>a+b,0)` returns 4 (hole skipped). Trap: `init !== undefined` (fails for explicit undefined); double-counting seed; invoking holes; not throwing on empty."
+
+---
+
+## 13. 60-second revision
+
+> - **`arguments.length >= 2`** to detect init.
+> - **No init:** seed = first non-hole; start at `seedIdx + 1`.
+> - **Empty + no init → `TypeError`.**
+> - **Skip holes via `i in this`.**
+> - **4 callback args: `(acc, current, index, array)`.**
+> - **`length >>> 0`** snapshot.
+> - **`reduceRight`** mirror.
+> - **Trap:** `init !== undefined` (wrong); double seed; invoke on holes; empty no throw.
+
+---
+
+**Related:** [polyfill-map.md](./polyfill-map.md) · [polyfill-filter.md](./polyfill-filter.md) · [polyfill-flat.md](./polyfill-flat.md) · [lodash-reduce.md](./lodash-reduce.md) · [group-and-partition.md](./group-and-partition.md)
+
+**Concept primer:** [`concepts/arrays.md`](../../concepts/arrays.md)

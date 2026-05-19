@@ -1,105 +1,118 @@
-# `MessageChannel` for cross-realm task scheduling
+# `MessageChannel` — fast macrotask yield primitive
 
-## Source
-- WHATWG HTML spec: https://html.spec.whatwg.org/multipage/web-messaging.html#message-channels
-- MDN: https://developer.mozilla.org/en-US/docs/Web/API/MessageChannel
-- React Scheduler source (uses MessageChannel): https://github.com/facebook/react/blob/main/packages/scheduler/src/forks/SchedulerDOM.js
-- Vue 3 nextTick implementation (uses microtask fallback chain).
+> **Difficulty:** Senior   |   **Time:** ~15 min   |   **Prereqs:** [queuemicrotask-deep-dive.md](./queuemicrotask-deep-dive.md), [setimmediate-vs-settimeout-in-io.md](./setimmediate-vs-settimeout-in-io.md)
+>
+> **Source:** WHATWG HTML spec; React Scheduler source; Vue/Lit schedulers. Senior frontend interviews.
 
-## Why this question matters in interviews
-This is a senior-level question because the **right answer involves admitting `MessageChannel` is NOT a microtask** — it's a *macrotask* (or "task" in HTML spec language). Most candidates conflate them. Production schedulers (React's, Vue's, Lit's) use `MessageChannel` specifically to **yield to the browser between batches of work** while staying faster than `setTimeout(0)`. If you can explain why React doesn't just use `queueMicrotask` for everything, you're showing the kind of judgment that gets senior-engineer offers.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### What `MessageChannel` actually does
-Creates a pair of `MessagePort` objects. Posting a message on one port schedules a `'message'` event on the other port — as a **task** (macrotask), not a microtask.
+What is `MessageChannel`, what scheduling tier does it post to, and why do React/Vue use it instead of `setTimeout(0)` or `queueMicrotask`?
 
-### Syntax to lock in
-```js
-const { port1, port2 } = new MessageChannel();
+**Verification examples**
 
-port1.onmessage = (event) => {
-  console.log('received:', event.data);
-};
+| API                                | Tier             | Min delay              |
+|------------------------------------|------------------|------------------------|
+| `process.nextTick` (Node)          | nextTick         | none                   |
+| `queueMicrotask` / `Promise.then`  | microtask        | none                   |
+| `MessageChannel.postMessage`       | **macrotask**    | ~0ms (no clamp)        |
+| `setTimeout(fn, 0)`                | macrotask        | 1ms (Node) / 4ms nested clamp (browser) |
+| `setImmediate` (Node)              | check phase      | none                   |
 
-port2.postMessage('hello');
-// Next macrotask: port1.onmessage fires.
+**Constraints**
+- `MessageChannel` posts a **macrotask** (task in HTML spec), NOT a microtask.
+- React Scheduler uses it for sub-4ms yield to main thread.
+- Posts in FIFO order within a single channel.
+- Cleanup via `port.close()` for long-running services.
+
+---
+
+## 2. Plain-English restatement
+
+Create a pair of `MessagePort` objects. Posting on one fires a `'message'` event on the other — as a **macrotask** (next "task" in HTML spec). Used by React, Vue, Lit schedulers because it's faster than `setTimeout(0)` (no clamp) AND yields to rendering (unlike `queueMicrotask`).
+
+---
+
+## 3. Why this matters in interviews
+
+Senior-level question. The right answer admits `MessageChannel` is NOT a microtask. Production schedulers (React Fiber, Vue 3) use it specifically to yield to the browser between batches while staying faster than `setTimeout(0)`.
+
+---
+
+## 4. Mental model
+
+```
+   Why React doesn't use queueMicrotask for time-slicing:
+   - Microtasks drain in SAME tick.
+   - Browser never paints between microtasks.
+   - Recursive microtask → frozen page.
+
+   Why React doesn't use setTimeout(0):
+   - 4ms clamp for nested timers (HTML5 spec).
+   - React's slice is 5ms → 4ms clamp consumes most budget.
+
+   MessageChannel solution:
+   - postMessage queues a TASK (macrotask).
+   - No clamp → next task fires sub-millisecond.
+   - Yields to rendering between tasks.
+   - 60fps stays smooth.
+
+   const { port1, port2 } = new MessageChannel();
+   port1.onmessage = (event) => doWork();
+   port2.postMessage(0);     // queues task → port1.onmessage next macrotask
 ```
 
-In Node, `MessageChannel` is in `node:worker_threads` (also globally available since Node 15). Same scheduling semantics.
+---
 
-### Why React/Vue use it instead of `setTimeout(0)`
-- **`setTimeout(fn, 0)` is coerced to 4ms** for nested timers (HTML5 clamping rule).
-- **`MessageChannel.postMessage` has no clamping** — it's queued as a task immediately.
-- React's scheduler does work in 5ms slices; if it used `setTimeout`, the 4ms clamp would consume most of the budget. With `MessageChannel`, the yield cost is sub-millisecond.
+## 5. Try it yourself first
 
-### Why not `queueMicrotask` for scheduling?
-- Microtasks drain in the **same** tick. The browser never gets a chance to render between microtasks. If you `queueMicrotask` recursively to "yield," the page is frozen.
-- `MessageChannel` posts a *task*, which yields to the rendering pipeline. The browser gets to paint, handle clicks, etc., between tasks.
+> **Predict before reading on:**
+> 1. Is `MessageChannel` a microtask or macrotask?
+> 2. Why does React not use `queueMicrotask` for time-slicing?
+> 3. Why faster than `setTimeout(0)`?
 
-### Scheduling tier summary
-| API | Tier | Min delay | Used for |
-|-----|------|-----------|----------|
-| `process.nextTick` | nextTick (Node-only) | none | Emit-before-I/O |
-| `queueMicrotask` | microtask | none | After current sync, before I/O |
-| `Promise.resolve().then` | microtask | none | Same as queueMicrotask + Promise allocation |
-| `MessageChannel.postMessage` | task / macrotask | ~0ms (no clamp) | Yield to render, batched scheduler |
-| `setTimeout(fn, 0)` | timers phase / task | 1ms (Node) / 4ms (clamped) | Delayed work |
-| `setImmediate` | check phase (Node) | none | Yield to poll in Node |
-| `requestIdleCallback` | idle | varies | Background work in browser |
+---
 
-### Edge cases
-1. **Cross-realm**: `MessageChannel` can post between iframes (in browsers) and across worker threads (in Node). Used to bridge isolated contexts.
-2. **Transferable objects**: `port.postMessage(data, [transferList])` — moves ArrayBuffer ownership without copy. Critical for high-perf workers.
-3. **Garbage collection of unused ports**: if you don't `.start()` or attach `onmessage`, the port may be GC'd. Always attach a listener before posting.
-4. **Closing**: `port1.close()` stops further messages. Important for cleanup in long-running schedulers.
-5. **Order**: messages posted in order are delivered in order. FIFO within a single channel.
-6. **Node-specific**: `worker_threads.MessageChannel` works between threads, with structured cloning + transferables.
+## 6. Brute force — walked through
 
-## Brute force approach
-"I'd use `setTimeout(0)`." Works, but the 4ms clamp kills perf at scale. Used in pre-2016 schedulers. React migrated away from it for exactly this reason.
+### Wrong attempt 1: `setTimeout(0)` for yielding
+4ms clamp kills perf at scale. React migrated away pre-2017.
 
-## Optimal approach
-For "yield to main thread" semantics in browsers:
-```js
-const { port1, port2 } = new MessageChannel();
-const callbacks = new Set();
+### Wrong attempt 2: `queueMicrotask` for yielding
+Microtasks drain in same tick → no rendering → frozen page.
 
-port1.onmessage = () => {
-  for (const cb of callbacks) cb();
-  callbacks.clear();
-};
+### Wrong attempt 3: call it a "microtask scheduler"
+It's a MACROtask. Easy to confuse.
 
-function yieldToMainThread(cb) {
-  callbacks.add(cb);
-  port2.postMessage(0); // wake up port1 next task
-}
-```
+---
 
-For Node cross-thread communication, use `MessageChannel` from `worker_threads` to exchange data between main thread and a worker.
+## 7. The unlocking insight
 
-## Solution (JavaScript)
+> **`MessageChannel.postMessage` queues a macrotask with no clamp. Faster than `setTimeout(0)` (no 4ms minimum). Yields to rendering between tasks (unlike microtasks). React Fiber and Vue/Lit schedulers use it for cooperative time-slicing.**
 
-### A minimal scheduler à la React
+Three properties:
+
+1. **Macrotask, not microtask** — distinct from `queueMicrotask`.
+2. **No clamp** — sub-millisecond between successive tasks.
+3. **Yields to render** — browser paints between tasks.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
-/**
- * yieldToMain(): defer fn to the next macrotask (after rendering, after I/O).
- * Uses MessageChannel because:
- *  - setTimeout(0) is clamped to 4ms (nested timers)
- *  - queueMicrotask doesn't yield to rendering
- */
+// Minimal scheduler using MessageChannel
 const channel = new MessageChannel();
 const queue = [];
 let scheduled = false;
 
-channel.port1.onmessage = () => {
+channel.port1.onmessage = () => {                                     // step 1: handler
   scheduled = false;
-  // Snapshot to avoid mutations during iteration.
-  const tasks = queue.splice(0);
+  const tasks = queue.splice(0);                                       // snapshot
   for (const task of tasks) {
     try { task(); }
-    catch (e) { setTimeout(() => { throw e; }); } // re-throw async, don't kill loop
+    catch (e) { setTimeout(() => { throw e; }); }                      // re-throw async
   }
 };
 
@@ -107,57 +120,27 @@ function yieldToMain(fn) {
   queue.push(fn);
   if (scheduled) return;
   scheduled = true;
-  channel.port2.postMessage(0);
+  channel.port2.postMessage(0);                                        // step 2: queue macrotask
 }
 
-// Demo
 console.log('sync 1');
 queueMicrotask(() => console.log('microtask'));
 yieldToMain(() => console.log('yielded 1'));
 yieldToMain(() => console.log('yielded 2'));
-setTimeout(() => console.log('timer 4ms'), 0);
+setTimeout(() => console.log('setTimeout 4ms+'), 0);
 console.log('sync 2');
+
+// Output: sync 1, sync 2, microtask, yielded 1, yielded 2, setTimeout 4ms+
+//   Sync first → microtask drain → MessageChannel task (sub-ms) → setTimeout (clamped)
 ```
 
-### Expected output (browser)
-```
-sync 1
-sync 2
-microtask
-yielded 1
-yielded 2
-timer 4ms
-```
-
-Why this ordering:
-- Sync runs first.
-- Microtask drains after current sync.
-- MessageChannel task fires as the next task (before the clamped setTimeout).
-- setTimeout(0) waits ~4ms.
-
-### React's actual usage (simplified)
-```js
-function schedulerPostTask(callback) {
-  channel.port2.postMessage(null);
-  scheduledHostCallback = callback;
-}
-
-channel.port1.onmessage = () => {
-  const currentTime = performance.now();
-  const hasMoreWork = scheduledHostCallback(currentTime);
-  if (hasMoreWork) {
-    channel.port2.postMessage(null); // schedule next slice
-  }
-};
-```
-Each slice does work for ~5ms then yields. Smooth 60fps. With `setTimeout(0)` and its 4ms clamp, you'd waste 80% of the budget.
-
-### Node cross-thread example
+**Try it yourself**
 
 ```js
+// Node cross-thread (worker_threads)
 const { Worker, MessageChannel } = require('node:worker_threads');
-
 const { port1, port2 } = new MessageChannel();
+
 const worker = new Worker(`
   const { parentPort } = require('node:worker_threads');
   parentPort.once('message', ({ port }) => {
@@ -165,73 +148,93 @@ const worker = new Worker(`
   });
 `, { eval: true });
 
-worker.postMessage({ port: port2 }, [port2]); // transfer port2 to worker
+worker.postMessage({ port: port2 }, [port2]);        // transfer port2
 port1.on('message', (msg) => console.log(msg));
-port1.postMessage('hello from main');
-// Logs: echo: hello from main
+port1.postMessage('hello');
+// Logs: echo: hello
 ```
 
-## Step-by-step dry run
+---
 
-```js
+## 9. Step-by-step dry run
+
+```
 const ch = new MessageChannel();
-ch.port1.onmessage = () => console.log('port1 received');
+ch.port1.onmessage = () => console.log('port1');
 console.log('A');
-ch.port2.postMessage('x');     // queues a task
-queueMicrotask(() => console.log('B'));
+ch.port2.postMessage('x');     // queues TASK (macrotask)
+queueMicrotask(() => console.log('B'));  // queues MICROtask
 console.log('C');
+
+Sync:
+  log 'A'
+  postMessage → Macro=[task]
+  queueMicrotask → MQ=[mt_B]
+  log 'C'
+
+Sync done. Drain MQ:
+  mt_B → log 'B'
+
+Browser pumps next task:
+  task → port1.onmessage → log 'port1'
+
+Output: A, C, B, port1
+
+Microtask drains BEFORE MessageChannel task — different tiers.
 ```
 
-Trace:
-- Sync: log `A`, post message (queues task), queue microtask, log `C`.
-- Sync ends.
-- Drain microtask: log `B`.
-- Browser/runtime pumps next task: fires `port1.onmessage` → log `port1 received`.
+---
 
-Output: `A C B port1 received`.
+## 10. Common confusion + traps
 
-Note: microtask drains before the MessageChannel task — they're on different tiers.
+1. **"`MessageChannel` is a microtask scheduler"** — NO, macrotask.
+2. **Forget `port.close()`** — long-running schedulers leak channels.
+3. **`postMessage` without transferList** — copies large data; use transferables.
+4. **Same as `setTimeout(0)`** — no clamp; sub-ms vs 1-4ms.
+5. **Cancelling a posted message** — can't; ignore via generation counter.
+6. **In browser** — global. **In Node** — from `worker_threads` (also global since Node 15).
+7. **`port` GC'd without listener** — attach `onmessage` before posting.
 
-## Important takeaways
+---
 
-**Syntax to memorize**
-- `const { port1, port2 } = new MessageChannel()`.
-- `port.onmessage = (e) => ...`; data on `e.data`.
-- `port.postMessage(data, [transferList])` — postMessage queues a task.
-- `port.close()` for cleanup.
+## 11. Senior follow-ups & variants
 
-**Patterns to reuse**
-- **Browser scheduler**: MessageChannel for sub-4ms yield to main thread. Used by React, Vue, Lit.
-- **Cross-thread messaging in Node**: MessageChannel from worker_threads, with transferables for zero-copy.
-- **Cross-iframe comms**: MessageChannel for isolated trusted communication channels.
+### Variant 1 — Polyfill `requestIdleCallback`
+Combine `MessageChannel` for yield + `performance.now()` for budget tracking.
 
-**Common mistakes**
-- Calling MessageChannel a "microtask scheduler." It's a **macrotask** scheduler. Microtask = queueMicrotask.
-- Forgetting `port.close()` — long-running schedulers leak channels otherwise.
-- Forgetting transferList — copying a 100MB ArrayBuffer instead of transferring.
-- Believing `setTimeout(0)` and MessageChannel are equivalent. They're not — `setTimeout(0)` has a 1ms (Node) / 4ms-when-nested (browser) clamp.
+### Variant 2 — Why no browser `setImmediate`?
+IE/Edge legacy had it; others rejected. Standard replacement is essentially `MessageChannel`.
 
-**Related questions**
-- queueMicrotask vs Promise.resolve().then
-- setImmediate vs setTimeout(0) in I/O
-- worker_threads
-- React Scheduler internals
+### Variant 3 — Backpressured queue between iframes
+Port-based comms with explicit ack messages.
 
-## Variants
+### Variant 4 — React Scheduler actual usage
+Each slice does ~5ms work then `postMessage` to schedule next. Smooth 60fps.
 
-1. **"Implement requestIdleCallback polyfill"** — combine MessageChannel for yielding with `performance.now()` for budget tracking. (See the dedicated machine-coding problem on this.)
-2. **"Why doesn't browser have setImmediate?"** — IE/Edge legacy had it, others rejected for spec reasons. The standardized replacement is essentially `MessageChannel.postMessage`.
-3. **"Implement a backpressured task queue between two iframes"** — port-based comms with explicit ack messages.
-4. **"How would you cancel a posted message?"** — you can't. Once queued, the task is scheduled. You can ignore it in the handler by checking a generation counter.
+### Variant 5 — `Scheduler.postTask` (new spec)
+Chromium native API with priorities (`user-blocking`, `user-visible`, `background`). Future replacement.
 
-## Revision notes
+---
 
-> **MessageChannel — 60 second recap**
-> - Posts a **task (macrotask)**, NOT a microtask.
-> - Used by React/Vue schedulers because:
->   - faster than `setTimeout(0)` (no 4ms clamp)
->   - yields to render (unlike `queueMicrotask`)
-> - `port1.onmessage = fn; port2.postMessage(0)` is the idiom.
-> - In Node: from `worker_threads`; supports cross-thread + transferables (zero-copy).
-> - **Trap**: thinking it's a microtask scheduler. It's a task scheduler.
-> - Cleanup with `port.close()` for long-running services.
+## 12. How to think aloud
+
+> "`MessageChannel` posts a macrotask (task in HTML spec), NOT a microtask. React/Vue/Lit schedulers use it because it's faster than `setTimeout(0)` (no 4ms nested-timer clamp) AND it yields to rendering between tasks (unlike `queueMicrotask`, which drains in same tick — frozen page). Idiom: `const {port1, port2} = new MessageChannel(); port1.onmessage = fn; port2.postMessage(0)`. In Node: from `worker_threads`, supports cross-thread + transferables for zero-copy. Cleanup with `port.close()`. Trap: calling it a microtask scheduler; forgetting `port.close()`; not using transferList for large data."
+
+---
+
+## 13. 60-second revision
+
+> - **`MessageChannel` posts MACROTASK** (not microtask).
+> - **Faster than `setTimeout(0)`** (no 4ms clamp).
+> - **Yields to rendering** (unlike `queueMicrotask` — drains same tick).
+> - **React/Vue schedulers** use it for cooperative time-slicing.
+> - **Idiom:** `port1.onmessage = fn; port2.postMessage(0)`.
+> - **Node:** `worker_threads.MessageChannel` — cross-thread + transferables.
+> - **Cleanup:** `port.close()`.
+> - **Trap:** "microtask scheduler"; missed transferList; uncleaned ports.
+
+---
+
+**Related:** [queuemicrotask-deep-dive.md](./queuemicrotask-deep-dive.md) · [setimmediate-vs-settimeout-in-io.md](./setimmediate-vs-settimeout-in-io.md) · [requestidlecallback-scheduling.md](./requestidlecallback-scheduling.md) · [`10-machine-coding-patterns/scheduler-idle-callback.md`](../10-machine-coding-patterns/scheduler-idle-callback.md)
+
+**Concept primer:** [`concepts/event-loop.md`](../../concepts/event-loop.md)

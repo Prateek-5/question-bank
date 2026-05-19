@@ -1,120 +1,121 @@
-# Request Deduplication (Same-Key In-Flight Coalescing)
+# Request Deduplication — in-flight + recent two-layer dedup
 
-## Source / Origin
-- React's `useDeferredValue` / Suspense cache; SWR `dedupingInterval`; React Query's queries; Apollo's `network-only` semantics.
-- Asked at: Razorpay, Stripe, Atlassian; ubiquitous in any front-end or BFF role.
-- Concept reference: sibling `cache-stampede-single-flight.md`, `dataloader-batch-cache.md`.
+> **Difficulty:** Medium-Senior   |   **Time:** ~20 min   |   **Prereqs:** [cache-stampede-single-flight.md](./cache-stampede-single-flight.md), [`04-promises/async-memoize.md`](../04-promises/async-memoize.md)
+>
+> **Source:** SWR's `dedupingInterval`, React Query, Apollo cache. Razorpay, Stripe, Atlassian, every BFF.
 
-## Why this question matters in interviews
-A search box fires `search('a')`, then `search('ab')`, then `search('a')` again because the user hit backspace. Without dedup, the network sees 3 requests; with dedup, the third reuses the first's promise (if still in-flight) or its cached result (if it just resolved). This pattern is core to perceived performance in user-facing apps. Interviewers test that you (1) distinguish *in-flight* dedup from *result cache*, (2) reason about TTL/stale-while-revalidate, (3) handle errors and aborts cleanly.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
-```js
+**Signature**
+```ts
 class Deduper {
-  constructor({ dedupingIntervalMs = 2000 } = {}) {
-    this.inflight = new Map();        // key → promise
-    this.recent   = new Map();        // key → { result, ts }
-    this.dedupingIntervalMs = dedupingIntervalMs;
-  }
-
-  async fetch(key, fn) {
-    // 1. in-flight dedup
-    const inflight = this.inflight.get(key);
-    if (inflight) return inflight;
-
-    // 2. recent-result dedup (stale-while-revalidate window)
-    const cached = this.recent.get(key);
-    if (cached && (Date.now() - cached.ts) < this.dedupingIntervalMs) return cached.result;
-
-    // 3. fresh fetch
-    const p = (async () => {
-      try {
-        const result = await fn();
-        this.recent.set(key, { result, ts: Date.now() });
-        return result;
-      } finally {
-        this.inflight.delete(key);
-      }
-    })();
-    this.inflight.set(key, p);
-    return p;
-  }
-
-  invalidate(key) { this.recent.delete(key); }
+  constructor(opts?: { dedupingIntervalMs?: number; lruCap?: number });
+  fetch<T>(key: string, fn: () => Promise<T>): Promise<T>;
+  invalidate(key: string): void;
+  invalidateAll(): void;
 }
 ```
 
-### Edge cases / interview traps
-1. **In-flight vs recent.** Two layers: one for concurrent duplicates, one for sub-second-apart duplicates after completion. SWR uses 2s default; React Query uses 0 (no recent-result reuse without `staleTime`).
-2. **Errors should not cache.** Don't store an error in `recent`. Otherwise repeated rapid calls all see the same error.
-3. **Abort propagation.** If a caller aborts but others are still waiting, don't cancel the in-flight — others depend on it. Reject *this caller's* awaiting branch only.
-4. **Cache invalidation.** Mutations need to invalidate the dedup window; otherwise stale reads.
-5. **Memory growth.** `recent` Map grows; bound with LRU or periodic sweep.
-6. **TTL vs deduping interval.** Deduping is "no two identical calls within X ms"; full cache TTL is a different concept — keep separate.
-7. **Key fidelity.** Build the key from *all* params (sort, filter, page). A naive `JSON.stringify` works but is order-dependent; canonicalize first.
+**Input / Output examples**
 
-## Mental Model
+| Setup (dedupingIntervalMs=500)                       | Behaviour                                              |
+|------------------------------------------------------|---------------------------------------------------------|
+| Concurrent `fetch('u', fn)` × 100                    | one `fn` call, all 100 share its promise               |
+| Sequential `fetch('u', fn)` 50ms apart, fn took 200ms | first runs fn; later calls within recent window → cached |
+| `fetch('u', fn)` 600ms later (window stale)          | runs fn again                                          |
+| `fn` rejects                                          | error NOT cached in recent; next call retries          |
+| `invalidate('u')` then `fetch('u', fn)`               | runs fn again                                          |
 
-Two layers of dedup, layered on the fetch path:
+**Constraints**
+- Two layers: `inflight` (concurrent) + `recent` (sub-second result reuse).
+- **Errors don't cache** — failures retryable.
+- LRU-bound `recent` to avoid unbounded growth.
+- Canonicalize keys (sort object keys before stringify).
+
+---
+
+## 2. Plain-English restatement
+
+User types in a search box: `search('a')`, `search('ab')`, then backspaces to `search('a')`. Without dedup → 3 network calls. With this Deduper: third call reuses the first's promise (if in-flight) OR its result (within the deduping window). Distinct from a cache: only collapses concurrent and near-concurrent calls.
+
+---
+
+## 3. Why this matters in interviews
+
+Core to perceived performance in user-facing apps. Tests two-layer reasoning (in-flight vs recent), error semantics (don't cache failures), TTL/SWR concepts.
+
+---
+
+## 4. Mental model
 
 ```
    fetch(key, fn):
-    1. inflight[key] exists?     →  YES: return same promise (caller B joins caller A)
-    2. recent[key] within X ms?  →  YES: return cached result (NO network)
-    3. neither?                  →  NO:  fire fn(), store in inflight; on resolve, copy to recent
+     1. inflight[key]?            → YES: return same promise (joined)
+     2. recent[key] within X ms?  → YES: return cached result (no network)
+     3. neither?                  → fire fn(); on success populate both
+
+   Timeline (X = 500ms):
+   t=0    call A → inflight={}, recent={} → fresh; p1
+   t=10   call B → inflight has 'a' → return p1   (joined)
+   t=200  p1 resolves → recent['a']={r, ts:200}; inflight.delete('a')
+   t=210  call C → recent within 500ms → return cached r (no network)
+   t=900  call D → recent stale (900-200=700>500) → fresh; p3
 ```
 
-```
-    t=0   call A:  inflight={}, recent={} → fresh fetch, p1
-    t=10  call B (same key):  inflight has → return p1
-    t=200 p1 resolves; recent[key]={result, ts:200}; inflight.delete
-    t=210 call C (same key): inflight empty; recent within 2000ms → return cached result, NO fetch
-    t=2300 call D: recent stale → fresh fetch
-```
+---
 
-## Why interviewers care
+## 5. Try it yourself first
 
-- **Front-end perf intuition.** Knowing why typeahead/autocomplete feels fast in well-built apps.
-- **Layered cache reasoning.** In-flight, recent, persistent — three distinct buckets.
-- **Error semantics.** Don't cache errors; do dedup errors mid-flight.
+> **Predict before reading on:**
+> 1. Why two layers (inflight + recent) instead of one?
+> 2. Why don't errors populate `recent`?
+> 3. What goes wrong if you cache `JSON.stringify(params)` without canonicalizing key order?
 
-## Common beginner confusion
+---
 
-- **"Dedup = cache."** No. Dedup *includes* a tiny cache (recent), but the main job is collapsing concurrent and near-concurrent calls.
-- **"Use just in-flight."** Sub-second repeated calls (e.g., React StrictMode double-mount, user-press-Enter-twice) still cause two fetches. Need recent-result reuse.
-- **"Use just a TTL cache."** Concurrent requests during the first miss all stampede.
-- **"`JSON.stringify(params)` is a stable key."** Object key order is implementation-defined; use a canonical serializer.
-- **"Invalidate on every write."** Right idea — but make sure your write-paths actually call `invalidate(key)`.
+## 6. Brute force — walked through
 
-## Brute force approach
+### Wrong attempt 1: no dedup
+Backspace mash → 20 search calls in 1s.
 
-```js
-async function fetch(key, fn) {
-  return fn();   // every call hits network
-}
-```
+### Wrong attempt 2: only in-flight dedup
+Sub-second repeated calls (StrictMode double-mount, double-Enter) still cause two fetches.
 
-User mashing backspace → 20 search requests in 1 second.
+### Wrong attempt 3: TTL cache only
+Concurrent first-misses all stampede (no inflight layer).
 
-## Optimal approach
+### Wrong attempt 4: cache errors in `recent`
+Failed calls all rapidly see same error; no retry possible.
 
-Two-layer Map: `inflight` (collapses concurrent) and `recent` (collapses repeated within window). Errors don't populate `recent`. Expose `invalidate(key)` for write-path correctness.
+---
 
-## Solution (JavaScript)
+## 7. The unlocking insight
+
+> **Two-layer dedup: `inflight: Map<key, Promise>` for concurrent dedup + `recent: Map<key, {result, ts}>` for sub-second repeated calls. Errors don't populate `recent`. Expose `invalidate(key)` for write-paths. LRU-bound `recent`.**
+
+Three properties:
+
+1. **In-flight + recent** — solves both concurrent stampede and sub-second repeats.
+2. **Errors retry** — never cache failure in `recent`.
+3. **LRU bound** — bounded memory under unbounded keyspace.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
 class Deduper {
   constructor({ dedupingIntervalMs = 2000, lruCap = 1000 } = {}) {
-    this.inflight = new Map();
-    this.recent = new Map();
+    this.inflight = new Map();                                       // step 1: concurrent layer
+    this.recent = new Map();                                          // step 2: recent layer
     this.dedupingIntervalMs = dedupingIntervalMs;
     this.lruCap = lruCap;
   }
 
-  _touch(key, val) {
-    this.recent.delete(key);                      // re-insert at tail
+  _touch(key, val) {                                                 // step 3: LRU re-insert
+    this.recent.delete(key);
     this.recent.set(key, val);
     if (this.recent.size > this.lruCap) {
       const oldest = this.recent.keys().next().value;
@@ -124,17 +125,20 @@ class Deduper {
 
   async fetch(key, fn) {
     const inflight = this.inflight.get(key);
-    if (inflight) return inflight;
+    if (inflight) return inflight;                                    // step 4: concurrent hit
+
     const cached = this.recent.get(key);
-    if (cached && Date.now() - cached.ts < this.dedupingIntervalMs) return cached.result;
+    if (cached && Date.now() - cached.ts < this.dedupingIntervalMs) {
+      return cached.result;                                            // step 5: recent hit
+    }
 
     const p = (async () => {
       try {
         const result = await fn();
-        this._touch(key, { result, ts: Date.now() });
+        this._touch(key, { result, ts: Date.now() });                  // step 6: success → recent
         return result;
       } finally {
-        this.inflight.delete(key);
+        this.inflight.delete(key);                                     // step 7: cleanup
       }
     })();
     this.inflight.set(key, p);
@@ -144,61 +148,103 @@ class Deduper {
   invalidate(key) { this.recent.delete(key); }
   invalidateAll() { this.recent.clear(); }
 }
+```
 
-// Usage in a typeahead
+**Try it yourself**
+
+```js
 const dedup = new Deduper({ dedupingIntervalMs: 500 });
+
 async function searchUsers(q) {
-  return dedup.fetch(`u:${q}`, () => fetch(`/api/users?q=${q}`).then(r => r.json()));
+  return dedup.fetch(`u:${q}`, () => fetch(`/api/users?q=${q}`).then((r) => r.json()));
+}
+
+// Type "ab" then backspace
+await Promise.all([searchUsers('a'), searchUsers('ab'), searchUsers('a')]);
+// First call fires; second 'ab' fires; third 'a' joins first's in-flight.
+
+// On mutation
+async function createUser(data) {
+  const r = await fetch('/api/users', { method: 'POST', body: JSON.stringify(data) });
+  dedup.invalidateAll();    // or invalidate specific keys
+  return r;
 }
 ```
 
-## Step-by-step dry run
+---
 
-`dedupingIntervalMs=500`. User types "ab", then backspaces to "a" (already typed):
-
-```
-t=0    searchUsers('a') → inflight miss, recent miss → fire fetch, p1
-t=20   searchUsers('ab') → diff key → fire fetch, p2
-t=150  searchUsers('a') → inflight has 'a' (still p1) → return p1 (joined)
-t=300  p1 resolves → recent['a']={r, 300}; inflight.delete('a')
-t=350  searchUsers('a') → inflight miss; recent['a'] within 500ms → return cached, no fetch
-t=900  searchUsers('a') → recent['a'] stale (900-300=600 > 500) → fire fetch, p3
-```
-
-Network traffic: 3 calls (`a` at t=0, `ab` at t=20, `a` at t=900) instead of 5.
-
-## How to think aloud in the interview
-
-> "Two-layer dedup: `inflight` Map for concurrent calls, `recent` Map (with timestamp + LRU bound) for sub-second repeats. On `fetch(key, fn)`: in-flight wins, then recent-result wins (within window), otherwise fire fresh and store in both. `finally` cleans `inflight` regardless of success. Errors don't populate `recent` — so failures are retryable immediately. Expose `invalidate(key)` for mutations. The deduping interval is the perceived-fresh threshold — 500ms-2s typical."
-
-## Important takeaways
-
-- **Two layers**: in-flight + recent. Different problems.
-- **Errors don't cache.** Recent stays empty on rejection.
-- **LRU bound the recent map.** Otherwise unbounded growth.
-- **Key canonicalization.** Sort object keys before stringify.
-- **Pair with mutations.** Writes call `invalidate(key)`.
-
-## Variants
-
-- **stale-while-revalidate (SWR)** — return stale immediately *and* refresh in background. Two return values: `data` (possibly stale) + `isValidating`.
-- **Per-user dedup** — key includes `userId` to avoid cross-user collisions in a BFF.
-- **Network-aware** — pause dedup window during retries on the underlying fetch.
-- **`focus`-triggered revalidation** — invalidate everything when the tab regains focus (React Query default).
-
-## Revision notes
+## 9. Step-by-step dry run
 
 ```
-Deduper:
-  fetch(key, fn):
-    inflight has? return same promise
-    recent within window? return cached result
-    else: fire fn(); store in inflight + recent (on success)
-    finally: delete inflight
-  
-  TWO layers: inflight (concurrent) + recent (sub-second)
-  errors do NOT cache
-  LRU bound recent
-  invalidate(key) on writes
-  variants: SWR, per-user, focus-revalidate
+dedupingIntervalMs=500.
+
+t=0    searchUsers('a') → inflight miss; recent miss → fire fetch_a; p1
+t=20   searchUsers('ab') → diff key → fire fetch_ab; p2
+t=150  searchUsers('a') → inflight has 'a' (p1) → return p1 (joined)
+t=300  p1 resolves → _touch('a', {result, ts:300}); inflight.delete('a')
+t=350  searchUsers('a') → inflight miss; recent 'a' age=50<500 → return cached, NO fetch
+t=900  searchUsers('a') → recent 'a' age=600>500 → stale → fire fetch_a; p3
+
+Network calls: 3 ('a' at t=0, 'ab' at t=20, 'a' at t=900) vs 5 without dedup.
+
+Error scenario:
+  searchUsers('x') → fn rejects.
+  finally: inflight.delete('x'). recent NOT populated.
+  Next searchUsers('x') → fresh attempt (retry possible).
 ```
+
+---
+
+## 10. Common confusion + traps
+
+1. **Dedup = cache** — no; dedup includes a tiny cache. Cache TTL is a separate concern.
+2. **Only in-flight layer** — sub-second repeats still miss.
+3. **Only TTL cache** — concurrent first-misses all stampede.
+4. **Cache errors** — failures unretryable.
+5. **Unbounded `recent`** — memory grows under high-cardinality keys.
+6. **`JSON.stringify(params)` unsorted** — object key order is implementation-defined; canonicalize first.
+7. **Forget `invalidate` on writes** — stale reads after mutations.
+
+---
+
+## 11. Senior follow-ups & variants
+
+### Variant 1 — Stale-while-revalidate (SWR)
+Return stale immediately, refresh in background. Two return values: `data` (possibly stale) + `isValidating`.
+
+### Variant 2 — Per-user dedup
+Key includes `userId` to avoid cross-user collisions in a BFF.
+
+### Variant 3 — Network-aware
+Pause dedup window during retries.
+
+### Variant 4 — Focus-triggered revalidation
+Invalidate all when tab regains focus (React Query default).
+
+### Variant 5 — Distributed dedup
+Multi-instance dedup via Redis + SETNX. Different machinery.
+
+---
+
+## 12. How to think aloud
+
+> "Two-layer dedup: `inflight: Map<key, Promise>` for concurrent calls; `recent: Map<key, {result, ts}>` for sub-second repeated calls. `fetch(key, fn)`: in-flight hit wins, then recent-within-window wins, else fire fresh. Errors DON'T populate `recent` so failures retry. LRU bound `recent`. Canonicalize keys (sort object props). Pair with mutations: writes call `invalidate(key)`. SWR variant: return stale and revalidate in background. Trap: only in-flight layer; cache errors; unbounded recent; unsorted key serialization."
+
+---
+
+## 13. 60-second revision
+
+> - **Two layers:** `inflight` (concurrent) + `recent` (sub-second).
+> - **Errors don't cache** in `recent`; retry on next call.
+> - **LRU-bound `recent`** for high-cardinality keys.
+> - **Canonicalize keys** (sort object props before stringify).
+> - **Invalidate on writes.**
+> - **Different from cache:** dedup is short-window; cache TTL is hours.
+> - **Variants:** SWR (stale + revalidate), per-user, focus-revalidate, distributed.
+> - **Trap:** one-layer only; cache errors; unbounded recent; unsorted keys; missing invalidation.
+
+---
+
+**Related:** [cache-stampede-single-flight.md](./cache-stampede-single-flight.md) · [`04-promises/async-memoize.md`](../04-promises/async-memoize.md) · [dataloader-batch-cache.md](./dataloader-batch-cache.md) · [idempotency-wrapper.md](./idempotency-wrapper.md)
+
+**Concept primer:** [`concepts/promises.md`](../../concepts/promises.md)

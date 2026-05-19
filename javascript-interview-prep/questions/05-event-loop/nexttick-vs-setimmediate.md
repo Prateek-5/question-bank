@@ -1,103 +1,145 @@
-# process.nextTick vs setImmediate vs setTimeout(0)
+# `process.nextTick` vs `setImmediate` vs `setTimeout(0)`
 
-## Source
-- Canonical Node interview question — every senior Node round asks this.
-- Node docs: https://nodejs.org/en/learn/asynchronous-work/event-loop-timers-and-nexttick
+> **Difficulty:** Senior   |   **Time:** ~15 min   |   **Prereqs:** [nodejs-event-loop-phases.md](./nodejs-event-loop-phases.md), [microtask-macrotask-order.md](./microtask-macrotask-order.md)
+>
+> **Source:** Canonical Node interview question.
 
-## Why this question matters in interviews
-Three APIs that all look like "run this later" but live in three different places in the loop. The interviewer is checking whether you can place each one on the correct rung:
-- **`process.nextTick`** runs in its own queue, drained **between every callback**, before microtasks. NOT a libuv phase.
-- **`setImmediate`** runs in libuv's **check** phase.
-- **`setTimeout(fn, 0)`** runs in libuv's **timers** phase.
+---
 
-Bonus points for naming the deterministic vs non-deterministic ordering between `setImmediate` and `setTimeout(0)`. Backend engineers care because misuse of `nextTick` is one of the top three causes of event-loop starvation in production Node services.
+## 1. Problem statement
 
-## Concepts involved
+Three Node APIs that all "run later" but live in three different places in the loop.
 
-### Where each one lives
+**Verification examples**
+
+| API                           | Where it runs                                  | Priority                |
+|--------------------------------|------------------------------------------------|--------------------------|
+| `process.nextTick(fn)`        | Its own queue (NOT a phase)                    | Highest deferred         |
+| `queueMicrotask` / `.then`    | Microtask queue                                | After nextTick           |
+| `setImmediate(fn)`            | libuv check phase                              | Macrotask, post-poll     |
+| `setTimeout(fn, 0)`           | libuv timers phase                             | Macrotask, top of loop   |
+
+**Ordering rules**
+
+| Context                            | `setImmediate` vs `setTimeout(0)`              |
+|-------------------------------------|-------------------------------------------------|
+| From main module                    | Non-deterministic (timer-arming race)          |
+| From inside an I/O callback         | `setImmediate` ALWAYS wins (check follows poll)|
+| From inside `setImmediate`          | `setTimeout(0)` next iteration (timers first)  |
+
+**Constraints**
+- `process.nextTick` runs between every callback (NOT a phase).
+- Recursive nextTick STARVES all I/O.
+- Browsers have no `nextTick`/`setImmediate`.
+
+---
+
+## 2. Plain-English restatement
+
+Three names that look interchangeable but aren't. **`nextTick`** is Node-specific, drained between every callback, highest priority. **`setImmediate`** runs in libuv's check phase, after I/O. **`setTimeout(0)`** runs in libuv's timers phase. The misleading names: `setImmediate` is NOT immediate; `nextTick` does NOT run on the next loop tick.
+
+---
+
+## 3. Why this matters in interviews
+
+Backend interviewer's go-to test. Misuse of `nextTick` is one of the top three causes of event-loop starvation in production Node. Knowing the I/O-callback determinism rule is the senior follow-up.
+
+---
+
+## 4. Mental model
+
 ```
-   ┌──────────────────────────────────────┐
-   │ Current callback (sync work)          │
-   └──────────────────────────────────────┘
+   ┌───────────────────────────────────────┐
+   │ Current callback (sync work)           │
+   └───────────────────────────────────────┘
         ▼ after every callback returns
-   ┌──────────────────────────────────────┐
-   │ 1) process.nextTick queue  ← DRAIN    │
-   │ 2) Microtask queue         ← DRAIN    │
-   └──────────────────────────────────────┘
+   ┌───────────────────────────────────────┐
+   │ 1. process.nextTick queue   ← drain    │
+   │ 2. Microtask queue           ← drain   │
+   └───────────────────────────────────────┘
         ▼
-   ┌──────────────────────────────────────┐
-   │ Next libuv phase                      │
-   │   - timers     ← setTimeout / setInterval
-   │   - poll       ← I/O callbacks
-   │   - check      ← setImmediate
-   │   - close      ← 'close' events
-   └──────────────────────────────────────┘
+   ┌───────────────────────────────────────┐
+   │ Next libuv phase                       │
+   │   - timers    ← setTimeout/setInterval │
+   │   - poll      ← I/O callbacks          │
+   │   - check     ← setImmediate           │
+   │   - close     ← 'close' events         │
+   └───────────────────────────────────────┘
+
+   Memorize: nextTick > microtasks > everything else.
+
+   Names are historically backwards:
+   - setImmediate is NOT immediate (runs in check phase)
+   - nextTick does NOT run on next tick (runs BEFORE next phase)
+     → nextTick is more immediate than setImmediate.
+
+   Inside an I/O callback (poll phase):
+     next phase is check → setImmediate beats setTimeout(0) deterministically.
+   From main module:
+     loop entry timing is racy → order unpredictable.
 ```
 
-### Naming confusion (deliberate)
-The names are historically backwards:
-- `setImmediate` is NOT immediate — it runs in the **check** phase, after poll.
-- `process.nextTick` does NOT run on the next loop tick — it runs **before** the next phase, at the END of the current operation. So it's more "immediate" than `setImmediate`.
+---
 
-Memorize: **nextTick > microtasks > everything else**.
+## 5. Try it yourself first
 
-### `setImmediate` vs `setTimeout(0)` ordering
+> **Predict before reading on:**
+> 1. From main: which runs first, `setImmediate` or `setTimeout(0)`?
+> 2. Inside `fs.readFile` callback: which runs first?
+> 3. What does `process.nextTick(loop)` (recursive) do?
 
-| Context | Order |
-|---------|-------|
-| Called from **main module** | Non-deterministic. Depends on whether the 0ms timer deadline has elapsed by the time the loop reaches timers. |
-| Called from inside an **I/O callback** (poll phase) | Deterministic: `setImmediate` first. Because after poll comes check, then a new iteration which arrives at timers. |
-| Called from inside a `setImmediate` callback | Deterministic: `setImmediate` chained runs on the NEXT iteration's check; `setTimeout(0)` runs on the next iteration's timers (earlier in iteration). So `setTimeout(0)` first. |
+---
 
-This is the most common follow-up question after the basic ordering.
+## 6. Brute force — walked through
 
-### Edge cases (interview traps)
-1. **`process.nextTick` starvation** — recursive `process.nextTick(fn)` where `fn` schedules another nextTick prevents the loop from EVER advancing. No timers fire, no I/O completes. Worst kind of bug.
-2. **Microtasks can also starve** — but slightly less likely because Promise chains usually terminate. `nextTick` is more dangerous because it's drained even more aggressively.
-3. **Recommendation**: use `queueMicrotask` (or `Promise.resolve().then`) instead of `process.nextTick` for almost everything in user-land code. Reserve `nextTick` for the rare case of "I need to defer until the current operation completes but before any I/O" — historically used inside libraries that need to emit events after the constructor returns.
-4. **`setImmediate(fn)` vs `setTimeout(fn, 0)` from main** — flaky tests are usually caused by relying on this ordering. Don't.
-5. **`setImmediate` inside a hot loop** — preferred way to yield to the event loop without burning CPU. Better than `setTimeout(0)` because it doesn't go through the timers heap.
-6. **`process.nextTick` runs even before queueMicrotask** — both in browser/Node, microtasks queue ≠ nextTick queue (Node only).
-7. **Browsers don't have `process.nextTick` or `setImmediate`** (well, IE had setImmediate). Use `queueMicrotask` and `setTimeout(0)` instead.
-8. **`Promise.resolve()` does NOT schedule on nextTick** — it's a microtask. They are separate queues.
+### Wrong attempt 1: "they all defer work"
+Not enough — name the queue/phase each uses.
 
-## Brute force approach
-"They all defer work." That's not enough. You must name the queue/phase each one uses and the priority order. The interviewer will then ask "what's the difference?" and you'll be back to square one.
+### Wrong attempt 2: "nextTick is a microtask"
+No — separate higher-priority Node-specific queue.
 
-## Optimal approach
-Memorize the hierarchy:
-1. `process.nextTick` queue — drained first (between every callback).
-2. Microtask queue (Promise jobs) — drained next.
-3. Macrotask phases — `setTimeout` (timers), I/O (poll), `setImmediate` (check), close callbacks.
+### Wrong attempt 3: "setImmediate runs immediately"
+No — runs in check phase, after poll.
 
-Memorize the I/O-callback rule: `setImmediate` always beats `setTimeout(0)` from inside an I/O callback.
+---
 
-## Solution (JavaScript)
+## 7. The unlocking insight
+
+> **Hierarchy: sync → `process.nextTick` → microtasks → libuv phase (timers/poll/check/close). Inside I/O callback, `setImmediate` deterministically beats `setTimeout(0)`. Recursive `nextTick` starves I/O.**
+
+Three properties:
+
+1. **`nextTick` is not a phase, not a microtask** — its own queue.
+2. **Inside I/O cb:** `setImmediate` wins (poll → check is fixed order).
+3. **Recursive nextTick** starves the entire loop.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
-// Side-by-side demonstration.
 console.log('sync start');
 
-setTimeout(() => console.log('setTimeout(0)'), 0);
-setImmediate(() => console.log('setImmediate'));
-process.nextTick(() => console.log('process.nextTick'));
-Promise.resolve().then(() => console.log('promise.then (microtask)'));
-queueMicrotask(() => console.log('queueMicrotask'));
+setTimeout(() => console.log('setTimeout(0)'), 0);                   // step 1: timers phase
+setImmediate(() => console.log('setImmediate'));                      // step 2: check phase
+process.nextTick(() => console.log('process.nextTick'));              // step 3: NT queue
+Promise.resolve().then(() => console.log('promise.then'));            // step 4: microtask
+queueMicrotask(() => console.log('queueMicrotask'));                  // step 5: microtask
 
 console.log('sync end');
 
-// Deterministic part of the output (Node):
+// Output (deterministic part):
 // sync start
 // sync end
-// process.nextTick                ← drained first
-// promise.then (microtask)        ← microtask drain
-// queueMicrotask                  ← microtask drain (same priority as .then)
-// setTimeout(0) and setImmediate  ← order between these two is non-deterministic
+// process.nextTick              ← drained first
+// promise.then                  ← MQ drain
+// queueMicrotask                ← MQ drain (same priority, FIFO)
+// setTimeout(0) and setImmediate ← order racy from main module
 ```
 
+**Inside an I/O callback — deterministic ordering:**
+
 ```js
-// Inside an I/O callback the order between setImmediate and setTimeout(0)
-// becomes DETERMINISTIC.
 const fs = require('node:fs');
 
 fs.readFile(__filename, () => {
@@ -110,107 +152,102 @@ fs.readFile(__filename, () => {
 // Output:
 // inner nextTick
 // inner microtask
-// inner immediate                 ← DETERMINISTIC: check follows poll
-// inner timeout(0)                ← runs in next iteration's timers phase
+// inner immediate          ← DETERMINISTIC: check follows poll
+// inner timeout(0)         ← runs in NEXT iteration's timers phase
 ```
+
+**Try it yourself — DANGER: nextTick starvation**
 
 ```js
-// DANGER: nextTick starvation
-function starve() {
-  process.nextTick(starve);   // never lets the loop advance
-}
-setTimeout(() => console.log('I will NEVER print'), 100);
+function starve() { process.nextTick(starve); }
+setTimeout(() => console.log('I NEVER print'), 100);
 starve();
-// The setTimeout callback never fires. The process burns 100% CPU.
+// Process burns 100% CPU; setTimeout callback never fires.
 ```
 
-## Step-by-step dry run
+---
 
-For the I/O-callback snippet:
+## 9. Step-by-step dry run
 
-| Step | Phase | NT | MQ | Timers | Check | Output |
-|------|-------|----|----|--------|-------|--------|
-| 1 | sync | — | — | — | — | — |
-| 2 | sync | `fs.readFile` dispatched to libuv pool | — | — | — | — | — |
-| 3 | sync done | — | — | — | — | — |
-| 4 | loop iteration: timers (empty), pending (empty), poll → waits for fs | — | — | — | — | — |
-| 5 | poll fires: fs cb runs; inside it: register `setTimeout` cbT, `setImmediate` cbI, `nextTick` cbN, `microtask` cbM | `[cbN]` | `[cbM]` | `[cbT@0]` | `[cbI]` | — |
-| 6 | fs cb returns → drain NT → run cbN | — | `[cbM]` | `[cbT@0]` | `[cbI]` | `inner nextTick` |
-| 7 | drain MQ → run cbM | — | — | `[cbT@0]` | `[cbI]` | `inner microtask` |
-| 8 | poll done (no more I/O cbs) → check phase → run cbI | — | — | `[cbT@0]` | — | `inner immediate` |
-| 9 | drain NT, MQ (both empty) | — | — | `[cbT@0]` | — | — |
-| 10 | close phase: nothing | — | — | `[cbT@0]` | — | — |
-| 11 | next iteration: timers → cbT's deadline passed → run cbT | — | — | — | — | `inner timeout(0)` |
+```
+fs.readFile callback example:
 
-Critical observation at step 8: after the I/O callback in poll, the loop moves to **check** before looping back to **timers**. That's why `setImmediate` deterministically wins inside an I/O callback.
+t=0    fs.readFile dispatched to libuv pool. sync done.
+t=0    loop iteration: timers (empty), pending (empty), poll → waits for fs.
 
-For the nextTick starvation snippet:
+t=N    poll fires: fs cb runs. Inside it:
+        setTimeout(cb_T, 0)              timers=[cb_T]
+        setImmediate(cb_I)                check=[cb_I]
+        process.nextTick(cb_N)            NT=[cb_N]
+        Promise.resolve().then(cb_M)      MQ=[cb_M]
+       fs cb returns → drain NT (cb_N → log 'inner nextTick')
+                       drain MQ (cb_M → log 'inner microtask')
+       poll empty → check phase → run cb_I → log 'inner immediate'
+       drain NT, MQ (empty)
+       close phase: nothing
+       next iteration: timers → cb_T's deadline passed → run cb_T → log 'inner timeout(0)'
 
-| Step | Action | NT | Macro |
-|------|--------|----|----|
-| 1 | register `setTimeout` cbT@100 | — | `[cbT@100]` |
-| 2 | call `starve()` → enqueue starve in NT | `[starve]` | `[cbT@100]` |
-| 3 | sync done | `[starve]` | `[cbT@100]` |
-| 4 | drain NT → run starve → enqueues starve again | `[starve]` | `[cbT@100]` |
-| 5 | drain NT (re-enqueued) → run starve → enqueues starve again | `[starve]` | `[cbT@100]` |
-| ... | infinite loop in step 5 | `[starve]` | `[cbT@100]` |
+Output: nextTick, microtask, immediate, timeout(0).
 
-The loop never reaches the timers phase. `cbT` never fires.
+Recursive nextTick:
+  call starve() → enqueue starve in NT.
+  drain NT → run starve → re-enqueue starve in NT.
+  drain NT → infinite loop. Never advance to timers/poll/check.
+  CPU 100%, timers never fire.
+```
 
-## Important takeaways
+---
 
-**The hierarchy (memorize)**
-1. Sync code (call stack)
-2. `process.nextTick` queue
-3. Microtask queue (Promise, `queueMicrotask`)
-4. libuv phase callbacks (timers, pending, poll, check, close)
+## 10. Common confusion + traps
 
-Steps 2 + 3 drain between every callback.
+1. **nextTick is a microtask** — no, separate higher-priority queue.
+2. **setImmediate "runs immediately"** — no, check phase.
+3. **From main: deterministic order between setImmediate/setTimeout(0)** — non-deterministic.
+4. **Recursive nextTick to "batch" work** — STARVES I/O.
+5. **Promise.resolve() runs on nextTick** — no, microtask.
+6. **Browsers have setImmediate** — no (except IE).
+7. **`setImmediate` vs `setTimeout(0)` for yielding CPU** — both yield; `setImmediate` is cheaper (no timer heap).
 
-**The four "deferred" APIs**
-| API | Queue | Order |
-|-----|-------|-------|
-| `process.nextTick(fn)` | nextTick queue | Before microtasks. Between every callback. |
-| `queueMicrotask(fn)` / `Promise.resolve().then(fn)` | microtask queue | After nextTick. Between every callback. |
-| `setImmediate(fn)` | check phase | Once per loop iteration, after poll. |
-| `setTimeout(fn, 0)` | timers phase | Once per loop iteration, at the top. |
+---
 
-**When to use which**
-- `queueMicrotask` — defer to "right after this sync block" without leaving the current macrotask. Modern idiom.
-- `process.nextTick` — same as above but Node-only and higher priority. Rarely the right choice today; mostly used by older libraries (e.g., emitting 'error' events after construction).
-- `setImmediate` — yield to the event loop, let pending I/O run, then resume. Great for chunking CPU work.
-- `setTimeout(0)` — same effect, but goes through the timers heap. Slightly slower than `setImmediate`. Prefer `setImmediate` in Node.
+## 11. Senior follow-ups & variants
 
-**Common mistakes**
-- Using `process.nextTick` thinking it's "the same as setImmediate" — it isn't.
-- Relying on `setImmediate` vs `setTimeout(0)` ordering from main module — non-deterministic.
-- Recursively scheduling `nextTick` to "batch" work — starves I/O.
-- Saying `setImmediate` runs immediately — it doesn't; it runs in the check phase.
+### Variant 1 — "How yield CPU to let I/O run?"
+`setImmediate`. Demonstrate chunking a big array reduce.
 
-**Production lore**
-- The `node:process` docs explicitly recommend AGAINST `process.nextTick` in new code. Prefer `queueMicrotask`.
-- Express middleware once used `nextTick` heavily; modern code uses microtasks or `setImmediate` for chunking.
-- `nextTick` starvation has crashed real services. If you find yourself reaching for it, justify why microtasks aren't enough.
+### Variant 2 — "Build a CPU-yielding worker"
+`setImmediate` between batches; check `signal.aborted` for cancellation.
 
-## Variants
+### Variant 3 — "Cost of nextTick vs setImmediate"
+nextTick is cheaper (no libuv handle), but priority cost is high. Don't optimize prematurely.
 
-1. **"Predict the output"** — interviewer drops a snippet mixing all four. Walk the hierarchy.
+### Variant 4 — `process.nextTick` in old libraries
+Express middleware once used it heavily. Modern code uses microtasks or `setImmediate`.
 
-2. **"How do you yield CPU to let I/O run?"** — `setImmediate` is the answer. Demonstrate chunking a big array reduce.
+### Variant 5 — Node 11+ behavior
+Microtasks drain between every callback (was every phase before).
 
-3. **"How would you implement an `asyncQueue` that respects backpressure?"** — call `setImmediate` between batches; await drain events.
+---
 
-4. **"What's the cost of `process.nextTick` vs `setImmediate`?"** — nextTick is cheaper (no libuv handle), but the priority cost is high. Don't optimize prematurely.
+## 12. How to think aloud
 
-## Revision notes
+> "Three APIs, three places. `process.nextTick` is Node-only, its own queue, drained between every callback — highest deferred priority. `setImmediate` runs in libuv's check phase (after poll). `setTimeout(0)` runs in libuv's timers phase. Names are misleading: `setImmediate` is NOT immediate; `nextTick` does NOT run on next tick. From main module: `setImmediate` vs `setTimeout(0)` is RACY. From inside an I/O callback: `setImmediate` deterministically wins (check follows poll). Recursive nextTick STARVES all I/O — top-3 production Node bug. Modern advice: prefer `queueMicrotask` over `nextTick`; prefer `setImmediate` over `setTimeout(0)`."
 
-> **nexttick-vs-setimmediate — 60 second recap**
-> - **Hierarchy:** sync → `process.nextTick` → microtasks → libuv phase (timers/poll/check/close).
-> - `process.nextTick` is **NOT** a microtask and **NOT** a libuv phase — it's its own queue with the highest deferred-priority.
-> - `setImmediate` runs in the **check** phase (after poll). NOT immediate.
-> - `setTimeout(0)` runs in the **timers** phase.
-> - **From main module:** `setImmediate` vs `setTimeout(0)` order is non-deterministic.
-> - **From inside an I/O callback:** `setImmediate` always wins (check follows poll deterministically).
-> - **Trap:** recursive `process.nextTick` starves ALL I/O, timers, and immediates.
-> - **Modern advice:** prefer `queueMicrotask` over `process.nextTick`; prefer `setImmediate` over `setTimeout(0)`.
-> - Browsers have NO `process.nextTick` and NO `setImmediate` — use `queueMicrotask` and `setTimeout(0)`.
+---
+
+## 13. 60-second revision
+
+> - **Hierarchy:** sync > nextTick > microtasks > libuv phase (timers/poll/check/close).
+> - **`nextTick`** is NOT a microtask, NOT a libuv phase — own queue, highest deferred.
+> - **`setImmediate`** = check phase. **`setTimeout(0)`** = timers phase.
+> - **From main:** setImmediate vs setTimeout(0) RACY.
+> - **From inside I/O cb:** setImmediate deterministically wins.
+> - **Recursive nextTick STARVES** all I/O.
+> - **Browsers have neither** — use `queueMicrotask`/`setTimeout(0)`.
+> - **Modern advice:** prefer `queueMicrotask` to `nextTick`; prefer `setImmediate` to `setTimeout(0)`.
+
+---
+
+**Related:** [nodejs-event-loop-phases.md](./nodejs-event-loop-phases.md) · [microtask-macrotask-order.md](./microtask-macrotask-order.md) · [predict-mixed-async-output.md](./predict-mixed-async-output.md) · [nexttick-starvation.md](./nexttick-starvation.md) · [setimmediate-vs-settimeout-in-io.md](./setimmediate-vs-settimeout-in-io.md)
+
+**Concept primer:** [`concepts/event-loop.md`](../../concepts/event-loop.md)

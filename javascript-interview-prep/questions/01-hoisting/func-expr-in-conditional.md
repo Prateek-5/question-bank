@@ -1,177 +1,268 @@
-# Function expression vs declaration inside `if` / `else`
+# Function declaration inside an `if` block
 
-## Source
-- Canonical senior-JS interview problem (BFE.dev, "JavaScript: The Good Parts" Ch. 4, V8 / SpiderMonkey legacy notes).
-- MDN reference: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/function
+> **Difficulty:** Medium   |   **Time:** ~10 min   |   **Prereqs:** [function-declaration-vs-expression-hoisting.md](./function-declaration-vs-expression-hoisting.md)
+>
+> **Source:** Annex B.3.3 legacy semantics. The single most-cited "browser vs Node vs strict mode" quirk.
 
-## Why this question matters in interviews
-Senior interviewers love this trap because it exposes whether the candidate understands the **difference between a Function Declaration (FD) and a Function Expression (FE)** at parse time, *and* whether they know about the **Annex B legacy semantics** for "Function-in-Block" (FiB). It's the single most-cited "browser vs Node vs strict mode" quirk in the language. On the backend, this matters when:
-- Refactoring legacy Express handlers that conditionally redefine helpers.
-- Reading transpiled output (Babel/SWC often rewrites FiB to FE assigned to a `var`).
-- Debugging "the function exists at the top of the file but is `undefined` here" issues in CommonJS code.
+---
 
-If you ever see `if (cond) { function foo() {} }` in production code, **it's a bug waiting to happen**. The interviewer wants you to spot that.
+## 1. Problem statement
 
-## Concepts involved
+`if (cond) { function foo() {} }` — what's the behavior? Browser? Node strict? Node sloppy?
 
-### Syntax to lock in
+**Verification examples**
+
 ```js
-// Function Declaration — hoisted fully (name + body)
-function foo() {}
-
-// Function Expression — only the variable is hoisted (as var → undefined, or TDZ for let/const)
-const foo = function () {};
-const bar = function named() {};   // Named Function Expression
-
-// Function-in-Block (FiB) — the ambiguous case
+'use strict';
 if (true) {
-  function baz() {}                // FD inside a block — semantics differ across modes!
+  function foo() { return 'inside'; }
 }
+typeof foo;   // 'undefined' — block-scoped in strict ESM
 ```
 
-### Runtime / engine behavior
-- **Function Declaration at top level of a function/module/script:** fully hoisted. Both the binding *and* the function object are created during the creation phase. You can call `foo()` before its `function foo(){}` line.
-- **Function Expression:** the *variable* is hoisted by `var`/`let`/`const` rules. The function object is created on the right-hand side **at execution time**, when the assignment runs. Calling it before the assignment line gives `TypeError: foo is not a function` (if `var`) or `ReferenceError` (if `let`/`const`).
-- **Function-in-Block:** the messy case.
-  - **Strict mode / ES modules:** `function baz(){}` inside a block is **block-scoped**. It's hoisted to the top of the *block*, not the function. Outside the block, `baz` is undefined.
-  - **Sloppy mode (legacy script, no `"use strict"`):** "Annex B.3.3" legacy semantics kick in — the function is *also* hoisted to the enclosing function scope as `var baz = undefined`, and the assignment happens when control enters the block. The behavior differs across engines historically; modern V8 follows Annex B.
-  - **Node CommonJS modules** run in a function wrapper but are **not** automatically strict. ES modules **are** strict.
-
-### Edge cases (the traps)
-1. **`if (cond) { function foo() {} } else { function foo() {} }`** — in sloppy mode both `foo` declarations exist; the one that runs assigns to the outer `var foo`. In strict mode both are block-scoped and neither leaks out.
-2. **Named Function Expression's name** — `const x = function bar(){};` exposes `bar` only *inside* the function body, not outside. Old IE8 leaked `bar` to the enclosing scope (don't rely on it; the bug shipped in millions of pages).
-3. **Hoisting precedence** — a function declaration and a `var` with the same name: the function declaration "wins" during hoisting, but a later `var x = 1` assignment overwrites the binding.
-4. **Arrow function inside `if`** — `const fn = () => {}` is just a `const` declaration; arrow functions are *expressions*, never declarations. No FiB quirk.
-5. **Functions in `switch` / `try` / `catch`** — same FiB rules apply.
-6. **Reading transpiled code** — Babel emits `var foo = function() {}` for top-level `function` declarations when it can prove there's no `arguments` reliance, to dodge FiB. If you see this, it's intentional.
-
-## Brute force approach
-"I'll just assume the function is defined wherever I see `function name(){}`." This works for top-level FDs but completely fails for FiB. The naive reader claims `baz` is callable outside the `if` — wrong in strict mode, accidentally right in sloppy mode, and the answer flips based on a `"use strict"` line at the top of the file. Drop this mental model.
-
-## Optimal approach
-**Three-question decision tree** for every function-y thing you see:
-1. **Is it a Function Declaration or Function Expression?** FD = `function name() {}` as a *statement*. FE = anything appearing in an expression context (RHS of `=`, argument to a call, parenthesized).
-2. **Is it at the top level of a function/module/script, or inside a block?** Top-level → fully hoisted. Inside a block → FiB rules.
-3. **Strict or sloppy?** ES modules and `"use strict"` files: block-scoped, no leak. Sloppy classic scripts: Annex B.3.3 legacy hoist-and-assign.
-
-## Solution (JavaScript)
-
 ```js
-// File: example.js  (sloppy mode — classic script, no "use strict")
-
-console.log(typeof foo);   // (1) ?
-console.log(typeof bar);   // (2) ?
-console.log(typeof baz);   // (3) ?
-
+// sloppy mode (legacy script, no 'use strict')
 if (true) {
-  function foo() { return 'foo'; }   // FD inside block → Annex B.3.3
+  function foo() { return 'inside'; }
 }
-
-var bar = function () { return 'bar'; };
-
-if (false) {
-  function baz() { return 'baz'; }   // FD inside block that never runs
-}
-
-console.log(typeof foo);   // (4) ?
-console.log(typeof baz);   // (5) ?
+typeof foo;   // 'function' — Annex B.3.3 hoists to function scope
 ```
 
-In **sloppy mode** the answers are:
+| Mode                              | Behaviour                                              |
+|-----------------------------------|---------------------------------------------------------|
+| Strict mode / ESM                 | block-scoped; invisible outside block                  |
+| Sloppy mode (legacy)              | Annex B.3.3: hoisted to function scope as `var`        |
+| Node CJS (not strict)             | Annex B behavior                                       |
+| Node ESM                          | always strict; block-scoped                            |
+| Browser non-strict                | Annex B behavior (modern engines)                      |
+
+**Constraints**
+- Function-in-block (FiB) is implementation-defined in legacy sloppy mode.
+- Always avoid; use `let f = function() {}` instead.
+- Babel/SWC rewrite to function-expression-on-`var` when transpiling.
+
+---
+
+## 2. Plain-English restatement
+
+`function foo() {}` is meant for top-of-function or top-of-module. Inside a block, behavior depends on mode. In strict mode (ESM), it's block-scoped — invisible outside the block. In sloppy mode, the legacy "Annex B.3.3" rules hoist it to function scope as `var`, with the assignment happening when control enters the block.
+
+---
+
+## 3. Why this matters in interviews
+
+Exposes whether candidate knows declaration vs expression + Annex B legacy semantics. Common bug in legacy Express handlers conditionally redefining helpers.
+
+---
+
+## 4. Mental model
+
 ```
-(1) 'undefined'   // foo exists as var (Annex B), but not yet assigned
-(2) 'undefined'   // var bar hoisted but not assigned
-(3) 'undefined'   // baz exists as var (Annex B), not yet assigned (and never will be)
-(4) 'function'    // foo got assigned when control entered the if-block
-(5) 'undefined'   // if(false) never executed → baz stays undefined
+   if (cond) {
+     function foo() {}
+   }
+
+   STRICT MODE / ESM:
+   - `foo` is block-scoped.
+   - Hoisted to top of BLOCK as <uninitialized>.
+   - Outside block: typeof foo === 'undefined'.
+
+   SLOPPY MODE (legacy script):
+   - Annex B.3.3 kicks in.
+   - `foo` is BOTH:
+     (a) block-scoped (visible inside block).
+     (b) hoisted to enclosing function scope as `var foo = undefined`.
+   - When control enters the block, var foo = the function object.
+   - If cond is false: var foo remains undefined.
+
+   Rule: don't do this. Use:
+     const foo = function() {};   ← function expression on let/const
+     // or just declare top-level
 ```
 
-In **strict mode / ES module** the same file produces:
-```
-(1) 'undefined'   // foo is block-scoped; doesn't exist at outer scope yet — but `typeof` swallows ReferenceError for undeclared names, so 'undefined'
-(2) 'undefined'   // var bar hoisted but not assigned
-(3) 'undefined'   // baz is block-scoped, never declared outside the block
-(4) 'undefined'   // foo is block-scoped — invisible here
-(5) 'undefined'   // same — baz block-scoped, invisible here
-```
+---
 
-## Step-by-step dry run
+## 5. Try it yourself first
 
-Take the sloppy-mode trace:
+> **Predict before reading on:**
+> 1. In strict mode ESM, can you call `foo()` outside the `if` block?
+> 2. In sloppy mode with `cond = false`, what is `typeof foo` outside?
+> 3. What does Babel emit when transpiling this for ES5?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: "function declarations are always hoisted"
+Inside a block, it's implementation-defined.
+
+### Wrong attempt 2: "block-scoped in all modes"
+Sloppy hoists to function scope (Annex B).
+
+### Wrong attempt 3: "this works in browser everywhere"
+Pre-ES6 browsers were inconsistent.
+
+---
+
+## 7. The unlocking insight
+
+> **Function-in-block (FiB) is implementation-defined in sloppy mode (Annex B.3.3). In strict mode / ESM, it's clean block-scoped. Avoid; use function expression on `let`/`const` instead.**
+
+Three properties:
+
+1. **Strict mode = block-scoped** — clean.
+2. **Sloppy mode = Annex B hoist** to function scope.
+3. **Avoid FiB pattern** — use let/const + function expression.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
-// === Creation phase (sloppy mode, classic script) ===
-// Annex B.3.3 effect: function decls inside blocks get a `var` binding in the enclosing function scope too.
-// VE (script scope): { foo: undefined, bar: undefined, baz: undefined }
-// (foo and baz from Annex B var-hoisting; bar from the explicit var)
+'use strict';
+if (true) {
+  function baz() { return 'inside'; }                                  // step 1: block-scoped
+}
+typeof baz;                                                            // 'undefined'
 
-// === Execution phase ===
+// Sloppy mode equivalent (in a script without 'use strict'):
+// if (true) { function baz() {} }
+// typeof baz;   // 'function' (Annex B hoists to function/script scope)
 
-// line: console.log(typeof foo)
-//   foo is undefined → prints 'undefined'
-
-// line: console.log(typeof bar)
-//   bar is undefined → 'undefined'
-
-// line: console.log(typeof baz)
-//   baz is undefined → 'undefined'
-
-// enter if(true) block:
-//   inside the block, FD foo is fully hoisted to top of BLOCK
-//   AND, at the point control enters the block, Annex B copies the
-//   block-scoped foo into the outer var foo.
-//   VE: { foo: <fn>, bar: undefined, baz: undefined }
-
-// exit if-block. var foo retains the assignment.
-
-// line: var bar = function () { ... }
-//   VE: { foo: <fn>, bar: <fn>, baz: undefined }
-
-// if(false) — block never entered → baz remains undefined.
-
-// line: console.log(typeof foo) → 'function'
-// line: console.log(typeof baz) → 'undefined'
+// PREFERRED PATTERN: function expression on let/const
+let helper;
+if (someCondition) {
+  helper = function () { return 'A'; };
+} else {
+  helper = function () { return 'B'; };
+}
+helper();                                                              // safe, no ambiguity
 ```
 
-For **strict mode** the difference is: Annex B.3.3 is disabled. The `function foo` and `function baz` declarations stay strictly inside their blocks. No outer `var foo` / `var baz` exists. After the file runs, `typeof foo` is `'undefined'` because `typeof` doesn't throw on undeclared names.
+**Try it yourself**
 
-## Important takeaways
+```js
+// Strict (ESM):
+function f() {
+  'use strict';
+  if (true) {
+    function inner() {}
+  }
+  return typeof inner;
+}
+f();                                                                    // 'undefined'
 
-**Syntax to memorize**
-- `function name() {}` as a **statement** = Function Declaration. Fully hoisted (name + body).
-- `function name() {}` as an **expression** (RHS, arg, parens) = Function Expression. Only the variable binding hoists.
-- FiB (function-in-block) = legacy footgun. **Don't write it.** Use `const x = function() {}` or an arrow.
+// Sloppy (CJS without use strict):
+function g() {
+  if (true) {
+    function inner() {}
+  }
+  return typeof inner;
+}
+g();                                                                    // 'function' in Node sloppy
 
-**Patterns to reuse**
-- "What's the binding form, what's the scope, what's the mode" — apply this three-question filter to every `function` you see.
-- For conditional helpers, always use an expression: `const helper = cond ? fnA : fnB;`. Predictable in strict and sloppy.
+// Babel transpilation output (approximate):
+function h() {
+  var inner;
+  if (true) {
+    inner = function () {};
+  }
+  return typeof inner;
+}
+// Babel converts FiB to function-expression-on-var to preserve semantics.
+```
 
-**Common mistakes**
-- Assuming `if (cond) function foo(){}` block-scopes the same way everywhere. It doesn't — sloppy vs strict diverge.
-- Forgetting that ES modules and classes are *always* strict. CommonJS modules are not.
-- Thinking the *name* of a Named Function Expression is visible outside the function. It isn't (except in old IE).
+---
 
-**Backend relevance**
-- Express middleware that conditionally re-declares a helper function inside `if (env === 'dev')` will break differently in `node --use-strict` vs plain Node.
-- Code targeting Node 18+ ES modules can assume strict; CJS code can't.
+## 9. Step-by-step dry run
 
-## Variants
+```
+'use strict';
+function outer() {
+  if (true) {
+    function inner() { return 'in'; }
+  }
+  console.log(typeof inner);
+}
+outer();
 
-1. **Add `"use strict"` and ask for the diff** — interviewer wants you to recite Annex B.3.3 vs strict block-scoping.
-2. **Top-level `function foo(){}` vs `var foo = function(){}`** — when called before the line, FD works; FE throws `TypeError: foo is not a function` (var) or `ReferenceError` (let/const).
-3. **Hoisting precedence with same name** — `function foo(){}` followed by `var foo;` — does `foo` exist? Yes, the FD wins (the `var foo` declaration without initializer does **not** overwrite). Add `var foo = 1` and now `foo === 1` after that line.
+STRICT MODE:
+  outer's body parses.
+    Inside if block: function inner() {} is a function declaration in a block.
+    Per spec: hoisted to TOP OF BLOCK (the if's LE), NOT to outer's VE.
+  outer's VE: { inner: undefined? NO — not in VE at all }
+  
+  Execution:
+    Enter if-block. LE: { inner: <function> }.
+    Block ends.
+    console.log(typeof inner) → resolve inner in outer's scope → not found → 'undefined'.
 
-## Revision notes
+SLOPPY MODE (Annex B.3.3):
+  outer's VE: { inner: undefined } at creation.
+  
+  Execution:
+    Enter if-block.
+    Annex B: set outer's `inner` to the function object.
+    Block ends.
+    console.log(typeof inner) → 'function'.
 
-> **Function expression vs declaration in conditionals — 60 second recap**
-> - **FD** (`function foo(){}` as a statement) → fully hoisted: name + body, callable before the line.
-> - **FE** (`const x = function(){}` etc.) → only the **variable** hoists; body assigned on execution.
-> - **FiB** = function inside a block. Outcome depends on mode:
->   - **Strict / ES module:** block-scoped. Invisible outside the block.
->   - **Sloppy classic script:** Annex B.3.3 — also creates an outer `var name`, assigned when control enters the block.
-> - **Arrow functions** are expressions only — never FDs, no FiB quirk.
-> - **Named Function Expression**'s name (`function bar` in `const x = function bar(){}`) is visible *only inside* the function body.
-> - **`typeof` swallows** `ReferenceError` for undeclared names, but **not** for TDZ.
-> - **Babel** rewrites FiB to `var name = function(){}` to avoid the mode-dependency — read transpiled output if confused.
-> - **Trap:** `if (false) function foo(){}` in sloppy mode still creates an outer `var foo = undefined`.
-> - **Rule of thumb:** never write FDs inside blocks. Use FEs or arrows.
+Output:
+  Strict: 'undefined'
+  Sloppy: 'function'
+```
+
+---
+
+## 10. Common confusion + traps
+
+1. **"Always hoisted"** — inside block is implementation-defined.
+2. **"Sloppy and strict same"** — different.
+3. **"Block-scoped always"** — sloppy hoists to function scope.
+4. **"This works in browser everywhere"** — pre-ES6 browsers inconsistent.
+5. **`if (false) { function foo() {} }`** — sloppy: `foo` hoisted to function scope as `undefined`; assignment never runs.
+6. **Babel emits same code** — actually transpiles to `var` + function expression.
+7. **Modules are sloppy** — no, ESM is always strict.
+
+---
+
+## 11. Senior follow-ups & variants
+
+### Variant 1 — Hoisted across `if/else`
+Sloppy mode: `if(cond){function f(){A}} else {function f(){B}}` — only one `var f` in function scope; assigned based on branch.
+
+### Variant 2 — Strict-mode test
+Add `'use strict'` to outer function or use `.mjs` extension.
+
+### Variant 3 — Transpilation
+Babel/SWC convert FiB to function expression on `var` to preserve Annex B semantics across ES5 targets.
+
+### Variant 4 — Loop with FiB
+`for (var i = 0; i < 3; i++) { function f() { return i; } }` — sloppy: one `f` in function scope; reads `i` after loop (3).
+
+### Variant 5 — Switch case
+`switch (x) { case 1: function f() {} break; }` — same Annex B issues; avoid.
+
+---
+
+## 12. How to think aloud
+
+> "Function declarations inside blocks (Function-in-Block, FiB) are the single most-cited 'browser vs Node vs strict mode' quirk. In strict mode and ESM, the function is block-scoped — invisible outside. In sloppy mode (legacy scripts, non-strict CJS), Annex B.3.3 kicks in: the function is BOTH block-scoped AND hoisted to the enclosing function scope as `var fooName = undefined`, with assignment happening when control enters the block. Pre-ES6 browsers were inconsistent. Modern engines follow Annex B. Always avoid this pattern; use `let helper = function() {}` or assign conditionally. Babel transpiles FiB to function expression on `var` to preserve sloppy semantics. Trap: 'always hoisted'; 'block-scoped always'; assuming consistent browser behavior."
+
+---
+
+## 13. 60-second revision
+
+> - **Function-in-block (FiB)** is implementation-defined in sloppy mode (Annex B.3.3).
+> - **Strict mode / ESM:** block-scoped; invisible outside.
+> - **Sloppy mode:** Annex B hoists to function scope as `var`.
+> - **Pre-ES6 browsers** inconsistent.
+> - **Avoid FiB;** use `let f = function() {}` instead.
+> - **Babel transpiles** FiB to function expression on `var`.
+> - **ESM is always strict** — no sloppy mode.
+> - **Trap:** "always hoisted"; "always block-scoped"; consistent browser assumption.
+
+---
+
+**Related:** [function-declaration-vs-expression-hoisting.md](./function-declaration-vs-expression-hoisting.md) · [named-fn-expression-binding.md](./named-fn-expression-binding.md) · [var-in-block.md](./var-in-block.md)
+
+**Concept primer:** [`concepts/hoisting.md`](../../concepts/hoisting.md)

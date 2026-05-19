@@ -1,169 +1,283 @@
-# `structuredClone` vs Spread/`Object.assign`
+# `structuredClone` vs spread / `Object.assign`
 
-## Source / Origin
-- ES2022 `structuredClone()` global.
-- Asked at: Stripe, Razorpay, Atlassian.
-- Concept reference: `concepts/arrays.md`, sibling `05-event-loop/structured-clone-cost.md`.
+> **Difficulty:** Medium   |   **Time:** ~10 min   |   **Prereqs:** [`05-event-loop/structured-clone-cost.md`](../05-event-loop/structured-clone-cost.md), [`09-recursion/deep-clone-with-cycles.md`](../09-recursion/deep-clone-with-cycles.md)
+>
+> **Source:** ES2022 `structuredClone()`. Stripe, Razorpay, Atlassian.
 
-## Why this question matters in interviews
-"Deep-clone this object." Naive `{...obj}` only copies one level. `JSON.parse(JSON.stringify(obj))` is the legacy trick but drops Date/Map/Set/undefined and breaks on cycles. `structuredClone` (ES2022) is now the right answer. Senior bar: list 4 deep-clone strategies and their tradeoffs.
+---
 
-## Concepts involved
+## 1. Problem statement
+
+Choose the right deep-clone strategy. Know what each preserves and breaks.
+
+**Verification examples**
 
 ```js
 const o = { a: 1, b: { c: 2 }, d: new Date(), e: new Map([[1, 'x']]) };
 
-// 1. Shallow
-const s1 = { ...o };           // b is shared, mutating s1.b.c also changes o.b.c
-const s2 = Object.assign({}, o); // same
+// Shallow
+const s1 = { ...o };                    // s1.b === o.b (shared)
+s1.b.c = 999; o.b.c;                    // 999 — same reference!
 
-// 2. JSON trick (deep, lossy)
+// JSON trick (lossy)
 const j = JSON.parse(JSON.stringify(o));
-j.b !== o.b;                    // true (deep)
-j.d instanceof Date;            // false — Date became string
-j.e;                            // {} — Map became empty object
+j.d instanceof Date;                    // false — string
+j.e;                                     // {} — empty object
 
-// 3. structuredClone (deep, faithful)
+// structuredClone (deep + faithful)
 const c = structuredClone(o);
-c.b !== o.b;                    // true
-c.d instanceof Date;            // true
-c.e instanceof Map;             // true
-c.e.get(1);                     // 'x'
-
-// 4. Lodash _.cloneDeep
-const l = _.cloneDeep(o);
+c.b !== o.b;                            // true (deep)
+c.d instanceof Date;                    // true
+c.e instanceof Map;                     // true
+c.e.get(1);                              // 'x'
 ```
 
-### Comparison
-| Method | Depth | Date/Map/Set | Cycles | Functions | Speed |
-|---|---|---|---|---|---|
-| `{...obj}` | shallow | preserve | n/a | preserve | fastest |
-| `Object.assign({}, obj)` | shallow | preserve | n/a | preserve | fast |
-| `JSON.parse(JSON.stringify())` | deep | LOSE | throw | LOSE | slow |
-| `structuredClone()` | deep | preserve | preserve | THROW | fast |
-| `_.cloneDeep()` | deep | preserve | preserve | preserve* | slower |
+**Constraints**
+- Spread/Object.assign: shallow only.
+- JSON trick: lossy (Date→string, Map→{}, fn dropped, undefined dropped, cycles throw).
+- `structuredClone`: deep, handles cycles, Date/Map/Set, but no functions/DOM nodes/Symbols.
+- Lodash `_.cloneDeep`: customizable; heaviest.
 
-### Edge cases / traps
-1. **Shallow spread** is fine when you only need to mutate top-level properties.
-2. **`JSON` trick** silently loses Date (→ ISO string), Map/Set, undefined, functions, Symbol-keys, +Infinity/NaN (→ null).
-3. **`structuredClone` throws on functions, DOM nodes** (not cloneable). Cycles fine.
-4. **`structuredClone` is synchronous** — blocks for big objects.
-5. **Performance**: structuredClone is ~2-3x faster than `JSON.parse(JSON.stringify)` for typical objects.
-6. **Transferables option**: `structuredClone(obj, { transfer: [buf] })` moves an ArrayBuffer zero-copy *within* the result.
-7. **Lodash cloneDeep** is the most permissive but slowest; uses ~500x more code than structuredClone.
+---
 
-## Mental Model
+## 2. Plain-English restatement
+
+`{...obj}` copies one level. `JSON.parse(JSON.stringify())` is deep but lossy. `structuredClone` (ES2022) is deep + faithful for structured types. Lodash if you need custom or older Node.
+
+---
+
+## 3. Why this matters in interviews
+
+"Deep-clone this object" — staple. Senior bar: list 4 strategies with tradeoffs.
+
+---
+
+## 4. Mental model
 
 ```
-   shallow:     newObj.x = obj.x      ← references shared
-   deep JSON:   serialize → parse     ← lossy
-   structuredClone: HTML structured-clone algorithm (faithful for cloneable types)
-   _.cloneDeep: hand-rolled recursive walk (most flexible)
+   Comparison:
+   
+   Method           | Depth   | Date/Map/Set | Cycles | Fns      | Speed
+   -----------------+---------+--------------+--------+----------+-----------
+   {...obj}         | shallow | preserve     | n/a    | preserve | fastest
+   Object.assign    | shallow | preserve     | n/a    | preserve | fastest
+   JSON.parse(JSON) | deep    | LOSE         | THROW  | DROP     | fast
+   structuredClone  | deep    | preserve     | OK     | THROW    | medium
+   _.cloneDeep      | deep    | preserve     | OK     | preserve | slowest
+   
+   structuredClone:
+     Uses the Structured Clone Algorithm (also used by postMessage, IndexedDB).
+     Handles: Date, RegExp, Map, Set, ArrayBuffer, TypedArrays, Blob, File, ImageData.
+     Cycles: detected and preserved.
+     Does NOT handle: functions, DOM nodes (except Image/ImageData), Symbol keys, Error.cause (until ES2022).
+   
+   Cost:
+     structuredClone is sync; copy in main thread.
+     For huge objects (MB-scale), blocks event loop.
+     postMessage with transferList for ArrayBuffer = zero-copy.
 ```
 
-## Why interviewers care
+---
 
-- **Knows the modern answer (`structuredClone`).**
-- **Knows the JSON trick's pitfalls.**
-- **Choice by use case** — shallow when sufficient, deep when needed.
+## 5. Try it yourself first
 
-## Common confusion
+> **Predict before reading on:**
+> 1. What does spread copy?
+> 2. What does JSON trick drop?
+> 3. Does `structuredClone` handle cycles?
 
-- **"Spread is deep."** It isn't; only top-level.
-- **"`JSON.parse(JSON.stringify)` is safe."** No — drops Date, Map, Set, undefined; throws on cycles.
-- **"`structuredClone` clones functions."** It doesn't — throws.
-- **"Deep clone is always needed."** Usually shallow is enough; clone the path you mutate.
+---
 
-## Solution
+## 6. Brute force — walked through
 
 ```js
-// Pick by use case
-function update(state, path, value) {
-  const next = { ...state };       // shallow new top
-  let curr = next;
-  const keys = path.split('.');
-  for (let i = 0; i < keys.length - 1; i++) {
-    curr[keys[i]] = { ...curr[keys[i]] };   // shallow at each step
-    curr = curr[keys[i]];
-  }
-  curr[keys[keys.length - 1]] = value;
-  return next;
-}
+// Spread misses
+const orig = { a: { b: 1 } };
+const c = { ...orig };
+c.a.b = 2;
+orig.a.b;                                // 2 — shared
 
-// Deep clone for snapshot
-const snapshot = structuredClone(state);
-
-// Detect cloneability
-function tryClone(x) {
-  try { return structuredClone(x); }
-  catch (e) {
-    if (e.name === 'DataCloneError') return null;
-    throw e;
-  }
-}
-
-// Array deep clone preserving types
-const arr = [new Date(), new Map(), new Set(), /regex/];
-const arr2 = structuredClone(arr);
-arr2.every((v, i) => v instanceof arr[i].constructor);   // true
-
-// Performance comparison (rough)
-function bench(fn, obj, iters = 100_000) {
-  const start = performance.now();
-  for (let i = 0; i < iters; i++) fn(obj);
-  return performance.now() - start;
-}
-bench(o => ({ ...o }), state);                    // ~30ms
-bench(o => structuredClone(o), state);            // ~300ms
-bench(o => JSON.parse(JSON.stringify(o)), state); // ~700ms
+// JSON misses
+const o = { d: new Date() };
+JSON.parse(JSON.stringify(o)).d;         // string, not Date
 ```
 
-## Dry run
+---
+
+## 7. The unlocking insight
+
+> **`structuredClone` (ES2022) is the modern correct answer for deep cloning structured data. Spread/Object.assign are shallow. JSON trick is lossy.**
+
+Three properties:
+
+1. **Shallow:** spread / Object.assign.
+2. **Deep + lossy:** JSON.
+3. **Deep + faithful:** structuredClone (no fns).
+
+---
+
+## 8. Solution (annotated)
 
 ```js
-const o = { a: new Map([[1, 'x']]), b: new Date('2024-01-01') };
+// 1. Shallow clone (one-level)
+const s1 = { ...obj };
+const s2 = Object.assign({}, obj);
+// nested refs SHARED.
 
-const j = JSON.parse(JSON.stringify(o));
-// j = { a: {}, b: '2024-01-01T00:00:00.000Z' }   (lossy)
+// 2. JSON trick — legacy fallback
+function deepCloneJson(obj) {
+  return JSON.parse(JSON.stringify(obj));                                 // step 1: lossy
+}
+// LOSES: Date→ISO string, Map/Set→empty, fn/undefined dropped.
+// THROWS on circular reference.
 
-const c = structuredClone(o);
-// c = { a: Map(1){1=>'x'}, b: Date('2024-01-01') }   (faithful)
+// 3. structuredClone — modern default
+const c = structuredClone(obj);                                           // step 2: deep + faithful
+// Preserves: Date, RegExp, Map, Set, ArrayBuffer, TypedArrays, cycles.
+// Throws on: functions, DOM nodes, Symbol keys.
+
+// 4. Custom hand-rolled — when stringifying is too lossy and structuredClone unavailable
+function deepClone(value, seen = new WeakMap()) {                         // step 3: cycle-safe
+  if (value === null || typeof value !== 'object') return value;
+  if (seen.has(value)) return seen.get(value);                            // step 4: cycle detect
+  if (value instanceof Date) return new Date(value);
+  if (value instanceof RegExp) return new RegExp(value.source, value.flags);
+  if (value instanceof Map) {
+    const m = new Map();
+    seen.set(value, m);
+    for (const [k, v] of value) m.set(deepClone(k, seen), deepClone(v, seen));
+    return m;
+  }
+  if (Array.isArray(value)) {
+    const arr = [];
+    seen.set(value, arr);
+    for (const v of value) arr.push(deepClone(v, seen));
+    return arr;
+  }
+  const out = Object.create(Object.getPrototypeOf(value));
+  seen.set(value, out);
+  for (const k of Reflect.ownKeys(value)) {
+    out[k] = deepClone(value[k], seen);
+  }
+  return out;
+}
 ```
 
-## How to think aloud
+**Try it yourself**
 
-> "Four deep-clone options. Spread/Object.assign — shallow; fine for immutable updates path-by-path. JSON.parse(JSON.stringify) — old trick, lossy and slow. structuredClone — ES2022 standard; deep, preserves Date/Map/Set/cycles, throws on functions. _.cloneDeep — most permissive, slowest. Pick by what's in the object: if there's only data, use structuredClone; if there are functions, you can't deep-clone faithfully — refactor or accept lossy."
+```js
+// Cycles
+const o = { name: 'a' };
+o.self = o;
+JSON.stringify(o);                                            // throws "Converting circular"
+structuredClone(o).self === structuredClone(o);              // false (independent clones)
+structuredClone(o).self === structuredClone(o); // both clones have their own cycle
 
-## Important takeaways
+// Functions throw in structuredClone
+structuredClone({ fn: () => 1 });                             // DataCloneError
 
-- **`structuredClone()` is the modern deep-clone.**
-- **Spread is shallow.**
-- **JSON trick loses Date/Map/Set/undefined; throws on cycles.**
-- **`structuredClone` throws on functions.**
-- **For path-mutation, shallow at each level is usually enough.**
+// Performance: shallow is 100x+ faster
+const big = { /* many fields */ };
+performance.now();
+const c1 = { ...big };  // ns
+const c2 = structuredClone(big);  // ms for large
+const c3 = JSON.parse(JSON.stringify(big));  // ms
 
-## Variants
+// Use case: immutable update
+function update(state, key, value) {
+  return { ...state, [key]: value };                          // shallow enough for top-level
+}
+function deepUpdate(state, path, value) {
+  // structuredClone + walk + assign — convenient but slow
+}
+```
 
-- **`globalThis.structuredClone`** in workers too.
-- **`postMessage(obj, [transferables])`** — same algorithm, different API.
-- **`_.cloneDeep`** for legacy or function-cloning support.
-- **Custom replacer/reviver** with JSON for selective cloning.
+---
 
-## Revision notes
+## 9. Step-by-step dry run
 
 ```
-shallow:
-  {...obj}
-  Object.assign({}, obj)
-  → references shared at depth >1
+const o = { a: 1, b: { c: 2 } };
 
-deep:
-  JSON.parse(JSON.stringify(obj))  — lossy (Date→string, Map→{}, undefined→null, throws cycle)
-  structuredClone(obj)             — faithful for cloneable types; throws on functions
-  _.cloneDeep(obj)                 — slow, very permissive
+s1 = { ...o }:
+  Copy own enumerable properties one level.
+  s1.a = 1, s1.b = o.b (same reference).
+  s1.b.c = 999 → o.b.c = 999 (shared).
 
-PICK:
-  shallow → immutable path update
-  structuredClone → snapshot, deep equal of state
-  _.cloneDeep → legacy or functions/proxies needed
+s2 = JSON.parse(JSON.stringify(o)):
+  stringify: '{"a":1,"b":{"c":2}}'.
+  parse: new object {a:1, b:{c:2}}.
+  s2.b is a NEW object.
+
+const o2 = { d: new Date('2024-01-01') };
+JSON.parse(JSON.stringify(o2)):
+  stringify: '{"d":"2024-01-01T00:00:00.000Z"}'.
+  parse: {d: "2024-01-01T..."} — string, NOT Date.
+
+const o3 = { name: 'a' }; o3.self = o3;
+JSON.stringify(o3):
+  Encounters o3 inside o3 → "circular" → throw.
+
+structuredClone(o3):
+  Walks the graph. Encounters o3 again → reuses already-cloned reference.
+  Result: { name: 'a', self: <self> } — cycle preserved.
+
+structuredClone({ fn: () => 1 }):
+  Cannot clone function → DataCloneError.
 ```
+
+---
+
+## 10. Common confusion + traps
+
+1. **Spread is shallow** — nested refs shared.
+2. **JSON drops Date/Map/Set/fn/undefined**.
+3. **JSON throws on cycles**.
+4. **structuredClone throws on functions**.
+5. **structuredClone is sync** — blocks event loop for large.
+6. **Mutating original** after clone — independent (both versions).
+7. **WeakMap for cycle detection** in hand-rolled.
+
+---
+
+## 11. Senior follow-ups & variants
+
+### Variant 1 — `postMessage` zero-copy
+Transfer ArrayBuffer via transferList; receiver gets ownership.
+
+### Variant 2 — Immer / Immutable
+Structural sharing; only changed paths copied.
+
+### Variant 3 — Custom serializer
+SuperJSON, devalue — handle Date/Map for JSON-like.
+
+### Variant 4 — Async clone via worker
+Offload large structuredClone to worker.
+
+### Variant 5 — Spread vs Object.assign
+Different prototype handling; spread uses own enumerable; assign reads getters.
+
+---
+
+## 12. How to think aloud
+
+> "Four deep-clone strategies with tradeoffs: (1) Spread `{...obj}` / `Object.assign({}, obj)` — shallow only; nested refs shared; fastest. (2) `JSON.parse(JSON.stringify(obj))` — deep but lossy: Date becomes ISO string, Map/Set become empty `{}`, functions/undefined dropped, cycles throw. (3) `structuredClone(obj)` (ES2022) — uses the Structured Clone Algorithm (same one postMessage and IndexedDB use); deep, preserves Date/RegExp/Map/Set/TypedArrays, handles cycles correctly; but throws on functions, DOM nodes (mostly), Symbol keys; sync so blocks event loop for large objects. (4) Lodash `_.cloneDeep` — most flexible (handles fns and custom types), slowest, requires lib. Hand-rolled needs `WeakMap` for cycle detection. Use case decisions: top-level state update → spread is fine; need to deep-clone arbitrary structured data → structuredClone; need to clone functions → cloneDeep or shallow + manual; cross-thread transfer of ArrayBuffer → postMessage with transferList (zero-copy). Trap: spread thinking it's deep; JSON dropping Date silently; structuredClone on fn (DataCloneError); blocking event loop on huge clone."
+
+---
+
+## 13. 60-second revision
+
+> - **Spread/Object.assign:** shallow; nested refs shared.
+> - **JSON trick:** deep but lossy (Date→string, Map→{}, cycles throw).
+> - **`structuredClone` (ES2022):** deep + faithful for structured types; cycles OK; throws on fn.
+> - **Lodash `_.cloneDeep`:** most flexible, slowest.
+> - **`structuredClone` is sync** — blocks for large.
+> - **`postMessage` + transferList** for zero-copy ArrayBuffer.
+> - **WeakMap** for cycle detection in custom.
+> - **Trap:** spread=deep assumption; JSON Date loss; structuredClone+fn; blocking.
+
+---
+
+**Related:** [`05-event-loop/structured-clone-cost.md`](../05-event-loop/structured-clone-cost.md) · [`09-recursion/deep-clone-with-cycles.md`](../09-recursion/deep-clone-with-cycles.md) · [`09-recursion/deep-merge-with-cycles.md`](../09-recursion/deep-merge-with-cycles.md) · [`08-maps-sets/object-deep-diff.md`](../08-maps-sets/object-deep-diff.md)
+
+**Concept primer:** [`concepts/arrays.md`](../../concepts/arrays.md), [`concepts/recursion-and-the-call-stack.md`](../../concepts/recursion-and-the-call-stack.md)

@@ -1,138 +1,166 @@
-# Temporal Dead Zone with Default Parameters
+# TDZ with default parameters
 
-## Source / Origin
-- ECMAScript 2015 — let/const + default-parameter semantics.
-- Asked at: Stripe, Atlassian, Razorpay, Cloudflare — output-prediction trivia.
-- Concept reference: `concepts/hoisting.md`.
+> **Difficulty:** Medium-Senior   |   **Time:** ~12 min   |   **Prereqs:** [tdz-let-const.md](./tdz-let-const.md)
+>
+> **Source:** ES2015 default parameter semantics. Stripe, Atlassian, Razorpay output-prediction trivia.
 
-## Why this question matters in interviews
-Default parameters introduce a tiny per-call lexical scope that's separate from the function body. Combined with `let`/`const`'s TDZ, you get surprising errors: a parameter that *seems* defined throws `ReferenceError`. Senior bar: you can predict the output, explain the scope chain, and reason from first principles about why the spec was designed this way (avoid the var-style "use before declared = undefined" footgun).
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
-```js
-// Each parameter creates its own lexical scope; later params can see earlier ones
-function ok(a, b = a) { return [a, b]; }
-ok(1);           // [1, 1]
+Default parameter expressions live in their own scope. Combined with `let`/`const` TDZ semantics, you get surprising errors.
 
-function tdz(a = b, b = 1) { return [a, b]; }     // throws ReferenceError
-tdz();           // ReferenceError: Cannot access 'b' before initialization
+**Verification examples**
 
-function shadow(x) {
-  return function (x = x) { return x; };           // x in default refers to outer? NO — inner TDZ
-}
-shadow(5)();     // ReferenceError: Cannot access 'x' before initialization
+| Setup                                              | Result                                              |
+|----------------------------------------------------|------------------------------------------------------|
+| `function f(a, b = a) { return [a, b] }; f(2)`     | `[2, 2]` (b uses earlier param a)                   |
+| `function f(a = b, b = 1) { ... }; f()`            | `ReferenceError` (b in TDZ when a evaluates)        |
+| `function f(x = x) { ... }; f()`                   | `ReferenceError` (self-ref in param scope TDZ)     |
+| `let n = 1; function f(n = n) { ... }; f()`        | `ReferenceError` (LOCAL n shadows outer; LOCAL in TDZ)|
+| Destructuring `function ({a = b, b = 1}) { ... }`  | Same order-sensitive TDZ rules                       |
 
-let n = 1;
-function (n = n) {}                                // ReferenceError too
+**Constraints**
+- Params live in **separate parameter scope** from body scope.
+- Left-to-right initialization; later params unavailable to earlier defaults.
+- Self-reference in default → TDZ (local shadows outer; local in TDZ).
+- Destructuring defaults follow same rules.
+
+---
+
+## 2. Plain-English restatement
+
+Each function call creates a parameter scope. All params are declared but uninitialized (TDZ) at entry. They initialize in left-to-right order. A default expression can reference EARLIER params; referencing later or self → TDZ error.
+
+---
+
+## 3. Why this matters in interviews
+
+Tests TDZ depth beyond the canonical `let x = x` case. Spec-level scope-chain reasoning.
+
+---
+
+## 4. Mental model
+
 ```
-
-### Edge cases / interview traps
-1. **Parameter scope ≠ body scope.** They are separate lexical scopes. The body can shadow params but the default can refer only to params declared *earlier*.
-2. **TDZ applies to params.** A param is "declared but not initialized" until its initializer runs. Referring to a later one throws.
-3. **Self-reference is TDZ.** `function f(x = x)` — RHS `x` is the *param* `x` (not outer `x`), still TDZ.
-4. **`var` in body cannot shadow** a same-named param without weird "preserve binding" quirks (strict vs sloppy).
-5. **`arguments` object** still holds positional values, even with destructuring defaults.
-6. **Destructuring defaults** also TDZ — `function f({a = b, b = 1}) {}` is order-sensitive.
-7. **Cross-param closures** — a default function expression can close over later params if it's invoked later; usually no.
-8. **Block scope inside body** — `{ let x = 1; }` does not affect params.
-
-## Mental Model
-
-Two lexical scopes per call:
-
-```
-   function f(a = expr1, b = expr2) {
-     // body scope (separate from parameter scope)
-     let local;
-   }
-
-   parameter scope at call:
-     ┌──────────────────────────┐
-     │ a (declared, uninitialized) │   ← TDZ until expr1 runs
-     │ b (declared, uninitialized) │   ← TDZ until expr2 runs
-     └──────────────────────────┘
+   function f(a = expr1, b = expr2) { /* body */ }
    
-   evaluation order (per call):
-     1. enter parameter scope with all params in TDZ
-     2. for each param i in order:
-          if argument provided: a_i := arg
-          else: a_i := evaluate expr_i in parameter scope
-            (can read earlier a_j; later a_j still TDZ)
-     3. enter body scope
+   At each call, TWO scopes:
+   
+   ┌─────────── Parameter Scope ───────────┐
+   │ a: <uninitialized>                     │
+   │ b: <uninitialized>                     │
+   └───────────────────────────────────────┘
+              ↓ encloses
+   ┌─────────── Body Scope ─────────────────┐
+   │ local lets, vars, etc.                 │
+   └───────────────────────────────────────┘
+   
+   Per-call evaluation:
+   1. Enter parameter scope; all params in TDZ.
+   2. For each param in order:
+        if arg provided → init from arg.
+        else → evaluate default in parameter scope (sees earlier params; later in TDZ).
+   3. Enter body scope; body runs.
+   
+   TRAPS:
+   - function f(a = b, b = 1)  → evaluating a's default reads b (still TDZ) → throw.
+   - function f(x = x)         → x is LOCAL param; reading own default reads LOCAL x (TDZ) → throw.
+                                  (NOT outer x — shadowing kicks in at param-scope entry.)
 ```
 
-## Why interviewers care
+---
 
-- **TDZ understanding** beyond the canonical `let x = x` case.
-- **Scope chain awareness** — the parameter-scope/body-scope distinction.
-- **Spec-level intuition** — senior signal.
+## 5. Try it yourself first
 
-## Common beginner confusion
+> **Predict before reading on:**
+> 1. `function f(a = b, b = 1) {}; f()` — throws or returns?
+> 2. `let outer = 5; function f(x = outer) { return x }; f()` — output?
+> 3. `function f(x = x) {}; f()` — throws or uses outer x?
 
-- **"Parameters are like `var`."** They're not — they're like `let` (TDZ-aware).
-- **"Default values are evaluated once at function definition."** No — once per call, in parameter scope, at call time.
-- **"`function f(x = x)` uses outer x."** No — the local `x` shadows. RHS `x` is the same `x`, still TDZ.
-- **"Order doesn't matter."** It does — params must reference only previously-evaluated params.
-- **"Arrow functions behave differently."** They don't (for this rule).
+---
 
-## Brute force approach
+## 6. Brute force — walked through
 
-Memorize the patterns. Or just put initializers in body:
+### Wrong attempt 1: "params are like var"
+WRONG — params behave like `let` (TDZ-aware).
+
+### Wrong attempt 2: "defaults evaluated once at definition"
+WRONG — per call, in parameter scope, at call time.
+
+### Wrong attempt 3: "f(x = x) uses outer x"
+WRONG — local x shadows; reads local in TDZ.
+
+---
+
+## 7. The unlocking insight
+
+> **Params have their own scope. All params declared TDZ at entry; initialize left-to-right. Default expression can read earlier params; later/self → TDZ error. Destructuring defaults follow same rules.**
+
+Three properties:
+
+1. **Parameter scope** is separate from body scope.
+2. **Left-to-right init** with per-param TDZ.
+3. **Self-reference** is TDZ — local param shadows outer same-name.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
-function f(a, b) {
-  if (a === undefined) a = 1;
-  if (b === undefined) b = a;
-  ...
+// Forward references OK
+function ok(a, b = a) {                                                // step 1: b sees earlier a
+  return [a, b];
 }
-```
+ok(2);                                                                 // [2, 2]
 
-Works but loses the elegance and the `length` property (default-param functions report `length` of params *before* the first default).
-
-## Optimal approach
-
-Order params so each default references only previously-declared params, and never the same name as itself:
-
-```js
-function f(a = 1, b = a, c = a + b) { ... }     // OK
-function bad(a = b, b = 1) { ... }              // throws
-function badAlso(a = a) { ... }                 // throws
-```
-
-## Solution (JavaScript)
-
-```js
-// Various test cases for self-quiz
-function q1(a, b = a) { return [a, b]; }
-q1(2);                                          // [2, 2]
-q1(2, 5);                                       // [2, 5]
-q1(undefined, 5);                               // [undefined, 5]
-
-function q2(a = b, b = 1) { return [a, b]; }
-try { q2(); } catch (e) { console.log(e); }     // ReferenceError
-
-let x = 5;
-function q3(y = x) { return y; }
-q3();                                           // 5 — uses outer x
-
-function q4(x = x) {}                           // self-ref in param scope
-try { q4(); } catch (e) { console.log(e); }     // ReferenceError
-
-function q5(a = 1) {
-  let a = 2;                                    // SyntaxError in strict mode (duplicate)
-  // (parameter `a` is in parameter scope; `let a` in body is duplicate-name vs body scope is OK
-  //  but most engines flag it as an error since it would shadow ambiguously)
+// Backward reference fails
+function bad1(a = b, b = 1) {                                          // step 2: a's default reads b → TDZ
+  return [a, b];
 }
+try { bad1(); } catch (e) { console.log(e.message); }                  // 'Cannot access b before initialization'
 
-function q6({a = 1, b = a} = {}) { return [a, b]; }
-q6();                                           // [1, 1]  — destructuring also evaluates in order
-q6({a: 3});                                     // [3, 3]
-q6({b: 5});                                     // [1, 5]
+// Self-reference fails
+function bad2(x = x) {                                                 // step 3: local x shadows; LOCAL in TDZ
+  return x;
+}
+try { bad2(); } catch (e) { console.log(e.message); }
+
+// Outer shadow gotcha
+let n = 1;
+function bad3(n = n) {                                                  // step 4: LOCAL n shadows outer
+  return n;
+}
+try { bad3(); } catch (e) { console.log(e.message); }                   // throws — local n in TDZ
+
+// Outer reference (NOT same name) OK
+function ok2(m = n) {                                                   // step 5: m references outer n
+  return m;
+}
+ok2();                                                                  // 1
 ```
 
-## Step-by-step dry run
+**Try it yourself**
+
+```js
+// Destructuring defaults follow same rules
+function f({a = 1, b = a} = {}) { return [a, b]; }
+f();                                                                    // [1, 1]
+f({a: 3});                                                              // [3, 3]
+f({b: 5});                                                              // [1, 5]
+
+// Order matters in destructuring too
+function bad({a = b, b = 1} = {}) {}
+try { bad(); } catch (e) { console.log(e.message); }                    // TDZ on b
+
+// `function.length` reports params BEFORE first default
+function g(a, b = 1, c) {}
+g.length;                                                               // 1
+```
+
+---
+
+## 9. Step-by-step dry run
 
 ```js
 function tdz(a = b, b = 1) { return [a, b]; }
@@ -140,63 +168,87 @@ tdz();
 ```
 
 ```
-enter parameter scope
-  a: declared, TDZ
-  b: declared, TDZ
+Per-call evaluation:
 
-evaluate a:
-  argument? no
-  initializer expression: `b`
-  look up `b` in parameter scope → b is in TDZ → THROW ReferenceError
+1. Enter parameter scope:
+   a: <uninitialized> (TDZ)
+   b: <uninitialized> (TDZ)
+
+2. Evaluate param a:
+   argument provided? no
+   default expression: `b`
+   resolve b in parameter scope → b is <uninitialized> → THROW ReferenceError.
+
+3. (never reached) Body never runs.
 ```
 
-For `function shadow(x) { return function (x = x) { return x; }; }; shadow(5)();`:
+For `function f(x = x) { return x; }; f()`:
 
 ```
-shadow(5):
-  enter parameter scope of shadow: x=5
-  return inner function
-shadow(5)():
-  enter parameter scope of inner: x is declared, TDZ
-  evaluate x's initializer: `x` — refers to inner x (shadowing rule) → TDZ → THROW
+1. Enter parameter scope:
+   x: <uninitialized> (TDZ)
+
+2. Evaluate param x:
+   argument provided? no
+   default expression: `x`
+   resolve x → LOCAL x (parameter scope), in TDZ → THROW.
+
+NOTE: shadowing rule means RHS `x` resolves to the LOCAL parameter x,
+      NOT any outer x. Local x is in TDZ → error.
 ```
 
-## How to think aloud in the interview
+---
 
-> "Each call creates a parameter scope separate from the body scope. Params are declared in TDZ at the start and initialized in left-to-right order; defaults are evaluated lazily in this scope. So `function f(a = b, b = 1)` throws because when evaluating `a`'s default, `b` is still in TDZ. `function f(x = x)` throws because the local `x` shadows outer; the RHS resolves to the same local `x` in TDZ. To avoid: order params so later defaults reference earlier ones; never self-reference."
+## 10. Common confusion + traps
 
-## Important takeaways
+1. **Params like `var`** — like `let` (TDZ).
+2. **Defaults evaluated at definition** — per call.
+3. **`f(x = x)` uses outer x** — local shadows; throws.
+4. **Order doesn't matter** — it does (left-to-right).
+5. **Arrow functions different** — same rules.
+6. **`arguments` synced with params under defaults** — separate in strict.
+7. **Rest + default combo** — `function f(...args, x = 1)` is SyntaxError (rest must be last).
 
-- **Params live in their own scope, with TDZ.**
-- **Left-to-right initialization.** Later params unavailable to earlier defaults.
-- **Self-reference is TDZ.**
-- **Shadowing applies** — `function f(x = x)` resolves RHS to the local `x`.
-- **Destructuring defaults** evaluate in declaration order, same TDZ rules.
-- **`arguments`** is independent — still reflects positional args.
+---
 
-## Variants
+## 11. Senior follow-ups & variants
 
-- **Class field initializers** — analogous TDZ rules in class bodies.
-- **Computed default expressions** — full statements/expressions allowed; can throw.
-- **`function.length` quirk** — defaults reduce `length`; e.g., `function f(a, b = 1, c) { }.length === 1`.
-- **`arguments` vs params** — they're synced in sloppy mode; not in strict mode (with defaults).
-- **Rest + default combo** — `function f(...args, x = 1)` is a SyntaxError (rest must be last).
+### Variant 1 — Class field initializers
+Same TDZ rules apply in class body.
 
-## Revision notes
+### Variant 2 — Computed default expressions
+Any expression allowed (function call, ternary, etc.); can throw.
 
-```
-Default parameter scope:
-  each call → new parameter scope (separate from body)
-  params declared in TDZ at entry
-  initialize in declaration order
-  default can reference EARLIER params only
-  
-  TRAPS:
-    function f(a = b, b = 1)    → throws (b in TDZ when a's default evaluates)
-    function f(x = x)           → throws (RHS = local x in TDZ)
-    function f({a = b, b = 1})  → throws (same TDZ rule via destructuring)
-  
-  rule: forward-only references in defaults
-  outer-scope `let x` IS visible (no shadowing yet at parameter scope entry... wait, the LOCAL x shadows)
-  `function.length` reports count BEFORE first default
-```
+### Variant 3 — `function.length`
+Defaults reduce length; `function f(a, b = 1, c) {}.length === 1`.
+
+### Variant 4 — `arguments` divergence
+Strict mode with defaults: `arguments` doesn't sync with params.
+
+### Variant 5 — Destructuring TDZ
+`function ({a = b, b = 1})` — order-sensitive.
+
+---
+
+## 12. How to think aloud
+
+> "Each call creates a parameter scope separate from body scope. All params declared as `<uninitialized>` (TDZ) at entry. Then initialize left-to-right: if arg provided, init from arg; else evaluate default IN PARAMETER SCOPE. Default can reference earlier params (already initialized) but NOT later ones (still TDZ) or itself (local shadows outer; local TDZ). So `function f(a = b, b = 1)` throws because `b` is TDZ when `a`'s default evaluates. `function f(x = x)` throws because the local `x` shadows any outer `x`, and the RHS resolves to the local TDZ binding. Fix: order params so defaults reference only earlier ones; never self-reference. Destructuring follows same rules. Trap: 'params like var'; 'defaults evaluated at definition'; 'f(x = x) uses outer x'."
+
+---
+
+## 13. 60-second revision
+
+> - **Params live in separate parameter scope** from body scope.
+> - **All params TDZ at entry**; init left-to-right.
+> - **Default can read earlier params** only; later/self → TDZ error.
+> - **`f(x = x)`** → throws (local shadows outer; local TDZ).
+> - **`f(a = b, b = 1)`** → throws (b TDZ when a evaluates).
+> - **Destructuring defaults** follow same order rules.
+> - **`function.length`** = params before first default.
+> - **Trap:** "params like var"; "defaults at definition"; "self-ref uses outer".
+
+---
+
+**Related:** [tdz-let-const.md](./tdz-let-const.md) · [hoisting-and-scoping.md](./hoisting-and-scoping.md) · [`02-closures/private-data-counter.md`](../02-closures/private-data-counter.md)
+
+**Concept primer:** [`concepts/hoisting.md`](../../concepts/hoisting.md)

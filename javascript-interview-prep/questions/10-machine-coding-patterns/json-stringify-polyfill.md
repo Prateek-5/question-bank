@@ -1,126 +1,168 @@
-# Implement `JSON.stringify` polyfill
+# `JSON.stringify` polyfill — recursive-descent serializer
 
-## Source
-- Classic machine-coding deep-dive (BFE.dev, codedamn, GreatFrontEnd polyfill series).
-- ECMA-262 §25.5.2 / §24.5.2 — the spec definition is precise and worth a skim.
+> **Difficulty:** Senior   |   **Time:** ~30 min   |   **Prereqs:** [json-parse-recursive-descent.md](./json-parse-recursive-descent.md), [deep-clone-with-cycles.md](./deep-clone-with-cycles.md)
+>
+> **Source:** ECMA-262 §25.5.2, BFE.dev polyfill series, GreatFrontEnd.
 
-## Why this question matters in interviews
-JSON.stringify polyfill is the **recursive-descent serializer** of JS interviews. The naive approach (`'"' + obj + '"'` for strings) gets you a third of the way; the real interview begins at edge cases: cycles, undefined-in-arrays-vs-objects, special numbers (NaN/Infinity), the replacer parameter, indentation, surrogate pairs, custom `toJSON` methods. It tests **type dispatch via `typeof`**, **recursive traversal**, **cycle detection with `WeakSet`**, **escape-sequence handling**, and the kind of attention-to-spec-detail interviewers want to see in someone who'll write production data serializers (logging, audit trails, HTTP body encoding).
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
-```js
-function stringify(value) {
-  if (value === null) return 'null';
-  if (typeof value === 'number') return Number.isFinite(value) ? String(value) : 'null';
-  if (typeof value === 'boolean') return String(value);
-  if (typeof value === 'string') return `"${escape(value)}"`;
-  if (typeof value === 'undefined' || typeof value === 'function' || typeof value === 'symbol') return undefined;
-  if (Array.isArray(value)) {
-    const items = value.map((v) => stringify(v) ?? 'null'); // undefined/fn/symbol → null in arrays
-    return `[${items.join(',')}]`;
-  }
-  if (typeof value === 'object') {
-    const pairs = [];
-    for (const k of Object.keys(value)) {
-      const v = stringify(value[k]);
-      if (v !== undefined) pairs.push(`${stringify(k)}:${v}`);  // skip in objects
-    }
-    return `{${pairs.join(',')}}`;
-  }
-}
+**Signature**
+```ts
+function stringify(value: any): string | undefined;
 ```
 
-### Runtime / engine behavior
-- The spec walks the value with **type-based dispatch** (`typeof`, `Array.isArray`, `value === null`). There's no single API to ask "what kind of thing is this"; you assemble it.
-- **Asymmetric undefined handling**: in arrays, `undefined`/function/symbol becomes `null` in the output (positional integrity). In objects, the **whole key** is omitted. `JSON.stringify([1, undefined, 3])` → `"[1,null,3]"`; `JSON.stringify({a: undefined})` → `"{}"`.
-- **Number specials**: `NaN`, `Infinity`, `-Infinity` are not representable in JSON. The spec serializes them as `"null"`. `-0` becomes `"0"`.
-- **String escaping**: must escape `"`, `\`, control chars (`\b`, `\f`, `\n`, `\r`, `\t`), and any other ASCII < 0x20 via `\u00XX`. Lone surrogates produce invalid JSON in JSON.stringify (though some engines emit them anyway). Standard says: keep them, but emit `\uXXXX` for control chars.
-- **Cycles** throw `TypeError: Converting circular structure to JSON`. Detection requires tracking "what we've already entered" — a `WeakSet` of visited objects, push on enter, delete on exit (or check before recursing).
-- **`toJSON`**: if the value has a `toJSON()` method, the spec calls it first and serializes the return value. `Date.prototype.toJSON` returns ISO string — that's why Dates become `"2026-05-14T...Z"`.
-- The optional **replacer** can be either a function (called for each key/value pair) or an array (whitelist of keys for objects). The **space** parameter inserts indentation.
+**Input / Output examples**
 
-### Edge cases (these are the interview traps)
-1. **Cycles** — must throw. The canonical detection is a WeakSet of currently-entered objects, pushed on enter, deleted on exit. Don't use Set — non-object keys can't be tracked; non-object values can't be cyclical anyway.
-2. **`undefined` asymmetry** — array slot becomes `null`; object key is omitted entirely. Many candidates write the array case wrong.
-3. **`NaN`/`Infinity`** — serialize as `null`, not as the string `"NaN"`. Use `Number.isFinite`.
-4. **Strings** — escape `"`, `\`, `\n`, `\r`, `\t`, `\b`, `\f`, and all C0 control chars (0x00–0x1F) via `\u00XX`. Don't forget ` ` / ` ` if you care about JSONP-safe output (not strictly required by JSON.stringify; nice-to-have).
-5. **`toJSON()`** — check it on every value before type-dispatching. Dates, Mongo ObjectIds, and many custom classes rely on it.
-6. **Symbol keys** — `Object.keys` excludes them, which is correct. `JSON.stringify` ignores symbol keys silently.
-7. **`function`, `undefined`, `symbol`** as top-level argument → return `undefined` (not the string `"undefined"`). This trips up many.
-8. **Number-like classes** — `new Number(5)` is an object, not a primitive. The spec unwraps via `toJSON` or `valueOf`. Subtle; safe to skip in an interview unless asked.
-9. **Replacer + space** — full spec includes both. Most interviews only require the core; mention these as "easy add."
-10. **Object key order** — spec says iterate own enumerable string keys in their property-creation order. `Object.keys` already does this. Don't sort.
+| Input                                      | Output                                  |
+|--------------------------------------------|------------------------------------------|
+| `1`, `true`, `'hi'`, `null`                 | `"1"`, `"true"`, `'"hi"'`, `"null"`      |
+| `undefined`, `(() => {})`, `Symbol()`       | `undefined` (top-level)                  |
+| `[1, undefined, NaN, () => {}]`             | `'[1,null,null,null]'` (asymmetric)     |
+| `{a: undefined, b: 1}`                     | `'{"b":1}'` (key omitted)               |
+| `NaN`, `Infinity`                            | `'null'`                                 |
+| `new Date('2026-05-19')`                    | `'"2026-05-19T00:00:00.000Z"'` (via toJSON) |
+| `const a={}; a.self=a; stringify(a)`        | `TypeError: Converting circular structure to JSON` |
 
-## Brute force approach
-"Just call `String(value)`." Works for primitives, totally wrong for objects (becomes `"[object Object]"`). Drop.
+**Constraints**
+- Asymmetric `undefined`: array slot → `null`; object key → omitted entirely.
+- `NaN`/`Infinity` → `'null'`.
+- Cycles → throw via WeakSet tracking.
+- `toJSON()` hook called before type dispatch.
+- Strings escape `"`, `\`, control chars (< 0x20).
 
-A more reasonable starter: handle primitives directly, recurse on arrays/objects, ignore everything else. This is essentially the correct approach — the work is in the details.
+---
 
-## Optimal approach
-Recursive descent with `typeof`-based dispatch, WeakSet for cycle detection, and a small escape function for strings. O(n) in total bytes of input. Memory: O(depth) for the call stack plus the WeakSet for visited objects.
+## 2. Plain-English restatement
 
-## Solution (JavaScript)
+The inverse of `JSON.parse`: walk a value tree and emit valid JSON text. Type-dispatch on `typeof`/`Array.isArray`/`null`. Special rules: `undefined`/function/symbol disappear (in objects) or become `null` (in arrays). `NaN`/`Infinity` become `null`. Cycles throw. Dates use `toJSON`.
+
+---
+
+## 3. Why this matters in interviews
+
+The **recursive-descent serializer** of JS interviews. Tests `typeof`-dispatch, recursive traversal, cycle detection with `WeakSet`, escape handling, attention to spec details. Backend uses: HTTP body encoders, audit-log serializers, deterministic config snapshots.
+
+---
+
+## 4. Mental model
+
+```
+   stringify(value):
+   ┌─────────────────────────────────────────────────────┐
+   │ if value.toJSON?  → value = value.toJSON()          │
+   │                                                      │
+   │ typeof-dispatch:                                    │
+   │   null            → "null"                          │
+   │   boolean         → "true" / "false"                │
+   │   number          → finite? String(v) : "null"      │
+   │   string          → escape + quote                  │
+   │   undefined/fn/sym → undefined (omitted)            │
+   │                                                      │
+   │ object branch:                                       │
+   │   if seen.has(v) → THROW cycle                      │
+   │   seen.add(v)                                        │
+   │   if Array → [items.map(v=>walk(v) ?? 'null')]     │
+   │   else      → {pairs of "key":walk(v) where v≠undef}│
+   │   seen.delete(v)  ← allow same obj via different br │
+   └─────────────────────────────────────────────────────┘
+
+   Asymmetry:
+     [1, undefined, 2]    → "[1,null,2]"  ← positional
+     {a: undefined, b: 2} → '{"b":2}'      ← key dropped
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. What is `stringify({d: new Date('2026-05-19')})`?
+> 2. What is `stringify([1, undefined, 3])` vs `stringify({a: undefined, b: 1})`?
+> 3. Why use `WeakSet` instead of `Set` for cycle detection?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: `String(value)`
+Works for primitives. For objects: `"[object Object]"`. Drop.
+
+### Wrong attempt 2: skip `toJSON` hook
+`Date` → `{}` (no own enumerable keys). Wrong.
+
+### Wrong attempt 3: treat array undef same as object undef
+`[1, undefined, 2]` → `'[1,,2]'`? Wrong — should be `'[1,null,2]'` (positional integrity).
+
+---
+
+## 7. The unlocking insight
+
+> **Recursive walker with `typeof` dispatch. WeakSet tracks entered objects (cycle detection). `toJSON` hook called before type dispatch. Array vs object asymmetry on `undefined`. NaN/Infinity → `null`.**
+
+Three properties:
+
+1. **Type dispatch order matters** — null first, then primitives, then object branch.
+2. **`toJSON` is the override hook** — called before dispatch.
+3. **WeakSet for cycles** — push on enter, delete on exit (allows DAG sharing).
+
+---
+
+## 8. Solution (annotated)
 
 ```js
-/**
- * Polyfill of JSON.stringify (core, no replacer / space — see Variants).
- * @param {*} value
- * @returns {string | undefined}  undefined when top-level value is non-serializable
- */
 function stringify(value) {
   const seen = new WeakSet();
 
-  function escapeString(s) {
+  function escapeString(s) {                                          // step 1: string escaper
     let out = '"';
     for (let i = 0; i < s.length; i++) {
       const c = s.charCodeAt(i);
       const ch = s[i];
-      if (ch === '"') out += '\\"';
+      if (ch === '"')      out += '\\"';
       else if (ch === '\\') out += '\\\\';
       else if (c === 0x08) out += '\\b';
       else if (c === 0x09) out += '\\t';
       else if (c === 0x0a) out += '\\n';
       else if (c === 0x0c) out += '\\f';
       else if (c === 0x0d) out += '\\r';
-      else if (c < 0x20) out += '\\u' + c.toString(16).padStart(4, '0');
-      else out += ch;
+      else if (c < 0x20)   out += '\\u' + c.toString(16).padStart(4, '0');
+      else                  out += ch;
     }
     return out + '"';
   }
 
   function walk(val) {
-    // toJSON hook (Date, custom classes, ObjectId, etc.)
     if (val !== null && typeof val === 'object' && typeof val.toJSON === 'function') {
-      val = val.toJSON();
+      val = val.toJSON();                                              // step 2: toJSON hook
     }
 
     if (val === null) return 'null';
     const t = typeof val;
-    if (t === 'boolean') return val ? 'true' : 'false';
-    if (t === 'number') return Number.isFinite(val) ? String(val) : 'null';
-    if (t === 'string') return escapeString(val);
+    if (t === 'boolean')   return val ? 'true' : 'false';
+    if (t === 'number')    return Number.isFinite(val) ? String(val) : 'null';
+    if (t === 'string')    return escapeString(val);
     if (t === 'undefined' || t === 'function' || t === 'symbol') return undefined;
 
     // From here, val is an object.
     if (seen.has(val)) throw new TypeError('Converting circular structure to JSON');
-    seen.add(val);
+    seen.add(val);                                                     // step 3: cycle guard
 
     let out;
     if (Array.isArray(val)) {
-      const items = val.map((v) => walk(v) ?? 'null');     // undefined/fn/symbol → null
+      const items = val.map((v) => walk(v) ?? 'null');                // step 4: array → null for undef
       out = `[${items.join(',')}]`;
     } else {
       const pairs = [];
       for (const k of Object.keys(val)) {
         const v = walk(val[k]);
-        if (v !== undefined) pairs.push(`${escapeString(k)}:${v}`);  // skip omitted keys
+        if (v !== undefined) pairs.push(`${escapeString(k)}:${v}`);   // step 5: object → omit key
       }
       out = `{${pairs.join(',')}}`;
     }
 
-    seen.delete(val);  // allow same object via different branches (not a cycle)
+    seen.delete(val);                                                  // step 6: allow DAG sharing
     return out;
   }
 
@@ -128,91 +170,105 @@ function stringify(value) {
 }
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
-Input:
 ```js
-const obj = {
-  a: 1,
-  b: 'hi\n"x"',
-  c: [1, undefined, NaN, () => {}],
-  d: { nested: true, drop: undefined },
-  e: new Date('2026-05-14T00:00:00Z')
-};
+stringify({a: 1, b: 'hi\n"x"', c: [1, undefined, NaN, () => {}], d: {nested: true, drop: undefined}, e: new Date('2026-05-19')});
+// '{"a":1,"b":"hi\\n\\"x\\"","c":[1,null,null,null],"d":{"nested":true},"e":"2026-05-19T00:00:00.000Z"}'
 
-stringify(obj);
-```
+stringify(undefined);                       // undefined
+stringify([1, undefined, 3]);               // '[1,null,3]'
+stringify({a: undefined});                  // '{}'
+stringify(NaN);                              // 'null'
 
-Trace:
-- Enter `obj` (object, not seen). Add to WeakSet. Object branch.
-- `a`: walk(1) → `"1"`. Pair: `"a":1`.
-- `b`: walk('hi\n"x"') → escapeString → `"hi\n\"x\""` (with actual `\n` escaped as `\\n`).
-- `c`: walk([1, undef, NaN, fn]). Array branch. Map each:
-  - walk(1) → `"1"`
-  - walk(undefined) → `undefined` → coerce to `'null'`
-  - walk(NaN) → not finite → `'null'`
-  - walk(fn) → `undefined` → coerce to `'null'`
-  - join: `[1,null,null,null]`
-- `d`: walk({nested:true, drop:undefined}). Object branch.
-  - `nested`: walk(true) → `"true"`. Pair: `"nested":true`.
-  - `drop`: walk(undefined) → `undefined`. **Skip the key entirely.**
-  - Out: `{"nested":true}`.
-- `e`: Date instance has `toJSON` → call it → `"2026-05-14T00:00:00.000Z"` (string). walk(that string) → escaped JSON string.
-- Combine: `{"a":1,"b":"hi\n\"x\"","c":[1,null,null,null],"d":{"nested":true},"e":"2026-05-14T00:00:00.000Z"}`.
-
-Cycle test:
-```js
 const a = {}; a.self = a;
-stringify(a); // throws TypeError: Converting circular structure to JSON
+try { stringify(a); } catch (e) { e.message; }
+// 'Converting circular structure to JSON'
 ```
-- Enter `a`, add to seen. Iterate keys.
-- `self` → walk(`a`) → `seen.has(a)` is true → throw.
 
-## Important takeaways
+---
 
-**Syntax to memorize**
-- `typeof`-based dispatch order: null → number → boolean → string → unserializable (undef/fn/symbol) → array → object.
-- WeakSet for cycle detection, add on enter, delete on exit.
-- Array: undefined/fn/symbol → `null`. Object: skip the whole key.
-- NaN/Infinity → `null`. Use `Number.isFinite`.
+## 9. Step-by-step dry run
 
-**Patterns to reuse**
-- Recursive-descent with type dispatch is the same shape as: deep-clone, deep-equal, schema validators (Joi/Zod walker), and AST printers.
-- WeakSet for "what have I entered" generalizes to any graph traversal that might cycle.
+```
+walk({a:1, b:'hi', c:[1,undef], d:{x:undef}, e:Date}):
+  enter object. seen.add. iterate keys.
+    a: walk(1) → '1'. pair: '"a":1'.
+    b: walk('hi') → escape → '"hi"'. pair: '"b":"hi"'.
+    c: walk([1, undef]). enter array. seen.add. map:
+         walk(1) → '1'. walk(undef) → undefined → coerce '[null]' via ?? 'null'.
+       out = '[1,null]'. seen.delete.
+       pair: '"c":[1,null]'.
+    d: walk({x:undef}). enter object. seen.add. iterate:
+         x: walk(undef) → undefined. SKIP (key omitted).
+       out = '{}'. seen.delete.
+       pair: '"d":{}'.
+    e: walk(Date instance). toJSON exists → val = '2026-05-19T...'.
+       walk(string) → escape → '"2026-05-19T..."'.
+       pair: '"e":"2026-05-19T..."'.
+  out = '{"a":1,"b":"hi","c":[1,null],"d":{},"e":"2026-05-19T..."}'
+  seen.delete. return.
 
-**Common mistakes**
-- Skipping the `toJSON` hook → Dates serialize as `{}` (no own enumerable string keys).
-- Writing `JSON.stringify(undefined)` as `'undefined'` (wrong — should be `undefined`).
-- Treating the array `undefined`-slot the same as the object `undefined`-value. They differ.
-- Using `Set` instead of `WeakSet` for `seen`. Works but doesn't release references — for huge trees it can matter. WeakSet is correct.
-- Forgetting control-char escape (raw `\n` in the output is invalid JSON).
-- Not escaping the **key** when emitting `"key":value` — keys are strings and must go through the same escaper.
+Cycle:
+  walk({self: self}):
+    seen.add(self).
+    iterate keys:
+      self: walk(self) → seen.has(self) → THROW.
+```
 
-**Related questions**
-- `JSON.parse` polyfill (recursive-descent parser, the inverse).
-- Deep clone (same walker, different leaves).
-- Deep equal (two walkers in lockstep).
-- Schema validator / serializer.
+---
 
-## Variants
+## 10. Common confusion + traps
 
-1. **With `replacer`** — if function: call `replacer.call(holder, key, value)` for each entry and serialize the returned value. If array: only emit object keys whose name appears in the array.
+1. **Skipping `toJSON`** — Date serializes as `{}`.
+2. **`undefined` symmetry** — array slot vs object key differ; pick correct rule per branch.
+3. **NaN/Infinity** as `'NaN'`/`'Infinity'` — must be `'null'`.
+4. **`Set` for cycles** — works but doesn't release; WeakSet is correct.
+5. **Forgetting control-char escape** — raw `\n` in output is invalid JSON.
+6. **Not escaping keys** — keys are strings; pass through `escapeString` too.
+7. **Top-level non-serializable returns `'undefined'`** (string) — must return `undefined` (actual).
 
-2. **With `space` indentation** — track a current indent string. Emit `\n` + indent before each item; close with `\n` + parent indent + `]`/`}`. Skip indentation entirely if `space` is omitted or `0`.
+---
 
-3. **Streaming / chunked stringify** — for huge objects, yield chunks via a generator instead of building one giant string. Used by `JSONStream` and similar. Avoids OOM on large arrays.
+## 11. Senior follow-ups & variants
 
-4. **Strict mode** — instead of dropping undefined/function/symbol silently, throw. Useful for HTTP body serializers where silent loss is dangerous.
+### Variant 1 — Replacer (function or array)
+- Function: call `replacer.call(holder, key, value)` before serializing.
+- Array: only emit object keys in the whitelist.
 
-## Revision notes
+### Variant 2 — `space` indentation
+Track current indent string. Emit `\n` + indent before each item; close with `\n` + parent indent. Skip if `space` is `0`/omitted.
 
-> **JSON.stringify polyfill — 90 second recap**
-> - Recursive walker with `typeof` dispatch.
-> - WeakSet for cycle detection — add on enter, delete on exit, throw if seen.
-> - `toJSON` hook called before type dispatch (Dates etc).
-> - Array: undefined/fn/symbol → `null`. Object: skip the key entirely. Asymmetric.
-> - NaN/Infinity → `null`. -0 → `"0"`.
-> - String escape: `"`, `\`, `\b\t\n\f\r`, and any ASCII < 0x20 → `\u00XX`.
-> - Top-level non-serializable → return `undefined`.
-> - Trap: Date without toJSON serializes as `{}`. Cycle without WeakSet stack-overflows.
-> - Same shape as deep-clone, deep-equal, schema walker.
+### Variant 3 — Streaming stringify
+Generator yielding chunks. Avoids OOM on huge arrays. Used by `JSONStream`.
+
+### Variant 4 — Strict mode
+Throw on undefined/function/symbol instead of dropping silently. Safer for HTTP body serializers.
+
+### Variant 5 — Stable key order
+Sort object keys before emitting; produces deterministic output for diffing/hashing.
+
+---
+
+## 12. How to think aloud
+
+> "Recursive walker with `typeof` dispatch. Order: `toJSON` hook → null → boolean → number (finite check) → string (escape) → unserializable → object branch. WeakSet `seen` for cycle detection — add on enter, delete on exit (so DAG sharing isn't false-positive). Array vs object asymmetry: array's `undefined`/fn/symbol slots become `'null'` (positional); object's `undefined`/fn/symbol keys are OMITTED entirely. NaN/Infinity → `'null'`. Trap: skipping `toJSON` — Date serializes as `{}`. Trap: array/object asymmetry. Trap: Set instead of WeakSet (no release on huge trees). Same shape as deep-clone, deep-equal, schema walker."
+
+---
+
+## 13. 60-second revision
+
+> - **`typeof`-dispatch:** null → bool → number → string → unserializable → object.
+> - **`toJSON` hook** called before dispatch (Date, ObjectId, custom).
+> - **WeakSet `seen`** for cycles; add on enter, delete on exit.
+> - **Array:** undef/fn/symbol → `'null'`. **Object:** key omitted entirely.
+> - **NaN/Infinity → `'null'`** (use `Number.isFinite`).
+> - **String escape:** `"`, `\`, `\b\t\n\f\r`, `< 0x20 → \uXXXX`.
+> - **Top-level non-serializable** returns `undefined` (not `'undefined'`).
+> - **Trap:** missing toJSON; asymmetric undef rule; Set instead of WeakSet; raw control chars.
+
+---
+
+**Related:** [json-parse-recursive-descent.md](./json-parse-recursive-descent.md) · [deep-clone-with-cycles.md](./deep-clone-with-cycles.md) · [memoize-ii.md](./memoize-ii.md)
+
+**Concept primer:** [`concepts/recursion.md`](../../concepts/recursion.md)

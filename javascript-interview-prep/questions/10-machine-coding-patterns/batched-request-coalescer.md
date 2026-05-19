@@ -1,107 +1,107 @@
-# Batched Request Coalescer (Time-Window Aggregator)
+# Batched Request Coalescer — time-window aggregator
 
-## Source / Origin
-- AWS SDK's `aws-sdk-v3` batching; React's `unstable_batchedUpdates`; GraphQL DataLoader; Kafka's `linger.ms`.
-- Asked at: Stripe, Atlassian, AWS, anywhere with high-fanout downstream calls.
-- Concept reference: `concepts/event-loop.md`, sibling `dataloader-batch-cache.md`.
+> **Difficulty:** Medium-Senior   |   **Time:** ~20 min   |   **Prereqs:** [dataloader-batch-cache.md](./dataloader-batch-cache.md), [debounce.md](./debounce.md)
+>
+> **Source:** AWS SDK batching, React `unstable_batchedUpdates`, Kafka `linger.ms`. Stripe, Atlassian, AWS, high-fanout backends.
 
-## Why this question matters in interviews
-DataLoader batches within a *single microtask tick* (same event-loop turn). A *time-window coalescer* extends that: collect requests for up to `T` ms or `N` items, whichever comes first, then dispatch one batch. This is the pattern behind Kafka's `linger.ms`, SQS batch sending, Slack's typing-indicator aggregation, observability flush windows. Senior bar: you can articulate the latency-vs-throughput tradeoff this knob represents.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
-```js
-class BatchCoalescer {
-  constructor({ maxWaitMs = 10, maxBatchSize = 100, flushFn }) {
-    this.maxWaitMs = maxWaitMs;
-    this.maxBatchSize = maxBatchSize;
-    this.flushFn = flushFn;          // async (items: T[]) => R[]  (output aligned to input)
-    this.buffer = [];
-    this.timer = null;
-  }
-
-  submit(item) {
-    return new Promise((resolve, reject) => {
-      this.buffer.push({ item, resolve, reject });
-      if (this.buffer.length >= this.maxBatchSize) {
-        this._flush();
-      } else if (!this.timer) {
-        this.timer = setTimeout(() => this._flush(), this.maxWaitMs);
-      }
-    });
-  }
-
-  async _flush() {
-    if (this.timer) { clearTimeout(this.timer); this.timer = null; }
-    const batch = this.buffer.splice(0, this.buffer.length);
-    if (batch.length === 0) return;
-    try {
-      const results = await this.flushFn(batch.map(b => b.item));
-      if (results.length !== batch.length) throw new Error('flushFn length mismatch');
-      batch.forEach((b, i) => results[i] instanceof Error ? b.reject(results[i]) : b.resolve(results[i]));
-    } catch (err) {
-      batch.forEach(b => b.reject(err));
-    }
-  }
+**Signature**
+```ts
+class BatchCoalescer<I, R> {
+  constructor(opts: { maxWaitMs?: number; maxBatchSize?: number; flushFn: (items: I[]) => Promise<R[]> });
+  submit(item: I): Promise<R>;
+  drain(): Promise<void>;
 }
 ```
 
-### Edge cases / interview traps
-1. **Two flush triggers; either fires once.** Size-trigger short-circuits the timer; the size path must clear the timer. The timer path must avoid double-flush if a concurrent size-trigger fired between scheduling and firing.
-2. **Output alignment.** Like DataLoader, `flushFn` returns array in same order; throw on length mismatch.
-3. **Last-item starvation.** If the timer hasn't fired and the process is shutting down, in-flight items are lost. Expose `drain()` for graceful shutdown.
-4. **Backpressure.** If `flushFn` is slow and submissions keep arriving, you build up unbounded latency. Decide: drop, reject, or block.
-5. **maxWaitMs = 0 vs microtask.** A timer with `0ms` waits until next macrotask — strictly later than `queueMicrotask`. Use `queueMicrotask` for DataLoader-style same-tick batching; use timer for time-window batching.
-6. **Per-batch error vs per-item error.** Decide and document.
-7. **Drift over many cycles.** `setTimeout` is not monotonic-precise; over hours, batches may skew. Re-schedule from the *first* submit, not from the previous flush time.
+**Input / Output examples**
 
-## Mental Model
+| Setup (maxWaitMs=10, maxBatchSize=3)                 | Behaviour                                              |
+|------------------------------------------------------|---------------------------------------------------------|
+| Submit A, B, C at t=0, 1, 2                          | size hit at C → flush([A,B,C]) at t=2                  |
+| Submit A at t=0, no more                              | timer fires at t=10 → flush([A])                       |
+| `flushFn` returns wrong length                       | reject all in batch with length-mismatch error         |
+| `drain()` during shutdown                             | flush whatever's buffered, reject new submits          |
+| 100 submits rapidly                                   | size-trigger flushes 3 at a time; final batch via timer|
 
-A **bus that leaves either when full or after 10 minutes**:
+**Constraints**
+- Two flush triggers: **time** (maxWaitMs) OR **size** (maxBatchSize), whichever first.
+- `flushFn` output length AND order = input items.
+- `drain()` for graceful shutdown.
+- Size trigger clears the timer to prevent double-flush.
+
+---
+
+## 2. Plain-English restatement
+
+You have many small requests that you'd rather batch into one downstream call. Buffer items; when buffer reaches `maxBatchSize` OR `maxWaitMs` elapses since first submit, flush them all in one batch. Each submission returns a Promise that resolves with that item's result. This is what Kafka's `linger.ms`, SES bulk send, and SQS batching do — trade a few ms of latency for much better throughput.
+
+---
+
+## 3. Why this matters in interviews
+
+DataLoader batches within one microtask; a **time-window coalescer** extends to up to T ms or N items. Probes throughput/latency tradeoff awareness — a linchpin of distributed-systems design.
+
+---
+
+## 4. Mental model
 
 ```
-   t=0   submit(A) → buffer=[A], scheduled flush at t=10
-   t=2   submit(B) → buffer=[A,B]
-   t=4   submit(C) → buffer=[A,B,C]
-   t=10  TIMER → flush([A,B,C])   ← time trigger wins
-   
-   Alternate scenario:
-   t=0   submit(A)  scheduled flush at t=10
-   t=1   submit(B), submit(C), ... submit(100)
-                 → buffer hits maxBatchSize → flush NOW
-                 → clear timer; flushFn([A..100th])
+   A bus that leaves when full OR after 10 minutes:
+
+   maxWaitMs=10, maxBatchSize=3
+
+   t=0   submit(A) → buffer=[A], schedule timer at t+10
+   t=2   submit(B) → buffer=[A, B]
+   t=4   submit(C) → buffer=[A, B, C] → SIZE TRIGGER → flush NOW
+                     clear timer
+                     flushFn([A, B, C]) → resolves A, B, C
+   t=20  submit(D) → buffer=[D], schedule timer at t+30
+   t=30  TIMER → flush([D]) → resolves D
 ```
 
-Two knobs: `maxWaitMs` (max latency you'll add) and `maxBatchSize` (max payload per call). Tune them per workload.
+Two knobs: `maxWaitMs` (worst-case added latency) and `maxBatchSize` (max payload per call). Tune per workload.
 
-## Why interviewers care
+---
 
-- **Throughput/latency tradeoff awareness.** A linchpin of distributed-systems design.
-- **Real-world parallels.** Kafka `linger.ms`, SQS `WaitTimeSeconds`, SES batch send. Senior candidates recognize all of these.
-- **Lifecycle reasoning.** Graceful drain, error semantics, output alignment.
+## 5. Try it yourself first
 
-## Common beginner confusion
+> **Predict before reading on:**
+> 1. Why does size-trigger need to clear the timer?
+> 2. How does `flushFn` map results back to submitters?
+> 3. What goes wrong in graceful shutdown without `drain()`?
 
-- **"Just use DataLoader."** DataLoader batches in one tick; if you want time-window batching, you need a timer-driven coalescer.
-- **"`setTimeout(0)` is the same as `queueMicrotask`."** No — different priority queue; you'll batch across more interleaving than you want.
-- **"Drain isn't needed."** It is. Shutdown loses in-flight items without it.
-- **"Larger batch = always better."** No — larger batch = more latency. The sweet spot depends on downstream limits and SLO.
+---
 
-## Brute force approach
+## 6. Brute force — walked through
 
-```js
-// fire one downstream call per submission
-async function submit(item) {
-  return downstream.call([item]);     // 1000 small calls instead of 10 big ones
-}
-```
+### Wrong attempt 1: fire one downstream call per submit
+1000 small calls instead of 10 big ones. Inefficient.
 
-## Optimal approach
+### Wrong attempt 2: `queueMicrotask` like DataLoader
+Batches in one tick — too tight for a time-window aggregator that wants to wait for more arrivals.
 
-Buffer in a queue. Schedule a timer on first submit. Flush when either the timer fires or `buffer.length >= maxBatchSize`. Use `Promise` per submission to deliver results back to callers in original order.
+### Wrong attempt 3: forget to clear timer on size flush
+Double-flush: size triggers, then 10ms later timer fires on an empty buffer (or worse, on new items).
 
-## Solution (JavaScript)
+---
+
+## 7. The unlocking insight
+
+> **Buffer items; schedule timer on first submit. Flush when buffer hits `maxBatchSize` OR timer fires. Each submit returns a Promise; on flush, `flushFn(items)` returns aligned results. Size trigger clears timer to prevent double-flush. `drain()` flushes pending on shutdown.**
+
+Three properties:
+
+1. **Two triggers (size OR time)** — either wins.
+2. **Output alignment** — `flushFn` returns array in input order.
+3. **`drain()` for shutdown** — flushes pending; rejects new submits.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
 class BatchCoalescer {
@@ -113,87 +113,147 @@ class BatchCoalescer {
     this.timer = null;
     this.draining = false;
   }
+
   submit(item) {
     if (this.draining) return Promise.reject(new Error('Coalescer draining'));
     return new Promise((resolve, reject) => {
-      this.buffer.push({ item, resolve, reject });
-      if (this.buffer.length >= this.maxBatchSize) this._flush();
-      else if (!this.timer) this.timer = setTimeout(() => this._flush(), this.maxWaitMs);
+      this.buffer.push({ item, resolve, reject });                    // step 1: buffer
+      if (this.buffer.length >= this.maxBatchSize) {
+        this._flush();                                                 // step 2a: size trigger
+      } else if (!this.timer) {
+        this.timer = setTimeout(() => this._flush(), this.maxWaitMs);  // step 2b: time trigger
+      }
     });
   }
+
   async _flush() {
-    if (this.timer) { clearTimeout(this.timer); this.timer = null; }
+    if (this.timer) { clearTimeout(this.timer); this.timer = null; }  // step 3: clear timer
     const batch = this.buffer.splice(0, this.buffer.length);
     if (batch.length === 0) return;
+
     try {
-      const results = await this.flushFn(batch.map(b => b.item));
-      if (results.length !== batch.length) throw new Error('flushFn length mismatch');
-      batch.forEach((b, i) => results[i] instanceof Error ? b.reject(results[i]) : b.resolve(results[i]));
+      const results = await this.flushFn(batch.map((b) => b.item));
+      if (results.length !== batch.length) {
+        throw new Error('flushFn length mismatch');
+      }
+      batch.forEach((b, i) =>                                          // step 4: route by index
+        results[i] instanceof Error ? b.reject(results[i]) : b.resolve(results[i]),
+      );
     } catch (err) {
-      batch.forEach(b => b.reject(err));
+      batch.forEach((b) => b.reject(err));                              // batch-level error
     }
   }
-  async drain() {
+
+  async drain() {                                                       // step 5: graceful shutdown
     this.draining = true;
     await this._flush();
   }
 }
+```
 
-// Usage: batch SES emails — up to 50 recipients or 100ms latency
+**Try it yourself**
+
+```js
 const emailCoalescer = new BatchCoalescer({
   maxWaitMs: 100,
   maxBatchSize: 50,
-  flushFn: (emails) => ses.sendBulk({ recipients: emails }),
+  flushFn: async (emails) => ses.sendBulk({ recipients: emails }),
 });
-await emailCoalescer.submit({ to: 'a@x.com', body: 'hi' });
+
+await Promise.all([
+  emailCoalescer.submit({ to: 'a@x.com', body: 'hi' }),
+  emailCoalescer.submit({ to: 'b@x.com', body: 'hi' }),
+]);
+// Both sent in one SES bulk call after ~100ms (or sooner if 50 queued).
+
+// Shutdown
+process.on('SIGTERM', async () => {
+  await emailCoalescer.drain();
+  process.exit(0);
+});
 ```
 
-## Step-by-step dry run
+---
 
-`maxWaitMs=10, maxBatchSize=3`, three rapid submits followed by a lone one:
-
-```
-t=0   submit(A) → buffer=[A]; timer=t+10
-t=1   submit(B) → buffer=[A,B]
-t=2   submit(C) → buffer=[A,B,C] → size==3 → _flush() NOW
-                 clear timer; flushFn([A,B,C]); resolve A, B, C
-t=20  submit(D) → buffer=[D]; timer=t+30
-t=30  TIMER → _flush() → flushFn([D]); resolve D
-```
-
-Two flushes: one size-triggered with 3 items, one time-triggered with 1.
-
-## How to think aloud in the interview
-
-> "Time-window batching: buffer items, dispatch when either `maxBatchSize` is hit or `maxWaitMs` elapsed since first submit. Each submit returns a Promise; on flush, I call `flushFn(items)` and route results back by index. Size-trigger clears the timer. I'd expose `drain()` for graceful shutdown — flush pending immediately. Tradeoffs: bigger window = better throughput, worse latency. I'd pick 10ms for an autocomplete fanout, 200ms for SES batches, 1s for analytics ingestion."
-
-## Important takeaways
-
-- **Two triggers** (time OR size), either wins.
-- **Output alignment.** `flushFn` returns array in input order.
-- **`drain()` is mandatory** for non-toy use.
-- **Knobs translate to SLO.** `maxWaitMs` is the worst-case extra latency you commit to.
-- **Pair with retry/circuit-breaker** around `flushFn` — batches can fail wholesale.
-
-## Variants
-
-- **Microtask coalescer** (`queueMicrotask`-based) — DataLoader. Use when "same tick" is the right window.
-- **Per-key batching** — bucket items by a key (e.g., shard) and flush each bucket independently.
-- **Backpressure-aware** — bound buffer size; reject `submit` when full.
-- **Adaptive `maxWaitMs`** — shrink window under heavy load, expand when idle.
-- **Async iterable input** — flush whenever the source yields slower than the timer.
-
-## Revision notes
+## 9. Step-by-step dry run
 
 ```
-BatchCoalescer({maxWaitMs, maxBatchSize, flushFn}):
-  submit(item): push to buffer; size==max → flush; else schedule timer
-  _flush(): clear timer; batch=splice; flushFn(items); route results by index
-  drain(): set draining=true; flush remaining
-  
-  two triggers (size, time); either wins
-  output aligned to input
-  drain on shutdown
-  tradeoff: latency vs throughput
-  variants: per-key, adaptive, microtask (DataLoader), backpressure
+maxWaitMs=10, maxBatchSize=3:
+
+t=0   submit(A) → buffer=[A], timer=t+10
+t=1   submit(B) → buffer=[A, B]
+t=2   submit(C) → buffer=[A, B, C] → size===max → _flush() NOW
+                  clear timer
+                  flushFn([A,B,C]) → resolves all three
+
+t=20  submit(D) → buffer=[D], timer=t+30
+
+t=30  TIMER → _flush()
+              flushFn([D]) → resolves D
+
+Two flushes total: one size-triggered (3 items), one time-triggered (1 item).
+
+Failure mode:
+  submit(E) → buffer=[E], timer=t+10
+  t=10 timer → flushFn throws
+              batch.forEach(b => b.reject(err)) → E's promise rejects
 ```
+
+---
+
+## 10. Common confusion + traps
+
+1. **Forget to clear timer on size flush** — double-flush.
+2. **`flushFn` returns wrong-length array** — caller mapping breaks; throw loudly.
+3. **`queueMicrotask` instead of `setTimeout`** — too tight a window; loses batching opportunity.
+4. **Drain not implemented** — shutdown loses in-flight items.
+5. **Larger batch = always better** — wrong; bigger batch = more latency. Tune per SLO.
+6. **Per-item error semantics unclear** — pick: batch-level fail-all vs per-item `Error` slot in output.
+7. **`setTimeout` drift** — over hours, batches may skew; re-schedule from first submit, not previous flush.
+
+---
+
+## 11. Senior follow-ups & variants
+
+### Variant 1 — Microtask coalescer (DataLoader-style)
+`queueMicrotask` instead of `setTimeout`. Single-tick batching.
+
+### Variant 2 — Per-key batching
+Bucket items by key (e.g., shard ID); flush each bucket independently.
+
+### Variant 3 — Backpressure-aware
+Bound buffer size; reject `submit` when full instead of unbounded growth.
+
+### Variant 4 — Adaptive `maxWaitMs`
+Shrink window under heavy load; expand when idle.
+
+### Variant 5 — Async iterable input
+Flush whenever source yields slower than timer.
+
+### Variant 6 — Pair with retry / circuit breaker
+Wrap `flushFn` so batch failure → retry batch; circuit breaker for downstream protection.
+
+---
+
+## 12. How to think aloud
+
+> "Buffer + two triggers: size or time, whichever first. Schedule timer on first submit; size trigger clears the timer to prevent double-flush. Each `submit` returns a promise; `_flush` calls `flushFn(items)` and routes results back by index (output length+order must match). `drain()` for graceful shutdown — flush whatever's buffered, reject new submits. Trade-off: bigger window = better throughput, worse latency. 10ms for autocomplete fanout, 200ms for SES batch, 1s for analytics. Trap: forget to clear timer on size trigger (double-flush); no drain (lose items on shutdown); larger-is-better fallacy."
+
+---
+
+## 13. 60-second revision
+
+> - **Buffer + two triggers** (size OR time).
+> - **Size trigger clears timer** to prevent double-flush.
+> - **`flushFn` output:** same length AND order as input items.
+> - **`drain()`** mandatory for graceful shutdown.
+> - **Knobs:** `maxWaitMs` (latency cap), `maxBatchSize` (payload cap).
+> - **Per-item error:** `Error` in output slot. **Batch error:** reject all.
+> - **Variants:** microtask (DataLoader), per-key, backpressure, adaptive.
+> - **Trap:** missed timer clear; bad alignment; no drain; "bigger always better."
+
+---
+
+**Related:** [dataloader-batch-cache.md](./dataloader-batch-cache.md) · [debounce.md](./debounce.md) · [throttle.md](./throttle.md) · [request-deduplication.md](./request-deduplication.md)
+
+**Concept primer:** [`concepts/event-loop.md`](../../concepts/event-loop.md)

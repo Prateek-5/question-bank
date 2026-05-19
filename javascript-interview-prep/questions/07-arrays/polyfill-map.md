@@ -1,147 +1,232 @@
 # Polyfill `Array.prototype.map`
 
-## Source
-- Canonical interview problem (BFE.dev #14, GreatFrontEnd, Frontend Masters).
-- Companion to LeetCode #2635 "Apply Transform Over Each Element in Array" — https://leetcode.com/problems/apply-transform-over-each-element-in-array/
+> **Difficulty:** Foundation   |   **Time:** ~15 min   |   **Prereqs:** [polyfill-reduce.md](./polyfill-reduce.md), [holey-vs-packed-arrays.md](./holey-vs-packed-arrays.md)
+>
+> **Source:** BFE.dev #14, GreatFrontEnd, Frontend Masters. LeetCode #2635.
 
-## Why this question matters in interviews
-If `reduce` tests "do you understand folds," `map` tests "do you understand the **hole-preserving contract**" — which is more subtle than candidates realize. The native `map` does something almost unique among array methods: it **skips holes when calling the callback, but preserves them in the output**. `[1, , 3].map(x => x * 2)` → `[2, <1 empty slot>, 6]`, not `[2, undefined, 6]` and not `[2, 6]`. Getting this exactly right is the differentiator. You'll also be probed on `thisArg`, the three callback args (`value`, `index`, `array`), and non-mutation. As a backend engineer, `map` is your transform primitive — every ETL stage, every projection, every "deserialize each row" is a `map`. Owning the spec means you don't get burned by sparse data or `this`-binding bugs.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+Re-implement `Array.prototype.map` honoring sparse-array hole preservation, `thisArg`, and the three-arg callback contract.
+
+**Verification examples**
+
 ```js
-arr.map(callback, thisArg);
-// callback(value, index, array) -> mappedValue
+[1, 2, 3].myMap(x => x * 2);                     // [2, 4, 6]
+[1, , 3].myMap(x => x * 2);                      // [2, <1 empty>, 6]
+[1, 2].myMap(function(x){ return this + x; }, 10); // [11, 12]
+[].myMap(() => 1);                                // []
 ```
 
-### Spec details that win you the round
-1. **Hole-preserving output.** Output array has the same `length` as input. Indices that were holes in the input remain holes in the output — not `undefined`. The way to do this in the polyfill: **don't assign** at those indices, then explicitly set `result.length = len` at the end (or pre-create with `new Array(len)`).
-2. **Skip holes when calling the callback** — use `i in this`. Native `map` does NOT invoke the callback for missing indices.
-3. **`thisArg` binds `this` inside the callback** — `callback.call(thisArg, ...)`. Forgotten constantly.
-4. **Length captured up front.** Pushes during iteration don't extend the loop.
-5. **Three args passed:** `(value, index, originalArray)`. Forgetting `index` breaks predicates like `(v, i) => v + i`.
-6. **Non-mutating.** Returns a fresh array. Source untouched.
+**Constraints**
+- Three-arg callback: `(value, index, array)`.
+- `thisArg` is second param.
+- Skip holes when invoking callback (`i in this`).
+- Preserve holes in output (`length` set, indices unassigned at holes).
+- Non-mutating.
+- Throw `TypeError` if callback not callable.
 
-### Why output holes matter
-```js
-const a = [1, , 3];           // length 3, hole at index 1
-const native = a.map(x => x * 2);
-console.log(native);           // [2, <1 empty slot>, 6]
-console.log(native.length);    // 3
-console.log(1 in native);      // false  ← hole, not undefined
-console.log(native[1]);        // undefined (because hole reads as undefined)
+---
+
+## 2. Plain-English restatement
+
+Apply a function to each element, return a new array of results. Output length matches input length; sparse holes are preserved as holes (not filled with `undefined`); predicate sees `(value, index, array)`; `thisArg` binds inside callback.
+
+---
+
+## 3. Why this matters in interviews
+
+If `reduce` tests folds, `map` tests the **hole-preserving contract**. `[1,,3].map(x=>x*2)` → `[2, <empty>, 6]` (not `[2, undefined, 6]`, not `[2, 6]`). The way to do this: don't assign at hole indices; set `result.length = len` at end. Naive `push(undefined)` for holes makes `1 in result` true → broken contract.
+
+---
+
+## 4. Mental model
+
 ```
-If your polyfill does `result.push(undefined)` for holes, `1 in result` becomes `true` and you've broken the contract. Subtle, but every spec-test suite catches it.
+   arr.map(cb, thisArg):
+     len = ToLength(arr.length)        ← snapshot once
+     result = new Array(len)            ← preallocate; index gaps = holes
+     for i in 0..len-1:
+       if i in this:                    ← skip holes; don't invoke callback
+         result[i] = cb.call(thisArg, this[i], i, this)
+     return result
 
-### Mutating vs non-mutating
-`map` is non-mutating, just like `filter`, `slice`, `concat`, `flat`. Contrast with `forEach` (also non-mutating but returns `undefined`) and the mutating family `push`/`pop`/`shift`/`unshift`/`splice`/`sort`/`reverse`/`fill`/`copyWithin`.
+   Hole semantics:
+     in  = [1, , 3]                  length 3, no index 1.
+     out = [2, , 6]                  length 3, no index 1 — preserved.
+     1 in out  → false                ← assertion
 
-### Code-smell aspect
-`Array.prototype.myMap = ...` pollutes every array, and naive assignment makes the method **enumerable** — meaning `for...in arr` will surface `myMap` as a key. Use `Object.defineProperty(Array.prototype, 'myMap', { enumerable: false, writable: true, configurable: true, value: fn })` to keep it hidden. This is exactly why the SmooshGate (`Array.prototype.flatten` → `flat`) happened.
+   3 callback args:
+     cb(value, index, array)          ← index lets predicates like (v,i) => v+i work.
 
-## Brute force approach
-A `for` loop that `result.push(callback(this[i], i, this))` for every `i`. Three flaws:
-- Invokes the callback on holes (passes `undefined`).
-- Produces a dense output (no holes preserved).
-- Ignores `thisArg`.
+   thisArg:
+     cb.call(thisArg, ...)            ← arrows ignore (lexical this).
 
-Brute force fails the official spec tests. Interviewers will reach for `[1, , 3]` and watch your output.
+   Non-mutating:
+     Source untouched. Fresh result.
+```
 
-## Optimal approach
-Pre-allocate `new Array(len)`. Loop `i = 0..len-1`. If `i in this`, call `callback.call(thisArg, value, i, this)` and **assign** to `result[i]`. If `i` is a hole, skip — the slot in the pre-allocated array stays a hole automatically. Set `result.length = len` at the end for safety (handles edge cases where assignments only set lower indices).
+---
 
-## Solution (JavaScript)
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. `[1, , 3].map(x => x * 2)` — what's the result?
+> 2. Does map honor `thisArg`?
+> 3. What's the 3rd argument to the callback?
+
+---
+
+## 6. Brute force — walked through
+
+```js
+Array.prototype.myMap = function(cb) {
+  const result = [];
+  for (let i = 0; i < this.length; i++) {
+    result.push(cb(this[i], i, this));            // wrong: invokes on holes; loses holes; ignores thisArg
+  }
+  return result;
+};
+```
+
+Fails: holes invoked as `undefined`; output dense (loses hole shape); ignores `thisArg`.
+
+---
+
+## 7. The unlocking insight
+
+> **Hole preservation is the headline. Preallocate `new Array(len)`; only assign at indices where `i in this`; final length is preserved. Use `cb.call(thisArg, …)`.**
+
+Three properties:
+
+1. **Preallocate result** — `new Array(len)`.
+2. **Skip via `i in this`** — don't invoke on holes.
+3. **Preserve length** — set or trust preallocation.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
 Object.defineProperty(Array.prototype, 'myMap', {
+  enumerable: false,                                                    // step 1: don't pollute for-in
   value: function (callback, thisArg) {
-    if (typeof callback !== 'function') {
-      throw new TypeError(callback + ' is not a function');
-    }
+    if (this == null) throw new TypeError('myMap called on null/undefined');
+    if (typeof callback !== 'function') throw new TypeError('callback not callable');
 
-    const len = this.length >>> 0;       // ToUint32
-    const result = new Array(len);        // pre-allocate; slots are holes by default
+    const O = Object(this);
+    const len = O.length >>> 0;                                          // step 2: ToUint32 length
+    const result = new Array(len);                                       // step 3: preallocate; holes initially
 
     for (let i = 0; i < len; i++) {
-      if (i in this) {                    // skip holes — don't even call cb
-        result[i] = callback.call(thisArg, this[i], i, this);
+      if (i in O) {                                                       // step 4: skip holes
+        result[i] = callback.call(thisArg, O[i], i, O);                  // step 5: 3 args + thisArg
       }
-      // else: leave result[i] as a hole
     }
     return result;
   },
-  writable: true,
-  configurable: true,
-  enumerable: false,                       // critical: don't break for...in
 });
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
-Input:
 ```js
-const arr = [10, , 20];
-const out = arr.myMap(function (v, i) {
-  return v * this.factor + i;
-}, { factor: 3 });
+[1, 2, 3].myMap(x => x * 2);                              // [2, 4, 6]
+[1, , 3].myMap(x => x * 2);                               // [2, <empty>, 6]
+1 in [1, , 3].myMap(x => x * 2);                          // false (hole preserved)
+
+const obj = { factor: 10 };
+[1, 2].myMap(function (x) { return x * this.factor; }, obj);  // [10, 20]
+
+// Three args
+['a', 'b'].myMap((v, i, arr) => `${i}:${v} of ${arr.length}`);  // ["0:a of 2", "1:b of 2"]
+
+// Length snapshot
+const a = [1, 2, 3];
+a.myMap((v) => { a.push(99); return v; });                // ignores pushed during iteration
 ```
 
-Trace:
-- `len = 3`. `result = new Array(3)` → `[<empty>, <empty>, <empty>]`.
-- `i=0`: `0 in arr` → true. `value=10`. `cb.call({factor:3}, 10, 0, arr)` → `10*3 + 0 = 30`. `result[0] = 30`.
-- `i=1`: `1 in arr` → **false** (hole). Skip. `result[1]` stays a hole.
-- `i=2`: `value=20`. `20*3 + 2 = 62`. `result[2] = 62`.
-- Return `[30, <empty>, 62]`. Length 3. `1 in result === false`.
+---
 
-Compare to a brute-force polyfill that uses `push`:
-- It would produce `[NaN, NaN, 62]` (since `undefined * 3 + i = NaN`) and have `1 in result === true`. Wrong on two axes.
+## 9. Step-by-step dry run
 
-Edge run — empty array:
-- `[].myMap(x => x)` → `len=0`, loop doesn't execute. Returns `[]` (new empty array, NOT the original).
+```
+[1, , 3].myMap(x => x * 2):
+  len = 3. result = [empty × 3].
+  
+  i=0: 0 in [1,,3] true → result[0] = (1*2) = 2. result = [2, empty, empty].
+  i=1: 1 in [1,,3] false → skip. result = [2, empty, empty].
+  i=2: 2 in [1,,3] true → result[2] = 6. result = [2, empty, 6].
+  
+  Return [2, empty, 6]. length=3. 1 in result = false.
 
-Edge run — fully sparse:
-- `new Array(3).myMap(x => x * 2)` → length 3, callback never runs, returns `[<empty>, <empty>, <empty>]`. Matches native.
+[1, undefined, 3].myMap(x => x * 2):
+  i=0: in → result[0] = 2.
+  i=1: in (explicit undefined IS in) → cb(undefined) → NaN. result[1] = NaN.
+  i=2: in → 6.
+  Result [2, NaN, 6].
 
-## Important takeaways
+Difference: explicit undefined vs hole.
 
-**Syntax to memorize**
-- `new Array(len)` pre-allocates a sparse array of the right length. Use indexed assignment, not `push`, to preserve holes.
-- `callback.call(thisArg, value, i, this)` — three args, with `thisArg`.
-- `i in this` for hole detection.
+With thisArg = {f:10}, cb = function(x){return x*this.f}:
+  i=0: cb.call({f:10}, 1, 0, [1,2]) → 10.
+  i=1: cb.call({f:10}, 2, 1, [1,2]) → 20.
+  Result [10, 20].
+```
 
-**Patterns to reuse**
-- "Pre-allocate + indexed assign" is the only way to preserve holes. Same pattern in any polyfill that mirrors `map`'s output shape (e.g., a hole-preserving `mapAsync`).
-- `Object.defineProperty(..., { enumerable: false })` is the SmooshGate-safe way to extend prototypes.
+---
 
-**Common mistakes**
-- Using `push` — produces a dense output, fails the hole-preserving test.
-- Forgetting `thisArg` — silent bug in method-style use.
-- Calling the callback on holes (passing `undefined`) — wastes work and may throw if the callback isn't `undefined`-safe.
-- Skipping `length = len` cleanup when the last index is a hole. In practice `new Array(len)` already sets `length = len`, so this is a sanity belt-and-suspenders. Worth mentioning.
+## 10. Common confusion + traps
 
-**Related questions**
-- Polyfill `filter` (similar, but **doesn't** preserve holes — output is always dense).
-- Polyfill `forEach` (no return value; otherwise identical iteration).
-- Polyfill `flatMap` (`map` then flatten depth 1 — easy follow-up).
-- Async `map` (`Promise.all(arr.map(asyncFn))`) — different concern; talk through sequential vs parallel.
+1. **`push(undefined)` for holes** — breaks `i in result`.
+2. **Ignore `thisArg`** — predicate sees wrong `this`.
+3. **Forget 3rd arg** — predicates using `(v, i) => ...` work; using `array` breaks.
+4. **Pre-loop length capture missed** — pushes during iteration cause wrong behavior.
+5. **`this[i] !== undefined`** as hole check — wrong; explicit undefined IS an element.
+6. **Mutate source** — `map` is non-mutating; don't modify `this`.
+7. **`Object.defineProperty` not used** — prototype pollution makes `for...in` enumerate `myMap`.
 
-## Variants
+---
 
-1. **`mapAsync` (parallel)** — `Promise.all(arr.map(async (v, i) => ...))`. Common follow-up. Mention the gotcha: rejections short-circuit; use `Promise.allSettled` if you need per-item resilience.
-2. **`mapAsync` (sequential)** — `for...of` with `await`. Slower but preserves order and back-pressure. Useful when each call has side effects (DB writes, rate-limited API).
-3. **`flatMap` polyfill** — same shape as `map` but if the callback returns an array, splice it in one level. `arr.flatMap(fn) === arr.map(fn).flat(1)`. Spec-wise it's a `map` followed by a depth-1 flatten.
+## 11. Senior follow-ups & variants
 
-## Revision notes
+### Variant 1 — Hole preservation test
+`1 in [1,,3].myMap(x => x*2)` must be `false`.
 
-> **map polyfill — 60 second recap**
-> - Signature: `cb(value, i, arr)` + optional `thisArg`.
-> - **Pre-allocate** `new Array(len)` to preserve hole positions in the output.
-> - Loop `i=0..len-1`; if `i in this`, assign `result[i] = cb.call(thisArg, value, i, this)`.
-> - Skip holes — both in callback invocation **and** in output (don't assign).
-> - Non-mutating; returns a fresh array.
-> - Attach via `Object.defineProperty(..., { enumerable: false })` to avoid breaking `for...in`.
-> - Output `length === input.length` always.
-> - **Trap:** using `push` → dense output. `[1, , 3].myMap(x=>x*2)` should give `[2, <hole>, 6]`, not `[2, undefined, 6]`.
-> - **Trap:** forgetting `thisArg` — breaks `arr.map(fn, this)` from method context.
-> - Family: `filter` (doesn't preserve holes — output is always dense), `forEach` (no return), `flatMap` (map + flat 1).
+### Variant 2 — Array-like input
+`Array.prototype.myMap.call({0:'a', 1:'b', length:2}, x => x+'!')` → `['a!', 'b!']`.
+
+### Variant 3 — Async map
+Not native; `Promise.all(arr.map(asyncFn))` or `for await` for ordered.
+
+### Variant 4 — `Array.from(arr, mapper)`
+Built-in alternative; doesn't preserve holes (creates dense).
+
+### Variant 5 — `.flatMap(fn)`
+`map` + `flat(1)` in one pass.
+
+---
+
+## 12. How to think aloud
+
+> "`map` looks trivial but the hole-preserving contract is the differentiator. Output length matches input length; sparse holes preserved as holes — not filled with undefined. Three callback args `(value, index, array)`; `thisArg` second param to map. Step 1: validate `this` not null, callback callable. Step 2: snapshot length via `>>> 0` (ToUint32). Step 3: preallocate `new Array(len)` — gives us hole-shaped result. Step 4: loop `i in this` check to skip holes — `this[i] !== undefined` would skip explicit undefined too (wrong). Step 5: `callback.call(thisArg, value, i, this)` — three args + thisArg. Return result. Non-mutating; defineProperty with enumerable:false so for-in doesn't enumerate. Tests: `[1,,3].myMap(x=>x*2)` → `[2, <empty>, 6]` and `1 in result === false`. Trap: push(undefined) for holes (breaks contract); ignoring thisArg; using `arr[i] !== undefined` as hole check; forgetting length snapshot."
+
+---
+
+## 13. 60-second revision
+
+> - **Output length = input length**; preserve holes.
+> - **`new Array(len)`** + only assign at `i in this`.
+> - **`callback.call(thisArg, value, i, this)`** — 3 args.
+> - **`i in this`** to skip holes (not `!== undefined`).
+> - **`length >>> 0`** for ToUint32 spec.
+> - **Non-mutating.**
+> - **`Object.defineProperty(..., {enumerable: false})`** to avoid for-in.
+> - **Trap:** push(undefined) for holes; thisArg ignored; undefined ≠ hole.
+
+---
+
+**Related:** [polyfill-filter.md](./polyfill-filter.md) · [polyfill-reduce.md](./polyfill-reduce.md) · [polyfill-flat.md](./polyfill-flat.md) · [polyfill-find-findindex.md](./polyfill-find-findindex.md) · [holey-vs-packed-arrays.md](./holey-vs-packed-arrays.md)
+
+**Concept primer:** [`concepts/arrays.md`](../../concepts/arrays.md)

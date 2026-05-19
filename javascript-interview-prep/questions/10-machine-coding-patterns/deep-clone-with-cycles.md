@@ -1,228 +1,310 @@
 # Implement `deepClone(value)` with cycle handling
 
-## Source
-- Canonical machine-coding interview problem (LeetCode "Convert Object to JSON String" adjacent, BFE.dev, lodash `_.cloneDeep`).
-- Reference: lodash source, structured-clone algorithm (HTML spec).
+> **Difficulty:** Medium-Senior   |   **Time:** ~25 min   |   **Prereqs:** [memoize-ii.md](./memoize-ii.md), [`concepts/recursion.md`](../../concepts/recursion.md)
+>
+> **Source:** lodash `_.cloneDeep`, HTML structured-clone spec, `structuredClone` global. Asked at BFE.dev, BFE rounds, Frontend Masters.
 
-## Why this question matters in interviews
-Deep clone with cycles is the **machine-coding question that tests data-structure pattern reuse**. Naively candidates write recursion and call it done — until the interviewer hands them an object that references itself, and the function stack-overflows. The senior answer applies the same **"WeakMap to track seen nodes"** pattern used in: cycle detection in graphs, dependency-injection resolution, JSON serialization with refs, and React reconciliation. Done well, the implementation also handles **non-plain types** (Date, RegExp, Map, Set), which separates it from `JSON.parse(JSON.stringify(x))` — a trick every junior knows but which corrupts Dates, drops functions/undefined, and crashes on cycles. Backend engineers run into this every time they snapshot config, fork a request context, or build immutable update helpers.
+---
 
-In this bucket, focus on **pattern reuse** — the WeakMap-tracking-seen-refs trick is a building block, not just a one-off for clone. Identical structure to graph traversal, dependency resolution, and memoize-II's identity-keyed map.
+## 1. Problem statement
 
-## Concepts involved
-
-### Syntax to lock in
-```js
-function deepClone(value, seen = new WeakMap()) {
-  if (value === null || typeof value !== 'object') return value;     // primitive
-  if (seen.has(value)) return seen.get(value);                       // cycle short-circuit
-  // ... clone container, register in seen BEFORE recursing
-}
-
-const a = { name: 'a' };
-a.self = a;                       // cycle
-const b = deepClone(a);
-b === a;        // false
-b.self === b;   // true — cycle preserved
+**Signature**
+```ts
+function deepClone<T>(value: T, seen?: WeakMap<object, object>): T;
 ```
 
-### Runtime / engine behavior
-- `WeakMap` keys must be objects, which is exactly what we want (we only need to track objects, since primitives are passed by value).
-- **Register the clone in `seen` BEFORE recursing into its children.** This is the load-bearing step: if a child references back to its parent, the recursion finds the in-progress clone and returns it instead of looping infinitely.
-- `Object.getPrototypeOf` + `Object.create` preserves the prototype chain — important for class instances. `Object.assign({}, src)` does NOT preserve prototype.
-- `Object.getOwnPropertyDescriptors` + `Object.defineProperties` preserves getters/setters and `enumerable`/`writable` flags. Lodash does this; for an interview a plain key loop is fine if you state the trade-off.
-- Symbol-keyed properties: walk `Object.getOwnPropertySymbols` too. Often omitted; mention.
+**Input / Output examples**
 
-### Edge cases (these are the interview traps)
-1. **Cycles** — the headline. Without WeakMap, infinite recursion → stack overflow. With WeakMap, register-before-recurse handles it.
-2. **`JSON.parse(JSON.stringify(x))`** — the junior trap. **Fails on**: cycles (throws), Date (becomes string), RegExp (becomes `{}`), Map/Set (becomes `{}`), Function (dropped), `undefined` (dropped from objects, becomes `null` in arrays), Symbol keys (dropped), BigInt (throws). State this upfront.
-3. **Date** — `new Date(value.getTime())` or `new Date(value)`. Plain recursion would clone its internal slots as enumerable props, which doesn't exist.
-4. **RegExp** — `new RegExp(value.source, value.flags)`. Optionally preserve `lastIndex`.
-5. **Map / Set** — iterate entries, clone keys (if Map) and values, build a new container. **Register the new container in `seen` before iterating** so cyclic refs work.
-6. **Array** — preallocate with `new Array(value.length)` (preserves length), then clone each index. Holes (sparse arrays) — usually OK to skip; mention.
-7. **Class instances** — preserve prototype with `Object.create(Object.getPrototypeOf(value))`. Otherwise the clone is a plain object that looks like the original but `instanceof` fails.
-8. **Functions** — usually NOT cloned (impossible to clone closures correctly). Lodash copies the reference. State your choice.
-9. **TypedArray / Buffer / ArrayBuffer** — `slice()` or constructor copy. Worth a one-liner mention.
-10. **Symbol-keyed properties** — `Object.getOwnPropertySymbols(value)` to enumerate, copy explicitly.
+| Input                                                    | Behaviour                                              |
+|----------------------------------------------------------|---------------------------------------------------------|
+| Primitives (string, number, bool, null, undefined)       | returned as-is                                          |
+| `{a: {b: 1}}`                                            | deep clone; nested object is a new ref                  |
+| Cycle: `a.self = a`                                      | clone preserves cycle; `b.self === b` (not stack overflow)|
+| `new Date(...)`                                          | new Date with same ms                                   |
+| `new Map([[k, v]])`                                      | new Map; entries deep-cloned                            |
+| `new Set([...])`                                         | new Set; values deep-cloned                             |
+| `JSON.parse(JSON.stringify(x))` failure cases            | Date→string, RegExp→{}, Map/Set→{}, fn dropped, cycle throws |
 
-## Brute force approach
-**`JSON.parse(JSON.stringify(x))`** — one-liner, works for plain JSON-safe data. Failure modes listed above. Always mention this so the interviewer knows you know it; immediately disqualify it for general use.
+**Constraints**
+- Handle cycles via `WeakMap<original, clone>`.
+- **Register clone in seen BEFORE recursing into children** — load-bearing.
+- Type switch: Date, RegExp, Map, Set, Array, plain object.
+- Preserve prototype via `Object.create(Object.getPrototypeOf(value))`.
 
-**Naive recursion**: walks own enumerable keys, recurses. Works for trees, **stack-overflows on cycles**. Show this as the brute-force pass before adding the WeakMap.
+---
 
-## Optimal approach
-Recursion + `WeakMap<original, clone>` for cycle short-circuit. Register the new container in the map **before** populating its children. Switch on type to handle Date, RegExp, Map, Set, Array, plain object. Preserve prototype. Skip / passthrough functions and symbols based on requirements.
+## 2. Plain-English restatement
 
-## Solution (JavaScript)
+Make a structural copy of any value such that nothing in the clone shares references with the original. Handle cycles (self-referencing graphs), built-in container types (Date, RegExp, Map, Set), and preserve class prototypes. The naive `JSON.parse(JSON.stringify(x))` shortcut fails on cycles, Date, RegExp, Map, Set, functions, undefined, and BigInt — articulate this upfront.
+
+---
+
+## 3. Why this matters in interviews
+
+The machine-coding question that tests **data-structure pattern reuse**. Naive candidates write recursion and get stack-overflow on a cycle. The senior answer applies the **"WeakMap tracks seen nodes"** trick — the same pattern used in graph cycle detection, DI resolution, JSON-ref serialization, React reconciliation, and Memoize II. Pattern reuse > one-off code.
+
+---
+
+## 4. Mental model
+
+```
+   deepClone(value, seen=WeakMap):
+   ┌─────────────────────────────────────────────┐
+   │ if primitive → return value                 │
+   │ if seen.has(value) → return seen.get(value) │  ← cycle short-circuit
+   │                                             │
+   │ switch on type:                             │
+   │   Date     → new Date(value.getTime())      │
+   │   RegExp   → new RegExp(source, flags)      │
+   │   Map      → new Map(); deep-clone entries  │
+   │   Set      → new Set(); deep-clone values   │
+   │   Array    → new Array(len); deep-clone idx │
+   │   object   → Object.create(getProto(value)) │
+   │                                             │
+   │ seen.set(value, clone)  ← BEFORE recursing  │
+   │ populate clone's children                   │
+   │ return clone                                │
+   └─────────────────────────────────────────────┘
+
+   Cycle example:
+     node.self = node
+     deepClone(node):
+       create clone1; seen.set(node, clone1)
+       walk node.self → deepClone(node, seen)
+                          seen.has(node) → return clone1
+       clone1.self = clone1   ✓ cycle preserved
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. What does `JSON.parse(JSON.stringify({d: new Date()}))` produce? Why is it wrong?
+> 2. Why must `seen.set(original, clone)` happen BEFORE recursing into children?
+> 3. If you clone a class instance with `Object.assign({}, instance)`, why does `instanceof` fail on the result?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: `JSON.parse(JSON.stringify(x))`
+**Fails on:**
+- Cycles → throws "circular structure"
+- Date → becomes string
+- RegExp → `{}`
+- Map/Set → `{}`
+- Function → dropped
+- `undefined` → dropped (or `null` in arrays)
+- Symbol keys → dropped
+- BigInt → throws
+
+Mention upfront, disqualify, move on.
+
+### Wrong attempt 2: naive recursion (no `seen`)
+```js
+function deepClone(value) {
+  if (typeof value !== 'object' || value === null) return value;
+  const clone = Array.isArray(value) ? [] : {};
+  for (const k of Object.keys(value)) clone[k] = deepClone(value[k]);
+  return clone;
+}
+```
+Stack-overflows on cycles. No Date/RegExp/Map/Set handling. Doesn't preserve prototype.
+
+### Wrong attempt 3: register clone AFTER recursing
+```js
+const clone = {};
+for (const k of Object.keys(value)) clone[k] = deepClone(value[k], seen);
+seen.set(value, clone);   // BUG: by the time we get here, recursion already infinite-looped
+```
+The whole point of seen is to short-circuit recursion; setting it after recursion is too late.
+
+---
+
+## 7. The unlocking insight
+
+> **`WeakMap<original, clone>` to track seen refs. Register clone in `seen` BEFORE recursing into children. Type switch for Date/RegExp/Map/Set/Array/plain object. Preserve prototype with `Object.create(Object.getPrototypeOf(value))`.**
+
+Three properties:
+
+1. **`WeakMap`** because keys must be objects + GC-friendly.
+2. **Register-before-recurse** — the entire cycle-handling mechanism.
+3. **Type switch** — built-ins need constructor calls, not enumeration.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
-/**
- * Deep clone arbitrary value. Handles cycles, Date, RegExp, Map, Set, Array.
- * Preserves prototype chain. Does NOT clone Functions (returns the same reference).
- *
- * @param {any} value
- * @param {WeakMap<object, object>} [seen]  internal — tracks cycles
- * @returns {any} a deep clone
- */
 function deepClone(value, seen = new WeakMap()) {
-  // Primitives (string, number, boolean, null, undefined, bigint, symbol) — clone is the value itself.
-  if (value === null || typeof value !== 'object') return value;
+  if (value === null || typeof value !== 'object') return value;   // step 1: primitives
+  if (seen.has(value)) return seen.get(value);                      // step 2: cycle short-circuit
 
-  // Cycle short-circuit: we've seen this ref before, return its clone-in-progress.
-  if (seen.has(value)) return seen.get(value);
-
-  // Date
-  if (value instanceof Date) {
-    const cloned = new Date(value.getTime());
-    seen.set(value, cloned);
-    return cloned;
+  if (value instanceof Date) {                                       // step 3: Date
+    const c = new Date(value.getTime());
+    seen.set(value, c);
+    return c;
   }
 
-  // RegExp
-  if (value instanceof RegExp) {
-    const cloned = new RegExp(value.source, value.flags);
-    cloned.lastIndex = value.lastIndex;
-    seen.set(value, cloned);
-    return cloned;
+  if (value instanceof RegExp) {                                     // step 4: RegExp
+    const c = new RegExp(value.source, value.flags);
+    c.lastIndex = value.lastIndex;
+    seen.set(value, c);
+    return c;
   }
 
-  // Map
-  if (value instanceof Map) {
-    const cloned = new Map();
-    seen.set(value, cloned);   // BEFORE recursion
-    for (const [k, v] of value) cloned.set(deepClone(k, seen), deepClone(v, seen));
-    return cloned;
+  if (value instanceof Map) {                                        // step 5: Map
+    const c = new Map();
+    seen.set(value, c);                                              // BEFORE recursion
+    for (const [k, v] of value) c.set(deepClone(k, seen), deepClone(v, seen));
+    return c;
   }
 
-  // Set
-  if (value instanceof Set) {
-    const cloned = new Set();
-    seen.set(value, cloned);
-    for (const v of value) cloned.add(deepClone(v, seen));
-    return cloned;
+  if (value instanceof Set) {                                        // step 6: Set
+    const c = new Set();
+    seen.set(value, c);
+    for (const v of value) c.add(deepClone(v, seen));
+    return c;
   }
 
-  // Array
-  if (Array.isArray(value)) {
-    const cloned = new Array(value.length);
-    seen.set(value, cloned);
-    for (let i = 0; i < value.length; i++) cloned[i] = deepClone(value[i], seen);
-    return cloned;
+  if (Array.isArray(value)) {                                        // step 7: Array
+    const c = new Array(value.length);
+    seen.set(value, c);
+    for (let i = 0; i < value.length; i++) c[i] = deepClone(value[i], seen);
+    return c;
   }
 
-  // Plain object / class instance — preserve prototype.
-  const cloned = Object.create(Object.getPrototypeOf(value));
-  seen.set(value, cloned);
-  for (const key of Reflect.ownKeys(value)) {   // includes symbol keys
-    cloned[key] = deepClone(value[key], seen);
+  const c = Object.create(Object.getPrototypeOf(value));             // step 8: preserve prototype
+  seen.set(value, c);
+  for (const key of Reflect.ownKeys(value)) {                        // step 9: symbol keys too
+    c[key] = deepClone(value[key], seen);
   }
-  return cloned;
+  return c;
 }
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
-Input:
 ```js
 const node = { name: 'root', children: [] };
 const child = { name: 'child', parent: node };
-node.children.push(child);   // cycle: node → children[0].parent → node
-
-const created = new Date('2024-01-01');
-const tags = new Set(['a', 'b']);
-node.created = created;
-node.tags = tags;
+node.children.push(child);                           // cycle
+node.created = new Date('2024-01-01');
+node.tags = new Set(['a', 'b']);
 
 const clone = deepClone(node);
+
+clone !== node;                                       // true
+clone.children !== node.children;                     // true
+clone.children[0].parent === clone;                   // true (cycle preserved!)
+clone.created instanceof Date;                        // true
+clone.created !== node.created;                       // true
+clone.tags instanceof Set && clone.tags.has('a');     // true
 ```
 
-Trace:
+---
 
-- `deepClone(node, seen={})`:
-  - `typeof node === 'object'`, not seen. It's a plain object.
-  - Create `clone1 = Object.create(Object.prototype)`. `seen.set(node, clone1)`.
-  - Walk keys of node: `['name', 'children', 'created', 'tags']`.
-    - `name`: primitive `'root'` → clone[1].name = `'root'`.
-    - `children`: array `[child]`. Recurse:
-      - `deepClone(children)`: not seen → `clone2 = []`. `seen.set(children, clone2)`.
-        - Index 0: `deepClone(child)`: not seen → `clone3 = Object.create(Object.prototype)`. `seen.set(child, clone3)`.
-          - keys: `['name', 'parent']`.
-            - `name`: `'child'` (primitive).
-            - `parent`: this is `node`. **`seen.has(node)` is TRUE** (set in step 1). Return `clone1`. **Cycle short-circuited.** clone3.parent = clone1.
-        - clone2[0] = clone3.
-      - Return clone2.
-    - clone1.children = clone2.
-    - `created`: Date instance. `deepClone(created)`: not seen → `new Date(created.getTime())`. `seen.set(...)`. Return new Date. clone1.created = new Date copy.
-    - `tags`: Set. `deepClone(tags)`: not seen → `clone4 = new Set()`. `seen.set(tags, clone4)`.
-      - Iterate: clone4.add(deepClone('a')) = 'a'. clone4.add(deepClone('b')) = 'b'.
-      - Return clone4.
-    - clone1.tags = clone4.
-  - Return clone1.
+## 9. Step-by-step dry run
 
-Post-clone assertions:
-- `clone !== node` → true (different refs).
-- `clone.children !== node.children` → true (cloned).
-- `clone.children[0].parent === clone` → TRUE (cycle preserved correctly).
-- `clone.created.getTime() === node.created.getTime()` → true, but `clone.created !== node.created` → true (separate Date).
-- `clone.tags !== node.tags` → true. `clone.tags.has('a')` → true.
+```
+node = { name: 'root', children: [child], created: D, tags: S }
+child.parent = node                                                  ← cycle
 
-The cycle preservation in step 4 — where `parent` resolves to `clone1` rather than recursing into `node` again — is THE behavior interviewers care about.
+deepClone(node, seen={}):
+  not primitive, not in seen → object
+  create clone1 = Object.create(Object.prototype)
+  seen.set(node, clone1)                                              ← BEFORE recursion
+  walk keys: ['name', 'children', 'created', 'tags']
 
-## Important takeaways
+    'name' = 'root'  → primitive, return 'root'.  clone1.name='root'
 
-**Pattern reuse — the WeakMap-tracks-seen trick**
-The same trick appears in:
-- Cycle detection in graph traversal (mark visited, skip).
-- Dependency injection container (registry tracks resolved instances).
-- JSON serialization with refs (`$ref: 1` style).
-- Memoize II (identity-keyed cache — see memoize-ii.md).
-- React fiber reconciliation (track work in progress).
+    'children' = [child]:
+      deepClone([child], seen):
+        is Array → clone2 = new Array(1)
+        seen.set(children, clone2)
+        index 0: deepClone(child, seen):
+          not primitive, not in seen → object
+          create clone3, seen.set(child, clone3)
+          walk keys: ['name', 'parent']
+            'name' = 'child' → primitive
+            'parent' = node:
+              seen.has(node) → TRUE
+              return seen.get(node) = clone1                          ← cycle short-circuit
+          clone3.parent = clone1
+        clone2[0] = clone3
+        return clone2
+      clone1.children = clone2
 
-If you see "do something recursive over an object graph that might have cycles or shared refs," reach for a `WeakMap<original, result>` and register-before-recurse.
+    'created' = D (Date):
+      seen.has(D)? no → new Date(D.getTime()), seen.set, return new Date
 
-**Syntax to memorize**
-- `WeakMap` because object keys + GC-friendly + no risk of stringification.
-- `if (seen.has(value)) return seen.get(value);` — the cycle short-circuit, every time.
-- `seen.set(original, clone)` **before** populating clone's children.
-- `Object.create(Object.getPrototypeOf(value))` to preserve class identity.
-- `Reflect.ownKeys(value)` to walk both string and symbol keys.
+    'tags' = S (Set):
+      new Set, seen.set, iterate cloning values (primitives 'a','b')
 
-**Common mistakes**
-- Registering the clone AFTER recursing → cycle isn't detected → stack overflow.
-- Using `JSON.parse(JSON.stringify(x))` and not articulating its failure modes.
-- Using `Object.assign({}, src)` for objects → drops the prototype, breaks `instanceof`.
-- Using a plain object for `seen` → can't use object refs as keys (and `WeakMap` is cleaner for GC anyway).
-- Forgetting Date / RegExp / Map / Set → returns empty `{}` for them (the same bug as `JSON.stringify`).
-- Cloning functions — usually wrong (can't clone closures). Pass by reference.
+  return clone1
 
-**Related questions**
-- **Memoize II** — same WeakMap-keyed identity trick.
-- Graph cycle detection — same "mark visited" pattern.
-- `structuredClone(value)` — the browser/Node 17+ built-in. Handles cycles, Date, RegExp, Map, Set, ArrayBuffer, TypedArrays, but NOT functions, Error subclasses preserved limited. Mention it; LeetCode often forbids it.
+Post-clone:
+  clone1.children[0].parent === clone1                                ✓ cycle preserved
+  clone1.created !== node.created                                     ✓ separate Date
+  clone1.tags !== node.tags                                           ✓ separate Set
+```
 
-## Variants
+---
 
-1. **`structuredClone(value)`** — built-in (Node 17+, all modern browsers). Implements the HTML structured-clone algorithm. One line. State why you'd still write the manual version (control over function/symbol handling, support for legacy runtimes, learning).
+## 10. Common confusion + traps
 
-2. **Lossy clone (`JSON.parse(JSON.stringify(x))`)** — explicit "I know this is wrong, here are the limits." Useful for snapshot-testing plain config.
+1. **Register clone AFTER recursing** → cycle isn't caught → stack overflow.
+2. **`JSON.parse(JSON.stringify(x))`** — articulate all the failure modes.
+3. **`Object.assign({}, src)`** — drops prototype; `instanceof` fails.
+4. **Plain object instead of WeakMap for `seen`** — can't use object refs as keys.
+5. **Forgetting Date/RegExp/Map/Set** — returns `{}` for them (same bug as JSON shortcut).
+6. **Cloning functions** — impossible to clone closures correctly. Pass reference; document.
+7. **Forgetting symbol keys** — use `Reflect.ownKeys`, not `Object.keys`.
 
-3. **Selective clone** — clone only own enumerable props, omit symbols / non-enumerable / inherited. Lighter; matches `JSON.stringify` semantics minus the bugs.
+---
 
-4. **Immutable update (clone-on-write)** — instead of fully cloning, share refs and only clone along the path being modified. This is what Immer does. Different problem; mention as a senior topic.
+## 11. Senior follow-ups & variants
 
-5. **Cross-realm clone** — for postMessage / Web Workers, the structured-clone algorithm handles transferable objects (`ArrayBuffer.transfer`). Out of scope for in-process clone.
+### Variant 1 — `structuredClone(value)`
+Built-in (Node 17+, all modern browsers). Handles cycles, Date, RegExp, Map, Set, TypedArrays. **Does NOT handle** functions, prototypes preserved-limited. One-liner; mention but be ready to write manual version (LeetCode often forbids it).
 
-6. **Class instances with private fields** — `#private` fields can't be cloned via property iteration. Need explicit clone method on the class. Trade-off worth flagging.
+### Variant 2 — Lossy clone (JSON shortcut)
+Explicit "I know this is wrong, here are the limits." Useful for snapshot-testing plain config.
 
-## Revision notes
+### Variant 3 — Selective clone
+Clone only own enumerable props; skip symbols, non-enumerable, inherited. Matches `JSON.stringify` semantics minus the bugs.
 
-> **deepClone with cycles — 60 second recap**
-> - `WeakMap<original, clone>` to track seen refs.
-> - **Register clone in `seen` BEFORE recursing** — that's how cycles short-circuit.
-> - Type switch: primitive → return value; Date / RegExp / Map / Set / Array / plain object → cloned form.
-> - Preserve prototype: `Object.create(Object.getPrototypeOf(value))`.
-> - `Reflect.ownKeys` walks symbol keys too.
-> - **`JSON.parse(JSON.stringify(x))`** is wrong for: cycles (throws), Date (stringified), RegExp (`{}`), Map/Set (`{}`), undefined (dropped), functions (dropped), symbols (dropped), BigInt (throws).
-> - **Pattern reuse:** WeakMap-tracks-seen is the same trick used in graph traversal, DI, memoize-II, JSON-ref serialization.
-> - Modern shortcut: `structuredClone(value)` (Node 17+) — mention but be ready to write manual.
-> - **Trap:** registering clone AFTER recursing → infinite loop on cycles.
+### Variant 4 — Immutable update (clone-on-write)
+What Immer does: share refs and only clone along the path being modified. Different problem; senior topic.
+
+### Variant 5 — Cross-realm clone
+For `postMessage` / Web Workers, the structured-clone algorithm handles transferable objects (`ArrayBuffer.transfer`).
+
+### Variant 6 — Class with private fields
+`#private` fields can't be cloned via property iteration. Need explicit `clone` method on the class.
+
+---
+
+## 12. How to think aloud
+
+> "Recursion + `WeakMap<original, clone>` for cycle short-circuit. Register the clone in seen BEFORE recursing into children — that's how cycles get caught. Type switch: primitives pass through; Date/RegExp/Map/Set/Array each need their constructor; plain objects use `Object.create(Object.getPrototypeOf(value))` to preserve class identity. Walk both string and symbol keys via `Reflect.ownKeys`. Functions: usually NOT cloned — impossible to clone closures correctly. `JSON.parse(JSON.stringify(x))` fails on cycles, Date, RegExp, Map, Set, functions, undefined, BigInt — articulate upfront. Modern shortcut: `structuredClone(value)` (Node 17+). Same WeakMap-tracks-seen trick shows up in graph cycle detection, DI containers, Memoize II, JSON-ref serialization, React fiber."
+
+---
+
+## 13. 60-second revision
+
+> - **`WeakMap<original, clone>`** for cycle tracking.
+> - **Register-before-recurse** is load-bearing.
+> - **Type switch:** Date → `new Date(getTime())`; RegExp → `new RegExp(source, flags)`; Map/Set → new + clone entries; Array → preallocate + clone idx; plain → `Object.create(getProto)` + `Reflect.ownKeys`.
+> - **Preserve prototype** so `instanceof` works.
+> - **`JSON.parse(JSON.stringify)`** breaks on: cycle, Date, RegExp, Map, Set, fn, undefined, BigInt, symbol keys.
+> - **`structuredClone(value)`** modern shortcut.
+> - **Pattern reuse:** WeakMap-tracks-seen is universal (DI, graph, Memoize II).
+> - **Trap:** register AFTER recursing; `Object.assign`; forgetting symbol keys.
+
+---
+
+**Related:** [memoize-ii.md](./memoize-ii.md) · [`09-recursion/tree-traversal-iterative.md`](../09-recursion/tree-traversal-iterative.md) · [`09-recursion/graph-cycle-detection.md`](../09-recursion/graph-cycle-detection.md) · [json-parse-recursive-descent.md](./json-parse-recursive-descent.md)
+
+**Concept primer:** [`concepts/recursion.md`](../../concepts/recursion.md)

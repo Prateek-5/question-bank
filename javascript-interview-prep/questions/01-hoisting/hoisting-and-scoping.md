@@ -1,101 +1,126 @@
-# Hoisting and Scoping — how they interact
+# Hoisting and scoping — how they interact
 
-## Source
-https://codedamn.com/news/javascript/what-is-hoisting-and-scoping-in-javascript — MDN: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Lexical_grammar#variables
+> **Difficulty:** Medium-Senior   |   **Time:** ~15 min   |   **Prereqs:** [hoisting-in-javascript.md](./hoisting-in-javascript.md), [let-vs-var-differences.md](./let-vs-var-differences.md)
+>
+> **Source:** Senior JS screens, output-prediction puzzles.
 
-## Why this question matters in interviews
-Hoisting and scoping are taught separately but tested **together** — interviewers ask "what does this print?" with deeply nested blocks and closures that lean on both. As a senior backend engineer the expected answer goes beyond mechanics: explain **which environment** the binding lives in, **how the scope chain resolves identifiers**, and **why** `var` leaking out of blocks combined with hoisting produces classic bugs (the loop-closure bug being the textbook example). A strong answer here also sets up the closures round that often follows.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
-```js
-// var leaks out of blocks; let/const don't.
-if (true) {
-  var leaked = 'visible outside';
-  let trapped = 'invisible outside';
-}
-console.log(leaked);   // 'visible outside'
-console.log(trapped);  // ReferenceError: trapped is not defined
+Walk through output-prediction snippets that combine hoisting + scope chains + closures. Demonstrate the **VE** vs **LE** distinction and **OuterEnv** pointer.
 
-// Scope chain resolution
-const outer = 'outer';
-function f() {
-  console.log(outer);  // climbs scope chain to global -> 'outer'
-}
+**Verification examples**
 
-// Hoisting shadows the outer name
-var x = 'global';
-function g() {
-  console.log(x);      // undefined (local var x hoisted)
-  var x = 'local';
-}
+| Snippet                                                | Behaviour                                              |
+|--------------------------------------------------------|---------------------------------------------------------|
+| `if (true) { var x = 5; } console.log(x);`             | `5` — `var` leaks to enclosing function                |
+| `if (true) { let x = 5; } console.log(x);`             | `ReferenceError` — block-scoped                        |
+| `for (var i = 0; i < 3; i++) setTimeout(() => log(i))` | `3, 3, 3` (shared `i`)                                  |
+| `for (let i = 0; i < 3; i++) setTimeout(() => log(i))` | `0, 1, 2` (fresh `i` per iteration)                     |
+| Nested function reads outer `var`                      | climbs scope chain to outer EC                          |
+
+**Constraints**
+- Every EC has VE (var/function) + LE (let/const/class) + OuterEnv pointer.
+- Scope chain: identifier resolution walks LE → VE → OuterEnv → ... → global.
+- Closures capture **environments**, not values.
+
+---
+
+## 2. Plain-English restatement
+
+Each execution context has two binding tables — VE for `var`/function, LE for `let`/`const`/`class` — and a pointer to its parent. When you read an identifier, the engine walks up the chain. Hoisting populates these tables during creation; scoping decides which table holds which name.
+
+---
+
+## 3. Why this matters in interviews
+
+Output-prediction puzzles depend on knowing **which environment** holds each binding. Sets up closures and async-output rounds.
+
+---
+
+## 4. Mental model
+
+```
+   Every Execution Context:
+   ┌────────────────────────────────────┐
+   │ Variable Environment (VE)          │   var, function declarations
+   │ Lexical Environment (LE)           │   let, const, class, params
+   │ OuterEnv pointer ──────▶ parent EC │
+   └────────────────────────────────────┘
+
+   Scope chain (resolution order):
+   current LE → current VE → OuterEnv.LE → OuterEnv.VE → ... → global
+
+   Closure captures the ENVIRONMENT, not the value.
+   That's why mutations to var after capture are visible.
+
+   for (var i)  → one i in function's VE; all closures share.
+   for (let i)  → new LE per iteration; closures capture own i.
 ```
 
-### Runtime / engine behavior
+---
 
-Every Execution Context has two records:
+## 5. Try it yourself first
 
-1. **Variable Environment (VE)** — holds `var` and function declarations. Per function (or script/module top level).
-2. **Lexical Environment (LE)** — holds `let`/`const`/`class` declarations. Per block.
+> **Predict before reading on:**
+> 1. `for (var i = 0; i < 3; i++) setTimeout(() => log(i))` — output?
+> 2. Why does the same loop with `let` print `0, 1, 2`?
+> 3. In `function f() { var x = 1; if (true) { var x = 2; } log(x); }`, what's the output?
 
-Each LE has an **OuterEnv** pointer to the enclosing environment, forming the **scope chain**. Identifier resolution walks this chain from innermost outward, stopping at the first match — or throwing `ReferenceError: x is not defined` if it reaches the global record without finding anything.
+---
 
-**Hoisting** populates these environments during the creation phase. **Scoping** determines which environment a name lives in and how lookups traverse the chain. They are orthogonal but interact:
-- `var` hoists to the nearest **function** scope, regardless of how many blocks deep it's written.
-- `let`/`const` hoist to the nearest **block** scope.
-- Closures capture **environments**, not values — they hold a reference to the LE/VE active when the function was created.
+## 6. Brute force — walked through
 
-### Edge cases (interview traps)
-1. **The `for (var i)` loop-closure bug** — `for (var i = 0; i < 3; i++) setTimeout(() => console.log(i), 0)` prints `3 3 3`. All three callbacks close over the **same** `i` in the function's VE. With `let`, each iteration gets a **new** `i` in a fresh block scope → `0 1 2`.
-2. **`var` inside a `for` loop** — same as above. The `var` initializer in `for (var i = 0; ...)` lives in the enclosing function.
-3. **Shadowing across scopes** — `let x = 1; { let x = 2; console.log(x); /* 2 */ } console.log(x); /* 1 */`. Inner block creates a new binding; lookup finds the inner first.
-4. **Module-scope hoisting** — `var` at module top level does NOT attach to `globalThis` in ESM (unlike classic scripts, where it does).
-5. **`with` and `eval`** can dynamically extend the scope chain. In strict mode, `with` is forbidden; direct `eval` still adds bindings to the local scope. Both are interview-flag-worthy as anti-patterns.
-6. **Function parameters create their own scope** — `function f(a = b, b) {}` throws because parameter `a`'s default expression sees `b` in TDZ.
+### Wrong attempt 1: "Inner scope can see outer"
+Correct but useless — doesn't explain WHY `var` leaks out of blocks.
 
-## Brute force approach
-Rusty candidate: *"Inner scope can see outer. Outer can't see inner."* Correct but useless — every output question still trips them up because they haven't internalized **which environment a `var` lives in**. Without the VE-vs-LE distinction, you can't explain why `var` leaks out of an `if` block but `let` doesn't.
+### Wrong attempt 2: treat `var i` in `for` as block-scoped
+It's not — function-scoped. One shared `i` across iterations.
 
-## Optimal approach
-For any "predict the output" question:
+### Wrong attempt 3: closures capture values
+They capture environments. Mutations are visible.
 
-1. List all scopes (script/module, each function, each block).
-2. For each scope, draw its VE and LE — populate with hoisted bindings.
-3. Draw the OuterEnv arrows (scope chain).
-4. Walk the execution phase, resolving each identifier read by climbing the chain.
+---
 
-This procedure mechanically solves every hoisting+scoping question.
+## 7. The unlocking insight
 
-## Solution (JavaScript)
+> **Per EC: VE + LE + OuterEnv. Identifier resolution walks LE → VE → OuterEnv chain. `var` lives in VE (function-scoped); `let` lives in LE (block-scoped). Each `for (let i)` iteration creates a NEW LE.**
+
+Three properties:
+
+1. **VE vs LE distinction** — function-scoped vs block-scoped.
+2. **OuterEnv chain** — resolution walks outward.
+3. **Closures capture environment** — mutations visible.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
-// Combined example — hoisting + scoping + closure capture
-const x = 'global-x';
+const x = 'global-x';                                                 // global LE
 
 function outer() {
-  // outer's VE = { y: undefined, inner: <fn> }    (hoisted)
-  // outer's LE = {}                                (no let/const)
-  console.log(x);              // climb to global -> 'global-x'
-  console.log(y);              // undefined (var hoisted in outer)
+  // outer's VE: { y: undefined, inner: <fn> }   (hoisted at creation)
+  // outer's LE: {}                                (no let/const here)
+  console.log(x);                                                     // climb chain → 'global-x'
+  console.log(y);                                                     // undefined (var hoisted)
 
   var y = 'outer-y';
 
-  for (let i = 0; i < 2; i++) {
-    // Each iteration: new block LE = { i: <new binding> }
-    setTimeout(() => console.log('i=' + i, 'y=' + y), 0);
-    // The arrow captures THIS iteration's LE (with its i) and outer's VE (y).
+  for (let i = 0; i < 2; i++) {                                       // step 1: fresh LE per iter
+    setTimeout(() => console.log('i=' + i, 'y=' + y), 0);              // captures iter's LE + outer's VE
   }
 
   function inner() {
-    var y = 'inner-y';         // shadows outer.y
-    console.log(y);            // 'inner-y'
+    var y = 'inner-y';                                                  // shadows outer.y
+    console.log(y);                                                     // 'inner-y' (own VE wins)
   }
   inner();
 }
 
 outer();
-// Output (in order):
+// Output:
 // global-x
 // undefined
 // inner-y
@@ -103,94 +128,123 @@ outer();
 // i=1 y=outer-y
 ```
 
-## Step-by-step dry run
+**Try it yourself — the loop-closure bug:**
 
-**Global Execution Context — Creation phase**
+```js
+// Bug: shared i
+for (var i = 0; i < 3; i++) {
+  setTimeout(() => console.log(i), 0);
+}
+// Output: 3, 3, 3 (all closures share function's VE.i; final value 3)
 
-| Binding | Environment | Value         |
-|---------|-------------|---------------|
-| `x`     | LE (const)  | `<uninitialized>` (TDZ) |
-| `outer` | VE          | `<function outer>` |
+// Fix: let per-iteration binding
+for (let i = 0; i < 3; i++) {
+  setTimeout(() => console.log(i), 0);
+}
+// Output: 0, 1, 2 (each iter has fresh LE.i; each closure owns one)
 
-**Execution phase (global)**
-- `const x = 'global-x'` → TDZ ends, `x = 'global-x'`.
-- `outer()` → push `outer`'s EC.
+// Pre-ES6 fix: IIFE
+for (var i = 0; i < 3; i++) {
+  (function (j) {
+    setTimeout(() => console.log(j), 0);
+  })(i);
+}
+// Output: 0, 1, 2 (IIFE creates fresh function scope each iter)
+```
 
-**`outer`'s Execution Context — Creation phase**
+---
 
-| Binding | Environment | Value         |
-|---------|-------------|---------------|
-| `y`     | VE          | `undefined`   |
-| `inner` | VE          | `<function inner>` |
+## 9. Step-by-step dry run
 
-Scope chain: `outer.LE -> outer.VE -> global`.
+```
+Global EC:
+  LE: { x: <uninitialized> }                          (const)
+  VE: { outer: <function> }
 
-**Execution phase (outer)**
-1. `console.log(x)` → not in outer.LE → not in outer.VE → found in global LE → `'global-x'`. Print.
-2. `console.log(y)` → outer.VE.y is `undefined`. Print `undefined`.
-3. `var y = 'outer-y'` → outer.VE.y becomes `'outer-y'`.
-4. **`for` loop with `let i`** — for each iteration, a new block LE is created with a fresh `i`. The arrow function captures that iteration's LE.
-   - Iter 0: block LE = `{ i: 0 }`. Schedule callback A.
-   - Iter 1: block LE = `{ i: 1 }`. Schedule callback B.
-5. `inner()` — push `inner`'s EC.
+Execution:
+  const x = 'global-x'  → x = 'global-x'
+  outer() called → push outer's EC.
 
-**`inner`'s Execution Context — Creation phase**
+outer's EC:
+  VE: { y: undefined, inner: <function inner> }       (creation phase)
+  LE: {}
+  OuterEnv → global
 
-| Binding | Environment | Value         |
-|---------|-------------|---------------|
-| `y`     | VE          | `undefined`   |
+  console.log(x)        → not in outer.LE, not in outer.VE → walk to global.LE → 'global-x'
+  console.log(y)        → outer.VE.y = undefined → print 'undefined'
+  var y = 'outer-y'     → outer.VE.y = 'outer-y'
+  
+  for (let i = 0; i < 2; i++):
+    iter 0: new block LE = { i: 0 }. Schedule cb_A. cb_A's OuterEnv → THIS LE.
+    iter 1: new block LE = { i: 1 }. Schedule cb_B. cb_B's OuterEnv → THIS LE.
+  
+  inner() → push inner's EC.
 
-Scope chain: `inner.VE -> outer.VE -> global`.
+inner's EC:
+  VE: { y: undefined }                                 (creation)
+  OuterEnv → outer
+  
+  var y = 'inner-y'     → inner.VE.y = 'inner-y'
+  console.log(y)        → resolves to inner.VE.y (first match) → 'inner-y'
 
-**Execution phase (inner)**
-- `var y = 'inner-y'` → inner.VE.y = `'inner-y'`.
-- `console.log(y)` → resolves to `inner.VE.y` (first match) → `'inner-y'`. Print.
+Pop inner. Pop outer. Global continues.
 
-Pop `inner`. Pop `outer`. Continue global script — nothing else.
+Microtask drain (after sync):
+  cb_A: resolves i from its captured LE → 0; y from outer.VE → 'outer-y'. Log.
+  cb_B: i=1; y='outer-y'. Log.
+```
 
-**Microtask + macrotask drain**
-- After the script finishes, the event loop picks up the two scheduled `setTimeout(..., 0)` callbacks (in order):
-  - Callback A: `i=0` from its captured block LE; `y='outer-y'` from outer's VE (still alive via closure). Print `i=0 y=outer-y`.
-  - Callback B: `i=1`, `y='outer-y'`. Print `i=1 y=outer-y`.
+---
 
-## Important takeaways
+## 10. Common confusion + traps
 
-**Syntax to memorize**
-- Two environment records per EC: **VE** (`var`/function) and **LE** (`let`/`const`/`class`).
-- Scope chain = chain of LE → VE → OuterEnv → ... → global.
-- Closure captures **the environment**, not the value — that's why `let` in a `for` loop fixes the bug (new env per iteration).
+1. **`var i` in `for` is block-scoped** — no, function-scoped; loop-closure bug.
+2. **Closures capture values** — no, environments; mutations visible.
+3. **Scope chain "merges"** — no, walks; first match wins.
+4. **`var` inside `if` doesn't leak** — it does (function-scoped).
+5. **Parameters share function VE** — separate parameter scope; default params can hit TDZ.
+6. **Module-level `var` attaches to `globalThis`** — only in scripts, NOT in ESM.
+7. **`with` and `eval`** can dynamically extend scope chain — avoid.
 
-**Patterns to reuse**
-- The "draw the scope diagram" technique solves every output-prediction question.
-- When debugging unexpected values, ask: which environment does this name resolve to? Walk the chain.
-- Prefer block scope (`let`/`const`) to function scope (`var`) — it eliminates a whole class of bugs.
+---
 
-**Common mistakes**
-- Treating `var i` in a `for` loop as block-scoped (it's not).
-- Forgetting that closures capture the **live** environment, so mutations after capture are visible.
-- Confusing scope (which name is visible where) with hoisting (when the binding becomes valid).
+## 11. Senior follow-ups & variants
 
-**Related questions**
-- `var` vs `let` in loops (closure bug)
-- TDZ behavior
-- IIFE pattern (pre-ES6 way to create block scope)
-- Module scope vs script scope
+### Variant 1 — Loop-closure bug
+`for (var i)` shares one `i`; closures see final value. Fix: `let` (per-iter LE) or IIFE.
 
-## Variants
+### Variant 2 — Nested shadowing
+Three nested fns each `var x = ...`. Each `console.log(x)` resolves to nearest VE.
 
-1. **Loop closure prediction** — `for (var i = 0; i < 3; i++) setTimeout(() => console.log(i), 0)` — answer `3 3 3` and explain WHY: all callbacks share one `i` in the function's VE. Fix with `let` or IIFE.
+### Variant 3 — Parameter scope TDZ
+`function f(a = b, b) {}` — `a`'s default reads `b` in TDZ → throws.
 
-2. **Nested shadowing** — three nested functions, each with `var x = ...`. Ask which `x` each `console.log(x)` resolves to. Tests scope-chain traversal precision.
+### Variant 4 — IIFE pre-ES6 pattern
+`(function(j) { setTimeout(() => log(j)); })(i)` — IIFE creates fresh fn scope per iter.
 
-3. **Hoisting + parameter scope** — `let x = 1; function f(x = x) {}` — calling `f()` throws TDZ because parameter `x`'s default reads its own binding before initialization. Tests parameter-list TDZ.
+### Variant 5 — Module scope
+ESM is strict; top-level var doesn't attach to globalThis; `this === undefined`.
 
-## Revision notes
+---
 
-> **Hoisting + scoping — 60 second recap**
-> - Every EC has **VE** (`var`/function) and **LE** (`let`/`const`/`class`). Hoisting populates them during creation.
-> - **Scope chain** = LE → VE → OuterEnv → ... → global. Lookups stop at the first match.
-> - `var` is **function-scoped**; `let`/`const` are **block-scoped**.
-> - Closures capture the **environment**, not the value — mutations are visible across captures.
-> - `for (var i)` shares one `i` (loop-closure bug). `for (let i)` creates a fresh `i` per iteration.
-> - **Trap:** `var` inside `if`/`for`/`{}` leaks to the enclosing function. `let`/`const` don't.
-> - **Trap:** identifier resolution walks the chain; shadowing happens at the first match — no "merge."
+## 12. How to think aloud
+
+> "Every EC has Variable Environment (var/function) + Lexical Environment (let/const/class) + OuterEnv pointer. Identifier resolution walks LE → VE → OuterEnv → ... → global. `var` lives in VE (function-scoped); `let` in LE (block-scoped). Closures capture the ENVIRONMENT, not the value — that's why `for (var i)` callbacks share one i (loop-closure bug) but `for (let i)` works (fresh LE per iteration). Whiteboard trick: draw VE+LE tables per EC, draw OuterEnv arrows. Mechanically solves every output-prediction puzzle. Trap: var-block leak; closures-capture-values; chain merges."
+
+---
+
+## 13. 60-second revision
+
+> - **Per EC:** VE (var/function), LE (let/const/class), OuterEnv pointer.
+> - **Scope chain:** LE → VE → OuterEnv → ... → global. First match wins.
+> - **`var`** = function-scoped (VE). **`let`/`const`** = block-scoped (LE).
+> - **Closures capture ENVIRONMENT**, not value.
+> - **`for (var i)`** = shared i (loop-closure bug). **`for (let i)`** = fresh LE per iter.
+> - **Whiteboard:** draw scope diagram for any prediction puzzle.
+> - **Trap:** `var` block-scope assumption; values-not-environments; module vs script.
+
+---
+
+**Related:** [hoisting-in-javascript.md](./hoisting-in-javascript.md) · [let-vs-var-differences.md](./let-vs-var-differences.md) · [let-in-for-loop-binding.md](./let-in-for-loop-binding.md) · [`02-closures/loop-closure-var-let.md`](../02-closures/loop-closure-var-let.md)
+
+**Concept primer:** [`concepts/hoisting.md`](../../concepts/hoisting.md), [`concepts/closures.md`](../../concepts/closures.md)

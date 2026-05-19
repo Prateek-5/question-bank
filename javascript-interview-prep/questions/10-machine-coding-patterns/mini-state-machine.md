@@ -1,82 +1,152 @@
 # Implement a Mini Finite State Machine
 
-## Source
-- Classic computer-science machine-coding question (XState is the canonical JS library; FAANG senior interviews often ask the mini-version).
-- Adapted from BFE.dev / GreatFrontEnd state-machine problems.
+> **Difficulty:** Medium   |   **Time:** ~25 min   |   **Prereqs:** [observable-subject.md](./observable-subject.md), [event-emitter.md](./event-emitter.md)
+>
+> **Source:** XState (the canonical JS state-machine library), GoF State pattern. Order workflows, retry circuits, connection lifecycles, auth flows.
 
-## Why this question matters in interviews
-State machines are the right abstraction for **anything with a small set of well-defined states and transitions**: order workflows (cart → checkout → paid → shipped), retry circuits (closed → open → half-open), connection lifecycles (idle → connecting → connected → reconnecting), authentication flows, feature flags with gradual rollout. Implementing one in 30-50 lines tests **object-as-config**, **lookup-based dispatch**, **immutability of transitions**, **event emission for side effects**, and shows the interviewer you've seen the "spaghetti `if/else` over a `status` field" antipattern and know the cure. Backend interviewers ask this when probing whether you can model business workflows cleanly.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
-```js
-const orderMachine = createMachine({
-  initial: 'cart',
-  states: {
-    cart:       { ADD_ITEM: 'cart', CHECKOUT: 'awaiting_payment' },
-    awaiting_payment: { PAY: 'paid', CANCEL: 'cancelled' },
-    paid:       { SHIP: 'shipped' },
-    shipped:    { /* terminal */ },
-    cancelled:  { /* terminal */ },
-  },
-});
-
-let state = orderMachine.initial;          // 'cart'
-state = orderMachine.transition(state, 'CHECKOUT');  // 'awaiting_payment'
-state = orderMachine.transition(state, 'PAY');       // 'paid'
-state = orderMachine.transition(state, 'INVALID');   // throws or returns same
+**Signature**
+```ts
+function createMachine(config: {
+  initial: string;
+  states: { [state: string]: { [event: string]: string | { target: string; action?: Function; cond?: Function } } };
+}): {
+  initial: string;
+  transition(state: string, event: string, context?: any): { state: string; changed: boolean; actions: Function[] };
+  interpret(context?: any): { state; context; send(event); subscribe(fn): () => void };
+};
 ```
 
-### Runtime / engine behavior
-- State is just a **string** (or symbol). Events are strings. The machine config is a plain object — totally serializable, which means you can persist a machine definition to disk / DB / version control.
-- `transition(state, event)` is a **pure function**: same input → same output, no side effects. This is what makes state machines composable and testable.
-- The lookup `config.states[state][event]` is O(1). The whole machine is a 2D map.
-- Side effects (actions) are decoupled: when transitioning, emit an event or return an `{nextState, action}` tuple. The caller runs the action — the machine just decides. This is the XState pattern.
-- Subscribers: similar to Observable / Subject, you can `subscribe(state => ...)` to react to state changes. Useful for UI rerendering and logging.
+**Input / Output examples**
 
-### Edge cases (these are the interview traps)
-1. **Invalid event from current state** — two policies: (a) throw to surface bugs, or (b) return current state unchanged ("ignore unknown events"). Pick one and state it; XState ignores by default.
-2. **Self-transitions** — `cart -> ADD_ITEM -> cart`. The state name didn't change but it's still a transition. Should the action fire? Yes — that's the point. Some libs distinguish "internal" (no exit/entry) vs "external" (re-entry) transitions.
-3. **Terminal states** — states with no outgoing transitions. Once you enter, you stay. Don't crash on lookup of `config.states[terminal][anyEvent]` — handle undefined.
-4. **Guards (conditional transitions)** — sometimes the same event from the same state goes to different next states depending on context. Extend the transition definition: `{ target: 'x', cond: (ctx) => ctx.amount > 0 }`. Common in real workflows.
-5. **Context** — XState has a separate "extended state" (a JSON object alongside the named state). The state is "paid," the context is `{ amount: 100, currency: 'USD' }`. Mention this as an extension.
-6. **Action side effects** — running an action inside `transition` makes it impure. Better: `transition` returns `{ nextState, actions: [...] }` and the runtime runs the actions. Keeps `transition` testable.
-7. **Hierarchical / parallel states** — XState supports nested machines and parallel regions. Out of scope for the mini version; mention as the next level.
-8. **Initial state must be a valid state name** — validate this in `createMachine`. Otherwise the first transition crashes.
+| Setup                                                                                  | Behaviour                                              |
+|-----------------------------------------------------------------------------------------|---------------------------------------------------------|
+| order: cart → checkout → paid → shipped                                                | linear workflow                                        |
+| `transition('cart', 'CHECKOUT')`                                                       | `{state: 'awaiting_payment', changed: true, actions: []}` |
+| `transition('cart', 'ADD_ITEM')` (self)                                                | `{state: 'cart', changed: false, actions: []}`         |
+| `transition('shipped', 'PAY')` (no PAY in shipped)                                     | `{state: 'shipped', changed: false, actions: []}`      |
+| Transition with `action` → runtime runs the action                                      | side effect dispatched                                 |
+| Transition with `cond: (ctx) => boolean` failing                                       | no transition                                          |
+| `interpret().subscribe(fn)`                                                            | fn fires on `changed` transitions only                |
 
-## Brute force approach
-"I'll write a giant switch statement on `state` with nested switches on `event`." Works, but doesn't scale — every new state means another case, every new event another sub-case, and you can't introspect or visualize the machine. The data-driven object-config approach is the canonical alternative: same expressiveness, but the machine is **data**, not code, so you can lint it, visualize it (XState's inspector tool), and even synthesize tests from it.
+**Constraints**
+- State is a string; events are strings. Config is plain data.
+- `transition` is **pure**: same input → same output, no side effects.
+- Runtime (`interpret`) holds state, emits to subscribers, runs actions.
+- Subscriber fires only when `changed === true` (not on self/no-op transitions).
 
-Another wrong path: putting transitions on the **events** instead of the **states** (`events: { PAY: { from: 'awaiting', to: 'paid' } }`). Works mathematically but reads worse; `states[s][e]` is the canonical shape because real workflows are designed state-by-state, not event-by-event.
+---
 
-## Optimal approach
-Plain-object config: `{ initial, states: { [stateName]: { [eventName]: target } } }`. `transition(state, event)` is an O(1) lookup. Build a subscriber list for state-change events. Add action support via `{ target, action }` tuple.
+## 2. Plain-English restatement
 
-## Solution (JavaScript)
+A data-driven dispatch table. The machine config describes states and which events transition them to which next states. `transition(state, event)` is an O(1) lookup that returns the next state — purely. The runtime wraps this with current-state storage, side-effect execution, and subscribers. Used to model order workflows, retry circuit breakers, connection lifecycles — anything with a small set of well-defined states.
+
+---
+
+## 3. Why this matters in interviews
+
+The right abstraction for **anything with a small set of well-defined states and transitions**. Probes: object-as-config, lookup dispatch, immutability of transitions, side-effect separation, the discipline to not write spaghetti `if/else` over a `status` field. Backend interviewers ask this when probing workflow modeling.
+
+---
+
+## 4. Mental model
+
+```
+   Config:
+   ┌──────────────────────────────────────────────────────────────┐
+   │ initial: 'cart'                                              │
+   │ states:                                                       │
+   │   cart:             { CHECKOUT: 'awaiting_payment',           │
+   │                       ADD_ITEM: 'cart' }                      │
+   │   awaiting_payment: { PAY: {target:'paid', action: charge},  │
+   │                       CANCEL: 'cancelled' }                  │
+   │   paid:             { SHIP: 'shipped' }                       │
+   │   shipped:          {}      ← terminal                        │
+   │   cancelled:        {}      ← terminal                        │
+   └──────────────────────────────────────────────────────────────┘
+
+   transition(state, event) = config.states[state][event]
+   ↓ O(1) lookup ↓
+
+   transition('cart', 'CHECKOUT')      → {state:'awaiting_payment', changed:true}
+   transition('cart', 'PAY')           → {state:'cart',             changed:false}
+   transition('shipped', 'PAY')        → {state:'shipped',          changed:false}
+
+   interpret wraps:
+   send(event):
+     {next, changed, actions} = transition(state, event, context)
+     state = next
+     run actions(context, event)
+     if changed: fire subscribers
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. Why should `transition` be pure (not run actions itself)?
+> 2. If the current state has no entry for the event, what should happen?
+> 3. Why fire subscribers only on `changed: true` transitions?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: giant `switch` statement
+```js
+function transition(state, event) {
+  switch (state) {
+    case 'cart': switch (event) { case 'CHECKOUT': return 'awaiting_payment'; ... }
+    ...
+  }
+}
+```
+Works mathematically but doesn't scale; can't lint, can't visualize, every new state means another case. Use data-driven config.
+
+### Wrong attempt 2: events keyed at the top level
+```js
+events: { PAY: { from: 'awaiting', to: 'paid' } }
+```
+Works but reads worse. Workflows are designed state-by-state; `states[s][e]` is the canonical shape.
+
+### Wrong attempt 3: actions inside `transition`
+Makes it impure → hard to test, no time-travel debugging. Separate decision (pure transition) from execution (runtime).
+
+---
+
+## 7. The unlocking insight
+
+> **Config is plain data. `transition(state, event)` is a pure O(1) lookup. Runtime (`interpret`) is the side-effectful wrapper — holds state, runs actions, notifies subscribers. Separating decision from execution makes the machine testable.**
+
+Three properties:
+
+1. **Data-driven config** — can be serialized, lint-ed, visualized.
+2. **Pure `transition`** — same input → same output.
+3. **Runtime separates side effects** — actions run by the interpreter, not by transition.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
-/**
- * Mini finite state machine.
- *
- * @param {object} config
- * @param {string} config.initial
- * @param {Object<string, Object<string, string | { target: string, action?: Function, cond?: Function }>>} config.states
- */
 function createMachine(config) {
   if (!(config.initial in config.states)) {
     throw new Error(`Initial state '${config.initial}' not in states`);
   }
 
-  function transition(currentState, event, context = {}) {
+  function transition(currentState, event, context = {}) {           // step 1: pure
     const stateConfig = config.states[currentState];
     if (!stateConfig) throw new Error(`Unknown state: ${currentState}`);
     const t = stateConfig[event];
-    if (t === undefined) return { state: currentState, changed: false, actions: [] };
-
-    // Normalize to {target, action, cond}
-    const t2 = typeof t === 'string' ? { target: t } : t;
-    if (t2.cond && !t2.cond(context)) {
+    if (t === undefined) {                                            // step 2: no transition for event
+      return { state: currentState, changed: false, actions: [] };
+    }
+    const t2 = typeof t === 'string' ? { target: t } : t;             // normalize
+    if (t2.cond && !t2.cond(context)) {                                // step 3: guards
       return { state: currentState, changed: false, actions: [] };
     }
     if (!(t2.target in config.states)) {
@@ -89,19 +159,17 @@ function createMachine(config) {
     };
   }
 
-  // Runtime wrapper — holds state, emits to subscribers, runs actions.
-  function interpret(context = {}) {
+  function interpret(context = {}) {                                  // step 4: runtime wrapper
     let state = config.initial;
     const subs = new Set();
-
     return {
       get state() { return state; },
       get context() { return context; },
       send(event) {
         const { state: next, changed, actions } = transition(state, event, context);
         state = next;
-        for (const action of actions) action(context, event);
-        if (changed) for (const sub of [...subs]) sub(state, event);
+        for (const action of actions) action(context, event);          // step 5: run side effects
+        if (changed) for (const sub of [...subs]) sub(state, event);   // step 6: fire on changed only
         return state;
       },
       subscribe(fn) { subs.add(fn); return () => subs.delete(fn); },
@@ -112,9 +180,8 @@ function createMachine(config) {
 }
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
-Input:
 ```js
 const orderMachine = createMachine({
   initial: 'cart',
@@ -133,66 +200,116 @@ const orderMachine = createMachine({
 const order = orderMachine.interpret({ amount: 100 });
 const unsub = order.subscribe((s, e) => console.log('->', s, 'via', e));
 
-order.send('ADD_ITEM');   // cart -> cart (self-transition; subscriber NOT fired because changed=false)
-order.send('CHECKOUT');   // cart -> awaiting_payment. logs '-> awaiting_payment via CHECKOUT'.
-order.send('PAY');        // awaiting_payment -> paid. action logs 'charged 100'. subscriber logs '-> paid via PAY'.
-order.send('SHIP');       // paid -> shipped.
-order.send('PAY');        // shipped[PAY] undefined → no-op, state stays 'shipped'.
+order.send('ADD_ITEM');    // self-transition; subscriber NOT fired
+order.send('CHECKOUT');    // -> awaiting_payment via CHECKOUT
+order.send('PAY');         // 'charged 100'; -> paid via PAY
+order.send('SHIP');        // -> shipped via SHIP
+order.send('PAY');         // no-op; subscriber NOT fired (terminal)
 unsub();
 ```
 
-Trace:
-- `interpret({amount:100})`: state='cart', subs=∅, context={amount:100}.
-- `subscribe(fn)`: subs={fn}.
-- `send('ADD_ITEM')`: `transition('cart', 'ADD_ITEM')` → target='cart', changed=false. State stays 'cart'. No subscribers fired.
-- `send('CHECKOUT')`: target='awaiting_payment', changed=true. State='awaiting_payment'. Subscriber logs.
-- `send('PAY')`: t = `{target:'paid', action}`. cond undefined (skip). Run action(context, 'PAY') → 'charged 100'. State='paid'. Subscriber logs.
-- `send('SHIP')`: target='shipped'. State='shipped'. Subscriber logs.
-- `send('PAY')`: state='shipped' has no PAY in config. Return state unchanged. No subscriber fire.
+---
 
-## Important takeaways
+## 9. Step-by-step dry run
 
-**Syntax to memorize**
-- Config: `{ initial, states: { [state]: { [event]: target_or_object } } }`.
-- `transition(state, event)` is **pure** — returns the next state. Action execution is the runtime's job.
-- O(1) lookup: `config.states[state][event]`.
-- Subscribe = Set of callbacks; return unsubscribe closure (same pattern as Observable/Subject).
+```
+interpret({amount:100}):
+  state = 'cart'
+  subs = {fn}
 
-**Patterns to reuse**
-- The "data-driven object dispatch" pattern: same shape as reducers (Redux), route tables (Express), parser action tables (compiler).
-- Pure `transition` + runtime `interpret` separation: makes the machine testable in isolation. Same idea as functional core + imperative shell.
+send('ADD_ITEM'):
+  transition('cart', 'ADD_ITEM'):
+    t = 'cart' (string)
+    t2 = {target: 'cart'}
+    return {state:'cart', changed: false, actions:[]}
+  state = 'cart' (no change)
+  actions: []
+  changed=false → subscribers NOT fired
 
-**Common mistakes**
-- Mixing actions into `transition` — makes it impure, hard to test, hard to time-travel-debug.
-- Validating only `initial` in the state set, not transition targets. A typo'd `target: 'paif'` silently crashes at runtime.
-- Always firing subscribers (even on self-transitions or invalid events). Gate on `changed`.
-- Not handling unknown event from current state — throwing is OK, returning unchanged is OK, **silently transitioning to undefined** is not.
-- Forgetting that terminal states are just states with empty transition maps. No special syntax needed.
+send('CHECKOUT'):
+  transition('cart', 'CHECKOUT'):
+    t = 'awaiting_payment'
+    return {state:'awaiting_payment', changed:true, actions:[]}
+  state = 'awaiting_payment'
+  changed=true → fn('awaiting_payment', 'CHECKOUT') → log
 
-**Related questions**
-- Observable/Subject (the subscribe API is identical).
-- Reducer pattern (Redux) — state + action → new state.
-- XState (next-level: hierarchy, parallel states, history, invoked services).
-- Retry circuit breaker (closed/open/half-open is a 3-state machine).
+send('PAY'):
+  transition('awaiting_payment', 'PAY', {amount:100}):
+    t = {target:'paid', action: charge}
+    cond undefined
+    return {state:'paid', changed:true, actions:[charge]}
+  state = 'paid'
+  run charge({amount:100}, 'PAY') → 'charged 100'
+  fn('paid', 'PAY') → log
 
-## Variants
+send('SHIP'):
+  transition('paid', 'SHIP'):
+    return {state:'shipped', changed:true, actions:[]}
+  fn('shipped', 'SHIP')
 
-1. **Guards / conditions** — transition is `{ target, cond: (ctx) => bool }`. Run cond first; if false, treat as no-transition.
+send('PAY'):
+  transition('shipped', 'PAY'):
+    stateConfig = {}; t = undefined
+    return {state:'shipped', changed:false, actions:[]}
+  no-op
+```
 
-2. **Actions on entry / exit** — separate from transition actions. When entering state X, run `states[X].entry`. When leaving, `states[X].exit`. Useful for resource setup/teardown (open socket on connected, close on disconnected).
+---
 
-3. **Persistence** — since state is just a string, serialize to disk: `JSON.stringify({state, context})`. Rehydrate by passing the string back to a fresh interpret. Real workflows (order processing) need this.
+## 10. Common confusion + traps
 
-4. **Visualization** — given the config object, walk it and emit a Graphviz / Mermaid diagram. Two-pager max; great talking point for "I write infra tooling."
+1. **Actions inside `transition`** — makes it impure; hard to test.
+2. **Validating only `initial`** — typo'd transition targets crash at runtime.
+3. **Subscribers firing on self-transitions** — gate on `changed`.
+4. **Silent transition to undefined** for unknown events — choose: return unchanged OR throw.
+5. **Forgetting terminal states** — they're just states with empty event maps; no special syntax.
+6. **Mutating `context` instead of returning new one** — XState convention is event-driven assigns; mention.
+7. **Shared mutable state across interpreters** — separate `interpret()` calls hold separate state, but if context is a shared ref, mutations leak.
 
-## Revision notes
+---
 
-> **Mini state machine — 60 second recap**
-> - Config: `{ initial, states: { [state]: { [event]: target } } }`. State + event are strings.
-> - `transition(state, event)` is pure: O(1) lookup, returns next state.
-> - Runtime (`interpret`) holds the state, emits subscribers, runs actions.
-> - Self-transitions (target === current) don't fire subscribers (gate on `changed`).
-> - Invalid event → return current state (no-op) OR throw. Pick a policy.
-> - Guards: `{target, cond}`. Actions: `{target, action}`. Entry/exit on the state itself.
-> - Trap: actions inside `transition` make it impure. Subscribers firing on self-transitions. Missing target validation.
-> - Reuse: order workflows, retry circuits, connection lifecycles, auth flows, feature rollouts.
+## 11. Senior follow-ups & variants
+
+### Variant 1 — Guards (conditional transitions)
+`{target, cond: (ctx) => bool}`. Run cond first; if false, treat as no-transition.
+
+### Variant 2 — Entry/exit actions per state
+`states[X].entry`, `states[X].exit`. Useful for resource setup/teardown (open socket on `connected`, close on `disconnected`).
+
+### Variant 3 — Persistence
+Serialize state + context to JSON; rehydrate by passing back to a fresh interpret. Required for order processing.
+
+### Variant 4 — Hierarchical / parallel states
+XState supports nested machines and parallel regions. Out of scope for mini; mention as next level.
+
+### Variant 5 — Visualization
+Walk config and emit Graphviz / Mermaid. Two-pager max; great infra-tooling demo.
+
+### Variant 6 — Invoked services
+A state spawns an async task (e.g., a fetch); the task's result emits an event that transitions further. XState `invoke`.
+
+---
+
+## 12. How to think aloud
+
+> "Config is plain data: `{initial, states: {[state]: {[event]: target_or_object}}}`. `transition(state, event)` is a pure O(1) lookup that returns `{state, changed, actions}` — no side effects. Runtime (`interpret`) is the wrapper: holds state, runs actions, notifies subscribers on changed transitions only. Self-transitions (target===current) don't fire subscribers. Unknown event from current state: return unchanged, OR throw — pick one. Guards: `{target, cond}` run cond first. Entry/exit actions for resource setup/teardown. Trap: actions inside `transition` make it impure. Trap: missing target validation. Family: order workflows, retry circuits, connection lifecycles, XState."
+
+---
+
+## 13. 60-second revision
+
+> - **Config:** `{initial, states: {[state]: {[event]: target | {target, action?, cond?}}}}`.
+> - **`transition(state, event)`** pure; O(1) lookup; returns `{state, changed, actions}`.
+> - **Runtime (`interpret`)** holds state, runs actions, fires subscribers on `changed`.
+> - **Self-transitions** don't fire subscribers.
+> - **Unknown event** → return unchanged (or throw, pick policy).
+> - **Guards** `{target, cond}`; **entry/exit** per-state actions.
+> - **Persistence:** JSON serialize state + context.
+> - **Family:** order workflow, retry circuit, connection FSM, auth flow, XState.
+> - **Trap:** impure transition; missing target validation; subscribers firing on no-op.
+
+---
+
+**Related:** [event-emitter.md](./event-emitter.md) · [observable-subject.md](./observable-subject.md) · [circuit-breaker.md](./circuit-breaker.md) · [dependency-injection-container.md](./dependency-injection-container.md)
+
+**Concept primer:** [`concepts/closures.md`](../../concepts/closures.md)

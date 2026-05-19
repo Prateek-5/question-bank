@@ -1,193 +1,264 @@
-# Prototype Chain & Inheritance in JavaScript
+# Prototype chain & inheritance
 
-## Source
-- codedamn "JavaScript prototype chain inheritance": https://codedamn.com/news/programming/javascript-prototype-chain-inheritance
-- Canonical interview question — asked at literally every JS-flavored backend round (Razorpay, Atlassian, Microsoft, Booking).
+> **Difficulty:** Medium-Senior   |   **Time:** ~15 min   |   **Prereqs:** [`concepts/prototype.md`](../../concepts/prototype.md)
+>
+> **Source:** The most fundamental JS conceptual question. Every JS-flavored backend round.
 
-## Why this question matters in interviews
-This is the **single most fundamental conceptual question in JavaScript**. Everything else — `this`, `class`, polyfilling `bind`/`new`, why `instanceof` works, why `Array.prototype.last` exists at all — depends on you having a crisp mental model of `prototype`, `__proto__`, and `Object.getPrototypeOf`. Senior interviewers use it as a filter: if you can't draw the chain on a whiteboard in under 60 seconds, they will downgrade you. Backend engineers who came from Python or Java often have this fuzzy — drilling it is non-negotiable.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### The three names you must distinguish
-| Name | Belongs to | Purpose |
-|---|---|---|
-| `Foo.prototype` | a **function** (constructor) | the object that *future instances will inherit from* |
-| `instance.__proto__` | an **instance** (deprecated accessor) | the link back to `Foo.prototype` |
-| `Object.getPrototypeOf(instance)` | modern API | same link, official way to read it |
+Explain the prototype chain. Distinguish `Foo.prototype`, `instance.__proto__`, and `Object.getPrototypeOf`. Show ES5 and ES6 inheritance.
 
-Mantra: **constructors carry `.prototype`; instances point to it via `__proto__` / `getPrototypeOf`.** They are the *same* object, accessed two ways.
+**Verification examples**
 
-### Syntax to lock in
+| Operation                                          | Result                                              |
+|----------------------------------------------------|------------------------------------------------------|
+| `new Foo() instanceof Foo`                          | `true` (chain walk finds `Foo.prototype`)           |
+| `Object.getPrototypeOf(instance) === Foo.prototype` | `true`                                               |
+| `instance.method()`                                 | walks chain → first match wins                      |
+| `class Dog extends Animal` — `d.speak()`           | inherited via chain                                  |
+| `Object.create(null)` instance — `obj.toString`    | `undefined` (no chain to Object.prototype)         |
+
+**Constraints**
+- Constructors carry `.prototype`; instances point via `__proto__`/`getPrototypeOf`.
+- Lookup walks instance → its proto → ... → `null`.
+- `instanceof` = "is `Ctor.prototype` on LHS's chain?"
+- `extends` wires both instance chain AND static-method chain.
+
+---
+
+## 2. Plain-English restatement
+
+Every object has a hidden link to another object — its prototype. Property lookups walk this chain. Constructors have a `.prototype` property that becomes the prototype of every instance they make via `new`. `instanceof` walks the chain looking for the constructor's prototype.
+
+---
+
+## 3. Why this matters in interviews
+
+Single most fundamental JS question. Filter: can you draw the chain in 60s? Everything else (`this`, polyfills, `class`) depends on this.
+
+---
+
+## 4. Mental model
+
+```
+   Three names to distinguish:
+   
+   Foo.prototype          → object that future instances inherit FROM (lives on the constructor)
+   instance.__proto__     → instance's link to Foo.prototype (deprecated accessor)
+   Object.getPrototypeOf  → modern way to read the link
+   
+   Constructor and instance access the SAME object via two names.
+
+   The chain (example):
+   d ──▶ Dog.prototype ──▶ Animal.prototype ──▶ Object.prototype ──▶ null
+        instance         inherits             inherits             chain root
+
+   Property lookup walks left-to-right; first match wins.
+   `null` ends the chain.
+
+   `new Foo(args)`:
+   1. Create new object obj.
+   2. obj.[[Prototype]] = Foo.prototype.
+   3. Foo.apply(obj, args) → run constructor body with this=obj.
+   4. Return obj (unless Foo returned an object).
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. What is `Object.getPrototypeOf([])`?
+> 2. After `Child.prototype = Object.create(Parent.prototype)`, why must you also set `Child.prototype.constructor = Child`?
+> 3. What's `Object.create(null)` useful for?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: `Object.assign` parent properties
+Flat snapshot; no live inheritance; `instanceof` lies.
+
+### Wrong attempt 2: `Child.prototype = Parent.prototype`
+Aliases — mutating one affects both. Use `Object.create`.
+
+### Wrong attempt 3: forget `constructor` reset
+After `Object.create`, `Child.prototype.constructor === Parent`. Reset to `Child`.
+
+---
+
+## 7. The unlocking insight
+
+> **Constructors carry `.prototype`; instances link via `__proto__`/`getPrototypeOf`. Lookup walks the chain. `new` wires `[[Prototype]] = Ctor.prototype`. ES6 `class extends` does this + wires static-method chain (`Sub.__proto__ = Base`).**
+
+Three properties:
+
+1. **Three names for two roles** — constructor's blueprint vs instance's link.
+2. **Chain walk** for lookups and `instanceof`.
+3. **`new` does 4 things** — create, link prototype, apply, return.
+
+---
+
+## 8. Solution (annotated)
+
 ```js
-// ES5-style constructor
-function Animal(name) { this.name = name; }
-Animal.prototype.speak = function () { return this.name + ' makes a sound'; };
-
-const a = new Animal('cat');
-a.speak();                                    // 'cat makes a sound'
-Object.getPrototypeOf(a) === Animal.prototype; // true
-a.__proto__ === Animal.prototype;              // true (deprecated accessor)
-a.constructor === Animal;                      // true (inherited via prototype)
-
-// ES6 class — pure syntactic sugar over the above
-class Dog extends Animal {
-  bark() { return this.name + ' woofs'; }
-}
-const d = new Dog('rex');
-Object.getPrototypeOf(d) === Dog.prototype;             // true
-Object.getPrototypeOf(Dog.prototype) === Animal.prototype; // true (extends)
-```
-
-### The chain (memorize this picture)
-```
-d ──▶ Dog.prototype ──▶ Animal.prototype ──▶ Object.prototype ──▶ null
-   instance       inherits           inherits             chain root
-```
-Property lookup walks left-to-right; the first match wins. `null` ends the chain — accessing any property of a value whose prototype is `null` (e.g. `Object.create(null)`) skips `Object.prototype` entirely.
-
-### Runtime / engine behavior
-- `new Foo()` does four things: (1) creates a new object `obj`, (2) sets `Object.getPrototypeOf(obj) = Foo.prototype`, (3) calls `Foo.apply(obj, arguments)`, (4) returns `obj` unless `Foo` itself returned an object.
-- `instanceof Foo` walks the prototype chain of the LHS asking "is `Foo.prototype` anywhere on it?" — not a class check, a chain check.
-- `extends Base` in `class` does **two** links: `Sub.prototype.__proto__ = Base.prototype` (instance methods chain), AND `Sub.__proto__ = Base` (static methods chain).
-- `class` declarations are not hoisted in a usable way — they sit in the TDZ until evaluated, unlike `function` constructors.
-
-### Edge cases (interview traps)
-1. **`Array` literal's chain** — `[].__proto__ === Array.prototype`, then `Array.prototype.__proto__ === Object.prototype`. Two hops, not one.
-2. **`Object.create(proto)`** — direct way to set a prototype without a constructor. `Object.create(null)` produces a "dictionary object" with no `__proto__`, `toString`, etc. — used by V8-friendly hash maps.
-3. **Shadowing** — defining `a.speak = ...` on the instance does **not** mutate `Animal.prototype.speak`; it creates an own property that masks the prototype one.
-4. **`hasOwnProperty`** — only checks own props, not inherited. Use to distinguish.
-5. **`for...in` walks the chain** — includes enumerable inherited keys; that's why `Object.keys` is preferred.
-6. **`constructor` is on the prototype** — `instance.constructor` is found via the chain at `Foo.prototype.constructor`. If you overwrite `Foo.prototype = {...}` you LOSE this link unless you re-set `.constructor = Foo`.
-7. **Arrow functions have no `prototype`** — `(()=>{}).prototype === undefined`. Hence `new (()=>{})()` throws.
-8. **`class` methods are non-enumerable** by default; methods you add as `Foo.prototype.x = ...` are enumerable. Explains `for...in` discrepancies.
-
-## Brute force approach
-"Copy parent properties into child via `Object.assign`." That gives you a flat snapshot, not live inheritance: a later change to the parent doesn't propagate, and `instanceof` lies. Drop it.
-
-## Optimal approach
-Use the **prototype chain** for shared behavior; use **own properties** for per-instance state. Two equivalent dialects:
-
-- **ES5 dialect** — set `Child.prototype = Object.create(Parent.prototype)`, then `Child.prototype.constructor = Child`. Inside `Child`, call `Parent.call(this, ...)` to inherit instance state.
-- **ES6 class dialect** — `class Child extends Parent { constructor(...){ super(...); } }`. Compiles to the above.
-
-Both produce identical chains. Pick `class` in modern code, but **be able to write the ES5 form on demand** — interviewers ask precisely because it forces you to show you understand the mechanics.
-
-## Solution (JavaScript)
-
-```js
-// ─── ES5 dialect: do it by hand, every wire visible ──────────────────────
+// ES5 dialect — every wire visible
 function Animal(name) {
-  this.name = name;          // own property — per-instance state
+  this.name = name;                                                    // step 1: own state
 }
-Animal.prototype.speak = function () {
+Animal.prototype.speak = function () {                                  // step 2: shared method
   return `${this.name} makes a sound`;
 };
 
 function Dog(name, breed) {
-  Animal.call(this, name);   // 1. inherit instance state (super(...))
+  Animal.call(this, name);                                              // step 3: inherit state (super)
   this.breed = breed;
 }
-// 2. inherit prototype methods. Object.create makes a new object whose
-//    __proto__ is Animal.prototype WITHOUT calling Animal as a constructor.
-Dog.prototype = Object.create(Animal.prototype);
-// 3. restore .constructor (Object.create wiped it out)
-Dog.prototype.constructor = Dog;
-// 4. add Dog-specific methods AFTER the prototype reassignment
+Dog.prototype = Object.create(Animal.prototype);                        // step 4: wire prototype chain
+Dog.prototype.constructor = Dog;                                        // step 5: restore constructor
 Dog.prototype.bark = function () {
   return `${this.name} woofs`;
 };
 
 const d = new Dog('rex', 'lab');
-d.speak();                                   // 'rex makes a sound'   (inherited)
-d.bark();                                    // 'rex woofs'           (own proto)
-d instanceof Dog;                            // true
-d instanceof Animal;                         // true   ← chain walk found Animal.prototype
-d instanceof Object;                         // true   ← chain ultimately reaches Object.prototype
-Object.getPrototypeOf(d) === Dog.prototype;            // true
-Object.getPrototypeOf(Dog.prototype) === Animal.prototype; // true
+d.speak();                                                              // 'rex makes a sound' (inherited)
+d.bark();                                                               // 'rex woofs' (own proto)
+d instanceof Dog;                                                       // true
+d instanceof Animal;                                                    // true (chain walk)
+d instanceof Object;                                                    // true
 
-// ─── ES6 class dialect: same machine, sugar syntax ───────────────────────
+// ES6 class — same machine, sugar syntax
 class Animal2 {
   constructor(name) { this.name = name; }
   speak() { return `${this.name} makes a sound`; }
 }
 class Dog2 extends Animal2 {
   constructor(name, breed) {
-    super(name);              // === Animal2.call(this, name)
+    super(name);                                                        // ≡ Animal2.call(this, name)
     this.breed = breed;
   }
   bark() { return `${this.name} woofs`; }
 }
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
-Take `d.bark()` and trace the property lookup, then `d.speak()`:
+```js
+// Walking the chain
+const d = new Dog2('rex', 'lab');
+Object.getPrototypeOf(d) === Dog2.prototype;                            // true
+Object.getPrototypeOf(Dog2.prototype) === Animal2.prototype;            // true
+Object.getPrototypeOf(Animal2.prototype) === Object.prototype;          // true
+Object.getPrototypeOf(Object.prototype) === null;                       // true
+
+// Object.create(null) for clean dictionaries
+const dict = Object.create(null);
+dict.foo = 1;
+dict.toString;                                                          // undefined (no chain!)
+// Safe for user-controlled keys (no proto pollution).
+
+// Arrow functions have no prototype
+const arrow = () => {};
+arrow.prototype;                                                        // undefined
+// new arrow() → TypeError (not a constructor)
+```
+
+---
+
+## 9. Step-by-step dry run
 
 ```
-d  =  { name: 'rex', breed: 'lab' }
-        │
-        ▼ Object.getPrototypeOf(d)
-Dog.prototype  =  { bark, constructor: Dog }
-        │
-        ▼ Object.getPrototypeOf(Dog.prototype)
-Animal.prototype  =  { speak, constructor: Animal }   ← actually .constructor was overwritten on Dog.prototype
-        │
-        ▼
-Object.prototype  =  { toString, hasOwnProperty, ... }
-        │
-        ▼
-null
+const d = new Dog('rex', 'lab')
+
+new Dog(...) steps:
+  1. obj = {} (fresh object)
+  2. obj.[[Prototype]] = Dog.prototype
+  3. Dog.apply(obj, ['rex', 'lab']):
+       Animal.call(this='obj', 'rex'):
+         obj.name = 'rex'
+       obj.breed = 'lab'
+  4. return obj
+
+Property lookups on d:
+
+d.bark():
+  d own? no
+  Dog.prototype own? YES → return Dog.prototype.bark
+  invoke with this=d → 'rex woofs'
+
+d.speak():
+  d own? no
+  Dog.prototype own? no
+  Animal.prototype own? YES → return Animal.prototype.speak
+  invoke with this=d → 'rex makes a sound'
+
+d.toString():
+  walks all the way to Object.prototype → toString → '[object Object]'
+
+d.zzz:
+  walks to null → returns undefined (doesn't throw)
+
+instanceof check:
+  d instanceof Animal:
+    Object.getPrototypeOf(d) === Animal.prototype? No (it's Dog.prototype).
+    Object.getPrototypeOf(Dog.prototype) === Animal.prototype? YES. Return true.
 ```
 
-1. `d.bark()` — engine asks `d` for own `bark`. **No.** Walk to `Dog.prototype`. **Found.** Call with `this = d`. Returns `'rex woofs'`.
-2. `d.speak()` — engine asks `d` for own `speak`. **No.** Walk to `Dog.prototype`. **No.** Walk to `Animal.prototype`. **Found.** Call with `this = d`. Returns `'rex makes a sound'`.
-3. `d.toString()` — walks all the way to `Object.prototype`. Found there. Returns `'[object Object]'`.
-4. `d.zzz` — walks to `null`, returns `undefined` (does NOT throw).
+---
 
-Now check `instanceof`:
-- `d instanceof Animal` ⇒ walk `Object.getPrototypeOf(d)`, `Object.getPrototypeOf(Dog.prototype)`, ... — does any equal `Animal.prototype`? **Yes**, at hop 2. Return `true`.
+## 10. Common confusion + traps
 
-## Important takeaways
+1. **`Child.prototype = Parent.prototype`** — aliases; use `Object.create`.
+2. **Forget `constructor` reset** after Object.create.
+3. **Confuse `Foo.prototype` (parent-to-be) with `Foo.__proto__`** (Foo's own proto = `Function.prototype`).
+4. **`new` with arrow function** — TypeError (no `.prototype`).
+5. **`for...in` walks chain** — includes inherited enumerable; use `Object.keys`.
+6. **`Object.create(null)` lacks `toString`** — feature, not bug.
+7. **Shadowing** — `instance.x = ...` creates own prop; doesn't mutate proto.
 
-**Syntax to memorize**
-- `Object.create(proto)` — make a new object with `proto` as its prototype, *without* running a constructor.
-- `Child.prototype = Object.create(Parent.prototype); Child.prototype.constructor = Child;` — the two-line ES5 inheritance setup. The second line is the one everyone forgets.
-- `super(...)` ≡ `Parent.call(this, ...)` inside an ES6 class constructor.
+---
 
-**Patterns to reuse**
-- Sharing methods → put on `prototype`. Per-instance data → assign in constructor.
-- For library code, prefer `Object.create(null)` for hash-maps to avoid `__proto__` / `toString` collisions with user keys.
-- `class` is the right default; ES5 form is the right *exam answer*.
+## 11. Senior follow-ups & variants
 
-**Common mistakes**
-- Setting `Child.prototype = Parent.prototype` directly. Now mutating `Child.prototype` mutates `Parent.prototype` — shared instance. Use `Object.create` to break the link.
-- Forgetting `Child.prototype.constructor = Child` after `Object.create`. `new instance.constructor()` will now construct a `Parent`.
-- Trying to use `new` with arrow functions or methods defined with `{ foo() {} }` shorthand on a plain object (those have no `[[Construct]]`).
-- Confusing `Foo.prototype` (the parent-to-be) with `Foo.__proto__` (Foo's *own* prototype, which is `Function.prototype`).
+### Variant 1 — Implement `instanceof`
+Walk `Object.getPrototypeOf(obj)` looking for `Ctor.prototype`. See [instanceof-polyfill.md](./instanceof-polyfill.md).
 
-**Why interviewers ask this**
-- One question reveals whether you understand JS object model, `this`, `new`, `instanceof`, `class` desugar, and Node's module objects — all of which rest on this single chain idea.
+### Variant 2 — Implement `Object.create`
+`function fakeCreate(p){ function F(){}; F.prototype=p; return new F(); }`. Crockford pattern.
 
-## Variants
+### Variant 3 — Mixin pattern
+`Object.assign(Target.prototype, Mixin1, Mixin2)` — combine multiple sources.
 
-1. **Implement `instanceof`** — write `myInstanceof(obj, Ctor)`: walk `Object.getPrototypeOf(obj)` until you hit `Ctor.prototype` or `null`. ~6 lines.
-2. **Implement `Object.create(proto)`** — `function fakeCreate(p){ function F(){}; F.prototype=p; return new F(); }` (the classic "Crockford pattern" before `Object.create` was standard).
-3. **Mixin pattern** — combine multiple objects' methods onto one prototype without single-parent chains (`Object.assign(Target.prototype, Mixin1, Mixin2)`).
-4. **Static methods** — `class Foo { static bar(){} }` puts `bar` on `Foo` itself, not on `Foo.prototype`. `Foo.bar()` works; `new Foo().bar()` does not. Be ready to draw both chains (instance chain + constructor chain).
-5. **`Object.create(null)`** — explain when you'd use it (safe maps, V8-friendly dictionaries).
+### Variant 4 — Static methods
+`class Foo { static bar() {} }` — `bar` on `Foo` itself, not `Foo.prototype`. Two chains (instance + constructor).
 
-## Revision notes
+### Variant 5 — `Object.create(null)` for dictionaries
+Safe maps; no `__proto__`/`toString` collisions with user keys.
 
-> **Prototype chain — 60 second recap**
-> - Three names: `Foo.prototype` (on the constructor), `instance.__proto__` (deprecated), `Object.getPrototypeOf(instance)` (modern). Last two point to the first.
-> - Lookup walks instance → its proto → its proto's proto → … → `null`. First match wins.
-> - `new Foo()` = create obj, set proto to `Foo.prototype`, run `Foo.apply(obj, args)`, return obj (unless constructor returned object).
-> - ES5 inherit: `Child.prototype = Object.create(Parent.prototype); Child.prototype.constructor = Child;` + `Parent.call(this, ...)` inside `Child`.
-> - `class Child extends Parent` is sugar over the above; also wires static-method chain `Sub.__proto__ = Base`.
-> - `instanceof` = "is `Ctor.prototype` anywhere on LHS's chain?"
-> - `Object.create(null)` makes a prototype-less object — safe map / dict.
-> - Arrow functions have no `.prototype`, can't be `new`-ed.
-> - **Trap:** `Child.prototype = Parent.prototype` (aliases, not inherits). Use `Object.create`.
-> - **Trap:** forgetting to re-set `constructor` after reassigning prototype.
+---
+
+## 12. How to think aloud
+
+> "Three names: `Foo.prototype` on the constructor (the blueprint for instances), `instance.__proto__` (deprecated accessor), `Object.getPrototypeOf(instance)` (modern way to read the link). Instance's link and constructor's prototype property are the SAME object. Lookup walks the chain: instance → its proto → its proto's proto → ... → null; first match wins. `new Foo(args)` does 4 things: create obj, wire `obj.[[Prototype]] = Foo.prototype`, call `Foo.apply(obj, args)`, return obj (unless constructor explicitly returned an object). ES5 inheritance: `Child.prototype = Object.create(Parent.prototype); Child.prototype.constructor = Child; Parent.call(this, ...)` in Child's constructor. ES6 `class extends` desugars to this + wires the static-method chain via `Sub.__proto__ = Base`. `instanceof` walks the chain looking for `Ctor.prototype`. `Object.create(null)` makes prototype-less objects — safe for user-keyed maps. Arrow functions have no `.prototype` → can't be `new`'d. Trap: `Child.prototype = Parent.prototype` aliases; forgetting `constructor` reset."
+
+---
+
+## 13. 60-second revision
+
+> - **Three names:** `Foo.prototype` (on constructor), `instance.__proto__` (deprecated), `Object.getPrototypeOf` (modern).
+> - **Chain walk** for lookups and `instanceof`. First match wins.
+> - **`new` does 4 things:** create, wire proto, apply, return.
+> - **ES5 inherit:** `Child.prototype = Object.create(Parent.prototype); .constructor = Child` + `Parent.call(this, ...)`.
+> - **ES6 `class extends`** = ES5 + static chain.
+> - **`instanceof`** = "is `Ctor.prototype` on LHS chain?"
+> - **`Object.create(null)`** for prototype-less dictionaries.
+> - **Arrow functions** have no `.prototype` (can't be `new`'d).
+> - **Trap:** `Child.prototype = Parent.prototype` (aliases); forgetting `constructor` reset; confusing `Foo.prototype` with `Foo.__proto__`.
+
+---
+
+**Related:** [this-keyword-nodejs.md](./this-keyword-nodejs.md) · [polyfill-new.md](./polyfill-new.md) · [instanceof-polyfill.md](./instanceof-polyfill.md) · [class-to-prototype-desugar.md](./class-to-prototype-desugar.md) · [object-create-polyfill.md](./object-create-polyfill.md)
+
+**Concept primer:** [`concepts/prototype.md`](../../concepts/prototype.md)

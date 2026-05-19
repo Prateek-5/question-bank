@@ -1,188 +1,239 @@
 # `Reflect.construct` vs `new`
 
-## Source / Origin
-- ES2015 `Reflect` API.
-- Asked at: Razorpay, Atlassian; framework-internals interviews.
-- Concept reference: `concepts/prototype.md`.
+> **Difficulty:** Senior   |   **Time:** ~10 min   |   **Prereqs:** [polyfill-new.md](./polyfill-new.md), [extends-super-implementation.md](./extends-super-implementation.md)
+>
+> **Source:** ES2015 Reflect API. Framework-internals interview.
 
-## Why this question matters in interviews
-`new C(...)` is sugar; `Reflect.construct(C, args, newTarget)` is the underlying primitive. The third argument `newTarget` lets you construct an instance whose `[[Prototype]]` comes from a *different* class than the one whose constructor runs. That's how class-extension actually works internally. Senior bar: you can use it to extend built-ins (Error, Array) correctly, simulate `super()`, and explain `new.target`.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+`new C(...args)` is sugar; `Reflect.construct(C, args, newTarget?)` is the underlying primitive. The third arg lets you control which class's prototype is installed.
+
+**Verification examples**
+
 ```js
-class A {}
-const a1 = new A();
-const a2 = Reflect.construct(A, []);     // same thing
-a2 instanceof A;                         // true
-
-// The interesting form: newTarget different from constructor
 class A { constructor() { this.fromA = true; } }
 class B {}
 
-const b = Reflect.construct(A, [], B);   // run A's constructor, but [[Prototype]] = B.prototype
-b.fromA;                                 // true (A's body ran)
-b instanceof B;                          // true
-b instanceof A;                          // false
+// Same as new A()
+Reflect.construct(A, []);                                                // A instance
+
+// Run A's constructor, but install B.prototype
+const b = Reflect.construct(A, [], B);
+b.fromA;                                                                  // true (A's body ran)
+b instanceof B;                                                           // true
+b instanceof A;                                                           // false
+
+// Required for built-in subclassing
+class MyArr {
+  constructor() { return Reflect.construct(Array, arguments, MyArr); }
+}
 ```
 
-### Edge cases / traps
-1. **`new.target`** — inside a constructor, this is the actual class being constructed (the `newTarget` from `Reflect.construct`). Without `new`, it's `undefined`.
-2. **Extending built-ins** — pre-2015 patterns like `class MyError extends Error { constructor(msg) { super(msg); }` work in modern engines but historically (Babel transpilation) needed `Reflect.construct`.
-3. **Subclassing without `extends`** — `Reflect.construct(Base, args, Sub)` simulates extension.
-4. **Arrow functions** — can't be `new`'d; `Reflect.construct` on an arrow throws.
-5. **`Reflect.construct(C, args)` ≡ `new C(...args)`** when third arg omitted.
-6. **Performance** — slower than `new` by ~10-30%; don't use in hot paths.
-7. **Used by mixin libraries** to graft class hierarchies dynamically.
+**Constraints**
+- Third arg `newTarget` (default = first arg).
+- Inside constructor, `new.target === newTarget`.
+- Required for `class extends Array/Error/Map` to work correctly.
 
-## Mental Model
+---
 
-`new` does three things, in order:
+## 2. Plain-English restatement
 
-```
-   new C(args):
-     1. obj = Object.create(C.prototype)
-     2. result = C.call(obj, ...args)         // or: C's constructor body runs with this=obj
-     3. return result if object, else obj
+`Reflect.construct(C, args)` is just `new C(...args)`. The killer feature is the third argument — `newTarget` — which tells the engine "use THIS class's prototype, even though you're running THAT constructor." That's how `extends Array` actually works internally.
 
-Reflect.construct(C, args, newTarget):
-     1. obj = Object.create(newTarget.prototype)    ← here's the difference
-     2. result = C.call(obj, ...args)
-     3. return result if object, else obj
-```
+---
+
+## 3. Why this matters in interviews
+
+Built-in subclassing literacy + `new.target` understanding.
+
+---
+
+## 4. Mental model
 
 ```
-   prototype chain after Reflect.construct(A, [], B):
-     obj → B.prototype → Object.prototype
-   (A's body ran but didn't determine the chain)
+   new C(...args)        = Reflect.construct(C, args, C)
+   Reflect.construct(C, args, NT)  = run C body; obj.[[Prototype]] = NT.prototype
+   
+   new.target inside constructor:
+     new C(...)                 → new.target = C
+     Reflect.construct(C, [], NT) → new.target = NT
+   
+   Why needed:
+   - Subclassing Array/Error/Map: parent.call(this) fails (they ignore this).
+   - parent must construct obj; new.target tells parent which prototype to use.
+   
+   class MyArr extends Array {} desugars to:
+     constructor() { super(); }
+   super() under the hood = Reflect.construct(Array, args, new.target).
+   new.target = MyArr → obj.[[Prototype]] = MyArr.prototype.
 ```
 
-## Why interviewers care
+---
 
-- **Spec depth** — knowing `new` is decomposable.
-- **`new.target` literacy** — exotic but real.
-- **Framework-internals signal** — Babel and TypeScript downleveling use this.
+## 5. Try it yourself first
 
-## Common confusion
+> **Predict before reading on:**
+> 1. What's `Reflect.construct(A, [], B)` — A's body or B's?
+> 2. Why does `class MyArr extends Array {}` need `Reflect.construct`?
+> 3. What's `new.target` inside a constructor?
 
-- **"`Reflect.construct` is the same as `new`."** Only when third arg is omitted.
-- **"newTarget = the constructor."** No — it's *who is being constructed*; often the same, but separable.
-- **"`new.target` is `this`."** It's `this.constructor`, but more precisely it's whoever started the new chain.
-- **"Arrow functions can be constructed."** They cannot — no `[[Construct]]` internal slot.
+---
 
-## Brute force
+## 6. Brute force — walked through
 
-`new C(...args)` — fine for normal cases.
+### Wrong attempt 1: `new C(...args)` always works
+Fails for built-in subclassing (Array, Error, Map ignore `this`).
 
-## Optimal approach
+### Wrong attempt 2: ignore `newTarget` arg
+Misses the headline feature.
 
-Reach for `Reflect.construct` when you need:
-1. Subclass-from-runtime-decided base.
-2. Extend built-ins correctly under transpiled code.
-3. Reflective construction (factory by string name).
+### Wrong attempt 3: `Parent.call(this)` for built-ins
+Returns Parent's own internals (not your subclass).
 
-## Solution
+---
+
+## 7. The unlocking insight
+
+> **`Reflect.construct(C, args, NT)` runs C's body but installs NT.prototype. Required for built-in subclassing. `new C(...args) ≡ Reflect.construct(C, args, C)`. Inside constructor, `new.target = newTarget`.**
+
+Three properties:
+
+1. **`Reflect.construct` is the primitive** — `new` is sugar.
+2. **`newTarget` controls prototype** — independent of which constructor runs.
+3. **`new.target`** reflects newTarget inside body.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
-// 1. Reflective factory
-const classes = { User: class User {}, Admin: class Admin extends User {} };
-function create(name, ...args) {
-  return Reflect.construct(classes[name], args);
+class A {
+  constructor() { this.fromA = true; }
 }
-create('Admin', /* ... */);
+class B {}
 
-// 2. Pre-2017 Babel "extending Error" workaround
-class MyError extends Error {
-  constructor(msg) {
-    super(msg);
-    // Without proper transpilation, `this.name === 'Error'` and stack is wrong.
-    // Manually fix:
-    Object.setPrototypeOf(this, new.target.prototype);
-    this.name = new.target.name;
-  }
-}
+const a1 = new A();
+const a2 = Reflect.construct(A, []);                                    // step 1: same as new
+a2 instanceof A;                                                         // true
 
-// 3. Subclassing via Reflect.construct (no `extends`)
-function Subclass(Base, extras) {
-  function Sub(...args) {
-    const inst = Reflect.construct(Base, args, Sub);     // newTarget = Sub
-    Object.assign(inst, extras);
-    return inst;
-  }
-  Sub.prototype = Object.create(Base.prototype);
-  Sub.prototype.constructor = Sub;
-  return Sub;
-}
+// newTarget different from constructor
+const b = Reflect.construct(A, [], B);                                   // step 2: A body + B prototype
+b.fromA;                                                                 // true (A's constructor body ran)
+b instanceof B;                                                          // true (B.prototype installed)
+b instanceof A;                                                          // false (NOT A.prototype)
 
-// 4. Detect call without `new`
-class Strict {
-  constructor() {
-    if (new.target === undefined) throw new Error('Must use new');
-  }
+// Subclassing Array correctly
+class MyArr extends Array {
+  // class syntax handles Reflect.construct internally
+  customMethod() { return 'hi'; }
 }
-new Strict();           // OK
-Strict();               // TypeError (class without `new` always throws, but illustrative)
+const arr = new MyArr(1, 2, 3);
+arr.length;                                                              // 3
+arr instanceof MyArr;                                                    // true
+arr instanceof Array;                                                    // true
+arr.customMethod();                                                      // 'hi'
 
-function Loose() {
-  if (new.target === undefined) throw new Error('Must use new');
+// Manual subclassing without class syntax
+function MyError(msg) {
+  const instance = Reflect.construct(Error, [msg], MyError);             // step 3: built-in
+  Object.setPrototypeOf(instance, MyError.prototype);
+  return instance;
 }
-Loose();                // throws
-new Loose();            // OK
+Object.setPrototypeOf(MyError.prototype, Error.prototype);
+Object.setPrototypeOf(MyError, Error);
+
+const e = new MyError('boom');
+e instanceof MyError;                                                    // true
+e instanceof Error;                                                      // true
+e.message;                                                                // 'boom'
+e.stack;                                                                  // includes stack trace
 ```
 
-## Dry run
+---
+
+## 9. Step-by-step dry run
 
 ```
-Reflect.construct(A, [1, 2], B):
-  newTarget = B
-  obj = Object.create(B.prototype)
-  call A's constructor with this=obj, args=[1,2]
-  (inside A's body, new.target === B)
-  return obj
+new A():
+  Internally: Reflect.construct(A, [], A).
+  Create obj. obj.[[Prototype]] = A.prototype.
+  Run A body with this=obj, new.target=A.
+  Return obj.
 
-obj instanceof B  → true
-obj instanceof A  → false (unless B.prototype is in A.prototype's chain)
+Reflect.construct(A, [], B):
+  Create obj. obj.[[Prototype]] = B.prototype.   ← KEY DIFFERENCE
+  Run A body with this=obj, new.target=B.        ← new.target = B
+  obj.fromA = true (A's body did this).
+  Return obj.
+  
+  Result: object with B.prototype chain that had A's constructor body run on it.
+
+class MyArr extends Array {}:
+  Desugars to:
+    constructor() {
+      // super() → Reflect.construct(Array, arguments, new.target)
+      // new.target = MyArr (because we did `new MyArr()`)
+      // obj.[[Prototype]] = MyArr.prototype.
+    }
+  
+  new MyArr(1,2,3) works because Array constructor sees new.target = MyArr
+    and installs MyArr.prototype on the new array.
 ```
 
-## How to think aloud
+---
 
-> "`new C(args)` is sugar for `Reflect.construct(C, args, C)`. The third arg, newTarget, is `new.target` inside the constructor — controls which prototype the new object gets. Useful for: subclassing without `extends`, extending built-ins under transpiled code, reflective construction by class name. Slower than `new` so reserve for genuine reflection needs. Inside a constructor, `new.target` lets the function detect 'was I called with new?' — useful for misuse-resistant APIs."
+## 10. Common confusion + traps
 
-## Important takeaways
+1. **`new C ≡ Reflect.construct(C, args)`** — same.
+2. **`newTarget` defaults to constructor** — provide explicitly to override.
+3. **Built-in subclassing without Reflect** — fails.
+4. **`Parent.call(this)`** vs `Reflect.construct(Parent, args, new.target)` — first fails for built-ins.
+5. **`new.target` is constructor** — actually is `newTarget` passed in.
+6. **Inside arrow function** — no `new.target`.
+7. **`Reflect.construct(null)`** — TypeError; first arg must be constructor.
 
-- **`new C(args) === Reflect.construct(C, args, C)`** (no third arg).
-- **`newTarget` controls the result's `[[Prototype]]`.**
-- **`new.target` inside constructor = newTarget**, undefined for plain calls.
-- **Used for reflective construction, subclassing without `extends`, built-in extension under transpilers.**
-- **Slower than `new`** — don't use in hot loops.
+---
 
-## Variants
+## 11. Senior follow-ups & variants
 
-- **`new.target.prototype` for prototype assignment** — common in Error subclass.
-- **`Reflect.apply`** — same trick for non-construct calls.
-- **`Proxy + Reflect.construct`** — wrap class construction for instrumentation.
+### Variant 1 — Abstract class enforcement
+`if (new.target === AbstractClass) throw new Error('Abstract');`.
 
-## Revision notes
+### Variant 2 — Factory returns different prototype
+`Reflect.construct(C, args, OtherClass)` for unusual factory patterns.
 
-```
-new C(args)            ≡ Reflect.construct(C, args, C)
-Reflect.construct(C, args, NT):
-  obj = Object.create(NT.prototype)
-  C.call(obj, ...args)
-  return obj if not object, else result
+### Variant 3 — Polyfill `new`
+`Reflect.construct` is the spec-complete primitive.
 
-new.target:
-  inside ctor — the newTarget (often === C; can differ via Reflect.construct)
-  outside `new` — undefined
-  detect plain call: if (!new.target) throw
+### Variant 4 — `super()` desugar
+Uses `Reflect.construct(Parent, args, new.target)` internally.
 
-USES:
-  - reflective construction (by class name string)
-  - extend built-ins under Babel-transpiled code (Object.setPrototypeOf(this, new.target.prototype))
-  - subclass without `extends`
+### Variant 5 — `Date` returns string without `new`
+`Date()` returns string; `new Date()` returns Date. Checks `new.target`.
 
-CAVEATS:
-  - cannot construct arrow functions
-  - slower than `new`
-```
+---
+
+## 12. How to think aloud
+
+> "`new C(...args)` is syntactic sugar for `Reflect.construct(C, args, C)`. The killer feature of Reflect.construct is the THIRD argument — `newTarget` — which lets you run one constructor's body but install a DIFFERENT class's prototype on the resulting object. Inside the constructor, `new.target` reflects the newTarget. Required for: subclassing built-ins (Array, Error, Map — they ignore `this` in normal calls; you need `Reflect.construct(Array, args, new.target)` to get a new array with the SUBCLASS's prototype). `class extends Array {}` works because the engine implicitly uses Reflect.construct under the hood. For manual built-in subclassing without class syntax, do `Reflect.construct(Error, [msg], MyError)` then `setPrototypeOf` to wire chains. Trap: built-in subclassing without Reflect (fails); confusing `new.target` with `this`."
+
+---
+
+## 13. 60-second revision
+
+> - **`new C(args) ≡ Reflect.construct(C, args, C)`**.
+> - **3rd arg `newTarget`** controls which prototype is installed.
+> - **`new.target` inside** body = newTarget.
+> - **Required for built-in subclassing** (Array, Error, Map).
+> - **`class extends Array {}`** uses Reflect.construct internally.
+> - **Abstract enforcement:** `if (new.target === Abstract) throw`.
+> - **Without `new`** (`Date()`) → no new.target.
+> - **Trap:** built-in subclass via `Parent.call(this)`; ignoring newTarget.
+
+---
+
+**Related:** [polyfill-new.md](./polyfill-new.md) · [extends-super-implementation.md](./extends-super-implementation.md) · [class-to-prototype-desugar.md](./class-to-prototype-desugar.md)
+
+**Concept primer:** [`concepts/prototype.md`](../../concepts/prototype.md)

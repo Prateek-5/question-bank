@@ -1,259 +1,275 @@
-# Worker threads — when the event loop isn't enough
+# Worker threads vs the event loop — when single-threaded isn't enough
 
-## Source
-- Node.js docs: https://nodejs.org/api/worker_threads.html
-- libuv design: http://docs.libuv.org/en/v1.x/design.html
-- Piscina (production-grade worker pool): https://github.com/piscinajs/piscina
-- "Don't block the event loop" — Node official guide.
+> **Difficulty:** Senior   |   **Time:** ~20 min   |   **Prereqs:** [event-loop-concurrency.md](./event-loop-concurrency.md), [microtask-starvation-recipes.md](./microtask-starvation-recipes.md)
+>
+> **Source:** Node docs, libuv design, Piscina. Senior backend interview.
 
-## Why this question matters in interviews
-The event loop assumes **all callbacks are short**. As soon as you do `JSON.parse(huge)` or `bcrypt.hashSync(...)` or any CPU-bound computation, you block I/O. Senior backend interviewers ask this question to verify you know the difference between **I/O concurrency** (event loop's job) and **CPU concurrency** (worker_threads' job). The follow-up is almost always: "you have a CPU-heavy endpoint, how do you scale it?" — and the answer is worker threads with a pool, not "scale horizontally."
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Single-threaded model recap
-Node runs JavaScript on **one** thread. All `setTimeout`, `Promise.then`, async I/O callbacks share that thread. libuv has a thread pool (default 4 threads) — but it's used internally for filesystem ops and DNS lookups, not for your JS code.
+When does the event loop fall short? When use `worker_threads`? `cluster`? `child_process`?
 
-### What blocks the loop
-- `JSON.parse` / `JSON.stringify` on large objects.
-- `crypto.pbkdf2Sync`, `bcrypt.hashSync`, any `*Sync` API.
-- Regex with catastrophic backtracking.
-- Tight CPU loops (image processing, parsing, compilation).
-- Synchronous compression / decompression.
+**Verification examples**
 
-When you block the loop, **every other request waits**. HTTP latency p99 spikes. Health probes fail.
+| Workload                                | Right tool                                              |
+|-----------------------------------------|---------------------------------------------------------|
+| 1000 concurrent HTTP requests           | event loop (I/O concurrent natively)                   |
+| `JSON.parse(huge)` on hot path           | `worker_threads`                                       |
+| `bcrypt.hashSync(...)`                   | `worker_threads` (CPU-bound)                            |
+| Crash isolation, OS load balancing       | `cluster` (separate processes)                          |
+| Fork an external CLI                     | `child_process.spawn`                                   |
+| Share state between threads              | `SharedArrayBuffer + Atomics` (worker_threads)         |
 
-### What worker_threads gives you
-- Each worker has its **own V8 isolate, its own event loop, its own heap**.
-- Communication via `postMessage` (structured clone) or `SharedArrayBuffer + Atomics` (zero-copy shared memory).
-- Spawning is **expensive** (~20-50ms cold start) — use a **pool**.
+**Constraints**
+- Event loop = I/O concurrency, NOT CPU concurrency.
+- Worker startup cost (~20-50ms) → use a pool.
+- `postMessage` = structured clone (copies); SAB = zero-copy.
+- Workers can't run libraries that need DOM.
 
-### Syntax to lock in
+---
+
+## 2. Plain-English restatement
+
+Node runs JS on one thread. I/O is offloaded to libuv internally — your JS code doesn't block. But CPU-bound JS (parsing, hashing, image processing) DOES block — every other request waits. `worker_threads` give you a separate V8 isolate with its own event loop for that CPU work.
+
+---
+
+## 3. Why this matters in interviews
+
+Senior backend interviewers verify you know the difference between **I/O concurrency** (event loop's job) and **CPU concurrency** (worker_threads' job). Follow-up: "you have a CPU-heavy endpoint, how do you scale?" — workers with a pool, not "scale horizontally."
+
+---
+
+## 4. Mental model
+
+```
+   Single-threaded event loop:
+   ┌─────────────────────────────────┐
+   │ Main thread — all JS runs here   │
+   │                                  │
+   │ libuv thread pool (size 4)       │
+   │ for fs/dns/crypto C-level work   │
+   │ — JS callbacks queue BACK to     │
+   │   main thread.                   │
+   └─────────────────────────────────┘
+
+   What blocks the loop:
+   - JSON.parse / JSON.stringify on large objects
+   - crypto.*Sync, bcrypt.hashSync
+   - Regex with catastrophic backtracking
+   - Tight CPU loops (image, parsing)
+
+   worker_threads:
+   ┌──────────────┐  postMessage  ┌──────────────┐
+   │ Main V8       │ ←──────────→ │ Worker V8     │
+   │ event loop    │  (structured │ event loop    │
+   │               │   clone)      │               │
+   │               │              │               │
+   │   SAB ←─── shared memory ───→ SAB             │
+   │             (zero-copy)                       │
+   └──────────────┘              └──────────────┘
+
+   Each worker = separate V8 isolate, separate heap, separate event loop.
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. Does the event loop's libuv thread pool run JS in parallel?
+> 2. Why use a worker POOL instead of spawning per request?
+> 3. What's the difference between `postMessage` and `SharedArrayBuffer`?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: "scale horizontally" for CPU work
+Wastes resources; one process per replica. Workers within a process share OS resources better.
+
+### Wrong attempt 2: spawn worker per request
+~20-50ms cold start. Kills perf. Pool warm workers.
+
+### Wrong attempt 3: `postMessage` huge objects
+Structured clone copies all bytes. For 100MB → use SAB or transferList.
+
+### Wrong attempt 4: workers for I/O
+Pointless — libuv handles I/O without blocking already.
+
+---
+
+## 7. The unlocking insight
+
+> **Workers are for CPU, not I/O. Each worker has its own V8 isolate. Communicate via `postMessage` (structured clone) or `SharedArrayBuffer + Atomics` (zero-copy). Use a pool (Piscina) because cold start is expensive.**
+
+Three properties:
+
+1. **I/O ≠ CPU.** Event loop handles I/O; workers handle CPU.
+2. **Pool warm workers** — ~30ms cold start.
+3. **SAB for zero-copy state**; `postMessage` for messages.
+
+---
+
+## 8. Solution (annotated)
+
 ```js
-// main.js
+// Minimal worker pool
 const { Worker } = require('node:worker_threads');
-
-const worker = new Worker('./worker.js', {
-  workerData: { input: [1, 2, 3] }
-});
-
-worker.on('message', (result) => console.log('result:', result));
-worker.on('error', (err) => console.error('worker error:', err));
-worker.on('exit', (code) => console.log('worker exited:', code));
-```
-
-```js
-// worker.js
-const { parentPort, workerData } = require('node:worker_threads');
-
-const result = workerData.input.reduce((a, b) => a + b, 0);
-parentPort.postMessage(result);
-```
-
-### SharedArrayBuffer + Atomics
-```js
-const sab = new SharedArrayBuffer(8); // 8 bytes
-const arr = new Int32Array(sab);       // typed view
-// Pass `sab` to a worker; both threads see the same bytes.
-// Use Atomics.add, Atomics.load, Atomics.wait/notify for safe access.
-```
-
-### Edge cases
-1. **Worker startup cost is real** — ~20-50ms for first message. Use `piscina` to maintain a warm pool.
-2. **Workers can't share regular objects** — `postMessage` does a structured clone (deep copy). Large objects = expensive.
-3. **SharedArrayBuffer + Atomics is the only way to share state without copying.** It's also error-prone (memory model bugs). Use lock-free libs (`@kbrw/atomics-mutex`, etc.) or avoid.
-4. **No DOM access** — workers in Node have no `document` (also true in browsers).
-5. **Cluster vs worker_threads** — `cluster` forks processes, each with its own V8 + event loop. Heavier than threads but isolated (one OOM doesn't kill all). `worker_threads` share the process; cheaper but a bug in one can corrupt shared memory.
-6. **Worker exit on uncaughtException** — the worker exits; main thread sees `'exit'` event with non-zero code. Handle it; restart.
-7. **`postMessage` queues to the worker's message queue** — drained between event loop phases on the worker side. The worker can be busy in JS and not receive messages until it yields.
-
-## Brute force approach
-"Just use `child_process.fork`." Works but slower (separate processes, no shared memory). Use `cluster` for HTTP scaling, worker_threads for CPU offload.
-
-## Optimal approach
-Use a **worker pool** (piscina or hand-rolled). Pool workers stay warm; queued tasks are dispatched to whichever worker is idle. For zero-copy data sharing, use `SharedArrayBuffer + Atomics`.
-
-## Solution (JavaScript)
-
-### A minimal worker pool
-
-```js
-// pool.js
-const { Worker } = require('node:worker_threads');
-const path = require('node:path');
 const os = require('node:os');
 
 class WorkerPool {
   constructor(workerScript, size = os.cpus().length) {
     this.workers = [];
-    this.queue = [];        // pending tasks
-    this.free = [];         // idle workers
+    this.queue = [];
+    this.free = [];
     for (let i = 0; i < size; i++) {
-      const w = new Worker(workerScript);
+      const w = new Worker(workerScript);                              // step 1: warm pool
       w.on('message', (result) => this._onResult(w, result));
       w.on('error', (err) => this._onError(w, err));
       this.workers.push(w);
       this.free.push(w);
     }
   }
-
   run(input) {
     return new Promise((resolve, reject) => {
       this.queue.push({ input, resolve, reject });
       this._drain();
     });
   }
-
   _drain() {
     while (this.free.length && this.queue.length) {
       const w = this.free.pop();
       const task = this.queue.shift();
       w._task = task;
-      w.postMessage(task.input);
+      w.postMessage(task.input);                                       // step 2: dispatch
     }
   }
-
   _onResult(w, result) {
     const task = w._task;
-    w._task = null;
     task.resolve(result);
     this.free.push(w);
     this._drain();
   }
-
   _onError(w, err) {
-    const task = w._task;
-    if (task) task.reject(err);
-    // worker died → replace it (production logic omitted)
+    if (w._task) w._task.reject(err);
+    // production: replace worker
   }
-
-  async close() {
-    await Promise.all(this.workers.map(w => w.terminate()));
-  }
+  close() { return Promise.all(this.workers.map((w) => w.terminate())); }
 }
-
-module.exports = WorkerPool;
 ```
+
+**Try it yourself**
 
 ```js
 // hash-worker.js
 const { parentPort } = require('node:worker_threads');
 const crypto = require('node:crypto');
-
 parentPort.on('message', (password) => {
-  // CPU-bound: would block the main loop for 200ms
   const hash = crypto.pbkdf2Sync(password, 'salt', 100_000, 64, 'sha512');
   parentPort.postMessage(hash.toString('hex'));
 });
-```
 
-```js
 // server.js
-const http = require('node:http');
-const WorkerPool = require('./pool');
 const pool = new WorkerPool('./hash-worker.js');
-
 http.createServer(async (req, res) => {
   if (req.url === '/hash') {
-    const hash = await pool.run('pa$$w0rd');
+    const hash = await pool.run('pa$$w0rd');                          // offload CPU
     res.end(hash);
   } else {
-    res.end('hello');
+    res.end('hello');                                                  // stays fast
   }
 }).listen(3000);
-// /hello stays fast (no blocking) while /hash is offloaded.
-```
 
-### SharedArrayBuffer example (zero-copy counter)
-
-```js
-// Main thread
+// SharedArrayBuffer for zero-copy counter
 const sab = new SharedArrayBuffer(4);
 const counter = new Int32Array(sab);
 const worker = new Worker('./inc-worker.js', { workerData: { sab } });
-
-setTimeout(() => {
-  console.log('counter after 1s:', Atomics.load(counter, 0));
-}, 1000);
-
-// inc-worker.js
-const { workerData } = require('node:worker_threads');
-const counter = new Int32Array(workerData.sab);
-for (let i = 0; i < 1_000_000; i++) {
-  Atomics.add(counter, 0, 1);    // atomic +1
-}
+Atomics.add(counter, 0, 1);                                            // safe mutate
 ```
 
-Both threads see the same memory. `Atomics.add` is the safe way to mutate.
+---
 
-## Step-by-step dry run
+## 9. Step-by-step dry run
 
-```js
-const { Worker } = require('node:worker_threads');
+```
+Without worker — CPU-bound endpoint:
+t=0    HTTP req for /hash arrives → handler starts.
+       bcrypt.hashSync runs synchronously. ~500ms.
+       Event loop FROZEN. Other requests wait.
+t=10   HTTP req for /healthcheck arrives. Queues. Waits.
+t=20   Another /healthcheck. Waits.
+t=500  /hash returns. Event loop wakes. All queued requests served LATE.
+       p99 latency on /healthcheck: 500ms+.
 
-console.log('main: start');
-const w = new Worker(`
-  const { parentPort } = require('node:worker_threads');
-  let sum = 0;
-  for (let i = 0; i < 1e8; i++) sum += i;  // CPU heavy, ~500ms
-  parentPort.postMessage(sum);
-`, { eval: true });
-
-w.on('message', (sum) => console.log('main: got', sum));
-console.log('main: continuing');
-setInterval(() => console.log('main: tick'), 100).unref();
+With worker pool:
+t=0    /hash arrives → pool.run(payload).
+       Main thread: returns Promise; continues other work.
+t=0    pool dispatches to free worker. Worker thread CPU-busy.
+       Main thread: free.
+t=10   /healthcheck arrives → main thread handles immediately.
+t=15   another /healthcheck → handled.
+t=500  worker posts result back. Main thread fulfills Promise.
+       /hash request returns.
+       p99 on /healthcheck: ~1ms (unaffected).
 ```
 
-Trace:
-- `main: start` logs.
-- Worker spawned (~30ms cold start). Worker thread begins the 1e8 loop.
-- `main: continuing` logs.
-- Main thread is **unblocked**. Every 100ms: `main: tick`.
-- After ~500ms, worker finishes its loop, posts message.
-- Main thread's next event loop iteration picks up the message: `main: got 4999999950000000`.
+---
 
-Without the worker (sync loop on main): you'd see `main: start`, then a 500ms freeze, no ticks, then `main: continuing`. The interval would be queued but starved.
+## 10. Common confusion + traps
 
-## Important takeaways
+1. **"libuv pool runs JS in parallel"** — no, C-level work only; JS callbacks queue back to main.
+2. **"Workers help with I/O"** — pointless; libuv already handles I/O.
+3. **Spawn per request** — cold start kills perf; use pool.
+4. **`postMessage` zero-cost** — structured clone copies; use SAB for big payloads.
+5. **`SharedArrayBuffer` without Atomics** — silent corruption.
+6. **`cluster` and `worker_threads` interchangeable** — cluster forks processes; workers share process.
+7. **`AsyncLocalStorage` propagates to workers** — no, separate isolates.
 
-**Syntax to memorize**
-- `new Worker(scriptPath, { workerData })`.
-- `worker.on('message' | 'error' | 'exit', cb)`.
-- `parentPort.postMessage(value)` from inside worker.
-- `new SharedArrayBuffer(bytes)` + typed array view + Atomics.
+---
 
-**Patterns to reuse**
-- **Worker pool**: keep workers warm. Library: `piscina`.
-- **Pipeline of workers**: chain workers via MessageChannel — Stage 1 (parse) → Stage 2 (transform) → Stage 3 (serialize).
-- **SharedArrayBuffer**: for high-frequency state between workers; for typed binary data (image pixels, audio buffers).
+## 11. Senior follow-ups & variants
 
-**Common mistakes**
-- Spawning a new worker per request — kills perf (cold start cost). Pool.
-- Passing large objects via `postMessage` — structured clone copies them. Use SharedArrayBuffer for zero-copy.
-- Forgetting `Atomics.*` for shared state — race conditions silently corrupt data.
-- Using workers for I/O — pointless. Workers are for **CPU**. I/O already doesn't block (libuv handles it).
-- Not handling worker death — a worker can crash; pool must replace.
+### Variant 1 — `cluster` vs `worker_threads`
+Cluster forks processes (OS isolation, OS load balance); workers share process (cheaper, can share memory).
 
-**Related questions**
-- libuv thread pool (UV_THREADPOOL_SIZE)
-- cluster vs worker_threads vs child_process
-- AsyncLocalStorage in worker context (no, it doesn't propagate)
-- MessageChannel cross-thread
+### Variant 2 — `child_process.spawn` / `fork`
+For external CLIs or process-level isolation; heavier than workers.
 
-## Variants
+### Variant 3 — `UV_THREADPOOL_SIZE`
+Tune libuv internal pool (default 4) for crypto-heavy workloads.
 
-1. **"When would you choose `cluster` over `worker_threads`?"** — when you need OS-level isolation (memory leak in one process doesn't affect others), when you want OS-level load balancing across HTTP listeners, or when forking external CLI tools.
-2. **"How do you debug a worker?"** — `node --inspect-brk=0.0.0.0:9230 main.js`; attach to worker via `worker.threadId` in DevTools.
-3. **"What about libuv's thread pool — isn't that already 'workers'?"** — libuv's pool is for **C-level I/O** (filesystem, DNS, some crypto). You can't run JS on it. `UV_THREADPOOL_SIZE=N` env var controls its size (default 4).
-4. **"How do you implement piscina from scratch?"** — pool of workers, FIFO queue, round-robin dispatch, idle-replace on crash, terminate-on-shutdown. The pool above is ~80% of the implementation.
+### Variant 4 — Piscina
+Production-grade worker pool. Auto-recycle on crash; backpressure; abort.
 
-## Revision notes
+### Variant 5 — Pipeline of workers
+Chain via `MessageChannel`: Stage 1 (parse) → Stage 2 (transform) → Stage 3 (serialize).
 
-> **worker_threads — 60 second recap**
-> - Event loop = single-threaded for JS. CPU-heavy work blocks I/O.
-> - **worker_threads**: each worker has its own V8 isolate, heap, event loop.
-> - Communication: `postMessage` (structured clone, copy) or `SharedArrayBuffer + Atomics` (zero-copy).
-> - **Use a pool** (piscina) — cold start ~30ms makes per-request workers pointless.
-> - Workers are for **CPU** (parsing, hashing, image processing). I/O already doesn't block.
-> - `cluster` = process-level (heavier, isolated). `worker_threads` = thread-level (cheaper, shared memory).
-> - **Trap**: thinking workers help I/O. They don't. Use them only when JS is CPU-bound.
+### Variant 6 — Debugging a worker
+`node --inspect-brk=0.0.0.0:9230 main.js`; attach via `worker.threadId` in DevTools.
+
+---
+
+## 12. How to think aloud
+
+> "Event loop = I/O concurrency, NOT CPU. Single thread runs all JS. CPU-bound work (JSON.parse big, bcrypt.hashSync, regex, image processing) blocks ALL other requests. Solution: `worker_threads` — each worker is its own V8 isolate, separate heap, separate event loop. Communicate via `postMessage` (structured clone) or `SharedArrayBuffer + Atomics` (zero-copy shared memory). Use a POOL (Piscina) because cold start is ~30ms. `cluster` is process-level (heavier, isolated); `worker_threads` is thread-level (cheaper, shared memory). Workers are for CPU, NOT I/O. Trap: spawning per request; postMessage on huge objects (copy); SAB without Atomics."
+
+---
+
+## 13. 60-second revision
+
+> - **Event loop = I/O concurrency**, NOT CPU.
+> - **Workers** = separate V8 isolate, heap, event loop.
+> - **`postMessage`** = structured clone (copy); **`SharedArrayBuffer`** = zero-copy.
+> - **Use a pool** (Piscina) — cold start ~30ms.
+> - **Workers for CPU only;** I/O already doesn't block.
+> - **`cluster`** = process-level (OS isolation); **`worker_threads`** = thread-level.
+> - **`SharedArrayBuffer + Atomics`** for safe shared mutation.
+> - **Trap:** workers help I/O; spawn-per-request; postMessage huge data; SAB without Atomics.
+
+---
+
+**Related:** [worker-pool-implementation.md](./worker-pool-implementation.md) · [microtask-starvation-recipes.md](./microtask-starvation-recipes.md) · [event-loop-concurrency.md](./event-loop-concurrency.md) · [nodejs-event-loop-phases.md](./nodejs-event-loop-phases.md)
+
+**Concept primer:** [`concepts/event-loop.md`](../../concepts/event-loop.md)

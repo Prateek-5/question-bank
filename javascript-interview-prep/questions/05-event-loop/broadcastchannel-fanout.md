@@ -1,196 +1,216 @@
-# BroadcastChannel Fan-Out (Cross-Tab / Cross-Worker Messaging)
+# `BroadcastChannel` — same-origin pub/sub across tabs and workers
 
-## Source / Origin
-- Web / Node BroadcastChannel API (standardized 2018 in DOM; Node 15+).
-- Asked at: Razorpay, Atlassian, Cloudflare (browser-focused roles).
-- Concept reference: `concepts/event-loop.md`, sibling `messagechannel-microtask.md`.
+> **Difficulty:** Medium   |   **Time:** ~15 min   |   **Prereqs:** [postmessage-roundtrip.md](./postmessage-roundtrip.md), [`10-machine-coding-patterns/pub-sub.md`](../10-machine-coding-patterns/pub-sub.md)
+>
+> **Source:** Web/Node BroadcastChannel API. Razorpay, Atlassian, Cloudflare browser roles.
 
-## Why this question matters in interviews
-Multiple tabs of the same origin. User logs out in tab A. Tabs B, C, D should immediately reflect the logout. Or: a multi-worker Node app where one worker invalidates a cache and others should know. `BroadcastChannel` is the simplest API: same-origin pub/sub with structured cloning. Senior bar: you know it's same-origin only, that messages are structurally cloned (no functions), that the sender doesn't receive its own message, and that you must `close()` when done.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+Multiple tabs of the same origin. User logs out in tab A — tabs B, C, D should reflect immediately. Same for multi-worker Node apps invalidating shared caches.
+
+**Verification examples**
+
+| Setup                                              | Behaviour                                              |
+|----------------------------------------------------|---------------------------------------------------------|
+| 3 tabs subscribe to `'session'` channel             | each receives messages from others                     |
+| Sender posts                                        | other tabs/workers get `'message'` event; sender NOT  |
+| Different origin                                    | does NOT receive (origin-isolated)                     |
+| Posts function                                      | DataCloneError (structured clone)                     |
+| `ch.close()`                                        | further messages dropped                              |
+
+**Constraints**
+- Same-origin only.
+- Sender does NOT receive its own message.
+- Structured clone — no functions.
+- Must `close()` to release resources.
+
+---
+
+## 2. Plain-English restatement
+
+A named pub/sub bus. Anyone same-origin can `new BroadcastChannel('foo')` and join. Posts on one are received by all OTHERS on the same channel. Simpler than `localStorage` events; no polling. Used for cross-tab logout, cross-worker cache invalidation.
+
+---
+
+## 3. Why this matters in interviews
+
+The right answer for cross-tab sync without rolling your own. Tests origin isolation literacy, structured-clone awareness, the "sender doesn't get its own message" gotcha.
+
+---
+
+## 4. Mental model
+
+```
+   ┌─────────┐     ┌─────────┐     ┌─────────┐
+   │ Tab A    │     │ Tab B    │     │ Tab C    │
+   │ ch=new   │     │ ch=new   │     │ ch=new   │
+   │ BC('s')  │     │ BC('s')  │     │ BC('s')  │
+   └─────────┘     └─────────┘     └─────────┘
+        │                ▲               ▲
+        │ postMessage('logout')            
+        └────────────────┴───────────────┘
+                       fan-out
+
+   Same origin → same broker → all subscribers receive.
+   Sender does NOT receive its own message.
+   Cleanup: ch.close() releases the subscription.
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. Does the sender's own `onmessage` fire when it posts?
+> 2. Can you `postMessage(fn)` over a BroadcastChannel?
+> 3. What happens if you don't `close()`?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: `localStorage` + `'storage'` event
+Works but: sender doesn't get event in own tab (same as BroadcastChannel), older API, requires JSON serialization, single-key contention.
+
+### Wrong attempt 2: WebSocket + server roundtrip
+Network roundtrip for same-machine sync — overkill.
+
+### Wrong attempt 3: forget `close()`
+Long-running tabs accumulate subscriptions; leak.
+
+---
+
+## 7. The unlocking insight
+
+> **`new BroadcastChannel('name')` joins a same-origin named bus. `postMessage(data)` fans out to OTHERS (not self). Structured clone (no functions). `close()` to release. Modern replacement for `localStorage` `'storage'` events.**
+
+Three properties:
+
+1. **Same-origin pub/sub** — no setup, no server.
+2. **Sender excluded** — no echo loop.
+3. **Structured clone** — no functions.
+
+---
+
+## 8. Solution (annotated)
+
 ```js
-// Tab A
-const ch = new BroadcastChannel('session');
-ch.postMessage({ type: 'LOGOUT', userId: 42 });
+// Tab A: emit logout
+const ch = new BroadcastChannel('session');                            // step 1: join named bus
+ch.postMessage({ type: 'LOGOUT', userId: 42 });                         // step 2: fan out
 
-// Tab B (same origin)
+// Tab B, C, D: receive
 const ch = new BroadcastChannel('session');
-ch.onmessage = (event) => {
+ch.onmessage = (event) => {                                             // step 3: listener
   if (event.data.type === 'LOGOUT') {
     redirectToLogin();
   }
 };
 
-// cleanup
-ch.close();
+// Cleanup
+window.addEventListener('beforeunload', () => ch.close());              // step 4: release
 ```
 
-### Edge cases / interview traps
-1. **Same-origin only.** Two tabs at `https://a.com` see each other's messages; `https://b.com` does not.
-2. **Sender doesn't receive its own message.** If tab A posts and listens on the same channel, A's handler is *not* invoked. Use a different channel or a state-broadcast pattern.
-3. **Structured clone.** Functions, DOM nodes, Promises cannot be sent. Plain data only. Big payloads = clone cost.
-4. **Order is not guaranteed across multiple senders.** Within one sender, posts arrive in order at each receiver. Across senders, interleaving is implementation-dependent.
-5. **No persistence.** A new tab won't see past messages. Use `localStorage`'s `storage` event for "broadcast + late-joiner gets it" semantics.
-6. **`close()` is mandatory.** Without it the channel and listeners leak.
-7. **Service Workers** can also send/receive — useful for "service worker tells all tabs to refresh."
-8. **Node `worker_threads`** — BroadcastChannel works across workers in same process; not across processes.
-
-## Mental Model
-
-A **room with a microphone**:
-
-```
-                  ┌───────────────────────┐
-                  │  channel('session')   │
-                  └─────────┬─────────────┘
-                            │ all tabs subscribed
-        ┌───────────┬───────┴───────┬───────────┐
-        │           │               │           │
-      Tab A       Tab B           Tab C       Tab D
-       posts       hears           hears       hears
-                  message         message     message
-
-   A posts → all OTHER tabs receive (A does NOT)
-```
-
-For Node worker_threads:
-
-```
-   main → spawn worker1, worker2
-   main, worker1, worker2 all open BroadcastChannel('cache-invalidate')
-   worker1.postMessage({key:'x'})
-   main + worker2 receive; worker1 does NOT
-```
-
-## Why interviewers care
-
-- **Cross-context messaging fluency** — beyond `postMessage` between iframes.
-- **API limit awareness** — same-origin, structured clone, no self-receive.
-- **Lifecycle hygiene** — `close()` mandatory.
-
-## Common beginner confusion
-
-- **"BroadcastChannel works across origins."** No — same-origin only.
-- **"Sender gets its own message."** It does not.
-- **"I can send a Promise."** No — structured clone won't pass it. You can send a `MessagePort` (transferable) for back-channel.
-- **"BroadcastChannel is RxJS Subject."** Similar shape; very different scope (cross-tab) and serialization (clone).
-- **"It's persistent."** New tab won't see old messages. For persistence: localStorage.
-
-## Brute force approach
+**Try it yourself**
 
 ```js
-// Polling — wasteful, latent
-setInterval(() => {
-  if (localStorage.getItem('isLoggedOut') === 'true') redirectToLogin();
-}, 1000);
-```
+// Multi-worker Node cache invalidation
+const { BroadcastChannel } = require('node:worker_threads');           // Node 15+
 
-## Optimal approach
+const ch = new BroadcastChannel('cache:invalidate');
+ch.onmessage = (event) => {
+  cache.delete(event.data.key);
+};
 
-A single `BroadcastChannel` per logical concern (`'session'`, `'cache'`, `'user-prefs'`). Subscribers register handlers; senders post. Close on tab unload.
-
-## Solution (JavaScript)
-
-```js
-// shared module: createBus.js
-class Bus {
-  constructor(name) {
-    this.ch = new BroadcastChannel(name);
-    this.listeners = new Map();
-    this.ch.onmessage = (ev) => {
-      const handlers = this.listeners.get(ev.data?.type);
-      if (handlers) handlers.forEach(h => h(ev.data));
-    };
-  }
-  on(type, handler) {
-    const set = this.listeners.get(type) || new Set();
-    set.add(handler);
-    this.listeners.set(type, set);
-    return () => set.delete(handler);
-  }
-  emit(type, payload) {
-    this.ch.postMessage({ type, ...payload, _ts: Date.now() });
-  }
-  close() { this.ch.close(); this.listeners.clear(); }
-}
-
-// usage
-const bus = new Bus('session');
-const off = bus.on('LOGOUT', () => redirectToLogin());
-
-bus.emit('LOGOUT', { userId: 42 });
-window.addEventListener('beforeunload', () => bus.close());
-
-// Pattern: "broadcast my own action too" — useful when sender also wants its handler invoked
-function broadcastAndLocal(type, payload) {
-  bus.emit(type, payload);
-  bus.listeners.get(type)?.forEach(h => h({ type, ...payload }));  // call locally too
+// Elsewhere in any worker:
+async function updateUser(id, data) {
+  await db.update(id, data);
+  ch.postMessage({ key: `user:${id}` });                               // invalidate everywhere
 }
 ```
 
-## Step-by-step dry run
+---
 
-3 tabs open at `https://app.example.com`. User clicks logout in Tab A.
-
-```
-Tab A: bus.emit('LOGOUT', { userId: 42 })
-       → ch.postMessage({type:'LOGOUT', userId:42, _ts: 1234})
-
-Tab A: does NOT receive its own message
-       (but App code typically navigates A directly without waiting)
-
-Tab B: bus.ch.onmessage fires
-       → handlers for 'LOGOUT' run
-       → redirectToLogin()
-
-Tab C: same as B
-
-(Tab D opens later) → no historical event; current session check
-                      via localStorage/cookie tells it the user is logged out
-```
-
-## How to think aloud in the interview
-
-> "BroadcastChannel — same-origin pub/sub for tabs and workers. One channel per concern. Subscribers register `onmessage`; senders `postMessage`. Sender doesn't get its own message; if needed, dispatch locally too. Structured clone limits payload to plain data. Always `close()` on tab unload to avoid leaks. For cross-origin: postMessage between explicit windows. For persistent broadcast: localStorage + `storage` event. For service-worker → tabs: SW also can use BroadcastChannel."
-
-## Important takeaways
-
-- **Same-origin only.**
-- **Sender doesn't self-receive.**
-- **Structured clone — plain data only.**
-- **`close()` mandatory** to avoid listener leaks.
-- **No persistence** — late joiners don't see past messages.
-- **One channel per concern**, not one giant channel.
-
-## Variants
-
-- **`storage` event** — `localStorage.setItem` triggers a `storage` event in other tabs. Lower API quality but persistent.
-- **Service Worker as hub** — service worker maintains state and pushes to all clients.
-- **WebRTC DataChannel** — for cross-machine pub/sub (different problem, much heavier).
-- **SharedArrayBuffer + Atomics** — for high-frequency low-latency cross-worker messaging.
-- **`MessageChannel`** — point-to-point with a transferable port; useful when you don't want broadcast.
-
-## Revision notes
+## 9. Step-by-step dry run
 
 ```
-BroadcastChannel:
-  new BroadcastChannel(name) — same-origin pub/sub
-  ch.postMessage(data) — structured clone
-  ch.onmessage = (event) => ...
-  ch.close()
-  
-  TRAPS:
-  - same-origin ONLY
-  - sender does NOT receive own message
-  - structured clone (no functions/Promises)
-  - no persistence
-  - close() mandatory
-  
-  alternatives:
-  localStorage 'storage' event — persistent, cross-tab
-  ServiceWorker → tabs — central hub
-  MessageChannel — point-to-point with transferable
+3 tabs open at /app:
+
+Tab A: ch = new BroadcastChannel('session'); subscribes.
+Tab B: ch = new BroadcastChannel('session'); subscribes.
+Tab C: ch = new BroadcastChannel('session'); subscribes.
+
+Tab A: ch.postMessage({type: 'LOGOUT', userId: 42}).
+
+t=0 (immediate):
+  Tab A: ch.onmessage does NOT fire (sender excluded).
+  Tab B: ch.onmessage fires → redirectToLogin().
+  Tab C: ch.onmessage fires → redirectToLogin().
+
+Different origin? https://other.example.com:
+  Has its own BroadcastChannel namespace. No fan-out across origins.
+
+postMessage({fn: () => 42}):
+  DataCloneError. Functions don't clone.
+
+ch.close():
+  Subscription released. Further posts NOT received.
 ```
+
+---
+
+## 10. Common confusion + traps
+
+1. **Sender receives own message** — no, excluded.
+2. **Cross-origin** — no, same-origin only.
+3. **Functions/DOM nodes** — no, structured clone throws.
+4. **Forget `close()`** — leak in long-running tabs.
+5. **Same as WebSocket** — no server, no network; in-browser only.
+6. **Works in service workers** — yes; useful for cross-context coordination.
+7. **`localStorage` `'storage'` event** — older alt; same constraints but lossy.
+
+---
+
+## 11. Senior follow-ups & variants
+
+### Variant 1 — Leader election across tabs
+Use BroadcastChannel for "I'm leader" heartbeats; lowest unique ID wins.
+
+### Variant 2 — Optimistic UI sync
+Tab A applies optimistic update + posts; B and C apply same; server reconciles.
+
+### Variant 3 — Service worker coordination
+Service worker uses BroadcastChannel to notify all controlled pages.
+
+### Variant 4 — Encrypted channels
+Encrypt payloads if multiple iframes share origin but want isolation.
+
+### Variant 5 — Versioned channels
+Include version in channel name (`'session:v2'`) for safe schema upgrades.
+
+---
+
+## 12. How to think aloud
+
+> "`new BroadcastChannel('name')` joins a same-origin named bus. `postMessage(data)` fans out to OTHER tabs/workers on same channel (sender excluded). Structured clone — no functions. Must `close()` to release. Use case: cross-tab logout, cache invalidation across workers, optimistic sync. Compare with `localStorage` `'storage'` event: BroadcastChannel is the modern replacement, cleaner API, supports object payloads natively. With service workers: SW can broadcast to all controlled pages. Trap: thinking sender gets echo; forgetting `close()`; trying to send functions."
+
+---
+
+## 13. 60-second revision
+
+> - **`new BroadcastChannel('name')`** joins same-origin bus.
+> - **Fan-out** to others on channel; sender excluded.
+> - **Same-origin only**; different origin = separate namespace.
+> - **Structured clone** payload — no functions.
+> - **`close()`** to release subscription.
+> - **Use cases:** cross-tab logout, cache invalidation, leader election, optimistic sync.
+> - **vs `localStorage 'storage'` event:** modern API; native object support.
+> - **Trap:** sender-echo assumption; cross-origin; functions; no close.
+
+---
+
+**Related:** [postmessage-roundtrip.md](./postmessage-roundtrip.md) · [worker-threads-vs-event-loop.md](./worker-threads-vs-event-loop.md) · [`10-machine-coding-patterns/pub-sub.md`](../10-machine-coding-patterns/pub-sub.md) · [`10-machine-coding-patterns/leader-election-toy.md`](../10-machine-coding-patterns/leader-election-toy.md)
+
+**Concept primer:** [`concepts/event-loop.md`](../../concepts/event-loop.md)

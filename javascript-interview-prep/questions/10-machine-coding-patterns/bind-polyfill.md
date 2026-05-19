@@ -1,186 +1,286 @@
-# Implement `Function.prototype.bind` (polyfill)
+# Polyfill `Function.prototype.bind`
 
-## Source
-- Canonical machine-coding interview problem (BFE.dev, Frontend Masters, MDN reference implementation).
-- Reference: ECMA-262 §20.2.3.2 (Function.prototype.bind).
+> **Difficulty:** Medium-Senior   |   **Time:** ~25 min   |   **Prereqs:** [`concepts/prototype.md`](../../concepts/prototype.md), [`03-prototype/this-binding-rules.md`](../03-prototype/this-binding-rules.md)
+>
+> **Source:** ECMA-262 §20.2.3.2. BFE.dev, Frontend Masters classic. The polyfill that everyone gets wrong on the first try.
 
-## Why this question matters in interviews
-Polyfilling `bind` is the **classic prototype-chain interview problem**. It looks like "easy, just `fn.apply(thisArg, ...args)` inside a wrapper" — but the *real* test is a single follow-up: **"What happens if I do `new (foo.bind(obj))()`?"** A correct answer must detect when the bound function is invoked as a constructor (`new`) and **ignore** the bound `this`, using the new instance as `this` instead. This catches 80% of candidates. The senior version also handles partial application (curried args), preserves the prototype chain, and uses `new.target` correctly. Backend interviewers especially love this question because Node code is full of `bind` usage — callback wiring, event handlers, class methods passed to async libraries — and getting it wrong leaks `this`-binding bugs everywhere.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+**Signature**
+```ts
+Function.prototype.myBind: (this: Function, thisArg: any, ...boundArgs: any[]) => Function;
+```
+
+**Input / Output examples**
+
+| Setup                                                    | Behaviour                                              |
+|-----------------------------------------------------------|---------------------------------------------------------|
+| `f.myBind(ctx)(a, b)` (normal call)                       | `f.apply(ctx, [a, b])`                                 |
+| `f.myBind(ctx, 1, 2)(3)` (partial app)                   | `f.apply(ctx, [1, 2, 3])`                              |
+| `new (Foo.myBind(ctx))()` (constructor)                   | `this` is the new instance, **NOT** ctx                |
+| `new (Foo.myBind(ctx))() instanceof Foo`                  | `true`                                                  |
+| `arrowFn.myBind(ctx)()`                                   | ctx ignored — arrows have lexical `this`               |
+| `f.myBind(a).myBind(b)`                                   | `b` ignored — first bind wins                          |
+
+**Constraints**
+- Normal call → `this = thisArg`.
+- `new` call → `this = new instance` (ignore thisArg, but boundArgs still apply).
+- Partial application: boundArgs prepend callArgs.
+- `instanceof` preserved via prototype chain.
+
+---
+
+## 2. Plain-English restatement
+
+Make a copy of a function whose `this` is permanently set to `thisArg` and whose first few args are pre-filled. The one twist: if someone calls the result with `new`, the bound `this` is ignored — JS gives the function a fresh instance, and the bound args still prefix the call args. The polyfill detects `new` via `new.target`.
+
+---
+
+## 3. Why this matters in interviews
+
+The classic prototype-chain interview problem. Looks like "just `fn.apply(thisArg, ...args)` inside a wrapper" — but the *real* test is one follow-up: **"What happens if I do `new (foo.bind(obj))()`?"** A correct answer detects constructor calls (`new.target`) and **ignores** the bound `this`, using the new instance instead. This catches ~80% of candidates. Backend interviewers love it because Node code is full of `bind` usage — callback wiring, event handlers, class methods passed to async libraries.
+
+---
+
+## 4. Mental model
+
+The bound function as a **decorator that re-routes `this`**:
+
+```
+   normal call:                    new call:
+   ────────────                    ──────────
+   fn.myBind(ctx)(a, b)            new (fn.myBind(ctx))(c)
+       │                                │
+       ▼                                ▼
+   Bound(a, b):                    Bound(c):
+     new.target = undefined          new.target = Bound   (truthy)
+     ctx = thisArg                   ctx = `this`         (fresh instance)
+     fn.apply(thisArg, [a, b])       fn.apply(newInstance, [c])
+                                     // boundArgs still prefix
+                                     // newInstance.[[Proto]] === Bound.prototype
+                                     //                       === Object.create(fn.prototype)
+                                     // so `new Bound() instanceof fn` → true
+```
+
+The `new.target` is the magic line. Without it, `new (foo.bind(ctx))()` sends `this` to ctx — wrong.
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. What is `new.target` inside a function called normally vs called with `new`?
+> 2. Why does `new (foo.bind(ctx))() instanceof foo` need to be `true`?
+> 3. If you `bind` an arrow function with a `thisArg`, does the arrow's `this` change?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: just `apply`
 ```js
 Function.prototype.myBind = function (thisArg, ...boundArgs) {
   const targetFn = this;
-  function Bound(...callArgs) {
-    // If invoked with `new`, `this` is the new instance — ignore thisArg.
-    const ctx = new.target ? this : thisArg;
-    return targetFn.apply(ctx, [...boundArgs, ...callArgs]);
-  }
-  // Preserve prototype chain so `new Bound()` produces an instance of targetFn.
-  if (targetFn.prototype) {
-    Bound.prototype = Object.create(targetFn.prototype);
-  }
-  return Bound;
+  return function (...callArgs) {
+    return targetFn.apply(thisArg, [...boundArgs, ...callArgs]);   // BUG: ignores `new`
+  };
 };
 ```
+Normal calls work. But `new (foo.myBind(ctx))()` → `foo.apply(ctx, ...)`, so `this` inside `foo` is `ctx`, NOT a new instance. Interviewer pounces.
 
-### Runtime / engine behavior
-- `new.target` is `undefined` when the function is called normally, and a reference to the **constructor** when invoked with `new`. It's the cleanest way to detect constructor calls inside a polyfill.
-- Native `Function.prototype.bind` returns an **exotic** function object whose `[[Prototype]]` is the original `fn.prototype`. Polyfills can't exactly replicate this — best we can do is set `Bound.prototype = Object.create(targetFn.prototype)` so `instanceof` works.
-- Partial application: native bind freezes the leading args. Calling the bound function appends more args on top. Order: `[...boundArgs, ...callArgs]`.
-- `arrow functions` cannot be bound. `arrow.bind(x)` ignores `x` because arrows have lexical `this`. The polyfill above silently does the same because `targetFn.apply(ctx, ...)` on an arrow ignores `ctx`. Mention this — it's a senior nuance.
+### Wrong attempt 2: arrow for `Bound`
+```js
+return (...callArgs) => targetFn.apply(thisArg, [...boundArgs, ...callArgs]);   // BUG
+```
+Arrow has no `new.target` and can't be called with `new`. Constructor invocations throw "is not a constructor."
 
-### Edge cases (these are the interview traps)
-1. **`new` on a bound function** — `const Bound = Foo.bind(ctx); new Bound()`. `this` must be the new instance, **not** `ctx`. Use `new.target`. This is THE test interviewers care about.
-2. **`instanceof Foo`** — `new Bound() instanceof Foo` must be `true`. Requires `Bound.prototype = Object.create(Foo.prototype)`.
-3. **Partial application order** — `fn.bind(ctx, 1, 2)(3, 4)` → `fn.call(ctx, 1, 2, 3, 4)`. Bound args go first.
-4. **`bind`ing already-bound functions** — `fn.bind(a).bind(b)` — `b` is ignored; the first bind wins. Native behavior; polyfill above replicates because the inner `Bound` uses the captured `thisArg`, ignoring later attempts.
-5. **`bind` on arrow functions** — `thisArg` is ignored; arrow `this` is lexical. Polyfill above silently no-ops correctly.
-6. **`bind` on `class` methods extracted from instance** — `const f = obj.method; f()` loses `this`. `const bf = obj.method.bind(obj); bf()` retains it. Classic Node callback wiring.
-7. **Length and name properties** — native bind produces a function with `.name === 'bound ' + fn.name` and `.length === Math.max(0, fn.length - boundArgs.length)`. Polish for senior cred; not strictly required.
-8. **`function.bind(null)` in strict vs sloppy** — in strict mode, `this` is `null` inside `fn`. In sloppy, `this` becomes `globalThis`. Don't try to override native semantics.
+### Wrong attempt 3: no prototype chain
+Forget `Bound.prototype = Object.create(targetFn.prototype)` → `new Bound() instanceof targetFn === false`. Bound class loses its identity.
 
-## Brute force approach
-Naive: `return function (...callArgs) { return fn.apply(thisArg, [...boundArgs, ...callArgs]); }`. Works for normal calls but **fails the `new` test**: `new (fn.bind(ctx))()` calls `fn.apply(ctx, ...)`, which means `this` inside `fn` becomes `ctx`, NOT a new instance. Interviewer pounces. Always include `new.target` handling from the start.
+---
 
-## Optimal approach
-- Capture `targetFn = this` (the function bind is being called on).
-- Return a `Bound` function that:
-  - Checks `new.target`; if truthy, uses `this` (the freshly constructed instance); else uses `thisArg`.
-  - Calls `targetFn.apply(ctx, [...boundArgs, ...callArgs])`.
-- Set `Bound.prototype = Object.create(targetFn.prototype)` for `instanceof` correctness.
+## 7. The unlocking insight
 
-## Solution (JavaScript)
+> **`new.target` flips the `this` source. Inside `Bound`: `const ctx = new.target ? this : thisArg`. Set `Bound.prototype = Object.create(targetFn.prototype)` so `instanceof` works.**
+
+Three properties:
+
+1. **`new.target`** is `undefined` for normal calls, set to the constructor for `new` calls — the cleanest detection.
+2. **Capture `targetFn = this`** before the inner function so it's accessible in the closure.
+3. **Prototype chain via `Object.create(targetFn.prototype)`** so `new Bound() instanceof targetFn`.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
-/**
- * Polyfill of Function.prototype.bind.
- * - Sets `this` to thisArg for normal calls.
- * - Sets `this` to the new instance for `new`-style calls (ignoring thisArg).
- * - Partial-applies boundArgs ahead of callArgs.
- * - Preserves prototype chain so `instanceof` works.
- */
 Function.prototype.myBind = function (thisArg, ...boundArgs) {
   if (typeof this !== 'function') {
-    throw new TypeError('myBind must be called on a function');
+    throw new TypeError('myBind must be called on a function');   // step 1: guard
   }
-  const targetFn = this;
+  const targetFn = this;                                          // step 2: capture fn
 
   function Bound(...callArgs) {
-    // `new.target` is truthy when invoked via `new Bound(...)`.
-    const ctx = new.target ? this : thisArg;
-    return targetFn.apply(ctx, [...boundArgs, ...callArgs]);
+    const ctx = new.target ? this : thisArg;                      // step 3: THE magic line
+    return targetFn.apply(ctx, [...boundArgs, ...callArgs]);      // step 4: partial app
   }
 
-  // Preserve prototype chain so `new Bound() instanceof targetFn`.
-  if (targetFn.prototype) {
+  if (targetFn.prototype) {                                       // step 5: instanceof support
     Bound.prototype = Object.create(targetFn.prototype);
   }
 
-  // Polish: name + length to match native bind output (optional).
+  // Polish: name + length to match native bind output
   Object.defineProperty(Bound, 'name', {
-    value: `bound ${targetFn.name || ''}`,
-    configurable: true,
+    value: `bound ${targetFn.name || ''}`, configurable: true,
   });
   Object.defineProperty(Bound, 'length', {
-    value: Math.max(0, (targetFn.length || 0) - boundArgs.length),
-    configurable: true,
+    value: Math.max(0, (targetFn.length || 0) - boundArgs.length), configurable: true,
   });
 
   return Bound;
 };
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
-Input:
 ```js
 function Greeter(greeting, name) {
   this.greeting = greeting;
   this.name = name;
 }
-Greeter.prototype.say = function () {
-  return `${this.greeting}, ${this.name}!`;
-};
+Greeter.prototype.say = function () { return `${this.greeting}, ${this.name}!`; };
 
 const ctx = { tag: 'wrongCtx' };
-const BoundGreeter = Greeter.myBind(ctx, 'Hello');
+const Bound = Greeter.myBind(ctx, 'Hello');
 
-// Test 1: normal call — should set props on ctx (because no `new`).
-BoundGreeter('Prateek');
-console.log(ctx.greeting, ctx.name);   // 'Hello' 'Prateek'
+// Normal call → mutates ctx
+Bound('Prateek');
+console.log(ctx.greeting, ctx.name);          // 'Hello' 'Prateek'
 
-// Test 2: `new` call — should IGNORE ctx, create fresh instance.
-const g = new BoundGreeter('Prateek');
-console.log(g.greeting, g.name);       // 'Hello' 'Prateek'
-console.log(g instanceof Greeter);     // true
-console.log(g.say());                  // 'Hello, Prateek!'
-console.log(ctx.greeting);             // still 'Hello' from Test 1, NOT overwritten
+// `new` call → fresh instance; ctx unchanged
+const g = new Bound('Anu');
+console.log(g.greeting, g.name);              // 'Hello' 'Anu'
+console.log(g instanceof Greeter);            // true
+console.log(g.say());                         // 'Hello, Anu!'
+console.log(ctx.greeting);                    // still 'Hello' (from earlier mutation)
 ```
 
-Trace Test 1 (normal call):
-- `BoundGreeter('Prateek')` invokes `Bound`. `new.target` is `undefined`.
-- `ctx = thisArg = { tag: 'wrongCtx' }`.
-- `targetFn.apply(ctx, ['Hello', 'Prateek'])` → `Greeter.call({tag:'wrongCtx'}, 'Hello', 'Prateek')`.
-- Inside Greeter: `this = ctx`. Assigns `ctx.greeting = 'Hello'`, `ctx.name = 'Prateek'`. Mutates ctx (yikes, but that's what bind does).
+---
 
-Trace Test 2 (`new` call):
-- `new BoundGreeter('Prateek')`. JS creates a fresh object whose `[[Prototype]]` is `Bound.prototype` (which is `Object.create(Greeter.prototype)`).
-- Inside `Bound`: `new.target` is `Bound` (truthy). So `ctx = this` (the fresh object).
-- `targetFn.apply(this, ['Hello', 'Prateek'])` → `Greeter.call(freshObj, 'Hello', 'Prateek')`.
-- Inside Greeter: `this = freshObj`. Assigns `freshObj.greeting`, `freshObj.name`.
-- `Bound` returns whatever Greeter returns (`undefined`), so `new` uses `freshObj` as the result.
-- `g instanceof Greeter` — walks `g`'s prototype chain: `g.[[Proto]] === Bound.prototype === Object.create(Greeter.prototype)`, whose `[[Proto]] === Greeter.prototype`. Match. `true`.
-- `g.say()` — finds `say` on Greeter.prototype via the chain. Works.
+## 9. Step-by-step dry run
 
-This is the dry run interviewers want to hear walked through — specifically that **`new.target` flips the `this` source** and **`Object.create(targetFn.prototype)` makes `instanceof` work**.
+```
+const ctx = { tag: 'wrongCtx' }
+const Bound = Greeter.myBind(ctx, 'Hello')
+  step 2:  targetFn = Greeter
+  step 5:  Bound.prototype = Object.create(Greeter.prototype)
+           → Bound.prototype.[[Proto]] === Greeter.prototype
 
-## Important takeaways
+Test 1 — normal call:
+Bound('Prateek')
+  enter Bound(['Prateek'])
+  step 3:  new.target = undefined → ctx = thisArg = { tag: 'wrongCtx' }
+  step 4:  Greeter.apply({tag:'wrongCtx'}, ['Hello', 'Prateek'])
+           inside Greeter: this = ctx
+             ctx.greeting = 'Hello'
+             ctx.name = 'Prateek'
+  return undefined
+  // ctx mutated (yikes, but that's the contract)
 
-**Syntax to memorize**
-- `const targetFn = this;` — capture the function bind is being called on.
-- `const ctx = new.target ? this : thisArg;` — the magic line.
-- `Bound.prototype = Object.create(targetFn.prototype);` — instanceof support.
-- `targetFn.apply(ctx, [...boundArgs, ...callArgs]);` — partial application order.
+Test 2 — new call:
+const g = new Bound('Anu')
+  JS engine: create freshObj with freshObj.[[Proto]] = Bound.prototype
+  enter Bound(['Anu']) with this = freshObj, new.target = Bound (truthy)
+  step 3:  ctx = this = freshObj
+  step 4:  Greeter.apply(freshObj, ['Hello', 'Anu'])
+           inside Greeter: this = freshObj
+             freshObj.greeting = 'Hello'
+             freshObj.name = 'Anu'
+  return undefined
+  // `new` uses freshObj as the result since Bound returned undefined
+  
+g instanceof Greeter:
+  walk g's prototype chain
+  g.[[Proto]] === Bound.prototype === Object.create(Greeter.prototype)
+  Bound.prototype.[[Proto]] === Greeter.prototype
+  → match → true
 
-**Patterns to reuse**
-- `new.target` detection: same trick used to enforce "must call with `new`" (`if (!new.target) throw ...`) or polyfill `Reflect.construct`. Senior-level JS knowledge.
-- `Object.create(parent.prototype)` is THE way to set up prototypal inheritance without invoking the parent constructor. Used in ES5 inheritance idioms before `class`.
-- Closures-over-captured-args is the same pattern as `partial`, `curry`, `memoize` — bind is just a specialized partial that also captures `this`.
+g.say():
+  property lookup on g → not own → walk chain
+  g.[[Proto]] (Bound.prototype) → no 'say' → walk further
+  Bound.prototype.[[Proto]] (Greeter.prototype) → has 'say' ✓
+  invoke say() with this=g → `${g.greeting}, ${g.name}!` = 'Hello, Anu!'
+```
 
-**Common mistakes**
-- Forgetting `new.target` → bound constructors send `this` to the wrong object on `new`.
-- Skipping `Object.create(targetFn.prototype)` → `instanceof` fails.
-- Using `targetFn.bind` recursively → infinite loop in your polyfill.
-- Forgetting to capture `this` outside the inner function — `this` inside `function Bound()` is different from the outer `this`.
-- Using an arrow function for `Bound` → arrow has no `new.target`, so constructor invocations break.
+---
 
-**Related questions**
-- Polyfill `call` and `apply` — simpler; uses a symbol-property trick to set `this` temporarily.
-- Polyfill the `new` operator — `myNew(Ctor, ...args)` = `Object.create(Ctor.prototype)` + `Ctor.apply(obj, args)` + return-handling.
-- `Reflect.construct(target, args, newTarget)` — modern equivalent of bind+new.
+## 10. Common confusion + traps
 
-## Variants
+1. **Forgetting `new.target`** — bound constructors send `this` to ctx instead of new instance.
+2. **Arrow for `Bound`** — no `new.target`; cannot be called with `new`.
+3. **Skipping `Object.create(targetFn.prototype)`** — `instanceof` fails.
+4. **Capturing `this` inside `function Bound()`** — the inner `this` is different from the outer; capture `targetFn` outside.
+5. **`fn.bind(a).bind(b)`** — `b` is silently ignored; native and polyfill both behave this way.
+6. **Arrow function as `targetFn`** — `thisArg` is ignored; arrow `this` is lexical. Polyfill silently no-ops correctly.
+7. **Strict vs sloppy `bind(null)`** — strict gives `this === null`; sloppy gives `globalThis`. Engine handles.
 
-1. **Polyfill `call`** — `Function.prototype.myCall = function(thisArg, ...args) { const sym = Symbol(); thisArg[sym] = this; const result = thisArg[sym](...args); delete thisArg[sym]; return result; }`. Be ready.
+---
 
-2. **Polyfill `apply`** — same as `call` but takes an array. One-line difference.
+## 11. Senior follow-ups & variants
 
-3. **Polyfill `new`** — `function myNew(Ctor, ...args) { const obj = Object.create(Ctor.prototype); const res = Ctor.apply(obj, args); return (typeof res === 'object' && res !== null) ? res : obj; }`. The `return` handling is the gotcha — constructors that return an object override the new instance.
+### Variant 1 — Polyfill `call`
+```js
+Function.prototype.myCall = function (thisArg, ...args) {
+  thisArg = thisArg ?? globalThis;
+  const sym = Symbol();
+  thisArg[sym] = this;
+  try { return thisArg[sym](...args); }
+  finally { delete thisArg[sym]; }
+};
+```
+Temporarily attaches the function as a property of `thisArg`, calls, removes.
 
-4. **`bind` chain immutability** — once bound, the `this` can't be changed even by `call`/`apply`. Polyfill above naturally has this property because the inner `Bound` always uses captured `thisArg`.
+### Variant 2 — Polyfill `apply`
+Same as `call` but takes an array.
 
-5. **Strict / sloppy mode differences** — `bind(null)` in strict gives `this === null` inside fn; in sloppy it becomes `globalThis`. Out of scope for the polyfill (engine handles it).
+### Variant 3 — Polyfill `new`
+```js
+function myNew(Ctor, ...args) {
+  const obj = Object.create(Ctor.prototype);
+  const res = Ctor.apply(obj, args);
+  return (res !== null && typeof res === 'object') ? res : obj;
+}
+```
+The return-handling line is the gotcha — constructors that return an object override the new instance.
 
-## Revision notes
+### Variant 4 — `Reflect.construct`
+Modern equivalent of `bind` + `new`: `Reflect.construct(Foo, args, NewTarget)`.
 
-> **bind polyfill — 60 second recap**
-> - `Function.prototype.myBind = function(thisArg, ...boundArgs) { ... }`
-> - Inner `Bound`: `const ctx = new.target ? this : thisArg;`
-> - `Bound.prototype = Object.create(targetFn.prototype)` for `instanceof`.
-> - Partial app: `[...boundArgs, ...callArgs]`.
-> - **THE test:** `new (foo.bind(ctx))()` — `this` must be the new instance, NOT ctx. `new.target` detects.
-> - Sibling polyfills: `call` (symbol trick), `apply` (array variant), `new` (Object.create + apply + return handling).
-> - **Trap:** arrow for `Bound` — no `new.target`, breaks constructor calls.
+### Variant 5 — Immutability of bound `this`
+Once bound, `this` can't be changed even by `call`/`apply` on the bound fn. Native and polyfill both have this.
+
+---
+
+## 12. How to think aloud
+
+> "Capture `targetFn = this`. Return a `Bound` function (NOT an arrow — arrows can't be called with `new`). Inside `Bound`: `const ctx = new.target ? this : thisArg` — the magic line. Then `targetFn.apply(ctx, [...boundArgs, ...callArgs])`. For `instanceof` to work, `Bound.prototype = Object.create(targetFn.prototype)`. Trap: forgetting `new.target` → constructor calls send `this` to ctx. Trap: arrow for `Bound` → no `new.target`. Sibling polyfills: `call` (symbol-property trick), `apply` (array variant), `new` (Object.create + apply + return-handling)."
+
+---
+
+## 13. 60-second revision
+
+> - **Polyfill: capture `targetFn`, return `Bound` (NOT arrow).**
+> - **`const ctx = new.target ? this : thisArg`** — the magic line.
+> - **`Bound.prototype = Object.create(targetFn.prototype)`** for `instanceof`.
+> - **Partial app:** `[...boundArgs, ...callArgs]`.
+> - **THE test:** `new (foo.bind(ctx))()` — `this` must be the new instance, NOT ctx.
+> - **Sibling polyfills:** `call` (symbol trick), `apply` (array variant), `new` (create + apply + return-handling).
+> - **Trap:** arrow `Bound`; missing prototype chain; capturing `this` inside `Bound`.
+
+---
+
+**Related:** [`03-prototype/this-binding-rules.md`](../03-prototype/this-binding-rules.md) · [`03-prototype/call-apply-bind-differences.md`](../03-prototype/call-apply-bind-differences.md) · [function-composition.md](./function-composition.md) · [curry.md](./curry.md)
+
+**Concept primer:** [`concepts/prototype.md`](../../concepts/prototype.md)

@@ -1,173 +1,308 @@
-# Deep Merge with Cycles
+# Deep merge with cycles
 
-## Source / Origin
-- `lodash.merge`; common utility with subtle edge cases.
-- Asked at: Razorpay, Atlassian, Stripe.
-- Concept reference: `concepts/recursion.md`, sibling `10-machine-coding-patterns/deep-clone-with-cycles.md`.
+> **Difficulty:** Senior   |   **Time:** ~15 min   |   **Prereqs:** [deep-clone-with-cycles.md](./deep-clone-with-cycles.md)
+>
+> **Source:** `lodash.merge`. Razorpay, Atlassian, Stripe.
 
-## Why this question matters in interviews
-"Merge config objects deeply." Tests recursion, identity tracking, type discrimination, and policy choices (arrays: concat or replace?). Senior bar: you handle cycles via WeakMap of visited pairs, document array policy, and reject prototype-pollution keys.
+---
 
-## Concepts involved
+## 1. Problem statement
+
+Merge config objects deeply. Source overrides target. Handle arrays (merge policy), cycles (WeakMap), prototype-pollution keys.
+
+**Verification examples**
 
 ```js
+deepMerge({a: 1, b: {x: 1}}, {b: {y: 2}, c: 3});
+// {a: 1, b: {x: 1, y: 2}, c: 3}
+
+deepMerge({a: [1, 2]}, {a: [3]});           // {a: [3]} (replace policy default)
+deepMerge({a: [1, 2]}, {a: [3]}, {arrayMerge: 'concat'});   // {a: [1, 2, 3]}
+
+// Prototype pollution attempt
+deepMerge({}, {__proto__: {polluted: 1}});  // safe (key skipped)
+```
+
+**Constraints**
+- Source overrides target.
+- Array policy: replace (default) / concat / index.
+- Skip `__proto__`, `constructor`, `prototype` keys.
+- Cycle safety via WeakMap.
+- Optional: skip undefined values.
+
+---
+
+## 2. Plain-English restatement
+
+Walk source; for each value: if object, merge recursively into target's same key; else assign. Handle arrays per policy, skip dangerous keys, track cycles.
+
+---
+
+## 3. Why this matters in interviews
+
+Recursion + identity + policy. Senior bar: handle cycles, document array policy, reject `__proto__`.
+
+---
+
+## 4. Mental model
+
+```
+   deepMerge(target, source, opts):
+     for each key in source:
+       skip __proto__, constructor, prototype
+       sv = source[key]
+       tv = target[key]
+       
+       if sv is primitive: result[key] = sv
+       else if Array.isArray(sv):
+         policy decides (replace/concat/index)
+       else if Date/Map/Set: clone sv
+       else (plain object):
+         result[key] = deepMerge(tv ?? {}, sv)
+     
+     return result
+   
+   Array policies:
+     'replace' (default): sv wins entirely.
+     'concat': tv.concat(sv).
+     'index': merge element-by-element; sv overrides at each index.
+   
+   Cycle tracker:
+     WeakMap<sourceObj, mergedResult>.
+     If source revisited, return cached result.
+   
+   Prototype pollution:
+     {__proto__: {polluted: 1}} → without skip, sets Object.prototype.polluted.
+     ALL objects in process now have .polluted. Catastrophic.
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. Array merge policy default?
+> 2. Why skip `__proto__`?
+> 3. `deepMerge(undefined, {a: 1})` — what happens?
+
+---
+
+## 6. Brute force — walked through
+
+```js
+function brute(t, s) {
+  for (const k in s) {       // walks prototype too!
+    if (typeof s[k] === 'object') {
+      t[k] = brute(t[k] ?? {}, s[k]);
+    } else {
+      t[k] = s[k];           // overwrites; no policy
+    }
+  }
+  return t;
+}
+```
+
+Bugs: for..in walks prototype; mutates target; no policy; pollution-vulnerable.
+
+---
+
+## 7. The unlocking insight
+
+> **Recursive walk. Per-key policy. Cycle tracker. Skip dangerous keys. Clone-on-merge for immutability.**
+
+Three properties:
+
+1. **Cycle tracker** WeakMap<source, result>.
+2. **Skip `__proto__`** etc. for safety.
+3. **Array policy** documented.
+
+---
+
+## 8. Solution (annotated)
+
+```js
+const DANGEROUS_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+
 function deepMerge(target, source, opts = {}) {
   const { arrayMerge = 'replace', skipUndefined = false } = opts;
   const seen = new WeakMap();
+
   function merge(t, s) {
-    if (s === null || typeof s !== 'object') return s;
+    if (s === null || typeof s !== 'object') return s;                    // step 1: primitive
+
     if (Array.isArray(s)) {
       if (arrayMerge === 'concat') return Array.isArray(t) ? t.concat(s) : s.slice();
-      if (arrayMerge === 'replace') return s.slice();
+      if (arrayMerge === 'replace') return s.slice();                      // step 2: array policy
       if (arrayMerge === 'index') {
         const out = Array.isArray(t) ? t.slice() : [];
         s.forEach((v, i) => { out[i] = merge(out[i], v); });
         return out;
       }
     }
+
     if (s instanceof Map) return new Map(s);
     if (s instanceof Set) return new Set(s);
     if (s instanceof Date) return new Date(s);
-    if (seen.has(s)) return seen.get(s);
+
+    if (seen.has(s)) return seen.get(s);                                   // step 3: cycle
+
     const result = (t && typeof t === 'object' && !Array.isArray(t)) ? { ...t } : {};
-    seen.set(s, result);
+    seen.set(s, result);                                                   // step 4: register first
+
     for (const key of Object.keys(s)) {
-      if (['__proto__', 'prototype', 'constructor'].includes(key)) continue;
+      if (DANGEROUS_KEYS.has(key)) continue;                               // step 5: pollution safety
       const sv = s[key];
       if (skipUndefined && sv === undefined) continue;
-      result[key] = merge(result[key], sv);
+      result[key] = merge(result[key], sv);                                // step 6: recurse
     }
+
     return result;
   }
+
   return merge(target, source);
 }
 ```
 
-### Edge cases / traps
-1. **Cycles**: `s.self = s` — without WeakMap of visited, infinite loop. WeakMap from source → result.
-2. **Array merge policy** — replace (default), concat, index-merge. Document.
-3. **Date / Map / Set / RegExp** — special types; copy, don't recurse into.
-4. **Prototype pollution** — reject `__proto__`, `prototype`, `constructor`.
-5. **null vs undefined** — undefined source: keep target? or wipe? Provide `skipUndefined` knob.
-6. **Functions** — keep by reference, don't try to merge.
-7. **Class instances** — same as plain objects, but be wary of prototype-preservation expectations.
-8. **Symbol keys** — `Object.keys` skips them; use `Reflect.ownKeys` if needed.
-
-## Mental Model
-
-```
-   target:  { a: 1, b: { c: 2 } }
-   source:  { b: { d: 3 }, e: 4 }
-
-   merge:   walk source keys
-            if both target[k] and source[k] are plain objects → recurse
-            else → source[k] wins (or merge by policy)
-
-   result:  { a: 1, b: { c: 2, d: 3 }, e: 4 }
-
-   cycle:   source.self = source
-            seen.set(source, partialResult)
-            when we encounter source.self again → return partialResult (avoid loop)
-```
-
-## Solution
-
-See "Syntax to lock in" above. Usage examples:
+**Try it yourself**
 
 ```js
 // Basic
-deepMerge({ a: { x: 1 } }, { a: { y: 2 } });
-// { a: { x: 1, y: 2 } }
+deepMerge({a: 1, b: {x: 1}}, {b: {y: 2}, c: 3});
+// {a: 1, b: {x: 1, y: 2}, c: 3}
 
 // Array policy
-deepMerge({ a: [1, 2] }, { a: [3, 4] });                  // { a: [3, 4] } (replace)
-deepMerge({ a: [1, 2] }, { a: [3, 4] }, { arrayMerge: 'concat' });  // { a: [1,2,3,4] }
-deepMerge({ a: [1, 2, 3] }, { a: [9, undefined, 8] }, { arrayMerge: 'index' });
-// { a: [9, 2, 8] } — index-merge keeps target where source has undefined
+deepMerge({arr: [1, 2]}, {arr: [3]});                         // {arr: [3]}
+deepMerge({arr: [1, 2]}, {arr: [3]}, {arrayMerge: 'concat'}); // {arr: [1, 2, 3]}
+deepMerge({arr: [1, 2, 3]}, {arr: [9, 99]}, {arrayMerge: 'index'});
+// {arr: [9, 99, 3]}
 
-// Cyclic source
-const s = { x: 1 };
-s.self = s;
-const r = deepMerge({}, s);
-r === r.self;    // true (cycle preserved)
+// Prototype pollution defense
+const bad = JSON.parse('{"__proto__": {"polluted": true}}');
+deepMerge({}, bad);
+({}).polluted;                                                 // undefined ✓ (skipped)
 
-// Skip undefined sources (don't wipe target)
-deepMerge({ a: 1, b: 2 }, { a: undefined, c: 3 }, { skipUndefined: true });
-// { a: 1, b: 2, c: 3 }
+// Without defense:
+// const obj = {};
+// for (const k of Object.keys(bad)) obj[k] = bad[k];
+// ({}).polluted === true   ← Object.prototype mutated!
+
+// Cycle in source
+const s = { a: 1 }; s.self = s;
+const m = deepMerge({}, s);
+m.self === m;                                                  // true (cycle in merged)
+m.self !== s;                                                  // true (independent)
 
 // Multiple sources
 function deepMergeAll(target, ...sources) {
-  return sources.reduce((acc, s) => deepMerge(acc, s), target);
+  return sources.reduce((acc, src) => deepMerge(acc, src), target);
 }
+
+deepMergeAll({a: 1}, {b: 2}, {c: 3});                         // {a:1, b:2, c:3}
 ```
 
-## Dry run
+---
+
+## 9. Step-by-step dry run
 
 ```
-target = {a:1, b:{c:2}}
-source = {b:{d:3}, e:4}
+deepMerge({a: 1, b: {x: 1}}, {b: {y: 2}, c: 3}):
 
-merge(target, source):
-  source is object, not array
-  seen.set(source, result={...target}={a:1, b:{c:2}})
-  walk source keys: ['b', 'e']
-    key 'b': sv={d:3}; result.b = merge(result.b={c:2}, {d:3})
-      merge({c:2}, {d:3}): object recurse
-      seen.set({d:3}, {c:2})  (note: result starts as copy of target.b)
-      walk: key 'd': sv=3; not object; result.d = 3
-      return {c:2, d:3}
-    key 'e': sv=4; not object; result.e = 4
-  return {a:1, b:{c:2,d:3}, e:4}
+merge(t, s):
+  s is object. Not array/Map/Set/Date. Not seen.
+  result = {...t} = {a: 1, b: {x: 1}}.
+  seen.set(s, result).
+  
+  for key 'b' in s:
+    sv = {y: 2}. tv = {x: 1}.
+    result['b'] = merge({x: 1}, {y: 2}):
+      Inner merge:
+        result' = {x: 1}. seen.set.
+        key 'y': merge(undefined, 2) = 2. result'.y = 2.
+        return {x: 1, y: 2}.
+    result.b = {x: 1, y: 2}.
+  
+  for key 'c' in s:
+    sv = 3. result.c = 3.
+  
+  return {a: 1, b: {x: 1, y: 2}, c: 3}.
+
+Pollution attempt:
+  bad = JSON.parse('{"__proto__": {"polluted": true}}').
+  Object.keys(bad) → ['__proto__']  ← own key (JSON.parse preserves as own).
+  Wait, actually JSON.parse may either set __proto__ as own or via setter. In modern Node, JSON.parse sets it as own enumerable.
+  
+  for key '__proto__': DANGEROUS_KEYS.has → SKIP.
+  
+  Safe. Object.prototype untouched.
+
+Without defense (the brute force):
+  for k in bad: obj[k] = bad[k];
+  k='__proto__': obj.__proto__ = {polluted:true}.
+  This sets obj's prototype to {polluted:true}.
+  {}.polluted now true → catastrophic.
+
+Cycle source:
+  s = {a:1}; s.self = s.
+  merge(target, s):
+    seen.set(s, result). result = {a:1}.
+    key 'self': merge(undefined, s):
+      seen.has(s) → return result.
+    result.self = result (cycle in clone).
 ```
 
-Cycle case:
+---
 
-```
-s = {x:1}; s.self = s
-deepMerge({}, s):
-  merge({}, s): not seen
-  seen.set(s, r={})
-  walk: key 'x': r.x = 1
-  walk: key 'self': sv = s
-    merge(undefined, s): s is in seen → return seen.get(s) = r
-  r.self = r
-  return r → r.self === r ✓
-```
+## 10. Common confusion + traps
 
-## How to think aloud
+1. **`for..in` walks prototype** — use `Object.keys`.
+2. **Mutate target** — lodash mutates by default; document.
+3. **No array policy** — silent overwrite confusion.
+4. **`__proto__` pollution** — catastrophic.
+5. **No cycle tracker** — infinite recursion.
+6. **`Object.assign` instead** — shallow merge only.
+7. **`spread` recursive** — would still need policy.
 
-> "Recursive merge with three policy knobs: array merge (replace/concat/index), skip undefined, and prototype-key rejection. WeakMap of visited sources to handle cycles — set the entry *before* recursing into children so cycles resolve to the partial result. Special-case Date/Map/Set/RegExp — copy, don't merge. Document the array policy clearly; that's where most users get bitten."
+---
 
-## Important takeaways
+## 11. Senior follow-ups & variants
 
-- **WeakMap for cycle detection** (set entry *before* recurse).
-- **Array policy is a knob** — replace by default, concat or index as options.
-- **Reject prototype keys** — `__proto__`, `prototype`, `constructor`.
-- **Date/Map/Set/RegExp**: copy, don't recurse.
-- **`skipUndefined` option** to preserve target on undefined source.
+### Variant 1 — Lodash parity
+lodash mutates target; document divergence.
 
-## Variants
+### Variant 2 — Multi-source
+`deepMergeAll(target, ...sources)`.
 
-- **Immer** for immutable updates with proxies.
-- **Lodash `_.mergeWith(target, source, customizer)`** — per-key override.
-- **Object.assign** for shallow.
-- **`structuredClone` + merge** for deep-copy-then-merge.
+### Variant 3 — Customizer
+Per-key callback override.
 
-## Revision notes
+### Variant 4 — `Object.assign` for shallow
+Spread/assign for one-level.
 
-```
-deepMerge(target, source, opts):
-  WeakMap seen for cycles
-  recurse on plain objects
-  policy: arrayMerge ∈ {replace, concat, index}
-  skipUndefined optional
-  reject __proto__, prototype, constructor
-  Date/Map/Set: copy, don't recurse
+### Variant 5 — Symbol keys
+Use `Reflect.ownKeys` instead of `Object.keys`.
 
-cycle handling:
-  seen.set(source, result) BEFORE walking children
-  return seen.get(source) on revisit
+---
 
-multiple sources:
-  reduce(deepMerge, target, ...sources)
-```
+## 12. How to think aloud
+
+> "Deep merge: walk source, per-key: if primitive → assign; if object → recurse into target's same key; if array → policy (default replace; concat; element-wise index merge). Three critical concerns: (1) Prototype pollution — `__proto__`, `constructor`, `prototype` keys in source must be SKIPPED. Without skip, `deepMerge({}, JSON.parse('{\"__proto__\":{\"polluted\":true}}'))` sets `Object.prototype.polluted` — every object in the process now has it. Catastrophic. Modern JSON.parse sets __proto__ as own enumerable; assignment via `obj.__proto__ = ...` mutates prototype. (2) Cycles — WeakMap<source, result> tracker; register BEFORE recurse children. (3) Array policy must be DOCUMENTED — lodash.merge does element-wise; that's surprising for users expecting concat or replace. Default to replace; expose option. Use `Object.keys` (own enumerable) NOT `for..in` (walks prototype enumerable). Clone Date/Map/Set values instead of merging (no good 'merge' semantic). Non-mutating: spread `{...target}` to start each level; mutating variant matches lodash but breaks immutability. Trap: `__proto__` pollution (security CVE); for..in proto walk; no cycle tracker (infinite); ambiguous array policy."
+
+---
+
+## 13. 60-second revision
+
+> - **Recursive walk; per-key dispatch.**
+> - **Skip `__proto__`, `constructor`, `prototype`** — pollution defense.
+> - **Array policy:** replace (default) / concat / index.
+> - **WeakMap cycle tracker** + register-before-recurse.
+> - **`Object.keys`** not `for..in`.
+> - **Date/Map/Set clone**, not merge.
+> - **Non-mutating** via `{...target}`.
+> - **Multi-source:** reduce.
+> - **Trap:** pollution; proto walk; cycle infinite; mutation surprise.
+
+---
+
+**Related:** [deep-clone-with-cycles.md](./deep-clone-with-cycles.md) · [`08-maps-sets/object-deep-diff.md`](../08-maps-sets/object-deep-diff.md) · [`07-arrays/structured-clone-vs-spread.md`](../07-arrays/structured-clone-vs-spread.md)
+
+**Concept primer:** [`concepts/recursion-and-the-call-stack.md`](../../concepts/recursion-and-the-call-stack.md)

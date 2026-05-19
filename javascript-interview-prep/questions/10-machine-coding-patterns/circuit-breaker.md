@@ -1,129 +1,112 @@
-# Circuit Breaker
+# Circuit Breaker — three-state failure-isolation primitive
 
-## Source / Origin
-- Pattern named by Michael Nygard in "Release It!" (2007).
-- Netflix Hystrix popularized it; modern equivalents: resilience4j (Java), opossum (Node), polly (.NET).
-- Asked at: Razorpay, Stripe, Uber, Atlassian — anywhere outbound calls to flaky deps exist.
-- Concept reference: backend `interview-scenarios/02-debugging-scenarios.md` (cascading failure section).
+> **Difficulty:** Senior   |   **Time:** ~25 min   |   **Prereqs:** [mini-state-machine.md](./mini-state-machine.md), [retry-with-jitter-and-budget.md](./retry-with-jitter-and-budget.md)
+>
+> **Source:** Michael Nygard's "Release It!" (2007); Netflix Hystrix, resilience4j, Polly, opossum. Asked at Razorpay, Stripe, Uber, Atlassian.
 
-## Why this question matters in interviews
-Cascading failure is the canonical distributed-systems incident. Service A calls service B. B slows from 50ms to 5s. A's threads block waiting for B. A's queue fills. A starts timing out. Now A's callers see latency. Eventually the whole graph melts. The circuit breaker is the protocol that says "stop calling B for 30 seconds; let it recover." Senior interviewers expect you to know *why* it exists (fail fast under partial failure), the three-state machine (CLOSED → OPEN → HALF_OPEN), and the knobs (threshold, window, timeout, half-open probe count).
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
-```js
+**Signature**
+```ts
 class CircuitBreaker {
-  constructor({ threshold = 5, windowMs = 10_000, cooldownMs = 30_000, halfOpenMax = 1 } = {}) {
-    this.threshold = threshold;
-    this.windowMs = windowMs;
-    this.cooldownMs = cooldownMs;
-    this.halfOpenMax = halfOpenMax;
-    this.state = 'CLOSED';
-    this.failures = [];           // timestamps of recent failures
-    this.openedAt = 0;
-    this.halfOpenInFlight = 0;
-  }
-
-  async exec(fn) {
-    if (this.state === 'OPEN') {
-      if (Date.now() - this.openedAt >= this.cooldownMs) this.state = 'HALF_OPEN';
-      else throw new Error('CircuitOpen');
-    }
-    if (this.state === 'HALF_OPEN' && this.halfOpenInFlight >= this.halfOpenMax) {
-      throw new Error('CircuitHalfOpenSaturated');
-    }
-    if (this.state === 'HALF_OPEN') this.halfOpenInFlight++;
-    try {
-      const r = await fn();
-      this.onSuccess();
-      return r;
-    } catch (e) {
-      this.onFailure();
-      throw e;
-    } finally {
-      if (this.state === 'HALF_OPEN') this.halfOpenInFlight = Math.max(0, this.halfOpenInFlight - 1);
-    }
-  }
-
-  onSuccess() {
-    if (this.state === 'HALF_OPEN') { this.state = 'CLOSED'; this.failures = []; }
-  }
-
-  onFailure() {
-    const now = Date.now();
-    this.failures.push(now);
-    this.failures = this.failures.filter(t => now - t < this.windowMs);
-    if (this.state === 'HALF_OPEN') { this.state = 'OPEN'; this.openedAt = now; return; }
-    if (this.failures.length >= this.threshold) { this.state = 'OPEN'; this.openedAt = now; }
-  }
+  constructor(opts?: { threshold?: number; windowMs?: number; cooldownMs?: number; halfOpenMax?: number; isFailure?(err): boolean });
+  exec<T>(fn: () => Promise<T>): Promise<T>;
+  reset(): void;
+  snapshot: { state: 'CLOSED'|'OPEN'|'HALF_OPEN'; failures: number; openedAt: number };
 }
 ```
 
-### Edge cases / interview traps
-1. **All exceptions count, or only some?** Production: don't trip on `4xx` (caller bug); trip on `5xx`/timeout. Make `isFailure(err)` injectable.
-2. **Time-based vs count-based window.** Count of last-N is simpler; sliding-time window is fairer (resilience4j default).
-3. **HALF_OPEN concurrency.** Only `halfOpenMax` requests allowed; the rest are short-circuited. Otherwise a thundering herd on the recovering service.
-4. **HALF_OPEN failure → re-OPEN, not CLOSED.** Subtle. Reset `openedAt` to now.
-5. **Clock skew & monotonic time.** Use `performance.now()` if your scheduler matters; `Date.now()` is fine for human-scale cooldowns.
-6. **Per-key breakers.** One breaker per downstream — never share between `userService` and `paymentService`.
-7. **Falling-back vs failing-fast.** Some breakers offer `fallback(fn)`; that's an *additional* concern (bulkhead/fallback), not the breaker itself.
-8. **Manual reset for ops.** Expose `reset()` so on-call can force-close after fixing the downstream.
+**Input / Output examples**
 
-## Mental Model
+| Setup (threshold=3, window=10s, cooldown=5s)          | Behaviour                                              |
+|--------------------------------------------------------|---------------------------------------------------------|
+| 3 failures within 10s                                  | state → OPEN                                            |
+| Call while OPEN                                        | throws `CircuitOpen` immediately, no downstream call   |
+| Cooldown elapsed                                       | state → HALF_OPEN; one probe allowed                    |
+| HALF_OPEN probe succeeds                               | state → CLOSED, failures cleared                       |
+| HALF_OPEN probe fails                                  | state → OPEN, openedAt reset                            |
+| 4xx error                                              | with injected `isFailure`, does NOT trip                |
 
-A circuit breaker is the **electrical fuse for service calls**.
+**Constraints**
+- Three states: CLOSED, OPEN, HALF_OPEN.
+- Sliding-window failure count (default 10s).
+- Bounded probes in HALF_OPEN (default 1).
+- `isFailure(err)` injectable — distinguish caller (4xx) from server (5xx/timeout) errors.
+
+---
+
+## 2. Plain-English restatement
+
+When a downstream service starts failing repeatedly, stop calling it for a while. Three states: **CLOSED** (normal, count failures), **OPEN** (short-circuit, reject without calling), **HALF_OPEN** (after cooldown, allow a few probes — success closes, failure re-opens). Prevents cascading failure: A's threads don't pile up waiting for B; instead A fails fast and falls back.
+
+---
+
+## 3. Why this matters in interviews
+
+Cascading failure is the canonical distributed-systems incident. The circuit breaker is the protocol that says "stop calling B for 30 seconds; let it recover." Probes the three-state machine, knobs (threshold, window, cooldown, halfOpenMax), and operational instincts (per-key, alert on OPEN).
+
+---
+
+## 4. Mental model
 
 ```
-                ┌──────────┐  failures < threshold  ┌──────────┐
-   normal ──▶   │  CLOSED  │ ─────────────────────▶ │  CLOSED  │
-   traffic      └────┬─────┘                        └──────────┘
+                ┌──────────┐  failures < threshold   ┌──────────┐
+   normal ───▶  │  CLOSED  │ ──────────────────────▶ │  CLOSED  │
+   traffic      └────┬─────┘                         └──────────┘
                      │ failures >= threshold
                      ▼
-                ┌──────────┐  cooldown elapsed   ┌────────────┐
-                │   OPEN   │ ──────────────────▶ │ HALF_OPEN  │
-                │ (reject) │                     │ (probe N)  │
-                └──────────┘                     └─────┬──────┘
-                     ▲                                 │
-                     │ probe fails                     │ probes ok
-                     └─────────────────────────────────┘
-                                                       │
-                                                       ▼
-                                                  back to CLOSED
+                ┌──────────┐    cooldown elapsed    ┌─────────────┐
+                │   OPEN   │ ─────────────────────▶ │ HALF_OPEN   │
+                │ (reject) │                         │ (probe ≤N)  │
+                └──────────┘                         └─────┬───────┘
+                     ▲                                     │
+                     │ probe fails                         │ probes ok
+                     └─────────────────────────────────────┘
+                                                           ▼
+                                                      back to CLOSED
 ```
 
-**CLOSED**: pass through; tally failures in a sliding window.
-**OPEN**: short-circuit; throw immediately so callers can fall back fast.
-**HALF_OPEN**: a few probes through; success → CLOSED, failure → OPEN with fresh cooldown.
+**Like an electrical fuse**: trips on overload, cools off, then probes to see if normal flow is back.
 
-## Why interviewers care
+---
 
-- **Failure isolation literacy** — you don't melt the system when one dep slows.
-- **State-machine discipline** — three states, two timers (window + cooldown), bounded probe count.
-- **Operations awareness** — manual reset, per-key keys, what to alert on (`state=OPEN` is a page).
+## 5. Try it yourself first
 
-## Common beginner confusion
+> **Predict before reading on:**
+> 1. Why per-downstream breaker, not one global breaker?
+> 2. After cooldown, why allow only ONE probe, not full traffic?
+> 3. Should 4xx errors trip the breaker?
 
-- **"Just retry on failure."** Retries amplify load; without a breaker, retries on a slow downstream make it slower. Always pair retry with breaker.
-- **"OPEN means broken — never close again."** Wrong. After cooldown, probe HALF_OPEN.
-- **"HALF_OPEN allows full traffic."** No — *bounded* probes. A single probe is common.
-- **"Set threshold=1 for safety."** Then a single transient blip trips you. 5/10s window is a sane default.
-- **"Same breaker for all calls."** No. Per-downstream keying; otherwise B's failure flips A's calls open.
+---
 
-## Brute force approach
+## 6. Brute force — walked through
 
-```js
-// no breaker — every call hits the downstream
-try { return await call(); } catch (e) { return fallback; }
-```
+### Wrong attempt 1: no breaker, retry forever
+Retries amplify load on slow downstream. Without a breaker, the slow service gets slower.
 
-Cascading failure happens because all callers keep hammering the slow service.
+### Wrong attempt 2: OPEN forever after first failure
+Threshold=1 trips on transient blip. Use 5/10s window default.
 
-## Optimal approach
+### Wrong attempt 3: full traffic in HALF_OPEN
+Thundering herd hits the recovering service. Bound probes (default 1).
 
-A three-state breaker with sliding-window failure counting, cooldown timer, and bounded probes in HALF_OPEN. Inject `isFailure(err)` to distinguish caller errors from server errors.
+---
 
-## Solution (JavaScript) — production-shape
+## 7. The unlocking insight
+
+> **Three-state machine + sliding-window failure count + cooldown timer + bounded HALF_OPEN probes. Per-downstream key. `isFailure` injectable so 4xx don't trip.**
+
+Three properties:
+
+1. **CLOSED tallies, OPEN rejects, HALF_OPEN probes.**
+2. **Sliding window** of failure timestamps within `windowMs`.
+3. **Bounded probe count** prevents thundering herd on recovery.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
 class CircuitBreaker {
@@ -132,14 +115,18 @@ class CircuitBreaker {
     this.windowMs    = opts.windowMs    ?? 10_000;
     this.cooldownMs  = opts.cooldownMs  ?? 30_000;
     this.halfOpenMax = opts.halfOpenMax ?? 1;
-    this.isFailure   = opts.isFailure   ?? ((err) => true);
-    this.state = 'CLOSED'; this.failures = []; this.openedAt = 0; this.halfOpenInFlight = 0;
+    this.isFailure   = opts.isFailure   ?? (() => true);
+    this.state = 'CLOSED';
+    this.failures = [];
+    this.openedAt = 0;
+    this.halfOpenInFlight = 0;
   }
-  _now() { return Date.now(); }
-  _gate() {
+
+  _gate() {                                                          // step 1: state check
     if (this.state === 'OPEN') {
-      if (this._now() - this.openedAt >= this.cooldownMs) {
-        this.state = 'HALF_OPEN'; this.halfOpenInFlight = 0;
+      if (Date.now() - this.openedAt >= this.cooldownMs) {
+        this.state = 'HALF_OPEN';
+        this.halfOpenInFlight = 0;                                    // promote to HALF_OPEN
       } else {
         const err = new Error('CircuitOpen'); err.code = 'CIRCUIT_OPEN'; throw err;
       }
@@ -148,80 +135,137 @@ class CircuitBreaker {
       const err = new Error('CircuitHalfOpenSaturated'); err.code = 'CIRCUIT_SATURATED'; throw err;
     }
   }
+
   async exec(fn) {
     this._gate();
     const wasHalfOpen = this.state === 'HALF_OPEN';
     if (wasHalfOpen) this.halfOpenInFlight++;
     try {
       const r = await fn();
-      this._onSuccess();
+      this._onSuccess();                                              // step 2: success
       return r;
     } catch (err) {
-      if (this.isFailure(err)) this._onFailure();
+      if (this.isFailure(err)) this._onFailure();                     // step 3: count failure
       throw err;
     } finally {
       if (wasHalfOpen) this.halfOpenInFlight--;
     }
   }
-  _onSuccess() { if (this.state === 'HALF_OPEN') { this.state = 'CLOSED'; this.failures = []; } }
+
+  _onSuccess() {
+    if (this.state === 'HALF_OPEN') { this.state = 'CLOSED'; this.failures = []; }
+  }
+
   _onFailure() {
-    const t = this._now();
+    const t = Date.now();
     if (this.state === 'HALF_OPEN') { this.state = 'OPEN'; this.openedAt = t; return; }
-    this.failures = this.failures.filter(x => t - x < this.windowMs);
+    this.failures = this.failures.filter((x) => t - x < this.windowMs);  // sliding window
     this.failures.push(t);
     if (this.failures.length >= this.threshold) { this.state = 'OPEN'; this.openedAt = t; }
   }
+
   reset() { this.state = 'CLOSED'; this.failures = []; this.halfOpenInFlight = 0; }
   get snapshot() { return { state: this.state, failures: this.failures.length, openedAt: this.openedAt }; }
 }
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
-`threshold=3, windowMs=10s, cooldownMs=5s, halfOpenMax=1`. Calls f1..f5 all fail; cooldown elapses; probe succeeds.
+```js
+const cb = new CircuitBreaker({
+  threshold: 3, windowMs: 10_000, cooldownMs: 5_000,
+  isFailure: (e) => /5\d\d|ETIMEDOUT|ECONNRESET/.test(e.message),    // don't trip on 4xx
+});
+
+try {
+  const data = await cb.exec(() => fetch('https://api.example.com').then(r => {
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.json();
+  }));
+} catch (e) {
+  if (e.code === 'CIRCUIT_OPEN') console.log('Failing fast — service is down');
+  else throw e;
+}
+```
+
+---
+
+## 9. Step-by-step dry run
 
 ```
-t=0   f1 fail → failures=[0], state=CLOSED
-t=1   f2 fail → failures=[0,1]
-t=2   f3 fail → failures=[0,1,2] → threshold hit → state=OPEN, openedAt=2
-t=3   f4 → _gate sees OPEN, cooldown not elapsed → throw CircuitOpen (no downstream call)
-t=4   f5 → throw CircuitOpen
-t=8   f6 → _gate sees OPEN, cooldown elapsed (8-2=6 ≥ 5) → state=HALF_OPEN, inflight=1
-       call succeeds → _onSuccess → state=CLOSED, failures=[]
-t=9   f7 → CLOSED, passes through → success
+threshold=3, windowMs=10s, cooldownMs=5s, halfOpenMax=1
+
+t=0  exec(f) → CLOSED. f fails. failures=[0]. state=CLOSED.
+t=1  exec(f) → CLOSED. f fails. failures=[0,1].
+t=2  exec(f) → CLOSED. f fails. failures=[0,1,2]. >=3 → state=OPEN, openedAt=2.
+
+t=3  exec(f) → _gate: OPEN, now-openedAt=1 < 5 → THROW CircuitOpen (no f call).
+t=4  exec(f) → same → THROW.
+
+t=8  exec(f) → _gate: OPEN, now-openedAt=6 >= 5 → state=HALF_OPEN, inflight=0.
+              halfOpenInFlight=1. exec f.
+              f SUCCEEDS → _onSuccess → state=CLOSED, failures=[].
+              halfOpenInFlight-- = 0.
+
+t=9  exec(f) → CLOSED. passes through.
+
+If f had FAILED at t=8:
+  _onFailure → HALF_OPEN → state=OPEN, openedAt=8. Full 5s cooldown again.
 ```
 
-If `f6` had failed: state→OPEN, openedAt=8, full cooldown again before next probe.
+---
 
-## How to think aloud in the interview
+## 10. Common confusion + traps
 
-> "Three states: CLOSED tallies failures in a sliding window. Threshold trips to OPEN. OPEN short-circuits and starts a cooldown. After cooldown, the next call promotes to HALF_OPEN; we allow up to N probes — success closes, failure re-opens. The breaker is per-downstream, not global. I'd inject `isFailure(err)` so 4xx don't trip me. I'd expose `state` as a metric and page on `state=OPEN`."
+1. **Per-downstream breaker, not global** — sharing flips unrelated calls.
+2. **Trip on 4xx** — caller bug, not server failure. Inject `isFailure`.
+3. **No probe bound** — thundering herd on recovery.
+4. **HALF_OPEN failure → CLOSED** — wrong. Must re-OPEN with fresh cooldown.
+5. **Retry without breaker** — amplifies load on slow downstream. Always pair.
+6. **Threshold=1** — single transient blip trips. 5/10s sane default.
+7. **Forget to reset `failures` on CLOSE** — stale counts trip again on next failure.
 
-## Important takeaways
+---
 
-- **Per-downstream** breakers, never shared.
-- **isFailure(err)** is injectable — 4xx vs 5xx vs timeout matter.
-- **HALF_OPEN is bounded** — single probe is the safe default.
-- **Pair with retry** — retry inside the breaker for transient blips; the breaker contains amplification.
-- **Observable**: emit state changes; alert on OPEN.
+## 11. Senior follow-ups & variants
 
-## Variants
+### Variant 1 — Rolling-window buckets
+Count failures per 1s bucket, sum last N. Better resolution. (resilience4j default.)
 
-- **Rolling window with buckets** (resilience4j) — count failures per 1s bucket, sum last N buckets. Better resolution.
-- **Error rate, not count** — trip on >50% failures over last 100 calls. More fair under variable traffic.
-- **Bulkhead + breaker** — separate thread/connection pools per downstream so one slow dep can't starve another.
-- **Distributed circuit breaker** — share state via Redis so all app instances trip together. Adds latency; uncommon.
+### Variant 2 — Error rate, not count
+Trip on >50% failures over last 100 calls. Fair under variable traffic.
 
-## Revision notes
+### Variant 3 — Bulkhead + breaker
+Separate connection pools per downstream — one slow dep can't starve another.
 
-```
-CircuitBreaker(threshold, windowMs, cooldownMs, halfOpenMax):
-  CLOSED → tally fails in window; threshold hit → OPEN
-  OPEN → reject; after cooldown, allow HALF_OPEN
-  HALF_OPEN → bounded probes; success → CLOSED, fail → OPEN
-  per-downstream key
-  inject isFailure (don't trip on 4xx)
-  reset() for ops
-  pair with retry+jitter
-  page on state=OPEN
-```
+### Variant 4 — Distributed circuit breaker
+Share state via Redis so all app instances trip together. Adds latency.
+
+### Variant 5 — Fallback on OPEN
+Combine with cached/stale-while-revalidate. On OPEN, return last-known-good or degraded UX.
+
+---
+
+## 12. How to think aloud
+
+> "Three states: CLOSED tallies failures in a sliding window; threshold hit → OPEN. OPEN short-circuits; after cooldown → HALF_OPEN. HALF_OPEN allows N probes — success closes, failure re-opens with fresh cooldown. Per-downstream breaker, not global. Inject `isFailure` so 4xx don't trip me. Expose `snapshot.state` as a metric; page on `state=OPEN`. Pair with retry (inside breaker for transient blips) and bulkhead (separate pools per dep). Trap: trip on 4xx; threshold too low; HALF_OPEN unbounded; missing per-key isolation."
+
+---
+
+## 13. 60-second revision
+
+> - **Three states:** CLOSED (tally) → OPEN (reject) → HALF_OPEN (probe).
+> - **Sliding window** of failures within `windowMs`.
+> - **Bounded probes** in HALF_OPEN (default 1).
+> - **`isFailure`** injectable — don't trip on 4xx.
+> - **Per-downstream** key, never global.
+> - **HALF_OPEN failure → re-OPEN** (fresh cooldown).
+> - **Page on OPEN**; expose `reset()` for ops.
+> - **Family:** retry + jitter (inside), bulkhead (alongside), distributed (Redis).
+> - **Trap:** global breaker; 4xx trip; HALF_OPEN unbounded; missing isFailure injection.
+
+---
+
+**Related:** [mini-state-machine.md](./mini-state-machine.md) · [retry-with-jitter-and-budget.md](./retry-with-jitter-and-budget.md) · [idempotency-wrapper.md](./idempotency-wrapper.md) · [async-semaphore.md](./async-semaphore.md)
+
+**Concept primer:** [`concepts/promises.md`](../../concepts/promises.md)

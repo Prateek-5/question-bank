@@ -1,168 +1,263 @@
-# Implement `Array.prototype.groupBy(fn)` — polyfill
+# `Array.prototype.groupBy(fn)` — polyfill
 
-## Source
-- LeetCode #2631 "Group By" — https://leetcode.com/problems/group-by/
-- ES2024 native: `Object.groupBy(iterable, keyFn)` and `Map.groupBy(iterable, keyFn)`.
+> **Difficulty:** Foundation   |   **Time:** ~10 min   |   **Prereqs:** [`07-arrays/group-and-partition.md`](../07-arrays/group-and-partition.md), [`07-arrays/polyfill-reduce.md`](../07-arrays/polyfill-reduce.md)
+>
+> **Source:** LeetCode #2631. ES2024 `Object.groupBy` / `Map.groupBy`.
 
-## Why this question matters in interviews
-Group-by is one of the **most common backend data-shaping primitives** — bucketing rows by user, status, day, region — yet for years JavaScript made you hand-roll it with `reduce`. The interviewer is checking whether you reach for `Array.prototype.reduce` cleanly, choose the right return container (object vs Map), and handle the **non-string-key** case. Now that ES2024 ships `Object.groupBy` / `Map.groupBy`, this is also a "what's new in the language" question. Bonus: senior engineers usually have an opinion on **why the spec returns objects with `null` prototype** (prototype pollution).
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+Group array items by a key function. Object output for string keys; Map for any key. Use null-prototype object for Object output.
+
+**Verification examples**
+
 ```js
-// Polyfill on Array.prototype
-Array.prototype.groupBy = function (fn) {
-  const result = Object.create(null); // no inherited keys
-  for (let i = 0; i < this.length; i++) {
-    const key = fn(this[i], i);
-    if (!result[key]) result[key] = [];
-    result[key].push(this[i]);
-  }
-  return result;
-};
+[1, 2, 3, 4].groupBy(n => n % 2 ? 'odd' : 'even');
+// {odd: [1, 3], even: [2, 4]}
 
-// Usage
-[1, 2, 3, 4].groupBy(n => n % 2 === 0 ? 'even' : 'odd');
-// -> { odd: [1, 3], even: [2, 4] }
-
-// ES2024 native (no Array.prototype mutation needed)
+// ES2024 native
 Object.groupBy([1, 2, 3, 4], n => n % 2 ? 'odd' : 'even');
-Map.groupBy([{}, {}], obj => obj);  // keys can be objects!
+Map.groupBy(items, item => item.refObject);   // object keys
+
+// Prototype pollution safe
+[].groupBy(() => '__proto__');                // works on null-proto object
 ```
 
-### Runtime / engine behavior
-- `Array.prototype.reduce` is the classic implementation primitive. `for` loop is faster (no function-call overhead per iteration) but the result is the same.
-- `Object.create(null)` returns a **bare object** with no `__proto__`, no `toString`, no `hasOwnProperty`. Critical because if the user-supplied key function ever returns `"__proto__"` or `"toString"`, a regular `{}` would either be unsafe or polluted. The ES2024 spec mandates a null-prototype object for exactly this reason.
-- Keys returned from `fn` are coerced to strings when stored in an object (`null` → `"null"`, objects → `"[object Object]"`). That's why `Map.groupBy` exists — it preserves key identity.
-- `Object.groupBy` is in V8 ≥ 11.7 (Node 21+), Safari 17.4+, FF 119+. Polyfill needed for older runtimes.
+**Constraints**
+- Use `Object.create(null)` to avoid prototype pollution.
+- Map version for non-string keys.
+- Preserve insertion order within bucket.
+- ES2024 native is the modern answer.
 
-### Edge cases (these are the interview traps)
-1. **Non-string keys** — `fn` returns `42` → coerced to `"42"`. Returns `null` → `"null"`. Returns `{}` → `"[object Object]"` (all distinct objects collide). If you need object keys, use **`Map.groupBy`**.
-2. **`fn` returns `undefined`** — coerced to the string `"undefined"`. Items are still grouped. Some interviewers want them filtered; ask.
-3. **Prototype pollution** — `fn(x) === '__proto__'` on a plain `{}` either silently fails or pollutes `Object.prototype`. Always `Object.create(null)`.
-4. **Empty input** — return `Object.create(null)` (empty), not `{}` — to be consistent. Or just return `{}`; LeetCode accepts both.
-5. **Mutating `Array.prototype`** — the question literally asks for this, but in real code adding to built-ins is **forbidden** (breaks `for...in`, conflicts with future spec additions). Mention it.
-6. **Index in keyFn** — spec passes `(element, index)`. Don't forget the index parameter; some interviewers test it.
-7. **Stable order within groups** — guaranteed because you iterate left-to-right and push. Don't accidentally reorder.
-8. **Sparse arrays** — `[,,1].groupBy(...)` should skip holes (native `Object.groupBy` doesn't — it treats holes as `undefined`). Match the spec.
+---
 
-## Brute force approach
-Two passes: first collect unique keys, then for each key filter the array. O(n × k). Don't.
+## 2. Plain-English restatement
 
-## Optimal approach
-Single pass with `reduce` (or `for` loop). Build an accumulator object/Map keyed by `fn(x)`, push `x` into the bucket. O(n) time, O(n) space.
+For each item, derive a key; push into the bucket for that key. Initialize bucket if first occurrence.
 
-For object-identity keys (function returns objects/numbers/NaN), use a `Map` accumulator instead.
+---
 
-## Solution (JavaScript)
+## 3. Why this matters in interviews
+
+Common backend data-shaping. Tests: choice of return container, prototype-pollution awareness, single-pass design. ES2024 native vs polyfill recognition.
+
+---
+
+## 4. Mental model
+
+```
+   Polyfill (object output):
+     result = Object.create(null)
+     for i, item in this:
+       k = fn(item, i)
+       (result[k] ??= []).push(item)
+     return result
+   
+   Map version (non-string keys):
+     result = new Map()
+     for item in this:
+       k = fn(item)
+       if (!result.has(k)) result.set(k, [])
+       result.get(k).push(item)
+   
+   ES2024 native:
+     Object.groupBy(iter, keyFn) — string/symbol keys; null-prototype object.
+     Map.groupBy(iter, keyFn)   — any key.
+   
+   Prototype pollution:
+     fn returns '__proto__' → {} would mutate Object.prototype!
+     Object.create(null) has no __proto__.
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. Why `Object.create(null)`?
+> 2. When use Map over Object?
+> 3. Are keys coerced to strings in Object?
+
+---
+
+## 6. Brute force — walked through
 
 ```js
-/**
- * Polyfill Array.prototype.groupBy(fn).
- * Returns an object keyed by stringified fn(el, i) -> array of elements.
- * Uses a null-prototype object to avoid prototype pollution.
- */
-Array.prototype.groupBy = function (fn) {
-  if (typeof fn !== 'function') {
-    throw new TypeError('groupBy: callback is not a function');
-  }
+[1, 2, 3].reduce((acc, x) => {
+  const k = fn(x);
+  acc[k] = acc[k] || [];
+  acc[k].push(x);
+  return acc;
+}, {});
+```
+
+Works, but `{}` is prototype-polluting if `fn` returns `'__proto__'`.
+
+---
+
+## 7. The unlocking insight
+
+> **One pass: derive key, init bucket, push. Use `Object.create(null)` or `Map`. ES2024 native available.**
+
+Three properties:
+
+1. **Single pass** — O(n).
+2. **`Object.create(null)`** or Map.
+3. **`(acc[k] ??= []).push(item)`** idiom.
+
+---
+
+## 8. Solution (annotated)
+
+```js
+// Polyfill on Array.prototype (matches ES2024 Object.groupBy semantics)
+if (!Array.prototype.groupBy) {
+  Object.defineProperty(Array.prototype, 'groupBy', {
+    enumerable: false,
+    value: function (fn) {
+      const result = Object.create(null);                                 // step 1: null-proto
+      for (let i = 0; i < this.length; i++) {
+        const k = fn(this[i], i);                                          // step 2: derive key
+        (result[k] ??= []).push(this[i]);                                  // step 3: init+push
+      }
+      return result;
+    },
+  });
+}
+
+// Standalone helper
+function groupBy(iter, fn) {
   const result = Object.create(null);
-  for (let i = 0; i < this.length; i++) {
-    const el = this[i];
-    const key = fn(el, i);                        // key coerced to string
-    if (result[key] === undefined) result[key] = [];
-    result[key].push(el);
+  let i = 0;
+  for (const item of iter) {
+    const k = fn(item, i++);
+    (result[k] ??= []).push(item);
   }
   return result;
-};
+}
 
-/**
- * Map-based variant — key identity preserved (objects, NaN, etc. all distinct).
- * Mirrors ES2024 Map.groupBy(iterable, keyFn).
- */
-function mapGroupBy(iterable, keyFn) {
-  const result = new Map();
+// Map version
+function groupByMap(iter, fn) {
+  const result = new Map();                                                // step 4: any key
   let i = 0;
-  for (const el of iterable) {
-    const key = keyFn(el, i++);
-    const bucket = result.get(key);
-    if (bucket) {
-      bucket.push(el);
-    } else {
-      result.set(key, [el]);
-    }
+  for (const item of iter) {
+    const k = fn(item, i++);
+    if (!result.has(k)) result.set(k, []);
+    result.get(k).push(item);
   }
   return result;
 }
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
-Input:
 ```js
-const users = [
-  { name: 'Ada',  role: 'admin' },
-  { name: 'Bob',  role: 'user'  },
-  { name: 'Cici', role: 'admin' },
-  { name: 'Dee',  role: 'user'  },
+[1, 2, 3, 4].groupBy(n => n % 2 ? 'odd' : 'even');
+// {odd: [1, 3], even: [2, 4]}
+
+const orders = [
+  { id: 1, status: 'paid' },
+  { id: 2, status: 'pending' },
+  { id: 3, status: 'paid' },
 ];
 
-const byRole = users.groupBy(u => u.role);
+groupBy(orders, o => o.status);
+// {paid: [...], pending: [...]}
+
+// Non-string key — must use Map
+const usersByCompany = groupByMap(users, u => u.company);   // company is object ref
+usersByCompany.get(acme).length;
+
+// Prototype pollution test
+const evil = [{}, {}].groupBy(() => '__proto__');
+// Polyfill: {__proto__: [{}, {}]} — own key, safe.
+// Naive `{}`: {} (mutates Object.prototype) — VERY BAD.
+
+// ES2024 native (Node 21+)
+Object.groupBy([1, 2, 3], n => n > 1 ? 'big' : 'small');
+
+Map.groupBy(employees, e => e.department);   // department is object → use Map
 ```
 
-Trace (i, key, accumulator):
-- `i=0`, el=`{Ada,admin}`, key=`'admin'`. `result.admin` is undefined → create `[]`. Push Ada. `result = { admin: [Ada] }`.
-- `i=1`, el=`{Bob,user}`, key=`'user'`. `result.user` is undefined → create `[]`. Push Bob. `result = { admin: [Ada], user: [Bob] }`.
-- `i=2`, el=`{Cici,admin}`, key=`'admin'`. Exists → push Cici. `result = { admin: [Ada, Cici], user: [Bob] }`.
-- `i=3`, el=`{Dee,user}`, key=`'user'`. Exists → push Dee. `result = { admin: [Ada, Cici], user: [Bob, Dee] }`.
+---
 
-Return that object (with null prototype).
+## 9. Step-by-step dry run
 
-Counter-example showing why **null-prototype matters**:
-```js
-[1].groupBy(() => '__proto__');
-// With Object.create(null):  { __proto__: [1] }   (correct, safe)
-// With {}                  :  {} but ({}).__proto__ is now [1]  — POLLUTED
+```
+[1, 2, 3, 4].groupBy(n => n % 2 ? 'odd' : 'even'):
+  result = null-proto {}.
+  i=0 n=1: k='odd'. result['odd'] ??= [] → []. push 1. result = {odd: [1]}.
+  i=1 n=2: k='even'. result['even'] ??= [] → []. push 2. result = {odd:[1], even:[2]}.
+  i=2 n=3: k='odd'. existing. push 3. result = {odd:[1,3], even:[2]}.
+  i=3 n=4: k='even'. existing. push 4. result = {odd:[1,3], even:[2,4]}.
+  Return.
+
+Order:
+  Keys appear in result in FIRST-occurrence order.
+  Values within bucket: insertion order.
+
+Pollution:
+  arr.groupBy(() => '__proto__'):
+    With Object.create(null): result['__proto__'] = [...] (own key). Safe.
+    With {}: {}.__proto__ === Object.prototype. Assigning to it walks setters; can replace Object.prototype. BAD.
+
+  ES2024 spec explicitly uses null-proto for this reason.
 ```
 
-## Important takeaways
+---
 
-**Syntax to memorize**
-- `Object.create(null)` — never `{}` — for the accumulator.
-- `for` loop + `if (!result[key]) result[key] = []; result[key].push(el)`.
-- Map-based variant for object/NaN keys: `result.get(key) ?? (...)`.
+## 10. Common confusion + traps
 
-**Patterns to reuse**
-- "Reduce-into-accumulator" — same skeleton as `countBy`, `keyBy`, `partition`, `indexBy`, histogram.
-- `Object.create(null)` whenever **user input** decides keys — defends against `__proto__` / `constructor` pollution.
+1. **`{}` for output** — prototype pollution risk.
+2. **Coercion** — Object keys become strings; for non-strings use Map.
+3. **`Object.fromEntries(map)`** to convert Map → plain object (when safe).
+4. **Mutate input** — groupBy must NOT mutate.
+5. **Symbol keys** — Object.groupBy supports symbol keys; Object.keys does not enumerate.
+6. **Stable bucket order** — insertion order preserved.
+7. **`fn` throws** — propagates; group state lost.
 
-**Common mistakes**
-- Using `{}` and being silently vulnerable to `__proto__` pollution.
-- Using `Array.prototype.reduce` with `result[key] || []` — works but allocates a new empty array every iteration (the `||` evaluates both sides on the first hit only, so it's fine, actually — but the `result[key] || (result[key] = [])` shortcut idiom trips many candidates).
-- Forgetting that `null`, `undefined`, `NaN`, objects all coerce to strings on object keys — `Map.groupBy` exists for that exact reason.
-- Reordering elements inside a group. Always push left-to-right.
+---
 
-**Related questions**
-- `Object.fromEntries(Object.entries(o).map(...))`
-- `partition` — split into two arrays by predicate.
-- `countBy(arr, fn)` — same shape, value is a count.
-- `indexBy(arr, fn)` — same shape but expects unique key (value is the element, not array).
+## 11. Senior follow-ups & variants
 
-## Variants
+### Variant 1 — Aggregated groupBy
+Avoid arrays — fold per group (count/sum).
 
-1. **`countBy(arr, fn)`** — same skeleton, but `result[key] = (result[key] || 0) + 1`. Returns `{ key: number }`.
+### Variant 2 — Multi-key groupBy
+Composite key (`${a}|${b}`) or array key with Map.
 
-2. **`Map.groupBy` (ES2024)** — like `Object.groupBy` but returns a `Map` so keys can be any value (object identity, NaN, etc.). Useful for grouping by reference, e.g., `Map.groupBy(orders, o => o.user)` keyed by user objects directly.
+### Variant 3 — `Map.groupBy` for object refs
+Native ES2024.
 
-3. **Async groupBy** — keyFn returns a Promise. Use `Promise.all(arr.map(keyFn))` first, then group synchronously. Common in real backends where the key is a derived async lookup.
+### Variant 4 — `partition` (binary)
+`[truthy, falsy]`.
 
-## Revision notes
+### Variant 5 — Lazy groupBy
+Generator yielding `[key, items]` after each new key first seen.
 
-> **groupBy — 60 second recap**
-> - One pass: for each `el`, compute `key = fn(el, i)`, push into `result[key]`.
-> - Use `Object.create(null)` — defends against `__proto__` pollution.
-> - Object/NaN keys → use `Map.groupBy` (ES2024) or a hand-rolled Map version.
-> - Native `Object.groupBy(arr, fn)` exists in Node 21+ / modern browsers.
-> - **Trap:** `fn` returns `'__proto__'` and you used `{}` → pollutes `Object.prototype`. Always `Object.create(null)`.
-> - Family: `countBy`, `keyBy`, `partition` — same reduce-into-accumulator skeleton.
+---
+
+## 12. How to think aloud
+
+> "groupBy: single pass, derive key, init bucket if needed, push. ES2024 native: `Object.groupBy(iter, keyFn)` for string keys (returns null-prototype object), `Map.groupBy` for any key (returns Map with original key identity preserved). Polyfill: use `Object.create(null)` to avoid prototype pollution — if `keyFn` returns `'__proto__'` or `'toString'`, a regular `{}` could either mutate `Object.prototype` (catastrophic) or have weird behavior. The `(result[k] ??= []).push(item)` idiom is the cleanest init-and-push. Map version when keys aren't strings/symbols (object refs, Map keys, etc.). Insertion order: bucket order = first-occurrence of key; within-bucket order = input order. Variants: aggregated (count/sum without arrays), multi-key (composite string or array-key Map), partition (binary), lazy generator. Trap: `{}` output (prototype pollution); string coercion of non-string keys; mutating input."
+
+---
+
+## 13. 60-second revision
+
+> - **One pass:** `(acc[k] ??= []).push(item)`.
+> - **`Object.create(null)`** for safe object output.
+> - **Map version** for non-string keys.
+> - **ES2024:** `Object.groupBy` / `Map.groupBy`.
+> - **Insertion order** preserved.
+> - **Prototype pollution risk** with `{}`.
+> - **Partition** = binary special case.
+> - **Aggregated variant** — fold instead of array.
+> - **Trap:** `{}`; coercion; mutate input.
+
+---
+
+**Related:** [`07-arrays/group-and-partition.md`](../07-arrays/group-and-partition.md) · [multiset-counter.md](./multiset-counter.md) · [group-anagrams.md](./group-anagrams.md) · [composite-key-strategies.md](./composite-key-strategies.md)
+
+**Concept primer:** [`concepts/maps-sets.md`](../../concepts/maps-sets.md)

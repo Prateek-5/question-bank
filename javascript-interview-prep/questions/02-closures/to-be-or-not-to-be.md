@@ -1,147 +1,314 @@
-# To Be Or Not To Be (`expect`)
+# Build a tiny `expect(val)` assertion API — `.toBe / .notToBe`
 
-## Source
-- https://leetcode.com/problems/to-be-or-not-to-be/
+> **Difficulty:** Easy   |   **Time:** ~10 min   |   **Prereqs:** [counter-ii.md](./counter-ii.md), [`concepts/closures.md`](../../concepts/closures.md)
+>
+> **Source:** [LeetCode 2704 — To Be Or Not To Be](https://leetcode.com/problems/to-be-or-not-to-be/)
 
-## Why this question matters in interviews
-This problem looks trivial — write `expect(5).toBe(5)` — but it's actually the closure-based foundation of **Jest**, **Jasmine**, **Mocha's `chai`**, and every fluent assertion library on npm. Interviewers like it because in <15 lines you have to demonstrate: closing over a value, returning an **object of methods** that share that value, and choosing between throwing vs returning errors. As a backend engineer, this is the same skeleton you'd use to build any **fluent / builder API** — query builders (Knex), HTTP request builders (supertest), config DSLs. The pattern goes: capture context in closure → expose chainable methods → propagate context.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+**Signature**
+```ts
+function expect(val: unknown): {
+  toBe(other: unknown): true;     // throws "Not Equal" if val !== other
+  notToBe(other: unknown): true;  // throws "Equal" if val === other
+};
+```
+
+**Input / Output examples**
+
+| Call                                       | Behaviour                                     |
+|--------------------------------------------|------------------------------------------------|
+| `expect(5).toBe(5)`                        | returns `true`                                |
+| `expect(5).toBe(6)`                        | throws `"Not Equal"`                          |
+| `expect(5).notToBe(6)`                     | returns `true`                                |
+| `expect(5).notToBe(5)`                     | throws `"Equal"`                              |
+| `expect(NaN).toBe(NaN)`                    | throws `"Not Equal"` (`NaN !== NaN` under `===`) |
+| `expect({a:1}).toBe({a:1})`                | throws `"Not Equal"` (different references)   |
+
+**Constraints**
+- Use **strict equality** (`===`).
+- Throw the bare string `"Not Equal"` / `"Equal"`, not an `Error` object (LeetCode harness expects this).
+- Return `true` on success.
+- Methods share the captured `val` via closure (no `this`).
+
+---
+
+## 2. Plain-English restatement
+
+Write a function `expect(val)` that returns a tiny object with two methods, `toBe` and `notToBe`. Each method takes a second value and compares it strictly to the originally captured `val`. On match-failure for `toBe` (or match-success for `notToBe`) it throws a string; otherwise it returns `true`.
+
+In 12 lines, you're building the closure-based skeleton of every fluent assertion library — Jest's `expect`, Jasmine's matchers, Chai's `chai(...)`. The pattern: capture context in a closure, return an object whose methods all share that context.
+
+---
+
+## 3. Why this matters in interviews
+
+This looks trivial — write `expect(5).toBe(5)` — but in under 15 lines it forces three demonstrations: closing over a value, returning an object of methods that share that value, and choosing between throwing vs returning errors. As a backend engineer, this is the same skeleton you'd reach for to build a query builder (Knex), HTTP request builder (supertest), or config DSL. Capture context in closure → expose chainable methods → propagate context.
+
+---
+
+## 4. Mental model
+
+`expect(val)` opens a **briefcase** containing `val`. The two methods are keys — both can open the briefcase and read `val`, but neither lets you change it or see it from outside. Each method just compares its argument to whatever's inside.
+
+```
+   expect(5)
+        │
+        ├── briefcase:  ┌──────────┐
+        │               │  val: 5  │   ← captured at expect-call time
+        │               └──────────┘
+        │                    ▲
+        │                    │ both methods read this slot via closure
+        │              ┌────────────────────┐
+        └── returns ──▶│  {                 │
+                       │    toBe(other)…    │
+                       │    notToBe(other)… │
+                       │  }                 │
+                       └────────────────────┘
+```
+
+One LE on the heap, two function objects pointing at it, no `this` involved.
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. Does `expect(NaN).toBe(NaN)` return `true` or throw? Why?
+> 2. Should you throw `"Not Equal"` (a string) or `new Error("Not Equal")`? What does the LeetCode harness expect?
+> 3. Will `const { toBe } = expect(5); toBe(5);` work without binding? Why does the closure-based version not need `this`?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: a class
+
+```js
+class Expect {
+  constructor(val) { this.val = val; }
+  toBe(other) { if (this.val !== other) throw "Not Equal"; return true; }
+  notToBe(other) { if (this.val === other) throw "Equal"; return true; }
+}
+const expect = (v) => new Expect(v);
+```
+
+Works mechanically — but the prompt says `expect(...)` should *return* an object, not require `new`. Also `this.val` is publicly mutable (`e.val = 999`), defeating the captured-context idea. And destructuring breaks: `const { toBe } = expect(5); toBe(5)` → `TypeError: Cannot read 'val' of undefined`.
+
+### Wrong attempt 2: `==` instead of `===`
+
 ```js
 function expect(val) {
   return {
-    toBe(other) {
-      if (val !== other) throw new Error("Not Equal");
-      return true;
-    },
-    notToBe(other) {
-      if (val === other) throw new Error("Equal");
-      return true;
-    },
+    toBe(other) { if (val != other) throw "Not Equal"; return true; },
+    notToBe(other) { if (val == other) throw "Equal"; return true; },
   };
 }
 ```
-- Outer captures `val` in its LE.
-- Returned object has two methods, both closing over the same LE → both see the same `val`.
-- Equality is **strict** (`===`) per the LeetCode spec. This matters: `expect(NaN).toBe(NaN)` returns `false` under `===`, so `notToBe` would *not* throw — surprising, sometimes spec-relevant.
 
-### Lexical environment / what survives
-- `LE_outer = { val }`. One LE per `expect(...)` call.
-- Two method function objects share `[[Environment]] = LE_outer`.
-- Even after `expect(5)` returns, LE_outer is held alive by the returned object — until the caller drops the reference. Typical lifecycle: `expect(x).toBe(y)` — built and discarded inline, garbage collected immediately.
+Spec violation. `expect(0).toBe(false)` would pass under `==`, fail under `===`. LeetCode's harness uses strict equality.
 
-### Why throwing vs returning?
-LeetCode wants `toBe` to **throw `"Not Equal"`** and **return `true`** on success. Jest's real `expect` matchers return `undefined` and throw on failure — same shape. The throw-on-failure model lets the test runner catch and report; return-`true` lets you assert in a one-liner if you want.
-
-### Edge cases / interview traps
-1. **Strict equality** — `===` not `==`. `expect(0).toBe(-0)` is `true` under `===`; `expect(NaN).toBe(NaN)` is `false`. Jest's real `toBe` uses `Object.is`, which flips both. If the interviewer asks "how would Jest's `toBe` handle `NaN`?", `Object.is(val, other)` is the answer.
-2. **Throwing the right type** — spec says `throw "Not Equal"` (a string). Real code uses `new Error(...)`. Match the spec verbatim on LeetCode; in a real-world variant, prefer `Error` (gives stack traces).
-3. **Object equality** — `expect({a:1}).toBe({a:1})` is `false` (different references). Asks for `toEqual` (deep) as a variant.
-4. **No `this` needed** — methods don't reference `this`, so destructuring is safe: `const { toBe } = expect(5); toBe(5);` works. Contrast with a class where `toBe` would lose `this`.
-5. **Chaining** — `.toBe()` returns `true`, not the object. So you can't chain `.toBe(5).notToBe(6)`. If the interviewer asks for chaining, return `this`-equivalent (the same object) instead.
-
-## Brute force approach
-"Use a class with `val` as a field and methods that check." Works. But again — the prompt says **return**, not **instantiate**. Class adds a `new` call site, a prototype, and exposes `val` (unless using `#val`). Closure version is tighter and idiomatically JS.
-
-## Optimal approach
-Outer function captures `val`. Return an object literal with two methods that close over `val` and throw on mismatch. O(1) memory, O(1) per assertion.
-
-## Solution (JavaScript)
+### Wrong attempt 3: throw an `Error` object
 
 ```js
-/**
- * @param {string|number|null|undefined} val
- * @return {{ toBe: Function, notToBe: Function }}
- */
-var expect = function (val) {
-  return {
-    toBe(other) {
+toBe(other) { if (val !== other) throw new Error("Not Equal"); return true; }
+```
+
+Production-correct (gives a stack trace), but the LeetCode test harness checks `catch (e) → e === "Not Equal"`. With `new Error(...)`, `e` is an Error object — the string comparison fails. Match the spec verbatim on LeetCode; prefer `Error` in real code.
+
+---
+
+## 7. The unlocking insight
+
+> **A closure-captured value plus an object of methods is the smallest fluent-API skeleton in JavaScript.**
+
+`expect(val)` creates a fresh LE holding `val`. Returning an object whose methods are function expressions defined inside that LE means **every method has `[[Environment]]` pointing at the same LE** — they all read the same `val` slot through the scope chain. There's no `this`, no field exposure, no class machinery. Just one captured slot shared by two methods.
+
+Three properties fall out:
+
+1. **Destructuring is safe.** `const { toBe } = expect(5); toBe(5)` works because `toBe` doesn't need `this` to find `val` — it reads via closure. Compare with a class, where the same destructure loses the receiver and throws.
+2. **The captured value is read-only from the outside.** There's no `.val` to set, no key in `Object.keys(...)`, no `Reflect.ownKeys(...)` exposing it. Even within the methods, neither needs to mutate `val`.
+3. **Each `expect(...)` call** creates a fresh LE — multiple briefcases don't interfere. `expect(5).toBe(5); expect(6).toBe(6);` runs cleanly.
+
+The same skeleton scales: Jest's real `expect` has 70+ matchers, async support (`.resolves`/`.rejects`), and a `.not` modifier — all reachable from this base shape by closing over additional flags.
+
+---
+
+## 8. Solution (annotated)
+
+```js
+var expect = function (val) {                  // step 1: outer captures `val` in its LE
+  return {                                      // step 2: return an object literal with two methods
+    toBe(other) {                                // step 3: strict-equality check; throw string on mismatch
       if (val !== other) throw "Not Equal";
       return true;
     },
-    notToBe(other) {
+    notToBe(other) {                             // step 4: inverse — throw if they DO match
       if (val === other) throw "Equal";
       return true;
     },
   };
 };
-
-// Usage
-expect(5).toBe(5);          // true
-expect(5).notToBe(6);       // true
-try { expect(5).toBe(6); }   catch (e) { console.log(e); } // "Not Equal"
-try { expect(5).notToBe(5); } catch (e) { console.log(e); } // "Equal"
 ```
 
-## Step-by-step dry run
+**Try it yourself**
+
+```js
+console.log(expect(5).toBe(5));        // true
+console.log(expect(5).notToBe(6));     // true
+
+try { expect(5).toBe(6); }      catch (e) { console.log(e); }   // "Not Equal"
+try { expect(5).notToBe(5); }   catch (e) { console.log(e); }   // "Equal"
+try { expect(NaN).toBe(NaN); }  catch (e) { console.log(e); }   // "Not Equal" (NaN !== NaN)
+
+// Destructuring-safe (no `this`)
+const { toBe } = expect(42);
+console.log(toBe(42));                  // true
+```
+
+---
+
+## 9. Step-by-step dry run
 
 Input:
+
 ```js
 const e = expect(5);
-console.log(e.toBe(5));     // expect: true
-try { e.toBe(6); } catch (err) { console.log(err); } // expect: "Not Equal"
-console.log(e.notToBe(7));  // expect: true
-try { e.notToBe(5); } catch (err) { console.log(err); } // expect: "Equal"
+e.toBe(5);
+try { e.toBe(6); } catch (err) { console.log(err); }
+e.notToBe(7);
+try { e.notToBe(5); } catch (err) { console.log(err); }
 ```
 
-Trace:
-1. `expect(5)` is called.
-   - LE_outer created: `{ val: 5 }`.
-   - Object literal `{ toBe, notToBe }` is built; both methods carry `[[Environment]] = LE_outer`.
-   - Returned and bound to `e`. Outer frame popped; LE_outer retained because `e` references methods that reference it.
-2. `e.toBe(5)`:
-   - Scope chain lookup of `val` → `LE_outer.val = 5`.
-   - `5 !== 5` is `false` → no throw → returns `true`.
-3. `e.toBe(6)`:
-   - `5 !== 6` is `true` → throws `"Not Equal"`. Caught by outer try/catch; prints `"Not Equal"`.
-4. `e.notToBe(7)`:
-   - `5 === 7` is `false` → no throw → returns `true`.
-5. `e.notToBe(5)`:
-   - `5 === 5` is `true` → throws `"Equal"`. Prints `"Equal"`.
+Values-first trace:
 
-All four method calls read **the same `val`** from **the same LE** on the heap.
+| Step | Call          | Captured `val` | Comparison      | Outcome             |
+|------|---------------|----------------|------------------|---------------------|
+| init | `expect(5)`   | LE = `{val: 5}` | —                | returns the methods object |
+| 1    | `e.toBe(5)`   | `5`            | `5 !== 5` → false | returns `true`      |
+| 2    | `e.toBe(6)`   | `5`            | `5 !== 6` → true  | throws `"Not Equal"` |
+| 3    | `e.notToBe(7)`| `5`            | `5 === 7` → false | returns `true`      |
+| 4    | `e.notToBe(5)`| `5`            | `5 === 5` → true  | throws `"Equal"`    |
 
-## Important takeaways
+All four calls read the **same `val` slot** in the **same LE** on the heap.
 
-**Syntax to memorize**
-- `function expect(val) { return { toBe(o){...}, notToBe(o){...} }; }`.
-- Method shorthand in object literal — concise and avoids the `function` keyword.
+---
 
-**Patterns to reuse**
-- **Returning an object of methods that all close over the outer's parameters** is the universal "tiny fluent API" pattern. Same as Counter II, Event Emitter, LRU cache, querybuilder.
-- This pattern is how Jest's `expect`, Jasmine's matchers, Chai's `chai(...)` all work internally — just with hundreds of matchers and async support.
+## 10. Common confusion + traps
 
-**Common mistakes**
-- Using `==` instead of `===` (spec violation).
-- Throwing `new Error("...")` when the spec says `throw "..."` (string). On LeetCode, match the spec to pass tests.
-- Forgetting to return `true` on success — some grading harnesses check the return value.
-- Adding chaining without being asked — the spec wants `.toBe()` to return `true`, not the object.
+1. **Strict equality vs loose equality.**
+   Use `===`/`!==`, not `==`/`!=`. The spec is explicit. `expect(0).toBe('')` is `false` under strict; `true` under loose. Don't change the operator without permission.
 
-**Related questions**
-- Counter II (multi-method closure with mutation)
-- Event Emitter (multi-method closure over a `listeners` map)
-- Currying (chained closures, similar fluent feel)
-- "Build a tiny assertion library" — extends this with `.toEqual`, `.toThrow`, `.toBeGreaterThan`, etc.
+2. **`NaN` quirks.**
+   `NaN !== NaN` is `true` under `===`, so `expect(NaN).toBe(NaN)` *throws* "Not Equal." Jest's real `toBe` uses `Object.is`, which treats `NaN === NaN` and `-0 !== +0`. If the interviewer asks "how would Jest handle this?", say `Object.is(val, other)`.
 
-## Variants
+3. **Object equality is by reference.**
+   `expect({a:1}).toBe({a:1})` throws because the two literals are different objects. For deep equality, use `toEqual` (a variant).
 
-1. **Add `.toEqual(other)`** — deep structural equality. Requires recursive comparison; closure pattern unchanged. Tests your recursion + type-check muscles.
+4. **Throw a string, not an Error (on LeetCode).**
+   The harness checks `catch (e) → e === "Not Equal"`. With `new Error(...)`, `e` is an object — strict comparison fails. Match the spec verbatim on LeetCode; in production prefer `new Error(...)` for stack traces.
 
-2. **Add `.not` modifier** — Jest-style `expect(5).not.toBe(6)`. Solution: `expect` returns an object that has both the matchers and a `.not` getter returning an inverted matcher set. Now you have **nested closures**: `not.toBe` closes over the outer `val` *and* a "negate" flag. Common follow-up.
+5. **Forgetting to return `true`.**
+   Some graders check the return value. `if (cond) throw; return true;` is the canonical shape.
 
-3. **Async `.resolves`/`.rejects`** — `await expect(promise).resolves.toBe(5)`. Now matchers return promises. Closure over `val` *and* the pending promise.
+6. **Trying to chain.**
+   `.toBe(5)` returns `true`, not the object. So `.toBe(5).notToBe(6)` throws `TypeError: cannot read 'notToBe' of true`. If chaining is asked for, return the methods object (or `this`-equivalent) instead.
 
-## Revision notes
+---
 
-> **expect (To Be Or Not To Be) — 60 second recap**
-> - Outer captures `val`; return object `{ toBe, notToBe }`.
+## 11. Senior follow-ups & variants
+
+### Variant 1 — Add `.toEqual` (deep equality)
+
+```js
+function expect(val) {
+  return {
+    toBe(other) { if (val !== other) throw "Not Equal"; return true; },
+    notToBe(other) { if (val === other) throw "Equal"; return true; },
+    toEqual(other) {
+      if (!deepEqual(val, other)) throw "Not Equal";
+      return true;
+    },
+  };
+}
+function deepEqual(a, b) {
+  if (a === b) return true;
+  if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false;
+  const ka = Object.keys(a), kb = Object.keys(b);
+  if (ka.length !== kb.length) return false;
+  return ka.every((k) => deepEqual(a[k], b[k]));
+}
+```
+
+Real assertion libraries also handle Date, Map, Set, RegExp, and cycles — see `memoize-with-deep-equality.md`.
+
+### Variant 2 — Jest-style `.not` modifier
+
+`expect(5).not.toBe(6)` should pass. This requires **nested closures**: the outer captures `val`, the `.not` getter returns a *new* matcher set that inverts the throw conditions.
+
+```js
+function expect(val) {
+  const positive = {
+    toBe(other) { if (val !== other) throw "Not Equal"; return true; },
+    notToBe(other) { if (val === other) throw "Equal"; return true; },
+  };
+  const negated = {
+    toBe(other) { if (val === other) throw "Not (Not Equal)"; return true; },
+    notToBe(other) { if (val !== other) throw "Not (Equal)"; return true; },
+  };
+  return { ...positive, not: negated };
+}
+```
+
+Senior follow-up: chain modifiers like `.not.toBe`. Closure-over-flag + factory of matcher sets generalizes.
+
+### Variant 3 — Async `.resolves` / `.rejects`
+
+```js
+function expect(val) {
+  const sync = { toBe(other) { if (val !== other) throw "Not Equal"; return true; } };
+  const resolves = {
+    async toBe(other) {
+      const v = await val;
+      if (v !== other) throw "Not Equal";
+      return true;
+    },
+  };
+  return { ...sync, resolves };
+}
+await expect(Promise.resolve(5)).resolves.toBe(5);
+```
+
+Now `val` may be a Promise, and `.resolves.toBe(5)` awaits then compares. Closure over a pending promise.
+
+### Variant 4 — Custom matcher registry
+
+Real Jest lets you `expect.extend({ toBeWithinRange(received, min, max) {...} })`. That's a closure over a global matcher registry; each `expect(...)` builds an object from the registry by binding `val` into each matcher.
+
+---
+
+## 12. How to think aloud in the interview
+
+> "Closure over `val`, return an object with two methods. Both methods close over the same `val` slot — they read it via the scope chain, no `this` involved. `toBe` throws `"Not Equal"` (string, per spec) on mismatch; `notToBe` throws `"Equal"` if they match. Both return `true` on success. Strict equality, so `NaN !== NaN` and object refs aren't equal — call those out for the interviewer. No chaining because `.toBe()` returns `true`, not the object. If they ask for follow-ups: `.toEqual` (deep), `.not` (factory of negated matchers via nested closures), `.resolves`/`.rejects` (async)."
+
+---
+
+## 13. 60-second revision
+
+> - **Pattern:** outer captures `val`; return object literal `{ toBe, notToBe }`.
 > - Both methods close over the **same LE** → both see the same `val`.
-> - `toBe(other)`: throw `"Not Equal"` if `val !== other`, else return `true`. Strict equality.
-> - `notToBe(other)`: throw `"Equal"` if `val === other`, else return `true`.
-> - No `this` — destructuring methods is safe.
+> - **Strict equality** (`===`) per spec; `Object.is` if interviewer asks for Jest semantics.
+> - **`toBe(other)`**: throw `"Not Equal"` if `val !== other`, else return `true`.
+> - **`notToBe(other)`**: throw `"Equal"` if `val === other`, else return `true`.
+> - No `this` → destructuring is safe.
 > - **Trap:** `==` vs `===`; `NaN !== NaN`; objects compare by reference.
-> - **Trap:** spec wants `throw "string"`, not `new Error()` — match the harness.
-> - This is the literal skeleton behind Jest's `expect`, Chai's matchers, and every fluent assertion lib.
-> - Family: Counter II, Event Emitter, querybuilder — all "object-of-methods sharing closure state."
+> - **Trap:** `throw new Error(...)` instead of `throw "..."` — LeetCode harness fails.
+> - **Family:** Jest `expect`, Chai matchers, Jasmine, querybuilder, fluent assertion libs.
+
+---
+
+**Related:** [counter-ii.md](./counter-ii.md) · [private-data-counter.md](./private-data-counter.md) · [module-pattern-iife.md](./module-pattern-iife.md)
+
+**Concept primer:** [`concepts/closures.md`](../../concepts/closures.md)

@@ -1,47 +1,48 @@
-# Microtask Drainer / Manual Microtask Flush
+# Microtask drainer — flush all queued microtasks before continuing
 
-## Source / Origin
-- Comes from `queueMicrotask`, `Promise.resolve().then`; the V8 microtask queue.
-- Asked at: Razorpay, Stripe, Atlassian, anywhere with output-prediction puzzles.
-- Concept reference: `concepts/event-loop.md`, `concepts/promises.md`.
+> **Difficulty:** Medium   |   **Time:** ~20 min   |   **Prereqs:** [`concepts/event-loop.md`](../../concepts/event-loop.md), [`concepts/promises.md`](../../concepts/promises.md), [build-promise-from-scratch.md](./build-promise-from-scratch.md)
+>
+> **Source:** `queueMicrotask`, `Promise.resolve().then`; the V8 microtask queue. Output-prediction puzzles at Razorpay, Stripe, Atlassian.
 
-## Why this question matters in interviews
-"Predict the output" or "schedule N tasks but flush all microtasks before any macrotask" is a recurring puzzle. The microtask queue drains *to completion* between every macrotask and after every top-level script. Senior bar: you can explain why `setTimeout(0)` runs *after* a chained `.then`, why excessive microtasks cause UI freeze (microtask starvation), and how to implement a "wait for everything queued right now" primitive.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
-```js
-// 1. Trigger a microtask
-queueMicrotask(() => console.log('microtask'));
-Promise.resolve().then(() => console.log('also microtask'));
-
-// 2. Drain all currently-queued microtasks before the next macrotask
-function drainMicrotasks() {
-  return new Promise(res => setImmediate(res));   // Node: setImmediate is a macrotask
-  // browser: return new Promise(res => setTimeout(res, 0))
-}
-
-// 3. Microtask order vs macrotask order
-console.log('1');
-setTimeout(() => console.log('4 (macrotask)'), 0);
-Promise.resolve().then(() => console.log('2 (microtask)'));
-queueMicrotask(() => console.log('3 (microtask)'));
-console.log('1.5');
-// Order: 1, 1.5, 2, 3, 4
+**Signature**
+```ts
+function drainMicrotasks(): Promise<void>;
 ```
 
-### Edge cases / interview traps
-1. **Microtasks chain into more microtasks.** A `.then` inside a `.then` adds another microtask that runs in the *same* drain. The queue drains until empty, not just length-at-start.
-2. **`process.nextTick` (Node) is its own queue,** drained even *before* the microtask queue. Recursive `nextTick` starves microtasks AND macrotasks (= "I/O starvation").
-3. **`queueMicrotask` vs `.then`** — same queue; `.then` allocates a promise.
-4. **`await` of a non-Promise** still schedules a microtask.
-5. **`await` of a synchronous value** — still defers to the next microtask. `async function() { return 1 }` then `.then` runs one microtask later.
-6. **Microtask starvation** — a long chain of `.then.then.then...` blocks the macrotask queue (timers, I/O callbacks) and freezes the UI.
-7. **"Drain microtasks" isn't a real API** — you simulate it by scheduling a macrotask (`setImmediate` / `setTimeout(0)`) and awaiting it.
-8. **`Promise.resolve(p)` where p is already a Promise** — short-circuits (returns p). Doesn't add an extra microtask.
+**Input / Output examples**
 
-## Mental Model
+| Setup                                                  | Output order              |
+|--------------------------------------------------------|---------------------------|
+| `console.log(1); setTimeout(log(4)); Promise.resolve().then(log(2)); queueMicrotask(log(3)); log(1.5);` | `1, 1.5, 2, 3, 4` |
+| `await drainMicrotasks();`                             | all queued microtasks done before next line |
+| Chained `.then(() => Promise.resolve())`              | adds extra microtask hop |
+| `while (true) await Promise.resolve()`                 | microtask starvation — timers never fire |
+
+**Constraints**
+- Microtask queue drains **to completion** between every macrotask.
+- `process.nextTick` (Node) drains **before** microtasks.
+- "Drain microtasks" isn't a real API — simulate via macrotask boundary.
+- Don't starve macrotasks with infinite microtask chains.
+
+---
+
+## 2. Plain-English restatement
+
+Two queues run the event loop: macrotasks (timers, I/O, `setImmediate`) and microtasks (`.then` callbacks, `queueMicrotask`). After each macrotask, ALL microtasks drain to empty before the next macrotask starts. To "wait until all currently-queued microtasks are done" you schedule a macrotask (via `setImmediate` or `setTimeout(0)`) and await it — by the time it runs, the microtask queue is empty.
+
+---
+
+## 3. Why this matters in interviews
+
+"Predict the output" or "schedule N tasks but flush all microtasks before any macrotask" is a recurring puzzle. The microtask queue drains *to completion* between every macrotask and after every top-level script. Senior bar: you can explain why `setTimeout(0)` runs *after* a chained `.then`, why excessive microtasks cause UI freeze (microtask starvation), and how to implement a "wait for everything queued right now" primitive.
+
+---
+
+## 4. Mental model
 
 Two queues per event-loop turn:
 
@@ -62,71 +63,87 @@ Two queues per event-loop turn:
      repeat
 ```
 
-So after each macrotask: drain all microtasks. After the top-level script: drain all microtasks before the first timer fires.
+Microtasks drain after each macrotask. So `setTimeout(fn, 0)` runs AFTER chained `.then`s.
 
-```
-   sync prints "1"
-   schedule setTimeout(t1)        macroQ = [t1]
-   schedule .then(m1)             microQ = [m1]
-   schedule queueMicrotask(m2)    microQ = [m1, m2]
-   sync prints "1.5"
-   script ends → drain micro queue → m1 runs → m2 runs
-   loop picks next macrotask → t1 runs
-```
+**Drain primitive:** schedule a macrotask, await it. By the time it runs, microtasks have all drained.
 
-## Why interviewers care
+---
 
-- **Foundational event-loop knowledge.** Either you know it cold or you don't.
-- **Output-prediction puzzles** are filtering tools at top firms.
-- **Production bug pattern** — microtask starvation is a real outage cause (long Promise chains in HTTP handlers blocking timers).
+## 5. Try it yourself first
 
-## Common beginner confusion
+> **Predict before reading on:**
+> 1. What's the output of `setTimeout(() => log(4), 0); Promise.resolve().then(() => log(2)); queueMicrotask(() => log(3)); log(1);`?
+> 2. Why does `await Promise.resolve()` in an infinite loop starve `setTimeout` callbacks?
+> 3. Does `Promise.resolve(promise)` add a microtask hop, or short-circuit?
 
-- **"setTimeout(0) runs immediately."** No — it runs after the current macrotask + microtask drain.
-- **"Microtasks and macrotasks alternate one-by-one."** No — *all* microtasks drain before *any* macrotask.
-- **"`process.nextTick` is faster than queueMicrotask."** Faster in latency, but it's a separate queue that drains *before* microtasks, and can starve everything if recursive.
-- **"`await` is just sleep."** It's a microtask suspension.
-- **"async function returns synchronously if no await."** It still wraps the value in a promise; subsequent `.then` is a microtask away.
+---
 
-## Brute force approach
+## 6. Brute force — walked through
 
+### Wrong attempt 1: repeated `setTimeout`
 ```js
-// "wait for everything pending" via repeated setTimeout
 for (let i = 0; i < 10; i++) await new Promise(r => setTimeout(r, 0));
-// fragile — depends on how many macrotasks the runtime has queued
 ```
+Fragile — depends on how many macrotasks the runtime has queued.
 
-## Optimal approach
+### Wrong attempt 2: just `await Promise.resolve()`
+Adds one microtask hop — doesn't drain chained `.then`s.
 
-For "drain microtasks" use one macrotask boundary: `await new Promise(res => setImmediate(res))` (Node) or `await new Promise(res => setTimeout(res, 0))` (browser). Microtasks fully drained before that callback fires.
+### Wrong attempt 3: busy-loop on `queueMicrotask`
+```js
+while (microQ.length > 0) await new Promise(queueMicrotask);
+```
+No public API for queue length; microtasks can enqueue more microtasks → never empties.
 
-## Solution (JavaScript)
+---
+
+## 7. The unlocking insight
+
+> **Schedule a macrotask and await it. By the time the macrotask callback runs, the microtask queue has already drained to empty.**
+
+The primitive:
 
 ```js
-// Drain microtasks: wait until the next macrotask runs (microtask queue is empty by then)
 function drainMicrotasks() {
-  return new Promise(resolve => {
-    if (typeof setImmediate === 'function') setImmediate(resolve);
-    else setTimeout(resolve, 0);
+  return new Promise((resolve) => {
+    if (typeof setImmediate === 'function') setImmediate(resolve);  // Node
+    else setTimeout(resolve, 0);                                     // browser
+  });
+}
+```
+
+Because `setImmediate` / `setTimeout(0)` are macrotasks, the runtime fully drains the microtask queue **before** running them. So `await drainMicrotasks()` resumes only after all queued microtasks have finished.
+
+**Microtask starvation:** an infinite chain of `.then`s blocks the macrotask queue indefinitely. Timers and I/O callbacks never fire while the chain runs. This is a real production outage cause.
+
+---
+
+## 8. Solution (annotated)
+
+```js
+function drainMicrotasks() {
+  return new Promise((resolve) => {
+    if (typeof setImmediate === 'function') setImmediate(resolve);   // Node: setImmediate is macrotask
+    else setTimeout(resolve, 0);                                       // browser fallback
   });
 }
 
-// Example: ensure all pending Promise.then's run before continuing
+// Example usage
 let log = [];
 log.push('A');
 Promise.resolve().then(() => log.push('B'));
 queueMicrotask(() => log.push('C'));
 await drainMicrotasks();
-// log === ['A', 'B', 'C']
+// log === ['A', 'B', 'C']  ← all microtasks drained
 
 // Counter-example: microtask starvation
 async function starve() {
-  while (true) await Promise.resolve();     // never yields to macrotasks
+  while (true) await Promise.resolve();   // blocks macrotasks forever
 }
-// timers and I/O callbacks never fire while this loop runs
+// timers, I/O never fire while this runs
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
 ```js
 console.log('s1');
@@ -136,65 +153,82 @@ Promise.resolve()
   .then(() => console.log('m2'));
 queueMicrotask(() => console.log('m3'));
 console.log('s2');
+
+// Output: s1, s2, m1, m3, m2, t1
 ```
 
-```
-Step 1: top-level script runs synchronously
-        macroQ: [t1]
-        microQ: [m1-handler, m3]
-        prints: s1, s2
+Note the `m1 → m3 → m2` order — chained `.then(() => Promise.resolve())` adds an extra microtask hop.
 
-Step 2: script ends → drain microQ
-        run m1-handler → prints 'm1' → returns Promise.resolve()
-                       → schedules m2-handler (waits one microtask for chained promise resolution)
-                       → microQ: [m3, m2-handler]
-        run m3 → prints 'm3' → microQ: [m2-handler]
-        run m2-handler → prints 'm2' → microQ: []
+---
 
-Step 3: microQ empty → next macrotask t1
-        prints 't1'
+## 9. Step-by-step dry run
 
-Output: s1, s2, m1, m3, m2, t1
+```js
+console.log('s1');
+setTimeout(() => console.log('t1'), 0);
+Promise.resolve().then(() => { console.log('m1'); return Promise.resolve(); }).then(() => console.log('m2'));
+queueMicrotask(() => console.log('m3'));
+console.log('s2');
 ```
 
-The "m1 → m3 → m2" order (not m1→m2→m3) trips up most candidates. Reason: chaining `.then(Promise.resolve())` adds an extra microtask hop.
+| Phase | Action | Output | macroQ | microQ |
+|-------|--------|--------|--------|--------|
+| sync | log s1, schedule t1, register m1-handler, schedule m3, log s2 | `s1, s2` | `[t1]` | `[m1, m3]` |
+| µ-drain | run m1 → log, return Promise.resolve() → schedules m2-handler | `m1` | `[t1]` | `[m3, m2]` |
+| µ-drain | run m3 → log | `m3` | `[t1]` | `[m2]` |
+| µ-drain | run m2 → log | `m2` | `[t1]` | `[]` |
+| next macro | run t1 → log | `t1` | `[]` | `[]` |
 
-## How to think aloud in the interview
+Final: `s1, s2, m1, m3, m2, t1`.
 
-> "Two queues. Microtask queue drains to completion between macrotasks. queueMicrotask and Promise.then enqueue microtasks; setTimeout enqueues macrotasks. process.nextTick (Node) is even higher priority — drains before microtasks. To 'drain microtasks' I schedule a macrotask (setImmediate or setTimeout(0)) and await it; by the time it runs, microtask queue is empty. Watch for chained promises that add extra microtask hops — that's the m1 m3 m2 trap. Beware microtask starvation: an infinite `await Promise.resolve()` blocks timers and I/O."
+---
 
-## Important takeaways
+## 10. Common confusion + traps
 
-- **Microtasks drain to completion** between macrotasks.
-- **Order**: sync → microtasks (incl. process.nextTick first) → next macrotask.
-- **`Promise.resolve(promise)` short-circuits** but chained `.then(() => Promise.resolve())` does add a hop.
-- **Drain primitive**: `await setImmediate` (Node) or `await setTimeout(0)` (browser).
-- **Microtask starvation** = real outage cause.
+1. **"setTimeout(0) runs immediately"** — no, after current macrotask + microtask drain.
+2. **"Microtasks alternate with macrotasks"** — no, ALL microtasks drain before ANY macrotask.
+3. **"`process.nextTick` is faster"** — same speed; different queue (drains BEFORE microtasks).
+4. **"`await` is sleep"** — it's a microtask suspension.
+5. **"async returns sync without await"** — still wraps in Promise; subsequent `.then` is one microtask away.
+6. **Chained `.then(() => Promise.resolve())`** adds an extra microtask hop.
+7. **Microtask starvation** — infinite `await Promise.resolve()` blocks timers/I/O.
 
-## Variants
+---
 
-- **Async drain** — `while (microtaskCount > 0) await microtask`. Doesn't exist in JS API; simulated via macrotask boundary.
-- **Test utilities** — testing libraries (RTL, jest) expose `flushPromises()` which is just `await new Promise(r => setTimeout(r))`.
-- **`Promise.resolve().then` vs `queueMicrotask`** — identical scheduling cost; latter allocates no promise.
-- **`process.nextTick` recursion** — Node's "starvation" gotcha; use `setImmediate` to break the loop.
+## 11. Senior follow-ups & variants
 
-## Revision notes
+### Variant 1 — Async drain helper
+`while (microtaskCount > 0) await microtask` — no public API; simulated via macrotask boundary.
 
-```
-event loop turn:
-  run 1 macrotask
-  drain microtask queue to EMPTY (microtasks can enqueue microtasks)
-  repeat
+### Variant 2 — Test utilities
+RTL, jest expose `flushPromises()` = `await new Promise(r => setTimeout(r))`.
 
-priority:
-  Node: process.nextTick > microtask (.then, queueMicrotask) > macrotask (setTimeout, setImmediate, I/O)
-  browser: microtask > macrotask
+### Variant 3 — `queueMicrotask` vs `.then`
+Identical scheduling priority; `queueMicrotask` allocates no Promise.
 
-drain primitive: await new Promise(r => setImmediate(r))  // Node
-                 await new Promise(r => setTimeout(r, 0)) // browser
+### Variant 4 — `process.nextTick` recursion
+Node's "starvation" gotcha — recursive `nextTick` blocks even microtasks. Use `setImmediate` to break the loop.
 
-traps:
-  - .then(() => Promise.resolve()) adds extra microtask hop
-  - process.nextTick recursion starves I/O
-  - while(true) await Promise.resolve() starves timers
-```
+---
+
+## 12. How to think aloud
+
+> "Two queues. Microtask queue drains to completion between macrotasks. queueMicrotask and Promise.then enqueue microtasks; setTimeout enqueues macrotasks. process.nextTick (Node) is even higher priority — drains before microtasks. To 'drain microtasks' I schedule a macrotask (setImmediate or setTimeout(0)) and await it; by the time it runs, microtask queue is empty. Watch for chained promises that add extra microtask hops — that's the m1 m3 m2 trap. Beware microtask starvation: infinite `await Promise.resolve()` blocks timers and I/O."
+
+---
+
+## 13. 60-second revision
+
+> - **Microtasks drain to completion** between macrotasks.
+> - **Priority (Node):** `process.nextTick` > microtask (`.then`, `queueMicrotask`) > macrotask (timers, I/O).
+> - **Drain primitive:** `await new Promise(r => setImmediate(r))` (Node) or `setTimeout(r, 0)` (browser).
+> - **`Promise.resolve(p)`** short-circuits but `.then(() => Promise.resolve())` adds a hop.
+> - **Microtask starvation** = real outage cause.
+> - **Family:** `flushPromises` test utility; React batched updates.
+> - **Trap:** `setTimeout(0)` runs after chained `.then`s; infinite microtask chain starves I/O.
+
+---
+
+**Related:** [build-promise-from-scratch.md](./build-promise-from-scratch.md) · [`05-event-loop/microtask-macrotask-order.md`](../05-event-loop/microtask-macrotask-order.md) · [`05-event-loop/microtask-starvation-recipes.md`](../05-event-loop/microtask-starvation-recipes.md) · [`05-event-loop/queuemicrotask-deep-dive.md`](../05-event-loop/queuemicrotask-deep-dive.md)
+
+**Concept primer:** [`concepts/event-loop.md`](../../concepts/event-loop.md), [`concepts/promises.md`](../../concepts/promises.md)

@@ -1,73 +1,123 @@
 # Implement `memoize` for object-identity arguments (Memoize II)
 
-## Source
-- Canonical advanced machine-coding interview problem (LeetCode #2630 "Memoize II", Pramp, BFE.dev).
-- LeetCode reference: https://leetcode.com/problems/memoize-ii/
+> **Difficulty:** Senior   |   **Time:** ~25 min   |   **Prereqs:** [memoize.md](./memoize.md), [`concepts/maps-sets.md`](../../concepts/maps-sets.md)
+>
+> **Source:** [LeetCode 2630 — Memoize II](https://leetcode.com/problems/memoize-ii/). The Memoize follow-up that separates value-keyed from identity-keyed.
 
-## Why this question matters in interviews
-Memoize II is the moment the interviewer separates the "I read a blog" candidates from the ones who actually understand data structures. The plain `memoize` (see memoize.md) breaks down the second you pass an object — `{a:1}` and `{a:1}` stringify identically but are **different references**. Memoize II requires you to key the cache by **identity, not value**, which means you can't stringify and you can't use a flat `Map` (object keys in a Map work, but you'd lose discrimination across multi-arg calls). The standard senior answer is a **nested Map trie**: one Map per argument position, drilling down. This is the same trie pattern that powers React's hook memoization, GraphQL DataLoader batching, and content-addressable caches. Demonstrating it gets you a tick in the "knows non-trivial data structures" column.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
-```js
-const memo = memoize(fn);
-const obj = { id: 1 };
-memo(obj, 'x');   // miss, computes
-memo(obj, 'x');   // hit — same ref!
-memo({ id: 1 }, 'x'); // miss — different ref
+**Signature**
+```ts
+function memoize<F extends (...args: any[]) => any>(fn: F): F;
 ```
 
-The trie node shape:
-```js
-// Each level: one Map per argument position.
-// Each node optionally holds a "result" if a function call ended here.
-const root = new Map();
-root.has('__result__'); // does a 0-arg call have a cached result?
-// or: a node = { map: Map, hasResult: boolean, result: any }
+**Input / Output examples**
+
+| Setup                                          | Behaviour                                              |
+|-------------------------------------------------|---------------------------------------------------------|
+| `memo(obj, 'x'); memo(obj, 'x')`               | second call: cached (same `obj` ref)                   |
+| `memo({a:1}); memo({a:1})`                     | two different refs → both miss                         |
+| `memo(1, 2); memo(1, 2)`                       | primitives keyed by SameValueZero → second cached      |
+| `memo(a); memo(a, b)`                          | variable arity — different paths, both cached separately |
+| `memo()` (zero args)                            | result slot at root                                    |
+| `memo(NaN); memo(NaN)`                         | second cached (Map uses SameValueZero, NaN === NaN under it) |
+
+**Constraints**
+- Cache by **identity** for objects/functions, by **SameValueZero** for primitives.
+- Handle variable arity.
+- O(N) lookup where N = `args.length`.
+- Each trie node has its own `result` slot.
+
+---
+
+## 2. Plain-English restatement
+
+Like `memoize`, but keys use **reference equality** for objects (not structural equality). `memo(obj1, 'x')` and `memo(obj2, 'x')` are different calls even if `obj1` and `obj2` are structurally identical. The plain `memoize` fails because `JSON.stringify({a:1}) === JSON.stringify({a:1})` collapses distinct refs. The senior answer: nested Map trie, one Map per argument position.
+
+---
+
+## 3. Why this matters in interviews
+
+Memoize II is the moment the interviewer separates "I read a blog" from "I understand data structures." The nested-Map trie pattern is the same structure that powers React `useMemo` deps, GraphQL DataLoader composite keys, content-addressable caches. Identity-keyed > value-keyed is a senior distinction.
+
+---
+
+## 4. Mental model
+
+A **trie of Maps**, one level per argument:
+
+```
+   memo(obj1, 5)              memo(obj1, 6)              memo(obj2, 5)
+                          R (root Map)
+                          │
+       ┌──────────────────┼──────────────────┐
+     obj1 (ref)         obj2 (ref)         ...
+       │                  │
+   ┌───┼───┐              │
+   5   6                  5
+   │   │                  │
+   result(15)  result(16) result(15)   ← per-node result slots
+   ↑           ↑          ↑
+   path 1      path 2     path 3 (obj2 ≠ obj1, separate branch!)
 ```
 
-### Runtime / engine behavior
-- `Map` accepts **any** key — strings, numbers, objects, functions. Object keys use **reference equality**. This is what makes the trie work: `map.get(obj)` returns the entry only if you pass the *same* `obj` reference.
-- A flat `Map<args, result>` doesn't work because each call has a *different* `args` array (new array literal every time). So we walk arg-by-arg.
-- Depth of the trie = `args.length`. Memory per cached call ≈ `O(args.length)` map entries. Each lookup = `O(args.length)` map probes (each O(1)).
-- **WeakMap vs Map**: WeakMap allows GC of the object key when no other refs exist — great for memory hygiene, but WeakMap keys **must be objects** (no primitives). So a hybrid approach is needed: WeakMap for object args, Map for primitive args. The LeetCode problem doesn't require WeakMap; mention it as a refinement.
+Each node: `{ children: Map, hasResult: boolean, result: any }`. Walk arg-by-arg; consume the result slot at the end of the walk.
 
-### Edge cases (these are the interview traps)
-1. **0-arg calls** — `memo()` should cache the result. Reserve a sentinel slot on the root node (e.g., `node.hasResult`).
-2. **Variable arity** — `memo(a)` and `memo(a, b)` are different calls. They must land at different trie depths and not collide. The "result slot" must be **per-node**, not "deepest leaf only."
-3. **Mixed primitive + object args** — `memo(1, obj, 'x')` must work. Use `Map` at every level (Map accepts both primitive and object keys).
-4. **Same args repeated** — `memo(obj, obj)` — walks down twice with the same key, but each level is a separate Map, so no collision.
-5. **Functions as args** — functions are objects in JS, so reference-keyed Maps work. Frequently tested.
-6. **`NaN`** — `NaN === NaN` is false, but `Map` uses **SameValueZero** equality, so `map.get(NaN)` after `map.set(NaN, ...)` works. Worth knowing for the trick question.
-7. **Cache invalidation** — if an object arg is mutated externally, the cached result is now stale. Mention "memoize works only for **pure** functions called with **immutable** arg shapes."
-8. **WeakMap can't be iterated** — if you switch to WeakMap, you give up `cache.size` and `cache.clear()`. Trade-off worth flagging.
+**Identity matters:** Map keys use reference equality for objects, so `obj1` and `obj2` (same shape, different refs) land at different children.
 
-## Brute force approach
-Flatten args to a string with `args.map(a => a.id || a).join('|')` — terrible. Brittle, leaks the implementation, dies on cycles, doesn't preserve identity. Or use `JSON.stringify` — same problem as plain `memoize`. Neither works. Go straight to the trie.
+---
 
-## Optimal approach
-A **nested Map trie**: root is a `Map`. To look up `memo(a, b, c)`:
-1. `node = root.get(a)`. If missing, miss → compute.
-2. `node = node.get(b)`. If missing, miss → compute.
-3. `node = node.get(c)`. If missing, miss → compute.
-4. Check `node.hasResult`. If yes, hit → return `node.result`. Else miss → compute, set.
+## 5. Try it yourself first
 
-Each "node" is `{ children: Map, hasResult: boolean, result: any }`.
+> **Predict before reading on:**
+> 1. Why does flat `Map<args, result>` (with `args` as the key) always miss?
+> 2. If `memo(a); memo(a, b)` both cache, where does each result live in the trie?
+> 3. What happens with `memo(NaN); memo(NaN)` — same or different cache entries?
 
-`O(N)` lookup where `N = args.length`. `O(N)` insertion. Memory grows with unique arg-paths.
+---
 
-## Solution (JavaScript)
+## 6. Brute force — walked through
+
+### Wrong attempt 1: stringify args
+```js
+const key = args.map(a => a.id ?? a).join('|');
+```
+Doesn't preserve identity. `obj1` and `obj2` with same `id` collide.
+
+### Wrong attempt 2: flat `Map<args, result>` using args array as key
+```js
+this.cache.set(args, result);
+this.cache.get(args);     // BUG: new array literal per call → never matches
+```
+Every call passes a fresh array reference → Map.get always misses.
+
+### Wrong attempt 3: result-slot only at deepest leaf
+```js
+// Only check `hasResult` at the bottom of the trie
+```
+Breaks variable arity. `memo(a)` and `memo(a, b)` need separate result slots, both on the same path.
+
+---
+
+## 7. The unlocking insight
+
+> **Nested Map trie: one Map per argument position. Walk arg-by-arg; each trie node has its own `hasResult`/`result` slot for that arity. Map keys use reference equality for objects, SameValueZero for primitives — exactly what we want.**
+
+Three properties:
+
+1. **Trie of Maps** — `O(N)` walk per call (N = args.length); each level O(1) lookup.
+2. **Per-node result slot** — handles variable arity.
+3. **Map equality semantics** — reference for objects/functions, SameValueZero for primitives.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
-/**
- * Memoize where keys use REFERENCE equality (objects/functions) or
- * SameValueZero (primitives). Uses a nested Map trie.
- * @param {Function} fn  pure function
- * @returns {Function}
- */
 function memoize(fn) {
-  const root = makeNode();
+  const root = makeNode();                                          // step 1: root trie node
 
   function makeNode() {
     return { children: new Map(), hasResult: false, result: undefined };
@@ -75,38 +125,33 @@ function memoize(fn) {
 
   return function (...args) {
     let node = root;
-    for (const arg of args) {
+    for (const arg of args) {                                        // step 2: walk arg-by-arg
       if (!node.children.has(arg)) {
         node.children.set(arg, makeNode());
       }
       node = node.children.get(arg);
     }
-    if (!node.hasResult) {
+    if (!node.hasResult) {                                            // step 3: per-node result slot
       node.result = fn.apply(this, args);
       node.hasResult = true;
     }
     return node.result;
   };
 }
-```
 
-A more memory-friendly variant using WeakMap for object keys (so they can be GC'd when no other ref holds them):
-
-```js
+// WeakMap-backed variant (GC-friendly for object args; Map for primitives)
 function memoizeWeak(fn) {
-  const objCache = new WeakMap();   // for object/function args
-  const primCache = new Map();      // for primitive args
-  const resultSlot = Symbol('result');
+  const makeNode = () => ({ weak: null, prim: null, hasResult: false, result: undefined });
+  const root = makeNode();
 
-  function getChild(node, arg) {
-    const cache = (typeof arg === 'object' && arg !== null) || typeof arg === 'function'
-      ? node.weak ?? (node.weak = new WeakMap())
-      : node.prim ?? (node.prim = new Map());
-    if (!cache.has(arg)) cache.set(arg, { weak: null, prim: null, hasResult: false, result: undefined });
+  const getChild = (node, arg) => {
+    const isRef = (typeof arg === 'object' && arg !== null) || typeof arg === 'function';
+    const cache = isRef
+      ? (node.weak ?? (node.weak = new WeakMap()))
+      : (node.prim ?? (node.prim = new Map()));
+    if (!cache.has(arg)) cache.set(arg, makeNode());
     return cache.get(arg);
-  }
-
-  const root = { weak: null, prim: null, hasResult: false, result: undefined };
+  };
 
   return function (...args) {
     let node = root;
@@ -120,99 +165,117 @@ function memoizeWeak(fn) {
 }
 ```
 
-For the interview, the simple `Map`-only trie is cleaner and what graders expect.
+**Try it yourself**
 
-## Step-by-step dry run
-
-Input:
 ```js
 let calls = 0;
 const fn = (a, b) => { calls++; return a.x + b; };
 const memo = memoize(fn);
 
 const obj1 = { x: 10 };
-const obj2 = { x: 10 };   // same shape, different ref
+const obj2 = { x: 10 };                       // same shape, different ref
 
-memo(obj1, 5);   // (1)
-memo(obj1, 5);   // (2)
-memo(obj2, 5);   // (3)
-memo(obj1, 6);   // (4)
+memo(obj1, 5);   // miss, calls=1, returns 15
+memo(obj1, 5);   // HIT, calls=1, returns 15
+memo(obj2, 5);   // MISS (different ref), calls=2
+memo(obj1, 6);   // miss, calls=3, returns 16
+
+console.log(calls);   // 3
 ```
 
-Trace the trie (`R` = root):
+---
 
-- Call (1) `memo(obj1, 5)`:
-  - Walk `obj1` in `R.children` → miss → create new node `N1`. `R.children.set(obj1, N1)`. node = N1.
-  - Walk `5` in `N1.children` → miss → create `N2`. node = N2.
-  - `N2.hasResult` = false → invoke `fn(obj1, 5)` = `15`, calls=1. Set `N2.result = 15, N2.hasResult = true`. Return `15`.
+## 9. Step-by-step dry run
 
-- Call (2) `memo(obj1, 5)`:
-  - `R.children.get(obj1)` = N1 (same ref!). node = N1.
-  - `N1.children.get(5)` = N2. node = N2.
-  - `N2.hasResult` true → return `15`. calls unchanged.
-
-- Call (3) `memo(obj2, 5)`:
-  - `R.children.get(obj2)` — **miss** (different ref from obj1) → create `N3`. node = N3.
-  - `5` in N3.children → miss → create `N4`. node = N4.
-  - Invoke `fn(obj2, 5)` = `15`, calls=2. Cache. Return.
-
-- Call (4) `memo(obj1, 6)`:
-  - `R.children.get(obj1)` = N1. node = N1.
-  - `N1.children.get(6)` — **miss** → create `N5`. node = N5.
-  - Invoke `fn(obj1, 6)` = `16`, calls=3. Cache. Return.
-
-Final `calls === 3`. Trie shape:
 ```
-R
-├─ obj1 → N1
-│   ├─ 5 → N2 (result=15)
-│   └─ 6 → N5 (result=16)
-└─ obj2 → N3
-    └─ 5 → N4 (result=15)
+Setup: memo = memoize(fn). root = {children: Map{}, hasResult: false}
+
+(1) memo(obj1, 5):
+    node = root
+    arg=obj1: children.has? no → create N1; node = N1
+    arg=5:    N1.children.has? no → create N2; node = N2
+    N2.hasResult? no → fn(obj1, 5) = 15. calls=1. N2.result=15, hasResult=true.
+    return 15
+
+(2) memo(obj1, 5):
+    walk: root → N1 (obj1) → N2 (5)
+    N2.hasResult? yes → return 15. calls unchanged.
+
+(3) memo(obj2, 5):
+    arg=obj2: root.children.has(obj2)? NO (different ref from obj1) → create N3
+    arg=5:    N3.children.has(5)? no → create N4
+    fn(obj2, 5) = 15. calls=2. N4.result=15.
+
+(4) memo(obj1, 6):
+    arg=obj1: → N1
+    arg=6:    N1.children.has(6)? no → create N5
+    fn(obj1, 6) = 16. calls=3. N5.result=16.
+
+Final trie:
+  root
+  ├─ obj1 → N1
+  │  ├─ 5 → N2 (result=15)
+  │  └─ 6 → N5 (result=16)
+  └─ obj2 → N3
+     └─ 5 → N4 (result=15)
 ```
 
-Note how `obj1` and `obj2` get separate branches even though their shapes are identical — that's the **identity-keyed** behavior we wanted.
+Variable arity:
+```
+memo(a):     walk root → N_a; consume N_a.result
+memo(a, b):  walk root → N_a → N_a_b; consume N_a_b.result
+```
+Both paths share the prefix `root → N_a` but the result slots are on different nodes.
 
-## Important takeaways
+---
 
-**Syntax to memorize**
-- Trie node = `{ children: Map, hasResult: boolean, result: any }`.
-- Walk args one at a time: `node = node.children.get(arg)`.
-- "Result slot" lives **on the node** at the end of the walk, not deeper. This handles variable arity.
+## 10. Common confusion + traps
 
-**Patterns to reuse**
-- Nested Map / trie is the same structure that powers: GraphQL DataLoader keying by composite args, React `useMemo` dep arrays, Redux Reselect-style memoization with object deps, and content-addressable storage.
-- WeakMap-of-WeakMap is a memory-safe variant when you know all args are objects.
-- The "I have N orthogonal keys, I want O(1) lookup, but composite keys must respect identity" problem always reduces to this trie.
+1. **Flat `Map<args, result>`** — new array literal per call, always misses.
+2. **`JSON.stringify(args)`** — defeats identity keying.
+3. **Result slot only at deepest leaf** — breaks variable arity.
+4. **`WeakMap` only** — primitive args throw (`WeakMap.set("foo", ...)`).
+5. **Forgetting cache invalidation when an arg mutates** — memoize works only for **pure** fns with immutable arg shapes.
+6. **NaN behavior** — Map uses SameValueZero, so `NaN` keys work; `===`-based caches don't.
+7. **WeakMap iteration** — WeakMaps aren't iterable; you lose `size` / `clear` if you go pure-Weak.
 
-**Common mistakes**
-- Using `JSON.stringify(args)` — defeats the purpose of identity keying.
-- Using a flat `Map` keyed by `args` (the array) — every call passes a new array literal, so every call misses.
-- Forgetting the "result slot" per node and only checking at the deepest level — breaks variable-arity calls.
-- Using only WeakMap → primitive args crash (`WeakMap.set("foo", ...)` throws).
+---
 
-**Related questions**
-- `memoize(fn)` — primitive-arg version (see memoize.md).
-- DataLoader batching (composite keys).
-- React `useMemo` deps — same identity issue.
+## 11. Senior follow-ups & variants
 
-## Variants
+### Variant 1 — WeakMap-backed (GC-friendly)
+Trie uses WeakMap for object args, Map for primitive args. Entries vanish when key object loses all refs. Trade-off: not iterable, no `size`.
 
-1. **WeakMap-backed memoize** — GC-friendly for object-only args. Cache entries vanish when the key object is no longer referenced. Trade-off: not iterable, no `size`.
+### Variant 2 — Bounded memoize (LRU at trie root)
+LRU evict whole arg-paths when memory grows. Hard to get right at deeper levels.
 
-2. **Bounded memoize** — wrap each trie node with an LRU eviction policy. Hard to get right (eviction at which level?), usually done at the top level only.
+### Variant 3 — Async Memoize II
+`fn` returns a Promise. Cache the Promise (dedupes concurrent calls). On reject, evict the path so retries can succeed.
 
-3. **Async memoize II** — `fn` returns a promise. Cache the promise (deduplicates concurrent calls). On rejection, evict the path so retries can succeed.
+### Variant 4 — Structural-equality keying
+Use `_.isEqual` for keys. Incompatible with hashing → O(N) linear scan per lookup. Useful when caller can't preserve refs.
 
-4. **`isEqual`-keyed memoize** — instead of identity, use structural equality (lodash `_.isEqual`) for keys. Slower but matches the value-equality intuition. Note: structural-equality keying is **incompatible** with hashing, so you fall back to linear scan — O(N) per lookup.
+---
 
-## Revision notes
+## 12. How to think aloud
 
-> **Memoize II — 60 second recap**
-> - Problem: identity-keyed memoize (objects with same shape but different refs must NOT collide).
-> - Solution: **nested Map trie**, one Map per arg position. Walk arg-by-arg.
-> - Each trie node has a `hasResult` flag + `result` slot — handles variable arity.
-> - Map keys use reference equality for objects, SameValueZero for primitives.
-> - Refinement: WeakMap for object keys (GC-friendly), Map for primitive keys (hybrid).
-> - **Trap:** flat `Map<args, result>` — new array literal per call, always misses.
-> - **Trap 2:** result-slot only at deepest leaf — breaks variable arity.
+> "Plain memoize fails for objects because `JSON.stringify({a:1}) === JSON.stringify({a:1})` collapses distinct refs. Solution: nested Map trie, one Map per argument position. Walk arg-by-arg; each trie node has its own `hasResult`/`result` slot (handles variable arity). Map keys use reference equality for objects and SameValueZero for primitives — exactly the semantics we want. O(N) per lookup where N = args.length. Same shape as React hook deps, DataLoader composite keys. Refinement: WeakMap for object positions so cache entries GC when keys are dropped. Trap: flat Map<args, result> always misses (new array per call). Trap: result slot only at deepest leaf breaks variable arity."
+
+---
+
+## 13. 60-second revision
+
+> - **Nested Map trie**, one Map per argument position.
+> - **Each node:** `{children: Map, hasResult, result}`.
+> - **Walk arg-by-arg;** consume per-node result slot.
+> - **Map keys:** reference for objects/functions, SameValueZero for primitives.
+> - **Variable arity** handled by per-node result slots.
+> - **WeakMap refinement** for object args (GC-friendly).
+> - **Async variant:** cache the Promise; evict on reject.
+> - **Trap:** flat Map (new array per call); result slot only at leaf; WeakMap-only (primitives throw).
+
+---
+
+**Related:** [memoize.md](./memoize.md) · [deep-clone-with-cycles.md](./deep-clone-with-cycles.md) · [lru-cache.md](./lru-cache.md) · [`04-promises/async-memoize.md`](../04-promises/async-memoize.md) · [dataloader-batch-cache.md](./dataloader-batch-cache.md)
+
+**Concept primer:** [`concepts/maps-sets.md`](../../concepts/maps-sets.md)

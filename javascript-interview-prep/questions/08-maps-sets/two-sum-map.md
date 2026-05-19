@@ -1,146 +1,266 @@
 # Two-Sum with a Map (O(n))
 
-## Source
-- LeetCode #1 "Two Sum" — the most-asked interview problem on the planet: https://leetcode.com/problems/two-sum/
-- Cracking the Coding Interview Ch. 11 (Arrays & Hash Tables), Frontend Masters, NeetCode 150.
+> **Difficulty:** Foundation   |   **Time:** ~10 min   |   **Prereqs:** [object-vs-map-vs-set.md](./object-vs-map-vs-set.md)
+>
+> **Source:** LeetCode #1. Most-asked interview problem.
 
-## Why this question matters in interviews
-Two-Sum is the **canonical hash-trick problem** — the one that teaches you "trade space for time with a Map." Every senior interviewer expects you to identify it instantly, articulate the O(n²) → O(n) jump, and write the single-pass Map solution in under five minutes. As a backend engineer it generalizes to: finding duplicate transactions, matching buy/sell orders in an order book, deduplicating webhook IDs, and resolving foreign keys in a batch. Failing this one signals weak fundamentals; nailing it cleanly is the price of admission.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+Given `nums` and `target`, return indices of two numbers summing to target. O(n) with a Map.
+
+**Verification examples**
+
 ```js
-// Single-pass with Map<complement, index>
+twoSum([2, 7, 11, 15], 9);              // [0, 1]
+twoSum([3, 3], 6);                       // [0, 1]
+twoSum([3, 2, 4], 6);                    // [1, 2]
+twoSum([1, 2], 5);                       // [] (no pair)
+twoSum([0, 0], 0);                       // [0, 1]
+```
+
+**Constraints**
+- Single pass O(n) time, O(n) space.
+- Check `seen.has(need)` BEFORE `seen.set(num, i)` — handles duplicates.
+- Return any one valid pair (per spec).
+
+---
+
+## 2. Plain-English restatement
+
+For each `num`, look for the complement `target - num` in a Map. If found, return `[seenIndex, currentIndex]`. Otherwise, record current num → index.
+
+---
+
+## 3. Why this matters in interviews
+
+Canonical hash-trick problem — "trade space for time with a Map." Senior interviewers expect <5 min single-pass solution. Generalizes to: duplicate transactions, order book matching, batch FK resolution.
+
+---
+
+## 4. Mental model
+
+```
+   single pass O(n):
+     seen = Map<value, index>
+     for i = 0..n-1:
+       need = target - nums[i]
+       if seen.has(need):
+         return [seen.get(need), i]
+       seen.set(nums[i], i)
+     return []
+   
+   Order matters:
+     CHECK first, SET after.
+     Otherwise [3, 3] target 6: 
+       i=0: set(3, 0).
+       i=1: need=3, has → [0, 1]. ✓
+     If we set before check:
+       i=0: set(3, 0). need=3, has → [0, 0]. ✗
+   
+   Variants:
+     Sorted input: two pointers, O(1) space.
+     All pairs: enumerate; different problem.
+     Return values vs indices: re-read prompt.
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. Why check `has` BEFORE `set`?
+> 2. Why Map over plain object?
+> 3. Sorted input — better approach?
+
+---
+
+## 6. Brute force — walked through
+
+```js
 function twoSum(nums, target) {
-  const seen = new Map();              // value -> index
   for (let i = 0; i < nums.length; i++) {
-    const need = target - nums[i];
-    if (seen.has(need)) return [seen.get(need), i];
-    seen.set(nums[i], i);              // record AFTER checking
+    for (let j = i + 1; j < nums.length; j++) {
+      if (nums[i] + nums[j] === target) return [i, j];
+    }
   }
   return [];
 }
 ```
 
-### Runtime / engine behavior
-- `Map` lookups (`has`, `get`, `set`) are **amortized O(1)**. V8 backs Map with a hash table that supports any key type — strings, numbers, objects, NaN — using SameValueZero equality.
-- Using a plain object `{}` is tempting but has two traps: numeric keys get stringified (`obj[5]` and `obj['5']` collide), and lookups must walk the prototype chain unless you use `Object.create(null)`. Map sidesteps both.
-- For `nums.length = n`, total work is `n` map writes + at most `n` map reads = **2n ops, O(n) time, O(n) space**.
+O(n²) — dies above n=10k.
 
-### Edge cases (these are the interview traps)
-1. **Duplicates with target = 2x** — `[3, 3]`, `target = 6` must return `[0, 1]`. Works only if you check `seen.has(need)` **before** `seen.set(nums[i], i)` — otherwise the same index gets returned twice.
-2. **No solution exists** — return `[]` (or `null`) by spec; some interviewers want a thrown error. Clarify.
-3. **Negative numbers / zero** — `[0, 0]`, `target = 0` is a classic gotcha. Map handles `0` and `-0` as the same key (SameValueZero); fine for integers.
-4. **Floating point** — `[0.1, 0.2]`, `target = 0.3` will fail because `0.3 - 0.1 !== 0.2` in IEEE 754. Out of scope for integer input but worth flagging.
-5. **Multiple valid pairs** — spec says return *any one*. Don't try to enumerate all unless asked (different problem).
-6. **Sorted input variant** — if interviewer says "sorted," switch to two-pointer (O(n) time, **O(1) space**) — see Variants.
-7. **Returning values vs indices** — re-read the prompt. LeetCode #1 returns indices; some variants want the values.
-8. **Empty / single-element input** — return `[]` immediately; don't crash on a 0-element loop.
+---
 
-## Brute force approach
-Nested loop: for every `i`, scan every `j > i` and check `nums[i] + nums[j] === target`. **O(n²) time, O(1) space.** Acceptable only as a baseline you immediately discard. State it, then say "we can do O(n) with a hash map" and pivot.
+## 7. The unlocking insight
 
-## Optimal approach
-One pass through the array. For each element `nums[i]`, ask: "have I already seen `target - nums[i]`?" If yes, the pair is `[seen.get(complement), i]`. If no, record `nums[i] → i` and continue. The Map turns the "have I seen X?" question from O(n) (linear scan) into O(1) (hash lookup). Net: **O(n) time, O(n) space**. The space is the unavoidable cost of the speedup — that trade is the entire point of the question.
+> **Map<value, index>: for each num, check `has(target - num)`. Trade space for time. Check before set to handle dupes.**
 
-## Solution (JavaScript)
+Three properties:
+
+1. **Map for O(1) lookup**.
+2. **Check then set** order.
+3. **Single pass** — O(n).
+
+---
+
+## 8. Solution (annotated)
 
 ```js
-/**
- * Return indices of the two numbers in `nums` that sum to `target`.
- * Assumes exactly one solution exists.
- * @param {number[]} nums
- * @param {number} target
- * @returns {[number, number] | []}
- */
 function twoSum(nums, target) {
-  const seen = new Map();              // value -> index of that value
-
+  const seen = new Map();                                                 // step 1: value → index
   for (let i = 0; i < nums.length; i++) {
-    const complement = target - nums[i];
-
-    // Check BEFORE inserting — handles duplicates like [3,3] target=6.
-    if (seen.has(complement)) {
-      return [seen.get(complement), i];
-    }
-    seen.set(nums[i], i);
+    const need = target - nums[i];                                         // step 2: complement
+    if (seen.has(need)) return [seen.get(need), i];                       // step 3: check first
+    seen.set(nums[i], i);                                                  // step 4: record after
   }
+  return [];                                                                // step 5: no pair
+}
 
-  return [];                           // no pair found
+// Sorted input: two-pointer, O(1) space
+function twoSumSorted(nums, target) {
+  let lo = 0, hi = nums.length - 1;
+  while (lo < hi) {
+    const s = nums[lo] + nums[hi];
+    if (s === target) return [lo, hi];
+    if (s < target) lo++;
+    else hi--;
+  }
+  return [];
+}
+
+// All pairs
+function twoSumAll(nums, target) {
+  const seen = new Map();
+  const out = [];
+  for (let i = 0; i < nums.length; i++) {
+    const need = target - nums[i];
+    if (seen.has(need)) {
+      for (const j of seen.get(need)) out.push([j, i]);
+    }
+    if (!seen.has(nums[i])) seen.set(nums[i], []);
+    seen.get(nums[i]).push(i);
+  }
+  return out;
 }
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
-Input: `nums = [2, 7, 11, 15]`, `target = 9`
+```js
+twoSum([2, 7, 11, 15], 9);                                    // [0, 1]
+twoSum([3, 3], 6);                                            // [0, 1]
+twoSum([3, 2, 4], 6);                                         // [1, 2] (not [0])
+twoSum([], 5);                                                 // []
+twoSum([0, 0], 0);                                            // [0, 1]
 
-| i | nums[i] | complement | seen.has? | action                    | seen after            |
-|---|---------|------------|-----------|---------------------------|-----------------------|
-| 0 | 2       | 7          | no        | seen.set(2, 0)            | `{2→0}`               |
-| 1 | 7       | 2          | **yes**   | return `[seen.get(2), 1]` | —                     |
+// Sorted
+twoSumSorted([1, 2, 3, 4], 5);                                // [0, 3] or [1, 2]
 
-Output: `[0, 1]`. Done in 2 iterations.
+// 3-Sum extension — fix one, two-sum the rest
+function threeSum(nums) {
+  nums = [...nums].sort((a, b) => a - b);
+  const out = [];
+  for (let i = 0; i < nums.length - 2; i++) {
+    if (i > 0 && nums[i] === nums[i - 1]) continue;            // dedup
+    let lo = i + 1, hi = nums.length - 1;
+    while (lo < hi) {
+      const s = nums[i] + nums[lo] + nums[hi];
+      if (s === 0) {
+        out.push([nums[i], nums[lo], nums[hi]]);
+        while (lo < hi && nums[lo] === nums[lo + 1]) lo++;
+        while (lo < hi && nums[hi] === nums[hi - 1]) hi--;
+        lo++; hi--;
+      } else if (s < 0) lo++;
+      else hi--;
+    }
+  }
+  return out;
+}
+```
 
-Duplicate input: `nums = [3, 3]`, `target = 6`
+---
 
-| i | nums[i] | complement | seen.has? | action                    | seen after            |
-|---|---------|------------|-----------|---------------------------|-----------------------|
-| 0 | 3       | 3          | no        | seen.set(3, 0)            | `{3→0}`               |
-| 1 | 3       | 3          | **yes**   | return `[seen.get(3), 1]` | —                     |
+## 9. Step-by-step dry run
 
-Output: `[0, 1]`. The check-before-insert order is what makes this work — flipping the two lines breaks duplicates.
+```
+twoSum([2, 7, 11, 15], 9):
+  seen = Map{}.
+  i=0 num=2: need=7. seen.has(7)? No. seen.set(2, 0). Map{2→0}.
+  i=1 num=7: need=2. seen.has(2)? Yes (idx 0). Return [0, 1].
 
-## Important takeaways
+twoSum([3, 3], 6):
+  i=0 num=3: need=3. seen.has(3)? No. seen.set(3, 0). Map{3→0}.
+  i=1 num=3: need=3. seen.has(3)? Yes (idx 0). Return [0, 1].
+  
+  ✓ Works because CHECK was before SET.
+  Buggy version (set first): i=0 would set(3,0); on need=3 has(3)→true, would return [0, 0]. Wrong.
 
-**Syntax to memorize**
-- `const seen = new Map()` — not `{}`.
-- `seen.has(k)` / `seen.get(k)` / `seen.set(k, v)` — three methods, no surprises.
-- **Check first, then insert** — order matters for duplicates.
+twoSum([1, 2], 5):
+  i=0: need=4. No. set(1, 0).
+  i=1: need=3. No. set(2, 1).
+  Return [].
 
-**Patterns to reuse**
-- "Map of value → index" is the hash-trick skeleton. Same pattern powers: **first-non-repeating-char** (char → count), **longest-substring-without-repeat** (char → last index), **subarray-sum-equals-k** (prefixSum → count), **group-anagrams** (key → bucket).
-- "Single pass + complement lookup" generalizes: **3Sum** wraps a two-pointer around it; **4Sum** wraps another loop. The Map version is the inner kernel.
+twoSumSorted([1, 2, 3, 4], 5):
+  lo=0, hi=3. sum=1+4=5 → return [0, 3].
 
-**Common mistakes**
-- Using `{}` instead of `Map` — works for small int keys but breaks on negative numbers as keys in some patterns, and stringifies everything.
-- Inserting before checking → duplicate values fail.
-- Two nested loops with a Map "for safety" — defeats the purpose; it's still O(n²).
-- Returning the values instead of indices (re-read the prompt).
-- Forgetting the no-solution case — uncaught return leaks `undefined`.
+vs brute O(n²):
+  For n=10000, brute does ~50M ops. Map does ~10k. 5000x.
+```
 
-**Big-O comparison**
-| Approach              | Time       | Space | Notes                          |
-|-----------------------|------------|-------|--------------------------------|
-| Nested loop           | O(n²)      | O(1)  | Baseline only                  |
-| Sort + two-pointer    | O(n log n) | O(1)* | *if sort is in-place; loses original indices |
-| **Map (single pass)** | **O(n)**   | **O(n)** | The expected answer         |
+---
 
-The sort+two-pointer trade is worth mentioning: it wins on **space** but loses on **time** and **destroys the original indices**, so it's only acceptable when the problem says "return values" or "input is already sorted."
+## 10. Common confusion + traps
 
-**Related questions**
-- 3Sum / 4Sum (LeetCode #15, #18)
-- Two Sum II — sorted input (LeetCode #167) — two-pointer variant
-- Subarray Sum Equals K (LeetCode #560) — Map of prefix sums
-- Longest Substring Without Repeating Characters (LeetCode #3)
+1. **Set before check** — `[3, 3]` returns `[0, 0]`.
+2. **Use Object instead** — string coercion can cause bugs (numeric keys).
+3. **Floating point** — `0.1 + 0.2 !== 0.3`; integer-only safe.
+4. **Multiple pairs** — return one; don't enumerate unless asked.
+5. **Sorted input** — switch to two-pointer for O(1) space.
+6. **Empty array** — return `[]`; don't crash.
+7. **Return indices vs values** — re-read prompt.
 
-## Variants
+---
 
-1. **Sorted-input variant (Two Sum II)** — input is sorted ascending. Use two pointers `lo=0, hi=n-1`; if `nums[lo]+nums[hi] < target` move `lo++`, if `>` move `hi--`. **O(n) time, O(1) space**. Beats the Map on space — the right answer when the array is sorted.
+## 11. Senior follow-ups & variants
 
-2. **Return all pairs** — different problem. Don't return on first hit; push `[seen.get(complement), i]` into a result array and **continue**. Watch for duplicate pairs if the array has repeated values — dedupe with a Set of canonicalized pair keys.
+### Variant 1 — Two-Sum sorted (two-pointer)
+O(n) time, O(1) space.
 
-3. **K-Sum generalization** — `kSum(nums, target, k)` recursively reduces to `(k-1)Sum` with target adjusted. The base case `k=2` is the Map version above. Pattern used to solve 3Sum, 4Sum cleanly.
+### Variant 2 — Three-Sum (LeetCode #15)
+Fix one + two-sum sorted rest.
 
-4. **Streaming / online variant** — numbers arrive one at a time over a stream; report a pair the moment one is possible. Same Map, but you never finish — `set` runs forever. Mention LRU eviction for bounded memory.
+### Variant 3 — All pairs
+Map<value, indices[]>.
 
-## Revision notes
+### Variant 4 — Pair with K diff
+`nums[i] - nums[j] === k`; similar Map approach.
 
-> **two-sum-map — 60 second recap**
-> - Single pass + `Map<value, index>`.
-> - For each `nums[i]`: compute `complement = target - nums[i]`. If `seen.has(complement)`, return `[seen.get(complement), i]`. Else `seen.set(nums[i], i)`.
-> - **Check before insert** — handles `[3,3] target=6`.
-> - **O(n) time, O(n) space**. Beats nested-loop O(n²).
-> - Sorted input → two-pointer O(n) time, **O(1) space** instead.
-> - Use `Map`, not `{}` — avoids stringification + prototype chain.
-> - Pattern generalizes to: 3Sum, prefix-sum-equals-k, longest-substring-without-repeat.
+### Variant 5 — Streaming
+Process online with O(window) memory if "find sum in last K".
+
+---
+
+## 12. How to think aloud
+
+> "Two-Sum is the canonical hash-trick — trade space for time with a Map. O(n²) brute force is obvious; the senior signal is producing the O(n) single-pass Map solution in under five minutes. Algorithm: keep `Map<value, index>`; for each `nums[i]`, compute `need = target - nums[i]`; if `seen.has(need)`, return `[seen.get(need), i]`; else `seen.set(nums[i], i)`. **Order matters: check BEFORE set** — otherwise `[3, 3]` target 6 returns `[0, 0]` (same index). Use Map over object: object stringifies keys (`obj[5] === obj['5']`), Map preserves type. Map has SameValueZero — `0` and `-0` collide, NaN keys work. Floating-point input is unsafe (`0.1 + 0.2 !== 0.3`); usually integer per problem. Variants: sorted input → two-pointer O(1) space; all pairs → Map<value, indices[]>; Three-Sum → fix outer, two-sum-sorted the rest. Trap: set before check; object instead of Map; float input; expecting all pairs."
+
+---
+
+## 13. 60-second revision
+
+> - **Single pass + Map**: O(n) time, O(n) space.
+> - **`Map<value, index>`**; check then set.
+> - **Check before set** — duplicates `[3, 3]`.
+> - **Map over Object** — no key coercion.
+> - **Sorted input → two-pointer** O(1) space.
+> - **All pairs** → Map<value, indices[]>.
+> - **Three-Sum** = fix + two-sum.
+> - **Trap:** set-first bug; float precision; expect all pairs.
+
+---
+
+**Related:** [object-vs-map-vs-set.md](./object-vs-map-vs-set.md) · [first-non-repeating-char.md](./first-non-repeating-char.md) · [group-anagrams.md](./group-anagrams.md) · [multiset-counter.md](./multiset-counter.md) · [`07-arrays/sliding-window-helper.md`](../07-arrays/sliding-window-helper.md)
+
+**Concept primer:** [`concepts/maps-sets.md`](../../concepts/maps-sets.md)

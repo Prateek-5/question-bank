@@ -1,118 +1,187 @@
-# Factory with Injected Dependencies (Functional DI)
+# Build a `createService({ deps })` factory — functional dependency injection
 
-## Source / Origin
-- Dependency injection without a framework — Mark Seemann; "Functional Architecture" patterns.
-- Asked at: Stripe, Atlassian, Razorpay — services-shop interviews.
-- Concept reference: `concepts/closures.md`, sibling `10-machine-coding-patterns/dependency-injection-container.md`.
+> **Difficulty:** Medium   |   **Time:** ~25 min   |   **Prereqs:** [counter-ii.md](./counter-ii.md), [module-pattern-iife.md](./module-pattern-iife.md), [`concepts/closures.md`](../../concepts/closures.md)
+>
+> **Source:** Mark Seemann's *Functional Architecture*; ubiquitous in modern Node services. Asked at Stripe, Atlassian, Razorpay.
 
-## Why this question matters in interviews
-"How do you test this code that calls `fetch`?" The textbook answer is mocking. The senior answer is: don't call `fetch` directly — accept it as a dependency. A factory closure that captures injected deps gives you (1) trivial unit testing by stubbing in fakes, (2) explicit dependency surface (no hidden globals), (3) no DI container, no decorators, no metadata. It's the smallest viable DI pattern.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
-```js
-// Without DI — hard to test
-async function getUser(id) {
-  const r = await fetch(`/api/users/${id}`);
-  return r.json();
-}
-
-// With factory DI
-function createUserService({ fetch, logger }) {
-  return {
-    async getUser(id) {
-      logger.info('fetch user', { id });
-      const r = await fetch(`/api/users/${id}`);
-      return r.json();
-    },
-  };
-}
-
-// In production
-const userService = createUserService({ fetch: globalThis.fetch, logger: realLogger });
-
-// In tests
-const fakeFetch = (url) => Promise.resolve({ json: () => ({ id: 1, name: 'A' }) });
-const test = createUserService({ fetch: fakeFetch, logger: noOpLogger });
-const u = await test.getUser(1);
+**Signature**
+```ts
+function createService(deps: { dep1: T1; dep2: T2; ... }): {
+  method1(...): ...;
+  method2(...): ...;
+};
 ```
 
-### Edge cases / interview traps
-1. **Each call to `createUserService` creates a fresh closure** with its own captured deps. Useful for per-request scoping.
-2. **Singletons** — call once, export the result. Good for shared connection pools.
-3. **No hidden globals** — every dep is in the factory signature. The function's behavior is *entirely* determined by inputs.
-4. **Stub fidelity** — your test fakes must match the real shape. Use TypeScript interfaces for safety.
-5. **Lazy resolution** — sometimes a dep isn't ready at factory call; pass a function: `({ getDb })` instead of `({ db })`.
-6. **Circular deps** — A needs B, B needs A. Resolve via lazy getters or restructure.
-7. **Per-request vs per-app scope** — bigger apps mix: app-level deps captured in module init; request-level deps re-captured in middleware.
-8. **Test isolation** — don't share factory across tests; each test creates a fresh service.
+**Input / Output examples**
 
-## Mental Model
+| Setup                                                                                | Production / test         | Behaviour                              |
+|--------------------------------------------------------------------------------------|---------------------------|----------------------------------------|
+| `createUserService({ fetch, logger, db, cache })`                                    | real deps in prod         | calls real fetch / db / cache          |
+| `createUserService({ fetch: fakeFetch, logger: noOp, db: {}, cache: fakeCache })`   | fakes in tests            | no network, no DB; deterministic       |
+| `createUserService({ fetch, logger: requestScopedLogger })` per middleware           | per-request scope         | request-scoped logger; shared db/cache |
 
-A factory is a **function that takes deps and returns a service**:
+**Constraints**
+- Every dependency is in the factory **signature** — no hidden globals, no `require` inside the service body.
+- Factory returns a service object whose methods close over the injected deps.
+- Production wires real deps at the **composition root** (typically `index.ts`).
+- Tests wire fakes — no mocking framework required.
+
+---
+
+## 2. Plain-English restatement
+
+The interviewer says: "How would you make this code that calls `fetch` testable?" The textbook answer is "use a mocking library." The senior answer is: **accept `fetch` as a dependency**. Write your service as a factory that takes a `deps` object and returns the service. Production code wires the real `fetch`, the real logger, the real database. Test code wires fakes. The service itself doesn't know — and doesn't care — which it got.
+
+This is **functional dependency injection** — the smallest, framework-free form of DI. No containers, no decorators, no metadata. Just closures.
+
+---
+
+## 3. Why this matters in interviews
+
+Senior interviewers ask this to test three things at once. **(1)** Testability discipline — can you make your code unit-testable without relying on `jest.mock` patching the require cache? **(2)** Encapsulation — can you use closures to keep dependencies private to the service? **(3)** Anti-pattern detection — do you flinch when code reaches for module-level singletons, hidden globals, or `Date.now()` called inside business logic? Functional DI is the cleanest answer to all three.
+
+---
+
+## 4. Mental model
+
+A factory is **a function that takes deps and returns a service**. The service's methods close over the deps; the deps are invisible from outside.
 
 ```
    createUserService({ fetch, logger, db, cache })
             │
             ▼
-   ┌──────────────────────────────────┐
-   │ closure scope:                    │
-   │   fetch, logger, db, cache        │  ← captured
-   │                                   │
-   │   getUser(id):                    │  ← method captures the scope
-   │     uses fetch, logger, ...       │
-   │                                   │
-   │   updateUser(id, data):           │
-   │     uses db, logger               │
-   └──────────────────────────────────┘
+   ┌───────────────────────────────────────────┐
+   │ closure scope:                            │
+   │   fetch, logger, db, cache  ← captured    │
+   │                                            │
+   │   getUser(id) { uses fetch, logger, ... } │
+   │   updateUser(id, data) { uses db, logger }│
+   └───────────────────────────────────────────┘
             │
             ▼
    service = { getUser, updateUser }
+
+   PRODUCTION:        TEST:
+   ──────────────     ──────────────
+   pass real deps     pass fake deps
+   service runs       service runs
+   real network       no network
 ```
 
-In production: pass real deps. In tests: pass fakes. Service has *no awareness* of which it got.
+The service has no awareness of *which* deps it got. That's the whole point — behavior is **entirely** determined by inputs.
 
-## Why interviewers care
+---
 
-- **Testability discipline.** Senior signal.
-- **Closure-as-encapsulation** — deps are private to the service.
-- **Anti-pattern detection** — they want to see you flinch when code reaches for module-level singletons.
+## 5. Try it yourself first
 
-## Common beginner confusion
+> **Predict before reading on:**
+> 1. Why is `const logger = require('./logger')` inside a service file harder to test than `function createService({ logger })`?
+> 2. If your factory's signature has 12 deps, what does that tell you about the service?
+> 3. How would you do **per-request scope** — a logger that includes the request ID, but a database connection pool that's shared across requests?
 
-- **"That's just dependency inversion."** It IS dependency inversion. Functional DI is the simplest form.
-- **"This means I need a container."** No — `createService({ a, b, c })` is the entire framework.
-- **"Mocking with jest is the same."** Mocking patches the module after-the-fact. Factory DI makes deps explicit and is harder to forget. Mocking is a workaround for bad code; DI is the fix.
-- **"I have too many deps in the signature."** That's a signal the service does too much. Split.
-- **"Factory must be a class."** No — plain function returning an object is fine.
+---
 
-## Brute force approach
+## 6. Brute force — walked through
+
+### Wrong attempt 1: module-level singletons
 
 ```js
-// Module-level singleton — hidden global; can't unit-test isolation
+// userService.js
+const fetch = require('node-fetch');
 const logger = require('./logger');
 const db = require('./db');
 
 async function getUser(id) {
-  logger.info(...);
-  return db.query(...);
+  logger.info('fetch user', { id });
+  const r = await fetch(`/api/users/${id}`);
+  return r.json();
 }
-
-// Tests must mock requires (jest.mock) — flaky, slow
+module.exports = { getUser };
 ```
 
-## Optimal approach
+How do you test this? You'd have to either:
+- Use `jest.mock('node-fetch')` — patches the require cache, fragile across test suites, doesn't compose.
+- Run a real network — slow, flaky.
 
-A factory that takes deps as a single object and returns the service. Production wires real deps in `index.js`/composition root. Tests wire fakes.
+Either way, you've baked the dependencies into the module. The service is a singleton with hidden global state.
 
-## Solution (JavaScript)
+### Wrong attempt 2: pass deps as scattered args
 
 ```js
-// service.js
-export function createUserService({ fetch, logger, db, cache }) {
-  return {
-    async getUser(id) {
+async function getUser(id, fetch, logger, db) {
+  logger.info('fetch user', { id });
+  ...
+}
+```
+
+Works mechanically but the signature is bad. Every caller has to pass all 3 deps. The deps leak into every call site instead of being captured once.
+
+### Wrong attempt 3: dependency container with strings
+
+```js
+const container = new Container();
+container.register('fetch', fetch);
+container.register('logger', logger);
+async function getUser(id) {
+  const fetch = container.resolve('fetch');
+  ...
+}
+```
+
+Now you've got a container. Closure-based DI doesn't need it — you've added ceremony without reducing coupling. The container itself becomes the hidden global.
+
+---
+
+## 7. The unlocking insight
+
+> **A factory function that takes a single `deps` object and returns a service is the simplest, framework-free form of dependency injection. Closures capture the deps; the service methods read them; tests pass fakes; production passes real implementations.**
+
+The pattern has three rules:
+
+1. **Single deps object** as the factory parameter — destructured for clarity. Adding a dep is a one-line change (add to signature; capture in closure).
+2. **All side effects** (network, time, randomness, DB) come through deps — never `import { fetch }` inside the service body, never `Date.now()` inside business logic, never `Math.random()` deep in the call tree.
+3. **Composition root** wires the real graph in one place (typically `index.ts`). The graph is fully explicit there.
+
+**When to call the factory:**
+
+- **Once per process** (app-level deps) — call at module init, export the singleton.
+- **Once per request** (request-scoped deps like a logger with `requestId`) — call inside middleware.
+- **Once per task** (rare; usually only for long-running background work with its own context).
+
+**When to break a service into smaller ones:**
+
+If the deps signature has more than ~6 entries, the service is doing too much. Split it.
+
+**Comparison with class-based DI:**
+
+```js
+// Class with constructor injection — same pattern, different syntax
+class UserService {
+  constructor({ fetch, logger, db, cache }) { /* assign to this */ }
+  async getUser(id) { /* use this.fetch, this.logger ... */ }
+}
+```
+
+Equivalent. Closure version is destructure-safe (no `this`); class version is more familiar to OOP-trained engineers. Pick by team culture.
+
+---
+
+## 8. Solution (annotated)
+
+```js
+// ── service.js ──────────────────────────────────────────────────
+export function createUserService({                        // step 1: factory takes deps object
+  fetch,                                                    // step 2: each dep is captured in closure
+  logger,
+  db,
+  cache,
+}) {
+  return {                                                  // step 3: return the service object
+    async getUser(id) {                                     // step 4: methods close over deps
       const cached = await cache.get(`user:${id}`);
       if (cached) return cached;
       logger.info('cache miss', { id });
@@ -129,40 +198,48 @@ export function createUserService({ fetch, logger, db, cache }) {
   };
 }
 
-// index.js (composition root)
+// ── index.js (composition root) ─────────────────────────────────
 import { createUserService } from './service.js';
 import { fetch } from 'undici';
 import { realLogger } from './logger.js';
 import { db } from './db.js';
 import { redisCache } from './cache.js';
 
-const userService = createUserService({ fetch, logger: realLogger, db, cache: redisCache });
-export { userService };
+export const userService = createUserService({              // step 5: production wiring
+  fetch,
+  logger: realLogger,
+  db,
+  cache: redisCache,
+});
 
-// service.test.js
+// ── service.test.js ─────────────────────────────────────────────
 import { createUserService } from './service.js';
 
-test('getUser uses cache when present', async () => {
-  const fakeCache = { get: async () => ({ id: 1, name: 'A' }), set: async () => {}, del: async () => {} };
-  const fakeFetch = () => { throw new Error('should not be called'); };
-  const fakeLogger = { info() {}, error() {} };
-  const fakeDb = {};
-  const svc = createUserService({ fetch: fakeFetch, logger: fakeLogger, db: fakeDb, cache: fakeCache });
-  const u = await svc.getUser(1);
-  expect(u).toEqual({ id: 1, name: 'A' });
+test('getUser returns cached value without calling fetch or db', async () => {
+  const svc = createUserService({                            // step 6: test wiring with fakes
+    fetch: () => { throw new Error('should not be called'); },
+    logger: { info() {}, error() {} },
+    db: {},
+    cache: {
+      get: async (k) => k === 'user:1' ? { id: 1, name: 'A' } : null,
+      set: async () => {},
+      del: async () => {},
+    },
+  });
+  expect(await svc.getUser(1)).toEqual({ id: 1, name: 'A' });
 });
 ```
 
-Per-request DI with middleware:
+**Try it yourself**
 
 ```js
-// per-request scope: wire deps per request
+// Per-request DI with middleware
 app.use((req, res, next) => {
   req.services = createUserService({
     fetch,
-    logger: realLogger.child({ requestId: req.id }),    // child logger with request ID
-    db,
-    cache: redisCache,
+    logger: realLogger.child({ requestId: req.id }),   // per-request scoped logger
+    db,                                                 // shared
+    cache: redisCache,                                  // shared
   });
   next();
 });
@@ -172,74 +249,173 @@ app.get('/users/:id', async (req, res) => {
 });
 ```
 
-## Step-by-step dry run
+---
 
-```
-createUserService({ fetch: F, logger: L, db: D, cache: C })
-  → enter factory scope; capture {F, L, D, C}
-  → return service object with methods that close over those four
-  
-test call:
-  fakeCache.get returns { id:1, name:'A' }
-  svc.getUser(1):
-    cache.get('user:1') → { id:1, name:'A' } (not null)
-    return { id:1, name:'A' }
-    (logger.info not called, fetch not called, db not touched)
+## 9. Step-by-step dry run
 
-prod call:
-  realCache.get('user:1') → null (cache miss)
-  logger.info('cache miss', { id: 1 })
-  fetch('/api/users/1') → response
-  res.json() → { id:1, name:'A' }
-  cache.set('user:1', data, ttl:300)
-  return data
+Test scenario (cache hit path):
+
+```js
+const svc = createUserService({
+  fetch: fakeFetch,
+  logger: fakeLogger,
+  db: {},
+  cache: { get: async () => ({ id: 1, name: 'A' }), set: async () => {}, del: async () => {} },
+});
+await svc.getUser(1);
 ```
 
-## How to think aloud in the interview
+Values-first trace:
 
-> "Functional DI: factory function takes a deps object, captures it in closure, returns a service with methods that use those deps. No globals, no containers, no decorators. Production wires real deps at the composition root; tests wire fakes. Each method has access to everything it needs from the closure. For per-request scope, the factory is called inside middleware. Trade-off: signature gets verbose when deps multiply — usually a signal the service should be split."
+| Step | Call                       | Captured deps used | Outcome                            |
+|------|----------------------------|---------------------|-------------------------------------|
+| 1    | `createUserService({...})` | (capture all 4)     | returns service object              |
+| 2    | `svc.getUser(1)`           | `cache.get('user:1')` | resolves to `{id:1, name:'A'}` (not null) |
+| 3    | (cache hit branch)         | (skip logger, fetch) | returns `{id:1, name:'A'}`          |
 
-## Important takeaways
+`fakeFetch` was never called. `fakeLogger.info` was never called. No network, no DB. The test is deterministic and fast.
 
-- **Factory takes deps; closure captures them.**
-- **No hidden globals** — every dep in the signature.
-- **Composition root** wires production deps in one place.
-- **Tests wire fakes** — no mocking framework needed.
-- **Per-request or per-app** scope possible.
-- **Many deps = split the service.**
+Production scenario (cache miss path):
 
-## Variants
+| Step | Call                  | Captured deps used                       | Outcome                              |
+|------|------------------------|-------------------------------------------|---------------------------------------|
+| 1    | `svc.getUser(1)`      | `realCache.get('user:1')`                | resolves to `null` (miss)             |
+| 2    | (miss branch)         | `realLogger.info('cache miss', {id:1})`  | logged                                |
+| 3    |                        | `fetch('/api/users/1')`                  | resolves with HTTP response           |
+| 4    |                        | `res.json()`                              | resolves with `{id:1, name:'A'}`      |
+| 5    |                        | `realCache.set('user:1', data, {ttl})`   | cached for next call                  |
+| 6    |                        |                                           | returns data                          |
 
-- **Class-based DI** — same idea, with classes; constructor takes deps.
-- **`InversifyJS` / NestJS DI** — full containers; useful at scale.
-- **Async factory** — `async function create...` for deps that need async init.
-- **Layered factories** — `createApp({ db, cache })` returns `{ userService, orderService }` each wired.
-- **Module replacement** (`jest.mock`) — patches at the require layer; alternative to DI but less clean.
+---
 
-## Revision notes
+## 10. Common confusion + traps
 
-```
-function createService({ dep1, dep2, ... }) {
-  // closure captures deps
-  return {
-    method() { ... uses dep1, dep2 ... },
-  };
+1. **"That's just dependency inversion."**
+   It is. Functional DI is the simplest form. The principle is the same as Mark Seemann's *Dependency Injection in .NET*; the implementation is 10 lines of JS.
+
+2. **"This means I need a container."**
+   No. `createService({ a, b, c })` is the entire framework. Containers help at scale (auto-resolution of deep graphs) but most services don't need them.
+
+3. **"Mocking with `jest.mock` is the same."**
+   Mocking patches the module system **after the fact**. Factory DI makes deps **explicit in the signature** and harder to forget. Mocking is a workaround for code that didn't accept deps; DI is the prevention.
+
+4. **"Factory must be a class."**
+   No. Plain function returning an object is fine. Classes work too — same pattern with constructor injection.
+
+5. **"Too many deps in the signature."**
+   That's a signal the service does too much. Split. A `UserService` with 12 deps is probably hiding a `UserService` + a `UserBillingService` + a `UserNotificationService`.
+
+6. **"Production wires deps in every file."**
+   No — only at the **composition root** (typically `index.ts` or a `compose.ts`). Everywhere else just imports and uses the assembled services.
+
+7. **Hidden `Date.now()` / `Math.random()` / process.env access.**
+   These are deps too. Inject them as `now: () => Date.now()` or `rand: () => Math.random()`. Tests that depend on time become trivial.
+
+8. **Circular deps (A needs B, B needs A).**
+   Resolve via lazy getters: pass `getB` instead of `b`, call it inside the method. Or restructure to remove the cycle.
+
+---
+
+## 11. Senior follow-ups & variants
+
+### Variant 1 — Layered composition (`createApp`)
+
+For larger systems, layer factories:
+
+```js
+function createApp({ db, cache, fetch, logger }) {
+  const userService = createUserService({ db, cache, fetch, logger });
+  const orderService = createOrderService({ db, cache, userService, logger });
+  const paymentService = createPaymentService({ db, fetch, logger, orderService });
+  return { userService, orderService, paymentService };
 }
 
-// production
-const service = createService({ dep1: real1, dep2: real2 });
-
-// test
-const test = createService({ dep1: fake1, dep2: fake2 });
-
-BENEFITS:
-  - explicit deps (no hidden globals)
-  - trivial testing (no mocking framework)
-  - per-request scoping possible
-  - composition root pattern
-
-WHEN TO SCALE UP:
-  - many deps → split service
-  - circular deps → lazy getter or restructure
-  - shared per-app deps + per-request deps → mix at composition root
+// composition root
+const app = createApp({ db, cache, fetch: undici.fetch, logger: realLogger });
 ```
+
+The graph is wired in one place. Each service still has its own narrow deps signature.
+
+### Variant 2 — Class-based DI
+
+```ts
+class UserService {
+  constructor(private deps: { fetch: Fetch; logger: Logger; db: Db; cache: Cache }) {}
+  async getUser(id) { /* this.deps.fetch(...) */ }
+}
+```
+
+Same shape with constructor injection. Closure version is destructure-safe; class version is more familiar to OOP teams.
+
+### Variant 3 — Async factory
+
+When a dep needs async init (DB connection, secret fetch):
+
+```js
+async function createUserService({ fetch, logger, getDb, cache }) {
+  const db = await getDb();        // resolve at factory time, once
+  return {
+    async getUser(id) { /* uses db directly */ },
+  };
+}
+```
+
+Composition root awaits all factories. Slightly more ceremony at boot.
+
+### Variant 4 — Hexagonal-style port adapters
+
+For testing complex flows, separate the *port* (interface) from the *adapter* (implementation):
+
+```js
+// port (the interface the service knows about)
+type UserStore = {
+  getById(id): Promise<User | null>;
+  put(user): Promise<void>;
+};
+
+// adapter (production implementation)
+const postgresUserStore: UserStore = { /* uses pg */ };
+
+// adapter (in-memory implementation for tests)
+const fakeUserStore: UserStore = {
+  data: new Map(),
+  async getById(id) { return this.data.get(id) || null; },
+  async put(user) { this.data.set(user.id, user); },
+};
+
+const svc = createUserService({ userStore: postgresUserStore });   // prod
+const test = createUserService({ userStore: fakeUserStore });      // test
+```
+
+The service depends on the port; adapters are swappable. Pure functional architecture.
+
+### Variant 5 — `InversifyJS` / NestJS DI
+
+For very large apps with deep dep graphs, decorators + container resolution can help — annotate classes/factories, the container resolves dependencies automatically by type. Mention it as a tool you'd reach for at scale, not as a default.
+
+---
+
+## 12. How to think aloud in the interview
+
+> "Functional DI: factory function takes a single `deps` object, destructures the deps in the signature, captures them in closure, returns a service whose methods use them. No globals, no containers, no decorators. Production wires real deps at the composition root — `index.js`. Tests wire fakes — no mocking framework needed. Each method has access to everything it needs via the captured scope. Per-request scope: call the factory inside middleware; per-app scope: call once at module init. Trade-off: if the signature has more than ~6 deps, the service is doing too much — split. Hidden deps like `Date.now()` and `Math.random()` should also be injected; tests that depend on time become trivial. For large graphs, layer factories: `createApp({ db, cache })` returns `{ userService, orderService }` each wired."
+
+---
+
+## 13. 60-second revision
+
+> - **Pattern:** `function createService({ dep1, dep2, ... }) { return { method() { /* uses dep1, dep2 */ } }; }`
+> - **No hidden globals** — every dep in the factory signature.
+> - **Composition root** wires production deps in one place.
+> - **Tests wire fakes** — no mocking framework.
+> - **Per-request or per-app scope** — call the factory at the right boundary.
+> - **Inject side effects** (fetch, time, randomness, env) — tests become deterministic.
+> - **Many deps = split the service.**
+> - **Circular deps** → lazy getter or restructure.
+> - **Family:** module pattern, ports-and-adapters, hexagonal architecture, class constructor injection.
+> - **Trap:** `jest.mock` after-the-fact patching; module-level `require` of side-effect deps.
+
+---
+
+**Related:** [module-pattern-iife.md](./module-pattern-iife.md) · [counter-ii.md](./counter-ii.md) · [closure-vs-private-class-field-comparison.md](./closure-vs-private-class-field-comparison.md) · [`10-machine-coding-patterns/dependency-injection-container.md`](../10-machine-coding-patterns/dependency-injection-container.md)
+
+**Concept primer:** [`concepts/closures.md`](../../concepts/closures.md)

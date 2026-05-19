@@ -1,70 +1,127 @@
-# Interval Cancellation
+# Interval Cancellation — `setInterval` + `clearInterval`
 
-## Source
-- LeetCode #2725 "Interval Cancellation": https://leetcode.com/problems/interval-cancellation/
-- Canonical: the periodic-task primitive used by polling loops, heartbeats, metric emitters, watchdogs.
+> **Difficulty:** Medium   |   **Time:** ~15 min   |   **Prereqs:** [timeout-cancellation.md](./timeout-cancellation.md)
+>
+> **Source:** [LeetCode 2725 — Interval Cancellation](https://leetcode.com/problems/interval-cancellation/).
 
-## Why this question matters in interviews
-On the surface it's `setInterval` / `clearInterval`. But every senior interviewer follows up with: "Why is `setInterval` usually the wrong tool? When does the period drift? What if `fn` is async and overruns?". A backend engineer who can articulate the **re-arming `setTimeout` pattern** and explain **why `setInterval` ticks can stack up under load** has demonstrated real event-loop understanding. The first call running at `t=0` (not `t=t`) is also a classic trap.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
-```js
-function cancellable(fn, args, t) {
-  fn(...args);                                  // first call immediately
-  const id = setInterval(() => fn(...args), t); // then every t ms
-  return () => clearInterval(id);
-}
+**Signature**
+```ts
+function cancellable(fn: (...args: any[]) => any, args: any[], t: number): () => void;
 ```
 
-### Runtime / engine behavior
-- `setInterval(cb, t)` schedules `cb` to fire repeatedly in the **timers phase** of libuv. Each tick adds a new entry to the timers heap with a target time of `prev + t` (not `lastFired + t`).
-- If a tick's callback runs longer than `t`, libuv will **not double-fire** — it skips overlapping ticks and resumes on the next aligned slot. Browsers behave similarly.
-- `clearInterval(id)` removes the recurring entry. Like `clearTimeout`, calling it after the most recent tick already moved to the stack does not unwind that tick.
-- The interval object in Node is a `Timeout` instance; `id.unref()` lets the event loop exit while it's still scheduled (useful for background heartbeats).
+**Input / Output examples**
 
-### Edge cases (interview traps)
-1. **First call at t=0 vs t=t** — `setInterval(fn, t)` fires its FIRST tick at `t`, not at `0`. Most LeetCode-style prompts want the first call immediately; do it manually before scheduling.
-2. **Long-running `fn`** — if `fn` is sync and takes longer than `t`, subsequent ticks queue up but Node coalesces; if `fn` is async (returns a Promise), there's **no overlap protection** — overlapping invocations can run concurrently.
-3. **Drift** — `setInterval` does not guarantee exact `t` spacing under load. For accurate scheduling, use `setTimeout` re-armed manually (the "self-rescheduling" pattern).
-4. **Cancel mid-tick** — calling cancel from inside `fn` itself is safe; the current invocation completes, no further ticks.
-5. **`unref` / `ref`** — Node-only. An unref'd interval won't keep the process alive.
-6. **Microtask starvation inside `fn`** — if `fn` schedules `process.nextTick` recursively, the next interval tick is delayed until nextTick queue drains.
+| Setup                                            | Behaviour                                              |
+|--------------------------------------------------|---------------------------------------------------------|
+| `cancel = cancellable(fn, [7], 100)`              | `fn(7)` runs at t=0, t=100, t=200, ...                  |
+| Call `cancel()` at t=250                          | t=0, 100, 200 fired; t=300 onwards skipped              |
+| Async `fn` taking > t                              | `setInterval` does NOT serialize; overlapping calls possible |
+| `setInterval` drift under load                    | best-effort spacing, not guaranteed                    |
 
-## Brute force approach
-"I'll use `setInterval` only and accept that the first tick happens at `t`." This fails the typical test case that asserts an immediate first invocation. Always call `fn(...args)` once before scheduling.
+**Constraints**
+- **First call must be manual** — `setInterval(fn, t)` fires first at `t`, not 0.
+- `setInterval` ticks don't serialize async overruns.
+- Drift under load — never use for billing windows or rate limiting.
+- Drift-aware variant: self-rescheduling `setTimeout` with `await`.
 
-## Optimal approach
-Invoke `fn` once synchronously, then `setInterval` for periodic firing, then return a closure over the id that calls `clearInterval`. O(1) per tick, O(1) cancel.
+---
 
-For drift-sensitive use cases, the alternative is a **self-rescheduling `setTimeout`** where each callback ends with `setTimeout(self, t)` — drift is bounded per-tick and async overruns naturally serialize.
+## 2. Plain-English restatement
 
-## Solution (JavaScript)
+Schedule `fn(...args)` to run NOW, then every `t` ms, until cancelled. Return a closure that calls `clearInterval`. The trick: `setInterval` fires its FIRST tick at `t`, not 0, so call `fn` once manually before scheduling.
+
+---
+
+## 3. Why this matters in interviews
+
+Tests whether you understand `setInterval`'s drift behavior, the immediate-first-tick contract, and async-overrun gotchas. Senior follow-up: self-rescheduling `setTimeout` for production-grade polling.
+
+---
+
+## 4. Mental model
+
+```
+   Naive setInterval(fn, t):
+   t=0     fn NOT called (setInterval's first tick is at t, not 0)
+   t=t     fn fires
+   t=2t    fn fires
+   ...
+
+   With manual first call:
+   t=0     fn(...args) called synchronously
+   t=t     interval tick → fn fires
+   t=2t    interval tick → fn fires
+   ...
+   cancel() → clearInterval(id) → no more ticks
+
+   Drift under load:
+   t=100   tick scheduled; main thread busy → fires at t=130
+   t=200   tick at t=230
+   t=300   tick at t=330
+   ↑ drift accumulates
+
+   Async overruns:
+   t=0     await fn() → still running at t=100
+   t=100   setInterval fires → fn() invoked AGAIN. TWO CONCURRENT.
+   ↑ setInterval doesn't await your fn
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. Does `setInterval(fn, 100)` call `fn` at t=0?
+> 2. If `fn` is async and takes 150ms, what happens with `setInterval(fn, 100)`?
+> 3. Why is `setInterval` bad for "exactly every 100ms" billing windows?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: `setInterval(fn, t)` alone
+First tick at `t`, not 0. Fails the "fn(7) at t=0" test.
+
+### Wrong attempt 2: assume async fn serializes
+Overlapping invocations under async overruns.
+
+### Wrong attempt 3: rely on exact `t` spacing
+Drifts under load; never use for billing.
+
+---
+
+## 7. The unlocking insight
+
+> **Invoke `fn(...args)` once synchronously, then `setInterval` for periodic firing. Return closure over id calling `clearInterval`. For production, prefer self-rescheduling `setTimeout` with `await` — bounds drift per-tick and serializes async overruns.**
+
+Three properties:
+
+1. **Manual first call** for `fn(...args)` at t=0.
+2. **`setInterval` drift** under load — never use for exact spacing.
+3. **Async overruns** can run concurrently — self-rescheduling `setTimeout` fixes.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
-/**
- * Invokes fn(...args) immediately, then every t ms, until the
- * returned canceller is called.
- *
- * @param {(...args: any[]) => any} fn
- * @param {any[]} args
- * @param {number} t  period in ms
- * @returns {() => void}  cancellation function
- */
 function cancellable(fn, args, t) {
-  fn(...args);                                     // tick 0
-  const id = setInterval(() => fn(...args), t);    // ticks 1..n
-  return () => clearInterval(id);
+  fn(...args);                                                       // step 1: tick 0
+  const id = setInterval(() => fn(...args), t);                       // step 2: ticks 1..n
+  return () => clearInterval(id);                                     // step 3: closure canceller
 }
 
-// --- Drift-aware variant (preferred in production) ---
+// Drift-aware production variant
 function cancellableDriftAware(fn, args, t) {
   let stopped = false;
   const tick = async () => {
     if (stopped) return;
     try { await fn(...args); } finally {
-      if (!stopped) setTimeout(tick, t);
+      if (!stopped) setTimeout(tick, t);                              // step 4: re-schedule after await
     }
   };
   tick();
@@ -72,79 +129,113 @@ function cancellableDriftAware(fn, args, t) {
 }
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
-Input:
 ```js
 const result = [];
 const fn = (x) => result.push(x);
 const cancel = cancellable(fn, [7], 100);
 setTimeout(cancel, 250);
+// At t=300: result === [7, 7, 7]   (ticks at 0, 100, 200; cancel at 250 stops 300)
+
+// Async overrun problem
+async function slow() { await new Promise((r) => setTimeout(r, 150)); }
+const c = cancellable(slow, [], 100);
+// At t=100: slow() at t=0 still running; setInterval fires another slow() → TWO IN FLIGHT.
+
+// Drift-aware fix
+const c2 = cancellableDriftAware(slow, [], 100);
+// At t=150: first slow() finishes; reschedule setTimeout for t=250.
+// No overlap.
 ```
 
-Trace (timers heap shown as `[id@deadline]`):
+---
 
-| Time (ms) | Phase | Action | result |
-|-----------|-------|--------|--------|
-| 0 | sync | `cancellable` called → `fn(7)` runs immediately | `[7]` |
-| 0 | sync | `setInterval` → schedules tick at 100 | `[7]` |
-| 0 | sync | outer `setTimeout(cancel, 250)` scheduled | `[7]` |
-| 100 | timers | interval tick → `fn(7)` | `[7,7]` |
-| 100 | timers | next tick re-armed for 200 | `[7,7]` |
-| 200 | timers | tick → `fn(7)` | `[7,7,7]` |
-| 200 | timers | next tick re-armed for 300 | `[7,7,7]` |
-| 250 | timers | `cancel` runs → `clearInterval(id)` | `[7,7,7]` |
-| 300 | timers | heap empty for this id, no tick | `[7,7,7]` |
+## 9. Step-by-step dry run
 
-Now imagine `fn` is async and takes 150 ms:
+```
+Naive setInterval, fn sync (1ms), t=100, cancel at 250:
 
-| Time | Event |
-|------|-------|
-| 0 | `fn(7)` invoked, returns pending Promise. Sync stack unwinds. |
-| 100 | interval tick fires → `fn(7)` invoked AGAIN. Now two are in flight. |
-| 150 | first `fn` settles its promise. |
-| 200 | another tick fires → `fn(7)` invoked. Three concurrent. |
+t=0    fn(7) sync → result=[7]
+       setInterval → tick scheduled at t=100. heap: [tick@100].
+       outer setTimeout(cancel, 250).
+t=100  timers phase: tick → fn(7) → result=[7,7]. Re-arms tick@200.
+t=200  timers phase: tick → fn(7) → result=[7,7,7]. Re-arms tick@300.
+t=250  timers phase: cancel runs → clearInterval. heap: [].
+t=300  heap empty for this id → no tick.
 
-This is why the drift-aware variant `await`s before re-arming.
+result === [7, 7, 7].
 
-## Important takeaways
+Async overrun (fn returns Promise that takes 150ms):
+t=0    fn() called; returns pending promise; result.push(initiated)
+t=100  setInterval tick: fn() called AGAIN; another pending promise
+       2 IN FLIGHT
+t=150  first fn settles
+t=200  another tick: fn() called; first one settled; second still running
+       2 IN FLIGHT still
+t=300  ...
 
-**Syntax to memorize**
-- `fn(...args)` then `setInterval(() => fn(...args), t)` then `return () => clearInterval(id)`.
-- The arrow inside `setInterval` is what lets us forward `args` cleanly.
+Drift-aware variant:
+t=0    tick() → await slow() (150ms)
+t=150  slow() done; setTimeout(tick, 100)
+t=250  tick() → await slow()
+t=400  slow() done; setTimeout(tick, 100)
+t=500  ...
 
-**Patterns to reuse**
-- "Self-rescheduling setTimeout" is the prod pattern for: polling APIs, heartbeats, watchdogs, retry loops with stable spacing.
-- Combine with `AbortSignal` for modern cancellation.
+No overlap. Spacing = 100 + slow_duration, not 100.
+```
 
-**Common mistakes**
-- Returning the interval `id` directly instead of a closure → forces caller to call `clearInterval` themselves.
-- Forgetting the immediate-first-tick. The LeetCode tests assert this.
-- Assuming `setInterval` won't overlap async callbacks — it absolutely will.
-- Recursively scheduling `process.nextTick` inside `fn` and starving subsequent ticks (and I/O).
+---
 
-**Where it sits in the event loop**
-- Both the initial sync call and each periodic tick fire in libuv's **timers phase**.
-- Microtasks and `process.nextTick` drain between ticks, just like any other macrotask boundary.
+## 10. Common confusion + traps
 
-## Variants
+1. **First tick at t=0** — no, at t=t; call manually.
+2. **Async overrun serialization** — no, `setInterval` doesn't await.
+3. **Exact spacing** — drifts under load.
+4. **`unref` keeps process alive** — `id.unref()` makes interval NOT keep alive.
+5. **Cancel from inside fn** — safe; current invocation completes.
+6. **Microtask starvation inside fn** — delays next interval tick.
+7. **Same as `setTimeout` cancel** — different cancel API (`clearInterval`).
 
-1. **`setTimeout`-based polling** — write the same API but reschedule with `setTimeout` after each call settles. Eliminates async overlap, bounds drift per-tick.
+---
 
-2. **Exponential-backoff poller** — `period` grows on each empty result (e.g., long-polling). Same skeleton, dynamic `t`.
+## 11. Senior follow-ups & variants
 
-3. **Heartbeat with timeout watchdog** — combine `setInterval` for heartbeat emission with a parallel `setTimeout` watchdog that fires if no ack arrives.
+### Variant 1 — Self-rescheduling `setTimeout` (production)
+Bounds drift per-tick; serializes async overruns. Above as `cancellableDriftAware`.
 
-4. **`AbortSignal`-driven** — accept a signal instead of returning a canceller. `signal.addEventListener('abort', () => clearInterval(id))`.
+### Variant 2 — Exponential-backoff poller
+Period grows on empty result (long-polling pattern).
 
-## Revision notes
+### Variant 3 — Heartbeat + watchdog
+`setInterval` heartbeat + parallel `setTimeout` watchdog firing if no ack.
 
-> **interval-cancellation — 60 second recap**
-> - First call must be **manual** — `setInterval` fires first tick at `t`, not `0`.
-> - Period is **best-effort**; libuv timers can drift under load.
-> - `setInterval` does NOT serialize async overruns — concurrent invocations possible.
-> - Preferred prod pattern: self-rescheduling `setTimeout` with `await`.
-> - `clearInterval(id)` removes the recurring entry; safe after cancel.
-> - Same `Timeout` object as `setTimeout`; `id.unref()` lets process exit.
-> - **Trap:** recursive `process.nextTick` inside `fn` starves the next interval tick AND all I/O.
-> - **Trap:** assuming spacing is exact — never use `setInterval` for billing windows or rate limiting.
+### Variant 4 — `AbortSignal`-driven
+`signal.addEventListener('abort', () => clearInterval(id))`.
+
+### Variant 5 — `id.unref()` for background
+Process can exit while interval still scheduled (background heartbeats).
+
+---
+
+## 12. How to think aloud
+
+> "`fn(...args)` once synchronously (test asserts immediate first invocation), then `setInterval(() => fn(...args), t)`, return closure over id calling `clearInterval`. Caveats: `setInterval` ticks don't serialize async overruns — concurrent invocations possible. `setInterval` drifts under load — never for exact spacing. Production pattern: self-rescheduling `setTimeout` with `await` — bounds drift per-tick, serializes overruns. Trap: forgetting immediate first call; assuming async serializes; assuming exact spacing."
+
+---
+
+## 13. 60-second revision
+
+> - **First call manual** — `setInterval` first tick at `t`, not 0.
+> - **Closure return** `() => clearInterval(id)`, not raw id.
+> - **`setInterval` doesn't await** — async overruns can overlap.
+> - **Drifts under load** — never for billing/rate-limiting.
+> - **Production:** self-rescheduling `setTimeout(tick, t)` with `await`.
+> - **`id.unref()`** lets process exit (background heartbeats).
+> - **Trap:** first-tick-at-t; async overlap; exact spacing assumption.
+
+---
+
+**Related:** [timeout-cancellation.md](./timeout-cancellation.md) · [cancellable-function.md](./cancellable-function.md) · [`10-machine-coding-patterns/scheduler-idle-callback.md`](../10-machine-coding-patterns/scheduler-idle-callback.md)
+
+**Concept primer:** [`concepts/event-loop.md`](../../concepts/event-loop.md)

@@ -1,14 +1,16 @@
-# Throttled Stream (Rate-Limited Pipeline)
+# Throttled stream — rate-limited pipeline
 
-## Source / Origin
-- "Cap the throughput" pattern; common in scraping, API ingestion, log shipping.
-- Asked at: Cloudflare, Stripe, Razorpay.
-- Concept reference: `concepts/streams.md`, sibling `web-streams-transform.md`, `10-machine-coding-patterns/rate-limiter-token-bucket.md`.
+> **Difficulty:** Medium   |   **Time:** ~10 min   |   **Prereqs:** [web-streams-transform.md](./web-streams-transform.md), [`10-machine-coding-patterns/rate-limiter-token-bucket.md`](../10-machine-coding-patterns/rate-limiter-token-bucket.md)
+>
+> **Source:** Scraping, API ingestion, log shipping. Cloudflare, Stripe, Razorpay.
 
-## Why this question matters in interviews
-"I'm reading 10k items but the downstream API allows 100/sec — slow me down." A throttled stream sits in the middle and gates chunks. Senior bar: you implement via async transform (await delay before enqueue), distinguish fixed-interval from token-bucket throttling, and let backpressure handle the rest.
+---
 
-## Concepts involved
+## 1. Problem statement
+
+Stream of items needs to be paced at most N per second before downstream consumer.
+
+**Verification examples**
 
 ```js
 function throttleStream(intervalMs) {
@@ -17,135 +19,280 @@ function throttleStream(intervalMs) {
     async transform(chunk, ctl) {
       const now = Date.now();
       const wait = Math.max(0, last + intervalMs - now);
-      if (wait > 0) await new Promise(r => setTimeout(r, wait));
+      if (wait > 0) await new Promise((r) => setTimeout(r, wait));
       last = Date.now();
       ctl.enqueue(chunk);
     },
   });
 }
 
-// Use
-const source = ndjsonStream('/events');
-const throttled = source.pipeThrough(throttleStream(100));   // ≤ 10/sec
+const throttled = source.pipeThrough(throttleStream(100));               // ≤ 10/sec
 for await (const ev of throttled) await sendDownstream(ev);
 ```
 
-### Edge cases / traps
-1. **Backpressure handles consumer slowness automatically.** Throttle is for *upstream* pacing.
-2. **`async transform`** — pipeline waits for it; that's exactly the throttling mechanism.
-3. **Burst**: this throttle is strict per-interval; token-bucket allows bursts up to N then refills.
-4. **`signal`** — wire AbortController through to bail out of delay.
-5. **Drift over many chunks** — base `last = Date.now()` after delay so we don't accumulate drift.
-6. **`controller.desiredSize`** can also be honored for backpressure-aware enqueue.
+**Constraints**
+- `async transform` awaits delay before enqueuing.
+- Pipeline waits for transform — natural throttling.
+- Fixed-interval vs token-bucket — pick policy.
+- Thread AbortSignal for cancellation.
 
-## Mental Model
+---
+
+## 2. Plain-English restatement
+
+Insert a Transform that awaits a delay before each chunk passes through. Pipeline waits for the await; producer naturally throttles.
+
+---
+
+## 3. Why this matters in interviews
+
+Practical: scrape with 100 req/sec limit; log shipper with downstream cap. Tests async transform + composition.
+
+---
+
+## 4. Mental model
 
 ```
-   source ─chunks→ throttle ─[delay]→ downstream
-                    │
-                    └ await sleep(intervalMs - elapsed)
-                      before enqueue
+   Fixed-interval throttle:
+     last = 0
+     transform(chunk):
+       wait = max(0, last + intervalMs - now)
+       await delay(wait)
+       last = now (after delay)
+       enqueue(chunk)
+   
+   Token bucket:
+     bucket = N tokens, refills at R/sec.
+     transform(chunk):
+       wait until tokens > 0.
+       tokens--.
+       enqueue.
+   
+   Fixed-interval: strict pacing, no bursts.
+   Token bucket: allows bursts up to N, then steady refill.
+   
+   Backpressure FREE:
+     pipeline awaits async transform.
+     producer pauses while transform delays.
+     no manual coordination needed.
 ```
 
-Each chunk waits at least `intervalMs` after the previous one was emitted.
+---
 
-## Solution
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. Why does `async transform` naturally throttle?
+> 2. Fixed-interval vs token bucket?
+> 3. How to abort mid-delay?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: `setInterval` to emit
+Drifts; doesn't tie to chunks.
+
+### Wrong attempt 2: synchronous throttle
+Blocks event loop.
+
+### Wrong attempt 3: drop excess chunks
+Loses data; throttle should slow, not drop.
+
+---
+
+## 7. The unlocking insight
+
+> **`async transform` awaits delay before enqueue. Pipeline waits → producer throttles naturally. Fixed-interval or token-bucket policy.**
+
+Three properties:
+
+1. **Async transform** awaits.
+2. **Pipeline waits** for it → throttle.
+3. **Pick policy** — fixed vs burst-tolerant.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
-function throttleByInterval(intervalMs) {
-  let lastEmit = 0;
+function throttleStream(intervalMs) {
+  let last = 0;
   return new TransformStream({
-    async transform(chunk, ctl) {
+    async transform(chunk, ctl) {                                        // step 1: async transform
       const now = Date.now();
-      const wait = lastEmit + intervalMs - now;
-      if (wait > 0) await new Promise(r => setTimeout(r, wait));
-      lastEmit = Date.now();
-      ctl.enqueue(chunk);
+      const wait = Math.max(0, last + intervalMs - now);
+      if (wait > 0) await new Promise((r) => setTimeout(r, wait));      // step 2: delay
+      last = Date.now();                                                 // step 3: after delay (avoid drift)
+      ctl.enqueue(chunk);                                                // step 4: enqueue
     },
   });
 }
 
-// Token-bucket variant (allows bursts up to capacity)
-function tokenBucketStream({ capacity, refillPerSec }) {
+// Token bucket variant (allows bursts)
+function tokenBucketStream({ capacity = 5, refillPerSec = 10 } = {}) {
   let tokens = capacity;
   let lastRefill = Date.now();
   return new TransformStream({
     async transform(chunk, ctl) {
       while (true) {
         const now = Date.now();
-        tokens = Math.min(capacity, tokens + ((now - lastRefill) / 1000) * refillPerSec);
+        const elapsed = (now - lastRefill) / 1000;
+        tokens = Math.min(capacity, tokens + elapsed * refillPerSec);
         lastRefill = now;
-        if (tokens >= 1) { tokens -= 1; break; }
-        await new Promise(r => setTimeout(r, Math.max(10, 1000 / refillPerSec)));
+        if (tokens >= 1) {
+          tokens -= 1;
+          ctl.enqueue(chunk);
+          return;
+        }
+        const wait = ((1 - tokens) / refillPerSec) * 1000;
+        await new Promise((r) => setTimeout(r, wait));
       }
-      ctl.enqueue(chunk);
     },
   });
 }
 
-// Usage: shipping logs to a 100/s API
-const shipped = logStream
-  .pipeThrough(tokenBucketStream({ capacity: 100, refillPerSec: 100 }));
-for await (const log of shipped) await api.send(log);
-
-// With cancel
-const ac = new AbortController();
-setTimeout(() => ac.abort(), 60_000);
-try {
-  for await (const x of throttled) { if (ac.signal.aborted) break; await downstream(x); }
-} catch (e) { /* ... */ }
+// With AbortSignal
+function abortableThrottle(intervalMs, signal) {
+  let last = 0;
+  return new TransformStream({
+    async transform(chunk, ctl) {
+      const wait = Math.max(0, last + intervalMs - Date.now());
+      if (wait > 0) {
+        await new Promise((res, rej) => {
+          const t = setTimeout(res, wait);
+          signal?.addEventListener('abort', () => {
+            clearTimeout(t);
+            rej(new Error('Aborted'));
+          }, { once: true });
+        });
+      }
+      last = Date.now();
+      ctl.enqueue(chunk);
+    },
+  });
+}
 ```
 
-## Dry run
+**Try it yourself**
 
-`intervalMs=100`, three items arriving immediately:
+```js
+// Scrape with rate limit
+const urls = readUrls();
+const requests = urls.pipeThrough(throttleStream(100));                  // 10/sec
+
+for await (const url of requests) {
+  const res = await fetch(url);
+  await processResponse(res);
+}
+
+// Combine with concurrency
+const results = urls
+  .pipeThrough(throttleStream(100))                                       // 10/sec emit
+  .pipeThrough(asyncMap(fetch, { concurrency: 5 }));                      // 5 concurrent
+
+// Node.js Transform equivalent
+const { Transform } = require('node:stream');
+class NodeThrottle extends Transform {
+  constructor(intervalMs) {
+    super({ objectMode: true });
+    this.intervalMs = intervalMs;
+    this.last = 0;
+  }
+  async _transform(chunk, enc, cb) {
+    const wait = Math.max(0, this.last + this.intervalMs - Date.now());
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    this.last = Date.now();
+    this.push(chunk);
+    cb();
+  }
+}
+```
+
+---
+
+## 9. Step-by-step dry run
 
 ```
-t=0    chunk1 → transform; wait=0; enqueue; lastEmit=0
-t=0    chunk2 → transform; wait=100; await 100ms
-t=100  enqueue chunk2; lastEmit=100
-t=100  chunk3 → wait=100; await 100ms
-t=200  enqueue chunk3; lastEmit=200
+throttleStream(100ms), 5 chunks arrive immediately:
+
+t=0    chunk1 arrives → transform.
+       wait = max(0, 0 + 100 - 0) = 0.
+       await (no delay). last=0. enqueue chunk1.
+t=0    chunk2 arrives → transform.
+       wait = max(0, 0 + 100 - 0) = 100.
+       await 100ms. PAUSE pipeline (producer paused).
+t=100  resume. last=100. enqueue chunk2.
+t=100  chunk3 arrives → transform.
+       wait = max(0, 100 + 100 - 100) = 100.
+       await 100ms.
+t=200  last=200. enqueue chunk3.
+t=200  chunk4 → wait 100ms.
+t=300  enqueue chunk4.
+t=300  chunk5 → wait 100ms.
+t=400  enqueue chunk5.
+
+5 chunks over 400ms = exactly 1 per 100ms after first.
+
+Token bucket variant:
+  capacity 5, refill 10/sec.
+  Burst: first 5 chunks pass instantly (tokens drain).
+  6th chunk waits for refill (100ms for 1 token).
+  Continues at steady rate.
 ```
 
-Effective rate: 10/sec. Source paces itself because pipeline awaits in transform (backpressure).
+---
 
-## How to think aloud
+## 10. Common confusion + traps
 
-> "Async transform in a TransformStream is itself a backpressure mechanism — the pipeline awaits before pulling the next chunk. So a throttle is just `await sleep(intervalMs - elapsed)` before enqueue. For burst-friendly throttling, token bucket — refill N/sec, consume 1 per chunk, await if empty. Wire AbortSignal in for cancel. The source naturally slows down because the pipeline is gating."
+1. **`setInterval` instead** — drifts; doesn't tie to data.
+2. **Drop chunks** — should slow, not drop.
+3. **`last = now` before delay** — drift accumulates.
+4. **No AbortSignal** — can't cancel mid-delay.
+5. **Throttle producer instead of transform** — same effect; transform is cleaner.
+6. **Mix sync/async transforms** — keep async for await semantics.
+7. **`signal.aborted` only at start** — must reject mid-delay too.
 
-## Important takeaways
+---
 
-- **Async `transform` + sleep** = throttle.
-- **Backpressure does the rest** — upstream slows automatically.
-- **Fixed-interval** = strict pacing; **token bucket** = bursty.
-- **`lastEmit = Date.now()` after the wait** to avoid drift.
-- **AbortSignal** in sleep for cancellation.
+## 11. Senior follow-ups & variants
 
-## Variants
+### Variant 1 — Token bucket
+Allows bursts up to capacity, then steady refill.
 
-- **Throttle by byte count** — track bytes/sec not chunks/sec.
-- **Adaptive throttle** — slow on 429, speed up on success.
-- **Per-key throttle** — fan-out by key, throttle each lane.
-- **Leaky bucket** — smooths bursts to a constant rate.
+### Variant 2 — Per-key throttle
+Map<key, lastTime> for different keys at independent rates.
 
-## Revision notes
+### Variant 3 — Async map with concurrency
+Throttle + parallel — best of both.
 
-```
-throttleByInterval(ms):
-  async transform(chunk, ctl):
-    wait = lastEmit + ms - now
-    if wait > 0: await sleep(wait)
-    lastEmit = now
-    ctl.enqueue(chunk)
+### Variant 4 — Drop policy
+Burst-with-drop instead of delay (lossy).
 
-tokenBucketStream({capacity, refillPerSec}):
-  refill on demand; consume token; sleep if empty
+### Variant 5 — Node Transform equivalent
+`async _transform` + `cb()` after delay.
 
-USES:
-  - rate-limited API ingestion
-  - log shipping
-  - polite scraping
+---
 
-BACKPRESSURE: pipeline awaits async transform → source slows automatically
-```
+## 12. How to think aloud
+
+> "Throttle stream: insert a TransformStream whose `async transform` awaits a delay before enqueuing. Pipeline naturally waits for the async transform → producer pauses while we sleep → no manual coordination needed. Fixed-interval (strict pacing): `wait = max(0, last + intervalMs - now)`. Token bucket (allows bursts): maintain `tokens`, refill at rate, consume 1 per chunk, wait for refill when 0. Set `last = Date.now()` AFTER the delay to avoid drift accumulation. Thread AbortSignal: wrap the `setTimeout` with abort listener that `clearTimeout` and rejects. Node `Transform` version: `async _transform(chunk, enc, cb)` + `cb()` after delay. Trap: setInterval (drifts; loses chunk binding); dropping chunks (should slow, not lose); `last = now` before delay (drift); ignoring signal."
+
+---
+
+## 13. 60-second revision
+
+> - **`async transform`** awaits delay → pipeline waits → throttle.
+> - **Fixed-interval:** `wait = max(0, last + interval - now)`.
+> - **Token bucket:** capacity + refill; allows bursts.
+> - **`last = Date.now()` AFTER delay** — avoid drift.
+> - **AbortSignal** wraps setTimeout for cancel.
+> - **Node Transform:** `async _transform` + `cb()`.
+> - **Combine with concurrency** for parallel-but-paced.
+> - **Trap:** setInterval; drop chunks; pre-delay timestamp; ignore signal.
+
+---
+
+**Related:** [web-streams-transform.md](./web-streams-transform.md) · [backpressure-demo.md](./backpressure-demo.md) · [`10-machine-coding-patterns/rate-limiter-token-bucket.md`](../10-machine-coding-patterns/rate-limiter-token-bucket.md) · [`10-machine-coding-patterns/throttle.md`](../10-machine-coding-patterns/throttle.md)
+
+**Concept primer:** [`concepts/streams.md`](../../concepts/streams.md)

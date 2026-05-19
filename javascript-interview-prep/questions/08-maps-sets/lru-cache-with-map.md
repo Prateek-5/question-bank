@@ -1,185 +1,270 @@
 # LRU Cache using `Map`
 
-## Source
-- Canonical interview problem (LeetCode #146 in many languages; JS-flavored variant).
-- LeetCode reference: https://leetcode.com/problems/lru-cache/
+> **Difficulty:** Senior   |   **Time:** ~15 min   |   **Prereqs:** [object-vs-map-vs-set.md](./object-vs-map-vs-set.md), [ttl-map.md](./ttl-map.md)
+>
+> **Source:** LeetCode #146. Staff-and-up machine-coding staple.
 
-## Why this question matters in interviews
-LRU is **the** machine-coding problem at staff-and-up rounds. The interviewer is checking two things: (1) do you reach for **`Map`** in JS instead of building a HashMap + doubly-linked list, and (2) do you correctly exploit `Map`'s **insertion-order iteration** to get O(1) `get`, `set`, and eviction in ~20 lines? Backend engineers see LRU everywhere — query result caches, connection pools, JWT key caches, in-memory rate-limit buckets. Getting it wrong in production means either memory leaks (no eviction) or repeated cache misses (wrong recency policy). The JS-specific elegance — `delete + set` to bump recency — is the *entire* point of using `Map` over a generic dict.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+LRU cache with O(1) get/put. JS trick: `Map` preserves insertion order; `delete + set` re-inserts at end (most recent).
+
+**Verification examples**
+
+```js
+const cache = new LRUCache(2);
+cache.put(1, 'a');
+cache.put(2, 'b');
+cache.get(1);                            // 'a' — bumps 1 to most recent
+cache.put(3, 'c');                       // evicts 2 (LRU)
+cache.get(2);                            // -1 (evicted)
+cache.get(3);                            // 'c'
+```
+
+**Constraints**
+- O(1) get & put.
+- Capacity-bounded.
+- Eviction: least recently used.
+- Touch on read (get) also bumps recency.
+
+---
+
+## 2. Plain-English restatement
+
+Map keeps insertion order. Reading: delete + set re-inserts at end (newest). Writing over capacity: evict `map.keys().next().value` (oldest).
+
+---
+
+## 3. Why this matters in interviews
+
+THE machine-coding problem at staff. Tests: Map literacy + insertion-order trick + O(1) discipline. In production: query caches, JWT key caches, connection pools.
+
+---
+
+## 4. Mental model
+
+```
+   Map preserves insertion order (ES2015 spec).
+   
+   LRU operations:
+     get(k):
+       if not in map: return -1
+       val = map.get(k)
+       map.delete(k); map.set(k, val)    ← bump to most recent
+       return val
+   
+     put(k, v):
+       if map has k: map.delete(k)        ← will re-insert at end
+       map.set(k, v)
+       if map.size > cap:
+         oldest = map.keys().next().value  ← O(1) first key
+         map.delete(oldest)
+   
+   All ops O(1) because:
+     Map.set / delete: O(1) hash + linked-list bookkeeping.
+     map.keys().next(): O(1) — iterator starts at head.
+
+   Compare to "vanilla" hash + doubly-linked list:
+     Same asymptotics; Map already does both internally.
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. Why use `delete + set` instead of just `set`?
+> 2. How is `map.keys().next().value` O(1)?
+> 3. Does `get` modify recency?
+
+---
+
+## 6. Brute force — walked through
+
+```js
+class NaiveLRU {
+  constructor(cap) { this.cap = cap; this.data = {}; this.order = []; }
+  get(k) {
+    if (!(k in this.data)) return -1;
+    this.order = this.order.filter(x => x !== k);   // O(n)
+    this.order.push(k);
+    return this.data[k];
+  }
+}
+```
+
+O(n) per get/put. Use Map.
+
+---
+
+## 7. The unlocking insight
+
+> **Map's insertion-order property + delete-then-set bump = O(1) LRU in ~20 lines.**
+
+Three properties:
+
+1. **Map insertion order** = recency.
+2. **`delete + set`** bumps to end.
+3. **`keys().next().value`** = oldest, O(1).
+
+---
+
+## 8. Solution (annotated)
+
 ```js
 class LRUCache {
   constructor(capacity) {
     this.cap = capacity;
     this.map = new Map();
   }
+
   get(key) {
-    if (!this.map.has(key)) return -1;
+    if (!this.map.has(key)) return -1;                                    // step 1: miss
     const val = this.map.get(key);
-    this.map.delete(key);                 // remove from current position
-    this.map.set(key, val);               // re-insert at end (most recent)
+    this.map.delete(key);                                                  // step 2: remove
+    this.map.set(key, val);                                                // step 3: re-insert at end
     return val;
   }
-  put(key, value) {
-    if (this.map.has(key)) this.map.delete(key);
-    this.map.set(key, value);
-    if (this.map.size > this.cap) {
-      const oldest = this.map.keys().next().value;   // O(1)
-      this.map.delete(oldest);
-    }
-  }
-}
-```
 
-### Runtime / engine behavior
-- **`Map` preserves insertion order.** Iteration via `for...of map`, `map.keys()`, `map.values()`, `map.entries()` all yield entries in the order they were `set`. This is the ECMAScript spec, not an implementation detail.
-- `map.delete(k)` followed by `map.set(k, v)` is **O(1) average** and moves the key to the **end** of the iteration order. That's the trick: "most recently used" = "most recently inserted."
-- `map.keys().next().value` — calls the iterator protocol once. Returns the **first** (oldest) key in O(1). Don't reach for `Array.from(map.keys())[0]` — that's O(n).
-- `map.size` is a getter; O(1).
-- V8 implements `Map` as an open-addressing hash table with a parallel insertion-order index. Both operations stay O(1) average.
-
-### Edge cases (these are the interview traps)
-1. **Update of existing key** — must still bump to most-recent. Do `delete` + `set`, not just `set` (which keeps the original position!).
-2. **Capacity of 0** — every `put` immediately evicts itself. Decide: throw, or silently no-op. Most implementations throw at construction; LeetCode often allows `cap >= 1`.
-3. **`get` on missing key** — return `-1` (LeetCode convention) or `undefined`. Know which contract you're meeting.
-4. **Eviction order** — oldest = `keys().next().value`. Never `entries().next()` then discard — same complexity but reads clumsy.
-5. **`Map` keys are by identity** — `cache.put({}, 1); cache.get({})` is a miss because two object literals are distinct references. Same trap as `Map` in general.
-6. **Object keys with `JSON.stringify`** — if you stringify to normalize, you've lost the identity advantage of `Map`. Decide upfront.
-7. **Concurrent mutation during iteration** — don't iterate the map while inserting/deleting. The spec defines semantics but it's fragile; the LRU implementation never iterates, so this is moot.
-8. **Memory** — `Map` does not GC keys. If keys are user objects you want auto-released, use **`WeakMap`** instead — but then you lose ordering (WeakMap is not iterable). LRU + WeakMap are mutually exclusive.
-9. **Thread safety** — JS is single-threaded; nothing to worry about in browser/Node main thread. But across `worker_threads` you'd need a shared store.
-10. **Doubly-linked-list alternative** — works in any language and is the textbook answer. In JS it's almost always wrong: `Map` already *is* a hashtable + ordered index.
-
-## Brute force approach
-Array of `[key, value]` pairs. `get`: linear scan, splice, push to end. `put`: linear scan to find existing key, then push. Eviction: `arr.shift()`. **O(n) per op.** Wrong but a useful straw man to mention so the interviewer sees you know why `Map` wins.
-
-## Optimal approach
-Single `Map`. Insertion order = recency order. Three idioms:
-- `get(k)`: `delete + set` to bump.
-- `put(k, v)`: `delete` if present, then `set`; evict `keys().next().value` if `size > cap`.
-- Capacity check is **strict greater than** because the just-inserted key is also counted.
-
-O(1) average for all three. O(cap) memory.
-
-## Solution (JavaScript)
-
-```js
-class LRUCache {
-  /**
-   * @param {number} capacity  positive integer
-   */
-  constructor(capacity) {
-    if (!Number.isInteger(capacity) || capacity < 1) {
-      throw new RangeError('capacity must be a positive integer');
-    }
-    this.capacity = capacity;
-    this.map = new Map();
-  }
-
-  /**
-   * @param {any} key
-   * @returns {any}  value or -1 if missing
-   */
-  get(key) {
-    if (!this.map.has(key)) return -1;
-    const value = this.map.get(key);
-    // Bump to most-recent position
-    this.map.delete(key);
-    this.map.set(key, value);
-    return value;
-  }
-
-  /**
-   * @param {any} key
-   * @param {any} value
-   */
   put(key, value) {
     if (this.map.has(key)) {
-      this.map.delete(key);                // remove old position
+      this.map.delete(key);                                                // step 4: dedup for bump
     }
-    this.map.set(key, value);              // insert as most-recent
-
-    if (this.map.size > this.capacity) {
-      // Evict least-recently-used = first inserted = first in iteration order
-      const oldestKey = this.map.keys().next().value;
-      this.map.delete(oldestKey);
+    this.map.set(key, value);
+    if (this.map.size > this.cap) {
+      const oldest = this.map.keys().next().value;                         // step 5: O(1) head
+      this.map.delete(oldest);                                             // step 6: evict
     }
   }
-
-  // Bonus utilities
-  has(key)   { return this.map.has(key); }
-  get size() { return this.map.size; }
-  clear()    { this.map.clear(); }
 }
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
-Input:
 ```js
-const c = new LRUCache(2);
-c.put(1, 'a');   // map: [1->a]
-c.put(2, 'b');   // map: [1->a, 2->b]
-c.get(1);        // returns 'a', bumps 1.   map: [2->b, 1->a]
-c.put(3, 'c');   // size would be 3, evict oldest (2).  map: [1->a, 3->c]
-c.get(2);        // -> -1 (evicted)
-c.put(1, 'A');   // existing key — delete+set bumps. map: [3->c, 1->A]
-c.put(4, 'd');   // evict 3.  map: [1->A, 4->d]
+const c = new LRUCache(3);
+c.put(1, 'a');                                                // Map: {1:a}
+c.put(2, 'b');                                                // {1:a, 2:b}
+c.put(3, 'c');                                                // {1:a, 2:b, 3:c}
+c.get(1);                                                      // 'a'; Map: {2:b, 3:c, 1:a}
+c.put(4, 'd');                                                // Evicts 2: {3:c, 1:a, 4:d}
+c.get(2);                                                      // -1
+c.get(3);                                                      // 'c'; Map: {1:a, 4:d, 3:c}
+
+// Variants — with TTL
+class TTLLRU {
+  constructor(cap, ttlMs) {
+    this.cap = cap;
+    this.ttl = ttlMs;
+    this.map = new Map();
+  }
+  get(k) {
+    if (!this.map.has(k)) return undefined;
+    const { value, exp } = this.map.get(k);
+    if (exp < Date.now()) { this.map.delete(k); return undefined; }
+    this.map.delete(k);
+    this.map.set(k, { value, exp });
+    return value;
+  }
+  put(k, v) {
+    if (this.map.has(k)) this.map.delete(k);
+    this.map.set(k, { value: v, exp: Date.now() + this.ttl });
+    if (this.map.size > this.cap) {
+      this.map.delete(this.map.keys().next().value);
+    }
+  }
+}
+
+// LFU variant requires frequency tracking — different problem.
 ```
 
-Detailed trace of `c.put(3, 'c')` when state is `[2->b, 1->a]`:
-1. `map.has(3)` → false → skip delete.
-2. `map.set(3, 'c')` → map becomes `[2->b, 1->a, 3->c]`. `size === 3`.
-3. `size (3) > cap (2)` → evict. `map.keys().next().value` → `2`.
-4. `map.delete(2)` → map becomes `[1->a, 3->c]`.
+---
 
-After all ops: cache contains `1 -> 'A'` and `4 -> 'd'`, recency order [1, 4]. Subsequent `get(1)` would return `'A'` and reorder to `[4, 1]`.
+## 9. Step-by-step dry run
 
-## Important takeaways
+```
+new LRUCache(2).
+put(1, 'a'):
+  has? No. set(1, 'a'). Map: {1:a}.
+  size 1 ≤ 2 — no evict.
 
-**Syntax to memorize**
-- `map.delete(k); map.set(k, v)` — the "bump to most-recent" idiom.
-- `map.keys().next().value` — O(1) oldest key.
-- `size > capacity` (strict greater) for the eviction check.
-- Class with `capacity`, `map`, three methods. No DLL, no extra index.
+put(2, 'b'):
+  has? No. set(2, 'b'). Map: {1:a, 2:b}.
 
-**Patterns to reuse**
-- Map's **insertion order = recency** is reusable for: LFU's tie-breaker, MRU caches, ordered Sets (a Set is also insertion-ordered!), session stores, query-deduplication caches.
-- "Delete + re-set to bump" — same trick works on `Set` for ordered-set-with-touch semantics.
+get(1):
+  has? Yes. val='a'. delete(1). Map: {2:b}.
+  set(1, 'a'). Map: {2:b, 1:a}.   ← 1 is now most recent.
+  Return 'a'.
 
-**Common mistakes**
-- Just calling `set(k, v)` on an existing key. `Map.set` **does not** reorder if the key exists — value updates in place, position stays. Cache becomes broken-LRU.
-- Computing oldest via `Array.from(map.keys())[0]` — O(n) per eviction. Defeats the purpose.
-- Using `>=` instead of `>` for the eviction check — evicts too eagerly.
-- Reaching for HashMap + DLL in JS. Correct in C++/Java. Over-engineered in JS and slower (every node is a heap object).
-- Returning `undefined` when the contract says `-1`. Read the spec.
+put(3, 'c'):
+  has? No. set(3, 'c'). Map: {2:b, 1:a, 3:c}.
+  size 3 > 2 → evict oldest.
+  keys().next().value = 2 (front of insertion order).
+  delete(2). Map: {1:a, 3:c}.
 
-**Related questions**
-- LFU cache (least-frequently-used) — much harder; uses Map<freq, Set<key>>.
-- TTL cache — combine Map ordering with `setTimeout` per key (see `Cache With Time Limit`).
-- LRU with size in **bytes** rather than entries — useful for response caches.
-- WeakMap-backed cache for object keys with auto-GC.
+get(2):
+  has? No. Return -1.
 
-## Variants
+get(3):
+  has? Yes. val='c'. delete(3). Map: {1:a}.
+  set(3, 'c'). Map: {1:a, 3:c}.   ← 3 now most recent.
+  Return 'c'.
+```
 
-1. **TTL on top of LRU** — each entry has `{ value, expiresAt }`. On `get`, check `expiresAt < Date.now()` and evict eagerly. Schedule a `setTimeout` per entry only if active sweeping is needed.
+---
 
-2. **Async LRU (request dedup)** — value is a Promise; if a key is in-flight, subsequent `get`s wait on the same promise. Memoizes async fetches; covers webhook deduplication.
+## 10. Common confusion + traps
 
-3. **Capacity in bytes** — track an approximate byte size per entry (`new TextEncoder().encode(JSON.stringify(v)).length` or supplied by caller). Evict until total < cap. Same `delete + set` recency.
+1. **Just `set` without `delete` first** — Map doesn't bump existing entries on re-set; insertion position unchanged.
+2. **`Array.from(map.keys())[0]`** — O(n); use `keys().next().value`.
+3. **No touch on read** — get must bump recency.
+4. **Capacity off-by-one** — evict when size > cap (not >=).
+5. **Eviction during put with same key** — delete-first or check `has` before set.
+6. **Async race** — not thread-safe in concurrent contexts.
+7. **TTL combined with LRU** — check expiry; delete if stale.
 
-4. **Persistent (write-back) LRU** — on eviction, hand the entry to a `flush(key, value)` callback to persist to disk/DB. Backend-y variant for warm-cache patterns.
+---
 
-## Revision notes
+## 11. Senior follow-ups & variants
 
-> **LRU with Map — 60 second recap**
-> - `Map` preserves insertion order. `delete(k); set(k, v)` = "bump to most recent."
-> - `get`: bump and return; missing -> -1.
-> - `put`: if exists, delete; set; if `size > cap`, evict `keys().next().value`.
-> - All ops O(1) average.
-> - **Trap:** just calling `set` on an existing key — value updates but position doesn't. Always delete first.
-> - **Trap:** `>=` vs `>` on the eviction check.
-> - Don't reach for HashMap + DLL in JS. `Map` is already exactly that.
+### Variant 1 — TTL + LRU
+Combine eviction policies; expire on read.
+
+### Variant 2 — LFU (frequency-based)
+Track count; evict least-frequent. More complex.
+
+### Variant 3 — Multi-tier (L1 + L2)
+Hot in-memory + cold disk/network.
+
+### Variant 4 — Bounded by memory bytes (not count)
+Estimate size per entry.
+
+### Variant 5 — Concurrent (`AsyncMutex`)
+Wrap put/evict in mutex for async-safe.
+
+---
+
+## 12. How to think aloud
+
+> "LRU cache: O(1) get and put, capacity-bounded, evicts least-recently-used. JS shortcut: `Map` preserves insertion order; that's our recency list. `get(k)`: if present, `delete(k); set(k, val)` re-inserts at the end (most recent); return value. `put(k, v)`: if present, delete first (so set re-inserts at end); set; if size > cap, evict `map.keys().next().value` (the front of insertion order — O(1) iterator). All ops O(1) because Map internally is hash + linked list with O(1) reorder. Don't use `Array.from(map.keys())[0]` — that's O(n). Must touch on read (get bumps recency). Variants: TTL + LRU (check expiry in get/put); LFU (frequency-based — different problem); multi-tier (L1 in-memory + L2 disk); memory-bounded (estimate bytes per entry); concurrent (async mutex). Trap: re-set without delete (doesn't bump); off-by-one cap check; not bumping on read."
+
+---
+
+## 13. 60-second revision
+
+> - **`Map` insertion order = recency.**
+> - **`delete + set`** bumps to end.
+> - **`keys().next().value`** = oldest, O(1).
+> - **All ops O(1).**
+> - **Touch on read** — get bumps recency.
+> - **Evict when `size > cap`** (after insert).
+> - **TTL variant** — check expiry.
+> - **LFU is different** — frequency-based.
+> - **Trap:** re-set without delete; `Array.from` for first; no read bump.
+
+---
+
+**Related:** [object-vs-map-vs-set.md](./object-vs-map-vs-set.md) · [ttl-map.md](./ttl-map.md) · [cache-invalidate-by-tag.md](./cache-invalidate-by-tag.md) · [`10-machine-coding-patterns/memoize.md`](../10-machine-coding-patterns/memoize.md)
+
+**Concept primer:** [`concepts/maps-sets.md`](../../concepts/maps-sets.md)

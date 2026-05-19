@@ -1,89 +1,197 @@
-# Implement `TimeLimitedCache` (TTL Cache)
+# Implement `TimeLimitedCache` — TTL cache (LeetCode shape)
 
-## Source
-- LeetCode #2622 "Cache With Time Limit": https://leetcode.com/problems/cache-with-time-limit/
-- Canonical: every Redis/memcached client, every server-side memo layer.
+> **Difficulty:** Medium   |   **Time:** ~25 min   |   **Prereqs:** [memoize-with-ttl.md](../02-closures/memoize-with-ttl.md), [`concepts/maps-sets.md`](../../concepts/maps-sets.md)
+>
+> **Source:** [LeetCode 2622 — Cache With Time Limit](https://leetcode.com/problems/cache-with-time-limit/).
 
-## Why this question matters in interviews
-TTL caches are the single most common backend caching primitive — Redis SETEX, memcached, Node's `lru-cache`. The interview probes two skills: (1) **expiry strategy** — active (`setTimeout` evicts on schedule) vs lazy (check `expiresAt` on read), and the tradeoffs; (2) **state hygiene** — using `Map` (not plain object) for O(1) ops + correct iteration semantics, and remembering to `clearTimeout` when you overwrite a key. Senior candidates are expected to bring up both strategies, pick one, and justify it. Show you've thought about memory pressure, timer storms, and what happens at `count()` time across the expiry boundary — these are real production concerns.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
-```js
+**Signature**
+```ts
 class TimeLimitedCache {
-  constructor() { this.store = new Map(); }
-  set(key, value, duration) {
-    const existed = this.store.has(key) && this.store.get(key).expiresAt > Date.now();
-    if (this.store.has(key)) clearTimeout(this.store.get(key).timerId);
-    const timerId = setTimeout(() => this.store.delete(key), duration);
-    this.store.set(key, { value, expiresAt: Date.now() + duration, timerId });
-    return existed;
-  }
-  get(key) {
-    const e = this.store.get(key);
-    if (!e || e.expiresAt <= Date.now()) return -1;
-    return e.value;
-  }
-  count() {
-    const now = Date.now();
-    let n = 0;
-    for (const e of this.store.values()) if (e.expiresAt > now) n++;
-    return n;
-  }
+  set(key: any, value: any, duration: number): boolean;   // true if non-expired entry existed
+  get(key: any): any;                                      // value or -1 if missing/expired
+  count(): number;                                         // count of non-expired entries
 }
 ```
 
-### Runtime / engine behavior
-- `Map` gives O(1) `get`/`set`/`delete` and preserves insertion order (useful for LRU variants).
-- `setTimeout` returns a Timeout handle in Node, a number in the browser. `clearTimeout` works on both.
-- Each active timer **keeps the event loop alive** in Node. In a long-lived server with 1M cache entries, that's 1M timers. Lazy expiry avoids this.
-- `Map.delete` inside a `setTimeout` callback runs in the **timers phase** as a macrotask — by the time it runs, the key may already have been overwritten (the old timer should have been cleared, but defensive code re-checks `expiresAt`).
+**Input / Output examples**
 
-### Edge cases (interview traps)
-1. **Overwrite during active TTL** — must `clearTimeout` the old timer; otherwise the old timer fires at the old expiry and wipes the new value. **The most-failed interview detail.**
-2. **`set` returns `true` only if a non-expired entry existed** — the LeetCode contract: `true` if there was a live entry, `false` otherwise. Many candidates return `this.store.has(key)`, which is wrong if the entry expired but the timer hasn't fired yet.
-3. **`get` across the boundary** — if you call `get` between expiry and the eviction timer firing, the active-only implementation returns the stale value. Always **double-check `expiresAt` on read** (lazy verify, even with active expiry).
-4. **`count` across the boundary** — must iterate and filter by `expiresAt`. Don't just return `this.store.size`.
-5. **Timer storm** — adding 100k entries simultaneously schedules 100k timers. Node copes, but it's wasteful. Lazy expiry + periodic GC is the prod pattern.
-6. **Negative or zero `duration`** — set + immediate expire. `setTimeout(..., 0)` defers eviction to the next macrotask; `get` called synchronously after `set(k, v, 0)` still returns `v` until the macrotask runs. **Lazy check on read fixes this.**
-7. **`unref()` for Node** — if these timers shouldn't block process exit, call `.unref()` on each. Browser timers don't have this.
-8. **`structuredClone` / referential leaks** — cache stores references, not copies. Mutating a cached object mutates the cache. Worth mentioning.
+| Call sequence                                                              | Returns / state                      |
+|-----------------------------------------------------------------------------|---------------------------------------|
+| `c.set('a', 1, 100)` at t=0                                                | `false` (no prior entry)              |
+| `c.set('a', 2, 50)` at t=60 (prior alive)                                  | `true` — clears old timer; replaces  |
+| `c.get('a')` at t=80                                                       | `2`                                   |
+| `c.get('a')` at t=120 (entry expired at t=110)                             | `-1`                                  |
+| `c.count()` at t=130                                                       | `0`                                   |
+| Overwrite without clearing prior timer                                     | **bug** — old timer wipes new value   |
 
-## Brute force approach
-**Plain object + no expiry timer**, check `Date.now()` on every read (lazy-only). Simple, no timer overhead, but `count()` is O(n) (you have to filter expired entries). For LeetCode this is fine and arguably the best answer for production memory. Mention this first, then implement the active variant.
+**Constraints**
+- `set` returns `true` iff a **non-expired** entry existed before.
+- `get` returns `-1` for missing or expired entries.
+- `count` excludes expired entries.
+- **Critical:** `clearTimeout` the prior timer on overwrite — otherwise it fires and wipes the new value.
+- Use `Map` (not plain object) for O(1) ops, non-string keys, no `__proto__` collisions.
 
-## Optimal approach
-**`Map` + active expiry via `setTimeout` + lazy verification on read.** Active eviction keeps `count()` cheap (mostly) and memory bounded; lazy verification handles the small window between expiry and timer firing. Always `clearTimeout` on overwrite/delete.
+---
 
-## Solution (JavaScript)
+## 2. Plain-English restatement
+
+Build a key/value cache where each entry has its own time-to-live. Three methods: `set` (with per-key TTL), `get` (returns value or -1 on miss/expire), `count` (non-expired entries). Active eviction via `setTimeout` *plus* lazy verification on read for the small race window between `expiresAt` and the eviction timer firing.
+
+The single most-failed detail: when you overwrite a key with an active TTL, you must `clearTimeout` the prior timer — otherwise that old timer will fire and wipe your new value.
+
+---
+
+## 3. Why this matters in interviews
+
+TTL caches are the single most common backend caching primitive — Redis SETEX, memcached, Node's `lru-cache`. The interview probes two skills: (1) **expiry strategy** — active (`setTimeout` evicts on schedule) vs lazy (check `expiresAt` on read), and the tradeoffs; (2) **state hygiene** — using `Map` (not plain object) for O(1) ops + correct iteration semantics, and remembering to `clearTimeout` when you overwrite a key. Senior candidates are expected to bring up both strategies, pick one, and justify it.
+
+---
+
+## 4. Mental model
+
+```
+   class TimeLimitedCache {
+     store: Map<key, { value, expiresAt, timerId }>
+     
+     set(k, v, ms):
+       prev = store.get(k)
+       existed = prev?.expiresAt > now
+       if (prev) clearTimeout(prev.timerId)   ← THE critical line
+       timerId = setTimeout(() => store.delete(k), ms)
+       store.set(k, { value: v, expiresAt: now + ms, timerId })
+       return existed
+     
+     get(k):
+       e = store.get(k)
+       if (!e) return -1
+       if (e.expiresAt <= now) {              ← lazy verify
+         clearTimeout(e.timerId)
+         store.delete(k)
+         return -1
+       }
+       return e.value
+   }
+```
+
+**Active vs lazy expiry:**
+
+- **Active** (`setTimeout` evicts on schedule) — keeps `count()` cheap and bounds memory. Cost: N timers in the event loop for N entries.
+- **Lazy** (check `expiresAt` on read) — zero timer overhead, but expired entries linger in memory until a `get` or `count` hits them.
+- **Production**: combine — active for memory cleanup, lazy for correctness across the small race window.
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. If you overwrite a key but forget `clearTimeout`, what happens when the old timer fires?
+> 2. Why use `Map` instead of `{}` for the store?
+> 3. For 1 million entries, what's the cost of active vs lazy expiry?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: forget `clearTimeout` on overwrite
 
 ```js
-/**
- * Time-limited cache. Keys auto-expire after their per-key `duration` ms.
- * - `set(k, v, ms)` returns true iff a non-expired entry existed.
- * - `get(k)` returns the value or -1 if missing/expired.
- * - `count()` returns the number of non-expired entries.
- */
+set(key, value, duration) {
+  const existed = this.store.has(key);
+  const timerId = setTimeout(() => this.store.delete(key), duration);
+  this.store.set(key, { value, expiresAt: Date.now() + duration, timerId });
+  return existed;
+}
+```
+
+`c.set('a', 1, 100)` at t=0 schedules T1 for t=100. `c.set('a', 2, 50)` at t=60 schedules T2 for t=110 — but **T1 still fires at t=100 and deletes the new value**. The cache appears empty at t=100 even though the new entry should be alive until t=110. Top failure mode.
+
+### Wrong attempt 2: plain object as store
+
+```js
+constructor() { this.store = {}; }
+set(key, value, duration) {
+  // ...
+  this.store[key] = ...;
+}
+```
+
+Three problems:
+- `__proto__` and `constructor` keys collide with object prototype.
+- Numeric keys are stringified (`1` and `'1'` collide).
+- No O(1) `size`, no insertion order for LRU variants.
+
+Use `Map`.
+
+### Wrong attempt 3: return `store.has(key)` for `set`
+
+```js
+set(key, value, duration) {
+  const existed = this.store.has(key);   // BUG: true even for expired-but-not-evicted
+  // ...
+  return existed;
+}
+```
+
+If the entry expired but its eviction timer hasn't fired yet, `has` returns `true`. The contract is "non-expired entry existed" — must check `expiresAt > now`.
+
+### Wrong attempt 4: trust active eviction alone
+
+```js
+get(key) {
+  const e = this.store.get(key);
+  return e ? e.value : -1;             // BUG: race window
+}
+```
+
+Between `expiresAt = t+100` and the timer firing at t+100, there's a microtask window where `get` could read the stale value. Always **lazy-verify** on read.
+
+---
+
+## 7. The unlocking insight
+
+> **`Map<key, {value, expiresAt, timerId}>`. On `set`, `clearTimeout(prev.timerId)` before scheduling new. On `get`, lazy-verify `expiresAt > now`. `count` iterates and filters by `expiresAt`.**
+
+Four invariants:
+
+1. **`clearTimeout(prev.timerId)` on overwrite.** Even if the prior entry was already expired but its eviction timer hadn't fired yet. Otherwise the old timer wipes the new value.
+
+2. **Lazy verify on `get`.** Even with active eviction, there's a microtask race window. Check `e.expiresAt > Date.now()` on every read.
+
+3. **`set` returns `true` iff non-expired entry existed.** Not `store.has(key)`. Must check the timestamp.
+
+4. **`count` filters by `expiresAt`.** Don't return `store.size` — it counts expired-but-not-evicted entries.
+
+**Active vs lazy production decisions:**
+
+- Small caches (< 1000 entries): active timers are fine. Memory tight; cheap to keep `count()` O(1)-ish.
+- Large caches (100k+): prefer lazy. 100k timers waste resources. Add periodic GC (`setInterval(sweep, 60000)`) instead.
+- For long-running Node servers, `.unref()` timers so they don't keep the process alive.
+
+---
+
+## 8. Solution (annotated)
+
+```js
 class TimeLimitedCache {
   constructor() {
-    /** @type {Map<any, { value: any, expiresAt: number, timerId: any }>} */
-    this.store = new Map();
+    this.store = new Map();                                  // step 1: Map for O(1) + non-string keys
   }
 
   set(key, value, duration) {
     const now = Date.now();
-    const prev = this.store.get(key);
-    const existed = !!prev && prev.expiresAt > now;
+    const prev = this.store.get(key);                         // step 2: peek prior
+    const existed = !!prev && prev.expiresAt > now;           // step 3: non-expired check
 
-    // Always clear an existing timer — even if expired but not yet evicted.
-    if (prev) clearTimeout(prev.timerId);
+    if (prev) clearTimeout(prev.timerId);                     // step 4: CRITICAL — clear old timer
 
-    const timerId = setTimeout(() => {
+    const timerId = setTimeout(() => {                        // step 5: schedule new eviction
       this.store.delete(key);
     }, duration);
-    // Optional for Node servers — let the process exit even with pending timers:
-    // timerId.unref?.();
+    // timerId.unref?.();   // optional for Node servers
 
     this.store.set(key, { value, expiresAt: now + duration, timerId });
     return existed;
@@ -92,8 +200,7 @@ class TimeLimitedCache {
   get(key) {
     const entry = this.store.get(key);
     if (!entry) return -1;
-    // Lazy verification: covers the window between expiresAt and the eviction timer firing.
-    if (entry.expiresAt <= Date.now()) {
+    if (entry.expiresAt <= Date.now()) {                      // step 6: lazy verify
       clearTimeout(entry.timerId);
       this.store.delete(key);
       return -1;
@@ -104,13 +211,15 @@ class TimeLimitedCache {
   count() {
     const now = Date.now();
     let n = 0;
-    for (const e of this.store.values()) if (e.expiresAt > now) n++;
+    for (const e of this.store.values()) {                    // step 7: filter by expiresAt
+      if (e.expiresAt > now) n++;
+    }
     return n;
   }
 }
 ```
 
-### Lazy-only variant (preferred for memory)
+**Lazy-only variant (for huge caches):**
 
 ```js
 class LazyTTLCache {
@@ -132,7 +241,7 @@ class LazyTTLCache {
     const now = Date.now();
     let n = 0;
     for (const [k, e] of this.store) {
-      if (e.expiresAt <= now) this.store.delete(k); // opportunistic GC
+      if (e.expiresAt <= now) this.store.delete(k);   // opportunistic GC
       else n++;
     }
     return n;
@@ -140,70 +249,157 @@ class LazyTTLCache {
 }
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
-Input:
 ```js
 const c = new TimeLimitedCache();
-c.set('a', 1, 100);          // t=0  → false (no prior)
-setTimeout(() => c.set('a', 2, 50), 60);   // t=60 → true (prior 'a' still alive until t=100)
-setTimeout(() => c.get('a'), 80);          // t=80 → 2
-setTimeout(() => c.get('a'), 120);         // t=120 → -1 (expired at t=60+50=110)
-setTimeout(() => c.count(), 130);          // t=130 → 0
+c.set('a', 1, 100);                       // false
+setTimeout(() => c.set('a', 2, 50), 60);  // true (prior alive)
+setTimeout(() => console.log(c.get('a')), 80);   // 2
+setTimeout(() => console.log(c.get('a')), 120);  // -1
+setTimeout(() => console.log(c.count()), 130);   // 0
 ```
 
-Trace:
-- `t=0`: `set('a', 1, 100)`. `prev` undefined → `existed = false`. Schedule eviction-timer T1 for `t=100`. Store: `{a: {value:1, expiresAt:100, timerId:T1}}`. Return `false`.
-- `t=60`: `set('a', 2, 50)`. `prev` exists, `expiresAt=100 > 60` → `existed = true`. `clearTimeout(T1)`. Schedule T2 for `t=110`. Store: `{a: {value:2, expiresAt:110, timerId:T2}}`. Return `true`.
-- `t=80`: `get('a')`. `expiresAt=110 > 80` → return `2`.
-- `t=110`: T2 fires → `store.delete('a')`.
-- `t=120`: `get('a')`. Not in store → return `-1`.
-- `t=130`: `count()`. Iterate empty map → return `0`.
+---
 
-Key thing to call out: if at `t=60` we'd **forgotten** `clearTimeout(T1)`, T1 would still fire at `t=100` and wipe the *new* value, breaking the cache.
+## 9. Step-by-step dry run
 
-## Important takeaways
+```js
+const c = new TimeLimitedCache();
+c.set('a', 1, 100);                              // t=0
+setTimeout(() => c.set('a', 2, 50), 60);         // t=60
+setTimeout(() => c.get('a'), 80);                // t=80
+setTimeout(() => c.get('a'), 120);               // t=120
+```
 
-**Syntax to memorize**
-- `Map` over `{}` — O(1) ops, non-string keys, no prototype-pollution risk.
-- `clearTimeout(prev.timerId)` **before** scheduling a new one on overwrite.
-- Lazy verification on `get` even if you have active expiry.
+Values-first trace:
 
-**Patterns to reuse**
-- This is the same skeleton as: rate limiters (token-bucket refill timer), session caches, idempotency-key stores, debounce-with-cache.
-- For LRU + TTL, layer this on top of an `LRUMap` (insertion order = recency).
+| Time | Event                                              | Store state                          | Returns |
+|------|----------------------------------------------------|---------------------------------------|---------|
+| 0    | `set('a', 1, 100)`: prev=undefined, existed=false  | `{a: {value:1, expiresAt:100, timerId:T1}}` | `false` |
+| 60   | `set('a', 2, 50)`: prev exists, expiresAt=100 > 60 → existed=true; `clearTimeout(T1)`; schedule T2 for t=110 | `{a: {value:2, expiresAt:110, timerId:T2}}` | `true` |
+| 80   | `get('a')`: expiresAt=110 > 80 → return 2          | (same)                                | `2`     |
+| 110  | T2 fires → `store.delete('a')`                     | `{}`                                  | —       |
+| 120  | `get('a')`: not in store → return -1               | `{}`                                  | `-1`    |
 
-**Common mistakes**
-- Forgetting `clearTimeout` on overwrite → old timer wipes new value.
-- Plain object instead of `Map` → key collisions with `__proto__`, slower hashing, no insertion order.
-- Returning `this.store.has(key)` for `set`'s return value → wrong if the entry expired-but-not-evicted.
-- Trusting active expiry alone → race window between `expiresAt` and the timer firing.
-- Not `.unref()`-ing timers in long-running Node services where you want clean shutdown.
+**If we had forgotten `clearTimeout(T1)` at t=60**: T1 fires at t=100 and deletes 'a' — even though the new entry should be alive until t=110. `get` at t=120 returns -1 (correct for this scenario, but for the wrong reason — the timing of cache misses gets corrupted).
 
-**Related questions**
-- LRU cache (different eviction policy).
-- Memoize with TTL (decorator pattern over this cache).
-- Distributed cache (Redis SETEX) — same contract, different backing store.
+---
 
-## Variants
+## 10. Common confusion + traps
 
-1. **Per-key max + TTL (LRU+TTL)** — layer a `Map` keyed by access-recency. Evict by recency once size exceeds `max`, by `expiresAt` lazily on read.
+1. **Forgetting `clearTimeout` on overwrite.** Top failure mode. Old timer wipes new value.
 
-2. **Async load-through cache** — `get(key, loader)` calls `loader()` on miss, caches its promise (single-flight de-dupe), evicts after TTL. Very common in production.
+2. **Plain object instead of `Map`.** Prototype pollution; numeric keys collide with string forms; no insertion order; slower.
 
-3. **Sliding TTL** — every `get` extends `expiresAt` by `duration`. Tweak `get` to `clearTimeout` and reschedule.
+3. **Returning `store.has(key)` for `set`.** Wrong if entry expired but its timer hasn't fired yet.
 
-4. **`getRemainingTime(key)`** — returns `expiresAt - Date.now()` clamped to 0. Useful for HTTP `Cache-Control: max-age` responses.
+4. **Trusting active expiry alone.** Race window between `expiresAt` and timer firing. Always lazy-verify in `get`.
 
-## Revision notes
+5. **Returning `store.size` for `count`.** Includes expired-but-not-evicted entries. Filter by `expiresAt`.
 
-> **TimeLimitedCache — 60 second recap**
-> - `Map<key, { value, expiresAt, timerId }>`.
-> - `set` → clear prior timer, store new entry with `expiresAt = now + ms`, schedule eviction timer. Return `true` iff prior entry was non-expired.
-> - `get` → lazy-verify `expiresAt > now`, else evict and return `-1`.
-> - `count` → iterate values, count where `expiresAt > now`.
-> - **Active** expiry = `setTimeout` evicts; **Lazy** = check on read. Production: combine — active for memory, lazy for correctness.
-> - `clearTimeout(prev.timerId)` on overwrite — top failure mode.
-> - For 100k+ entries, prefer **lazy only** + opportunistic GC; 100k timers waste resources.
-> - Use `Map` not `{}` (perf, non-string keys, no prototype pollution).
-> - Family: rate limiters, session stores, idempotency keys — same skeleton.
+6. **No `.unref()` in long-running Node services.** Active timers keep the process alive on graceful shutdown.
+
+7. **Mutating cached objects.** Cache stores references. `c.set('a', obj, 100); obj.x = 1;` mutates the cache. Document or `structuredClone` on write.
+
+---
+
+## 11. Senior follow-ups & variants
+
+### Variant 1 — LRU + TTL hybrid
+
+```js
+class LRUTTLCache {
+  constructor(max) {
+    this.store = new Map();   // Map insertion order = recency
+    this.max = max;
+  }
+  set(k, v, ms) {
+    if (this.store.has(k)) this.store.delete(k);   // delete-then-set: move to end
+    const timerId = setTimeout(() => this.store.delete(k), ms);
+    this.store.set(k, { value: v, expiresAt: Date.now() + ms, timerId });
+    if (this.store.size > this.max) {
+      const oldest = this.store.keys().next().value;
+      const e = this.store.get(oldest);
+      clearTimeout(e.timerId);
+      this.store.delete(oldest);
+    }
+  }
+  get(k) {
+    const e = this.store.get(k);
+    if (!e || e.expiresAt <= Date.now()) return -1;
+    this.store.delete(k); this.store.set(k, e);   // refresh recency
+    return e.value;
+  }
+}
+```
+
+Production-grade. Bounded memory.
+
+### Variant 2 — Sliding TTL (extend on access)
+
+```js
+get(k) {
+  const e = this.store.get(k);
+  if (!e || e.expiresAt <= Date.now()) return -1;
+  // Reschedule the timer for another full duration from now
+  clearTimeout(e.timerId);
+  e.expiresAt = Date.now() + e.originalDuration;
+  e.timerId = setTimeout(() => this.store.delete(k), e.originalDuration);
+  return e.value;
+}
+```
+
+Entries that get accessed stay alive longer. Pattern for session caches.
+
+### Variant 3 — `getRemainingTime(key)`
+
+```js
+getRemainingTime(key) {
+  const e = this.store.get(key);
+  if (!e) return 0;
+  return Math.max(0, e.expiresAt - Date.now());
+}
+```
+
+Useful for HTTP `Cache-Control: max-age` responses.
+
+### Variant 4 — Async load-through cache
+
+```js
+async getOrLoad(key, loader) {
+  const cached = this.get(key);
+  if (cached !== -1) return cached;
+  const value = await loader();
+  this.set(key, value, this.defaultTTL);
+  return value;
+}
+```
+
+Combine with async memoize (in-flight dedupe). See [async-memoize.md](./async-memoize.md).
+
+---
+
+## 12. How to think aloud in the interview
+
+> "`Map<key, {value, expiresAt, timerId}>`. `set`: clear prior timer if it exists, schedule new eviction timer, store entry, return true iff prior entry was non-expired. `get`: lazy-verify `expiresAt > now`; on hit, return value; on miss-or-expired, clear timer and delete, return -1. `count`: iterate and filter by `expiresAt`. The single most critical line is `clearTimeout(prev.timerId)` on overwrite — without it, the old timer fires and wipes the new value. Use Map not plain object for O(1) and non-string keys. For huge caches (>100k entries), prefer lazy-only + periodic GC over active timers — too many timers waste resources. For Node long-running services, `.unref()` timers."
+
+---
+
+## 13. 60-second revision
+
+> - **`Map<key, {value, expiresAt, timerId}>`.**
+> - **`clearTimeout(prev.timerId)` on overwrite** — top failure mode.
+> - **`set` returns `true` iff non-expired prior existed** — not `store.has(key)`.
+> - **Lazy verify on `get`** — covers race window between `expiresAt` and timer fire.
+> - **`count` filters by `expiresAt`** — not `store.size`.
+> - **`Map` not `{}`** — O(1), non-string keys, no `__proto__` collision.
+> - **Large caches (>100k):** lazy-only + periodic GC.
+> - **Family:** rate limiters, session caches, idempotency keys, async memoize.
+> - **Trap:** forgetting `clearTimeout`; trusting active expiry alone; returning `store.has` for `set`.
+
+---
+
+**Related:** [memoize-with-ttl.md](../02-closures/memoize-with-ttl.md) · [async-memoize.md](./async-memoize.md) · [`08-maps-sets/ttl-map.md`](../08-maps-sets/ttl-map.md) · [`10-machine-coding-patterns/lru-cache.md`](../10-machine-coding-patterns/lru-cache.md)
+
+**Concept primer:** [`concepts/maps-sets.md`](../../concepts/maps-sets.md), [`concepts/promises.md`](../../concepts/promises.md)

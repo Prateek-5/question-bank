@@ -1,219 +1,260 @@
-# Named Function Expression — Inner Binding & Hoisting
+# Named function expression — inner binding
 
-## Source / Origin
-- Spec section "RuntimeSemantics: Evaluation" of FunctionExpression.
-- Classic output-prediction puzzle; common in senior screens.
-- Concept reference: `concepts/hoisting.md`, `concepts/closures.md`.
+> **Difficulty:** Medium   |   **Time:** ~10 min   |   **Prereqs:** [function-declaration-vs-expression-hoisting.md](./function-declaration-vs-expression-hoisting.md)
+>
+> **Source:** ECMA-262 FunctionExpression evaluation. Senior screens output-prediction.
 
-## Why this question matters in interviews
-`const f = function inner() { ... }` creates *two* bindings: the outer `f` and an *inner* `inner` only visible inside the function. People reach for this when they want recursion without name collision; engines use it for stack-trace clarity. Senior bar: you know it's read-only inside (strict mode throws on assignment), you can predict subtle hoisting questions, and you understand it's NOT the same as a declaration.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+`const f = function inner() { ... }` creates TWO bindings: outer `f` and inner `inner` (only visible inside).
+
+**Verification examples**
+
+| Setup                                              | Result                                             |
+|----------------------------------------------------|-----------------------------------------------------|
+| `const f = function bar() { return bar };`         | `f()` returns the function; `bar` outside → ReferenceError |
+| `f.name`                                           | `'bar'` (inner name)                                |
+| Recursion using inner name                         | safe even if outer var is reassigned                |
+| Reassign inner name in strict                      | TypeError (read-only)                                |
+| Class expression analog                            | `const C = class Inner { ... }` — Inner local       |
+
+**Constraints**
+- Inner name is **read-only** inside the function (strict throws on write).
+- Inner name **not visible outside** the function body.
+- Useful for safe recursion (immune to outer reassignment).
+- Better stack traces (named, not `<anonymous>`).
+
+---
+
+## 2. Plain-English restatement
+
+When you write `const f = function bar() { ... }`, the function has a "backstage" name `bar` callable only inside its body. Outside, only `f` works. `bar` is read-only — protects recursive references from outer-variable reassignment.
+
+---
+
+## 3. Why this matters in interviews
+
+Hoisting nuance + self-recursion patterns + spec literacy. Tests whether you know `arguments.callee` is banned and named function expressions are the replacement.
+
+---
+
+## 4. Mental model
+
+```
+   const f = function bar() { ... };
+   
+   ┌─── Outer scope ───────────────────────┐
+   │ f: <function>                          │  (assignable; bound by const here)
+   │ bar: NOT visible                       │
+   │   ┌─── Function's scope (when called) ┐│
+   │   │ bar: <function> (read-only)       ││  ← inner binding
+   │   │   body executes here              ││
+   │   └────────────────────────────────────┘│
+   └────────────────────────────────────────┘
+   
+   When the function is invoked, JS prepends a scope with `bar` (read-only)
+   BEFORE the body's local scope. That's how `bar` is callable inside but
+   invisible outside.
+
+   USES:
+   - Safe recursion (outer var can be reassigned without breaking).
+   - Better stack traces (function.name = 'bar').
+   - Module-private state (NFE in IIFE).
+   
+   TRAPS:
+   - Reassigning inner name in strict → TypeError.
+   - Confusing with function declaration (which IS visible outside).
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. After `const f = function bar() { return bar }`, can you call `bar()` outside?
+> 2. What is `f.name`?
+> 3. Why is NFE safer than `const fact = function(n) { return fact(n-1); }` for recursion?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: "inner name visible outside"
+No — function-scoped to its body.
+
+### Wrong attempt 2: "anonymous functions can recurse via the outer var"
+They can, but break if outer var is reassigned. NFE is safer.
+
+### Wrong attempt 3: "inner name is writable"
+Read-only in strict; assigning throws TypeError.
+
+---
+
+## 7. The unlocking insight
+
+> **NFE has TWO bindings: outer (assignable) and inner (read-only, visible only inside function body). Use inner name for safe recursion + better stack traces. Replaces banned `arguments.callee`.**
+
+Three properties:
+
+1. **Two bindings** — outer var (mutable) + inner name (read-only).
+2. **Inner scoped to function body** — invisible outside.
+3. **`f.name`** = inner name (debugging benefit).
+
+---
+
+## 8. Solution (annotated)
+
 ```js
-// Anonymous function expression
-const a = function () { /* arguments.callee deprecated */ };
-
-// Named function expression — `inner` is visible only inside
-const b = function inner(n) {
-  if (n === 0) return 1;
-  return n * inner(n - 1);            // safe recursion
+// Pattern 1: safe recursion
+const fact = function fact_(n) {                                       // step 1: inner fact_
+  return n === 0 ? 1 : n * fact_(n - 1);                                // safe self-ref
 };
-inner;                                 // ReferenceError — not visible outside
-b.name === 'inner';                    // true
-
-// Function declaration is different (visible in enclosing scope)
-function decl() {}
-decl();                                // OK
-
-// NFE name is read-only
-const c = function self() {
-  self = 99;                           // silently fails in sloppy; TypeError in strict
+const alias = fact;
+fact = null;                                                            // wait — const can't reassign
+// Use let to demonstrate the safety
+let factLet = function factInner(n) {
+  return n === 0 ? 1 : n * factInner(n - 1);                            // safe — uses inner
 };
-```
-
-### Edge cases / interview traps
-1. **Inner name is not visible outside** the expression. `inner` is only inside.
-2. **The inner name is read-only** in strict mode. Assignment throws.
-3. **`f.name` returns the NFE name**, useful for debugging and serialization.
-4. **Function declarations vs expressions** — declarations hoist (name + body); expressions hoist only the variable (which is `undefined` until assigned).
-5. **NFE never hoists into outer scope.** Even with `var`, only the variable name hoists; the body is assigned later.
-6. **`arguments.callee`** is the historical way to recurse from anonymous expressions — banned in strict.
-7. **Class expression analog** — `const C = class Inner { ... }`. `Inner` only visible inside class body.
-8. **NFE in IIFE** — `(function self() { self() })()` infinite-loops; you have your own name without polluting outer scope.
-
-## Mental Model
-
-A named function expression is **a function with a backstage badge that only the function itself can see**:
-
-```
-   ┌────────────────────────────────────┐
-   │ outer scope:                       │
-   │   var b → assigned later           │
-   │                                    │
-   │   ┌──────────────────────────────┐ │
-   │   │ NFE inner scope:             │ │
-   │   │   inner (read-only, points   │ │
-   │   │           to the function)   │ │
-   │   │   ...body...                 │ │
-   │   └──────────────────────────────┘ │
-   │                                    │
-   │   inner   ← not visible here       │
-   └────────────────────────────────────┘
-```
-
-When the function is invoked, JS adds an extra scope with the `inner` binding *before* the body's local scope. That's why `inner` works inside but not outside.
-
-## Why interviewers care
-
-- **Hoisting nuance** — knowing the difference between declarations and expressions.
-- **Self-recursion patterns** — avoiding `arguments.callee`.
-- **Spec literacy** — the inner binding rule is non-obvious.
-
-## Common beginner confusion
-
-- **"NFE hoists the name into the outer scope."** Nope. Only the variable (if any) hoists, and only its name (not value).
-- **"You can reassign the inner name."** Read-only inside.
-- **"`arguments.callee` is fine."** Banned in strict mode; use NFE instead.
-- **"NFE adds another `function.name`."** The inner name *is* `function.name`.
-- **"Anonymous functions can't recurse."** They can, via the variable (`const f = function(n) { f(n-1); }`) — but that breaks if `f` is reassigned. NFE is safer.
-
-## Brute force approach
-
-```js
-// Anonymous — uses outer var; breaks if var reassigned
-const fact = function (n) {
-  return n === 0 ? 1 : n * fact(n - 1);
-};
-const f2 = fact;
-fact = null;                            // strict: TypeError; sloppy: succeeds
-f2(5);                                  // crashes: fact is null
-```
-
-## Optimal approach
-
-NFE — the inner name is safe from outer reassignment.
-
-```js
-const fact = function fact_(n) {
-  return n === 0 ? 1 : n * fact_(n - 1);   // inner name; not affected by outer mutation
-};
-const f2 = fact;
-fact = null;                                // safe; inner fact_ still points to function
-f2(5);                                       // 120
-```
-
-## Solution (JavaScript)
-
-```js
-// Pattern 1: recursive NFE
-const fib = function fibInner(n) {
-  if (n < 2) return n;
-  return fibInner(n - 1) + fibInner(n - 2);
-};
+const f2 = factLet;
+factLet = null;                                                         // outer reassigned
+f2(5);                                                                  // 120 — still works via inner
 
 // Pattern 2: better stack traces
-const debounce = function debounceInner(fn, ms) {
+const debounce = function debounceInner(fn, ms) {                      // step 2: named for trace
   let timer;
-  return function debounceWrapper(...args) {
+  return function debounceWrapper(...args) {                            // step 3: named inner fn
     clearTimeout(timer);
     timer = setTimeout(() => fn(...args), ms);
   };
 };
-debounce(() => {})(/* throws here */);   // stack trace shows debounceWrapper, not <anonymous>
 
-// Pattern 3: NFE in IIFE for module-private state
-const counter = (function counterImpl() {
+// Pattern 3: NFE in IIFE for private state
+const counter = (function counterImpl() {                              // step 4: named IIFE
   let n = 0;
   return { inc: () => ++n, peek: () => n };
 })();
-counter.inc(); counter.inc(); counter.peek();   // 2
+counter.inc(); counter.inc(); counter.peek();                           // 2
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
 ```js
+// Inner name not visible outside
+const f = function bar() { return bar; };
+f();                                                                    // returns the function
+try { bar(); } catch (e) { console.log(e.message); }                    // 'bar is not defined'
+
+// f.name reflects inner name
+console.log(f.name);                                                    // 'bar'
+
+// Class expression analog
+const Cat = class FelineImpl {
+  static who() { return FelineImpl.name; }                              // inner visible inside
+};
+Cat.who();                                                              // 'FelineImpl'
+try { FelineImpl; } catch (e) { console.log(e.message); }               // 'FelineImpl is not defined'
+
+// Inner name is read-only (strict mode)
+const g = function self() {
+  'use strict';
+  self = 99;                                                            // TypeError
+  return self;
+};
+try { g(); } catch (e) { console.log(e.message); }                      // 'Assignment to constant'
+```
+
+---
+
+## 9. Step-by-step dry run
+
+```
 const a = function inner(n) {
   if (n === 0) return 'done';
   return inner(n - 1);
 };
-a(2);            // 'done'
-inner;           // ReferenceError
+a(2);
+inner;     // ReferenceError outside
 ```
 
 ```
-declaration of `a`:
-  const a in TDZ
-  evaluate RHS: create function {
-    body: ...
+Outer scope creation:
+  a: <uninitialized> (TDZ; const)
+
+Evaluate RHS:
+  Create function object:
     name: 'inner'
-    inner scope: { inner: this-function (read-only) }
-  }
-  a := this function
-  a.name === 'inner'
+    [[Environment]] holds outer scope
+    Inside function: prepend a scope with `inner` (read-only) pointing to this fn.
+  Bind a := this function. TDZ ends.
+  a.name === 'inner'.
 
-call a(2):
-  enter function scope (with inner-binding)
-  enter body scope (local vars)
-  body: n=2, not 0, return inner(1)
-  call inner(1) [resolves via inner-binding scope]
-  ... recursion ...
+Call a(2):
+  Push function's EC.
+  Scope chain: [inner-binding scope] → [body local scope] → [outer]
+  Body: n=2, not 0, return inner(1)
+    Resolve inner → finds in inner-binding scope → recursive call.
+  ...
 
 `inner` lookup in outer scope:
-  outer scope has `a`, not `inner` → ReferenceError
+  Walk outer.LE → only has `a`. Not found.
+  Walk further → not found.
+  ReferenceError.
 ```
 
-Reassignment trap:
+---
 
-```js
-const a = function inner() {
-  inner = 99;                            // strict: TypeError; sloppy: silently fails
-  return inner;                          // returns the function (sloppy) or unreachable (strict)
-};
-a();
-```
+## 10. Common confusion + traps
 
-## How to think aloud in the interview
+1. **Inner name visible outside** — no, function-scoped.
+2. **Inner name writable** — read-only in strict.
+3. **`arguments.callee` is fine** — banned in strict.
+4. **NFE adds another `function.name`** — the inner name IS the name.
+5. **Anonymous functions can't recurse** — they can via outer var (unsafe if reassigned).
+6. **Class expression's inner name** — same pattern, local to body.
+7. **NFE hoists outer name** — no, only outer var hoists per its declarator.
 
-> "Named function expression: `function name() {}` on the RHS of an assignment. The name is bound only inside the function, read-only, and gives me safe recursion + better stack traces. The outer variable is the public name; the inner is the recursion handle. Inner doesn't pollute the outer scope. Replaces `arguments.callee` (banned in strict). Class expressions have the same pattern."
+---
 
-## Important takeaways
+## 11. Senior follow-ups & variants
 
-- **NFE: outer var + read-only inner name.**
-- **Inner only visible inside the function.**
-- **Replaces `arguments.callee`** for recursion.
-- **Better stack traces** (named, not `<anonymous>`).
-- **`function.name`** reflects the inner name.
-- **Class expressions** (`class Inner { }`) follow the same pattern.
+### Variant 1 — Class expression
+`const C = class Inner {...}` — `Inner` only visible inside class body.
 
-## Variants
+### Variant 2 — Object-method shorthand
+`{ method() {} }` — function name is `'method'`.
 
-- **Class expression** — `const C = class Inner { static method() { return Inner.X; } }`; `Inner` inside, `C` outside.
-- **Object-method shorthand** — `{ method() {} }` — the function's name is `method`.
-- **Generator NFE** — `function* gen() {}` — same rules.
-- **Async NFE** — `async function self() {}` — same rules.
-- **Default-export named** — `export default function name() {}` — `name` is local; outside, the export is `default`.
+### Variant 3 — Generator NFE
+`function* gen() {}` — same rules.
 
-## Revision notes
+### Variant 4 — Async NFE
+`async function self() {}` — same rules.
 
-```
-Named Function Expression (NFE):
-  const v = function inner() { ... };
-  outer: `v` (assignable)
-  inner: `inner` (read-only, function-scope only)
-  
-  USES:
-    - safe recursion (outer var can be reassigned)
-    - clean stack traces
-    - replacement for arguments.callee
-    
-  TRAPS:
-    - inner name is NOT visible outside
-    - read-only in strict (TypeError on assign)
-    - inner binding is FUNCTION-scope, not enclosing scope
-    
-  vs declaration:
-    function decl() {}  — hoisted (name+body), visible in enclosing scope
-    const v = function() {}  — only `v` hoists (as undefined until assigned)
-```
+### Variant 5 — Default-export named
+`export default function name() {}` — name is local; outside, the export is `default`.
+
+---
+
+## 12. How to think aloud
+
+> "Named function expression: `function name() {}` on the RHS. Two bindings: the OUTER variable (assignable per its declarator) and the INNER name (read-only, only visible inside the function body via a prepended scope). Uses: safe recursion (inner name immune to outer reassignment), better stack traces (`function.name` = inner), module-private state (NFE in IIFE). Replaces banned `arguments.callee`. Class expressions follow the same pattern: `const C = class Inner {}` — `Inner` is local. Inner is read-only in strict — assigning throws TypeError. Trap: 'inner visible outside'; 'inner writable'; treating NFE like function declaration."
+
+---
+
+## 13. 60-second revision
+
+> - **NFE:** `const f = function bar() {}` — outer `f` + inner `bar`.
+> - **Inner is read-only**, visible ONLY inside function body.
+> - **Outer follows declarator** (var/let/const) for hoisting.
+> - **`f.name`** reflects inner name (debugging).
+> - **Safe recursion** — inner name immune to outer reassignment.
+> - **Replaces** banned `arguments.callee`.
+> - **Class expression analog:** `const C = class Inner {}`.
+> - **Trap:** "inner visible outside"; "inner writable"; treating like declaration.
+
+---
+
+**Related:** [function-declaration-vs-expression-hoisting.md](./function-declaration-vs-expression-hoisting.md) · [class-hoisting.md](./class-hoisting.md) · [`02-closures/closures.md`](../../concepts/closures.md) · [`02-closures/private-data-counter.md`](../02-closures/private-data-counter.md)
+
+**Concept primer:** [`concepts/hoisting.md`](../../concepts/hoisting.md), [`concepts/closures.md`](../../concepts/closures.md)

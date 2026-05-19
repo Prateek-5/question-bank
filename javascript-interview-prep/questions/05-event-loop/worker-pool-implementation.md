@@ -1,256 +1,294 @@
-# Worker Pool — Reusable Worker Threads with Task Queue
+# Worker Pool — reusable threads with task queue
 
-## Source / Origin
-- Node `worker_threads`; browser `Worker`; libraries like `piscina`, `workerpool`.
-- Asked at: Cloudflare, Stripe, Atlassian, AWS.
-- Concept reference: `concepts/event-loop.md`, sibling `postmessage-roundtrip.md`, `10-machine-coding-patterns/async-pool.md`.
+> **Difficulty:** Senior   |   **Time:** ~20 min   |   **Prereqs:** [worker-threads-vs-event-loop.md](./worker-threads-vs-event-loop.md), [`10-machine-coding-patterns/async-pool.md`](../10-machine-coding-patterns/async-pool.md)
+>
+> **Source:** Node `worker_threads`, browser `Worker`, Piscina library. Cloudflare, Stripe, Atlassian.
 
-## Why this question matters in interviews
-Spinning up a Worker per task is expensive — boot time, memory, V8 init. A pool of N workers servicing a shared queue is the canonical solution. Senior bar: (1) you understand task → worker assignment, (2) you handle worker crashes (replace and replay), (3) you support task cancellation, (4) you can articulate when *not* to use workers (light I/O — the event loop alone handles thousands of concurrent fetches better than 8 workers each waiting on one).
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+**Signature**
+```ts
+class WorkerPool {
+  constructor(workerScript: string, size?: number);
+  run<T>(input: any): Promise<T>;
+  close(): Promise<void>;
+}
+```
+
+**Verification examples**
+
+| Setup                                            | Behaviour                                              |
+|--------------------------------------------------|---------------------------------------------------------|
+| 100 tasks → pool of 8 workers                    | 8 in flight; queue 92; drain as workers free          |
+| Task throws                                       | task Promise rejects; worker reused (or replaced)     |
+| Worker crashes mid-task                            | replace worker; reject task; resume drain             |
+| `close()` during work                             | wait for in-flight; reject queued                      |
+| Cancellation                                       | post abort message to worker (cooperative)             |
+
+**Constraints**
+- Spawn workers UP FRONT (warm pool); cold start ~30ms.
+- Map `taskId → {resolve, reject}` for correlation.
+- Replace crashed workers; track free list.
+- Workers are for CPU; light I/O = use event loop directly.
+
+---
+
+## 2. Plain-English restatement
+
+Pre-spawn N worker threads. Each task is enqueued; a free worker picks it up. Each task has an ID; results route back via map. On crash, replace worker, reject pending. The whole point: avoid the ~30ms cold start per task.
+
+---
+
+## 3. Why this matters in interviews
+
+The follow-up to "use `worker_threads`." Tests pool design, task correlation, crash recovery, when NOT to use workers (light I/O is fine on event loop).
+
+---
+
+## 4. Mental model
+
+```
+   ┌──────────────────────────────────────┐
+   │ workers: [W1, W2, ..., WN]            │  pre-spawned, warm
+   │ idle: [W1, W3, W5]                     │  free workers
+   │ queue: [{task, resolve, reject}]      │  pending tasks
+   │ pending: Map<taskId, {resolve, reject}>│  in-flight tasks
+   └──────────────────────────────────────┘
+
+   run(input):
+     id = nextId++
+     return Promise → pending.set(id, {resolve, reject})
+     if idle.length: dispatch immediately
+     else queue.push
+
+   _drain():
+     while idle.length && queue.length:
+       w = idle.pop()
+       task = queue.shift()
+       w._taskId = task.id
+       w.postMessage({id: task.id, input})
+
+   onMessage(w, {id, result, error}):
+     pending.get(id) → resolve/reject
+     pending.delete(id)
+     idle.push(w)
+     _drain()
+
+   onCrash(w):
+     replace worker; reject any in-flight task on it.
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. Why spawn workers up-front instead of on first request?
+> 2. What happens if a worker crashes mid-task?
+> 3. When is the event loop ALONE better than a worker pool?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: spawn per task
+~30ms cold start × N = wasted time.
+
+### Wrong attempt 2: no taskId correlation
+Worker A's result delivered to Worker B's caller.
+
+### Wrong attempt 3: no crash recovery
+Crashed worker leaves task hanging forever.
+
+---
+
+## 7. The unlocking insight
+
+> **Pre-spawn warm workers + idle list + queue + taskId map. On each `run`: assign ID, push to queue, drain. On `onMessage`: look up pending by ID, resolve, free worker, drain. On crash: replace worker, reject in-flight.**
+
+Three properties:
+
+1. **Warm pool** — eliminates cold start.
+2. **TaskId correlation** — `pending: Map<id, callbacks>`.
+3. **Crash recovery** — replace + reject in-flight.
+
+---
+
+## 8. Solution (annotated)
+
 ```js
-// Node: pool.js
-import { Worker } from 'worker_threads';
-import { fileURLToPath } from 'url';
+const { Worker } = require('node:worker_threads');
+const os = require('node:os');
 
 class WorkerPool {
-  constructor(workerScript, size = navigator.hardwareConcurrency || 4) {
+  constructor(workerScript, size = os.cpus().length) {
     this.workerScript = workerScript;
-    this.size = size;
     this.workers = [];
     this.idle = [];
     this.queue = [];
+    this.pending = new Map();
     this.nextId = 1;
-    this.pending = new Map();   // taskId → {resolve, reject}
-    for (let i = 0; i < size; i++) this._spawn();
+    for (let i = 0; i < size; i++) this._spawn();                     // step 1: warm pool
   }
 
   _spawn() {
     const w = new Worker(this.workerScript);
-    w.on('message', ({ id, result, error }) => {
-      const slot = this.pending.get(id);
-      if (!slot) return;
-      this.pending.delete(id);
-      if (error) slot.reject(Object.assign(new Error(error.message), error));
-      else slot.resolve(result);
-      this.idle.push(w);
-      this._drain();
-    });
-    w.on('error', (err) => this._replace(w, err));
-    w.on('exit', (code) => { if (code !== 0) this._replace(w, new Error('Worker exited ' + code)); });
+    w.on('message', ({ id, result, error }) => this._onResult(w, id, result, error));
+    w.on('error', (err) => this._onCrash(w, err));
+    w.on('exit', (code) => { if (code !== 0) this._onCrash(w, new Error(`exit ${code}`)); });
     this.workers.push(w);
     this.idle.push(w);
   }
 
-  _replace(deadWorker, err) {
-    // reject any pending tasks assigned to this worker
-    for (const [id, slot] of this.pending.entries()) {
-      if (slot.worker === deadWorker) { slot.reject(err); this.pending.delete(id); }
-    }
-    this.workers = this.workers.filter(w => w !== deadWorker);
-    this.idle = this.idle.filter(w => w !== deadWorker);
-    this._spawn();
-  }
-
-  run(method, args, { transfer = [] } = {}) {
+  run(input) {
     return new Promise((resolve, reject) => {
-      this.queue.push({ method, args, transfer, resolve, reject });
+      const id = this.nextId++;
+      this.pending.set(id, { resolve, reject });                       // step 2: correlation
+      this.queue.push({ id, input });
       this._drain();
     });
   }
 
   _drain() {
     while (this.idle.length && this.queue.length) {
-      const w = this.idle.shift();
-      const t = this.queue.shift();
-      const id = this.nextId++;
-      this.pending.set(id, { resolve: t.resolve, reject: t.reject, worker: w });
-      w.postMessage({ id, method: t.method, args: t.args }, t.transfer);
+      const w = this.idle.pop();
+      const task = this.queue.shift();
+      w._taskId = task.id;
+      w.postMessage({ id: task.id, input: task.input });                // step 3: dispatch
     }
   }
 
-  async terminate() {
-    await Promise.all(this.workers.map(w => w.terminate()));
+  _onResult(w, id, result, error) {
+    const pending = this.pending.get(id);
+    if (pending) {
+      this.pending.delete(id);
+      error ? pending.reject(error) : pending.resolve(result);
+    }
+    w._taskId = null;
+    this.idle.push(w);
+    this._drain();
+  }
+
+  _onCrash(w, err) {                                                   // step 4: crash recovery
+    const idx = this.workers.indexOf(w);
+    if (idx >= 0) this.workers.splice(idx, 1);
+    if (w._taskId != null) {
+      const pending = this.pending.get(w._taskId);
+      if (pending) { this.pending.delete(w._taskId); pending.reject(err); }
+    }
+    this._spawn();                                                      // replace
+  }
+
+  async close() {
+    await Promise.all(this.workers.map((w) => w.terminate()));
   }
 }
 ```
 
-```js
-// worker.js — RPC server (see postmessage-roundtrip.md for full version)
-const handlers = {
-  hashPassword: ({ password, salt }) => bcrypt.hashSync(password, salt),
-  resizeImage: async ({ buf, width }) => sharp(buf).resize(width).toBuffer(),
-};
-parentPort.on('message', async ({ id, method, args }) => {
-  try { parentPort.postMessage({ id, result: await handlers[method](args) }); }
-  catch (err) { parentPort.postMessage({ id, error: { message: err.message } }); }
-});
-```
-
-### Edge cases / interview traps
-1. **Workers should not be CPU-idle but I/O-bound.** If your tasks are fetch-only, the main event loop handles thousands more efficiently than 8 workers blocking on I/O.
-2. **Worker crash** — pending tasks on that worker leak unless you reject them in the `exit`/`error` handler.
-3. **Replay** — should a crashed task auto-retry on a new worker? Sometimes yes (idempotent), sometimes no.
-4. **Backpressure** — unbounded queue grows forever under heavy load. Bound queue size and either drop or reject `run()` when full.
-5. **Cancellation** — pre-dispatch: splice from queue. Mid-dispatch: send abort message; worker checks; honors if possible.
-6. **Worker boot time.** ~20-100ms in Node. Don't spawn-per-task.
-7. **Transferables for big payloads** — `ArrayBuffer` zero-copy across thread.
-8. **Pool sizing** — `hardwareConcurrency` for CPU work; can be higher for I/O-heavy tasks within the worker.
-
-## Mental Model
-
-A **call center** with N agents:
-
-```
-   tasks → queue   ▶  agent1 ▶ result
-                    ▶  agent2 ▶ result
-                    ▶  agent3 ▶ result
-                    ▶  agent4 ▶ result
-                          ↓
-                   when free, agent picks next from queue
-                          ↓
-                   if agent has a heart attack (crash) → replace with new agent
-                   reject any pending call assigned to dead agent
-```
-
-Pool keeps `idle` (free agents) and `queue` (waiting tasks). `_drain` runs whenever either changes — match free agent to head of queue.
-
-## Why interviewers care
-
-- **CPU-bound vs I/O-bound** distinction — senior intuition.
-- **Failure-handling discipline** — crashes, replays, leak prevention.
-- **Production patterns** — every Node service with image processing, password hashing, or compression uses this.
-
-## Common beginner confusion
-
-- **"Use workers for everything async."** No — JS already handles I/O concurrency on one thread. Workers are for **CPU-bound** work (encryption, image resize, parsing).
-- **"More workers = faster."** Beyond `hardwareConcurrency`, you context-switch more than you compute. Some workloads (I/O inside worker) benefit from oversubscription.
-- **"Pool restart is automatic."** No — you write the replace logic.
-- **"Transferables are slower than clone."** Faster — they're zero-copy; the original is neutered.
-- **"Pool tasks share memory."** They don't, unless you use `SharedArrayBuffer` + Atomics (separate question).
-
-## Brute force approach
+**Try it yourself**
 
 ```js
-// Spawn per task — boot overhead dwarfs work
-async function hash(password) {
-  const w = new Worker('./worker.js');
-  return new Promise((res, rej) => {
-    w.on('message', (r) => { res(r); w.terminate(); });
-    w.postMessage({ method: 'hashPassword', args: { password } });
-  });
-}
-```
-
-20-100ms boot for a 30ms hash = 70ms overhead per call.
-
-## Optimal approach
-
-`WorkerPool` of N workers servicing a shared queue. `run(method, args)` returns a promise. Pool handles task dispatch, worker lifecycle, and crash recovery.
-
-## Solution (JavaScript)
-
-See "Syntax to lock in" above. Usage:
-
-```js
-import { WorkerPool } from './worker-pool.js';
-import { fileURLToPath } from 'url';
-
-const pool = new WorkerPool(fileURLToPath(new URL('./worker.js', import.meta.url)), 8);
-
-// CPU-bound API endpoint
-app.post('/hash', async (req, res) => {
-  const hashed = await pool.run('hashPassword', { password: req.body.password, salt: 10 });
-  res.json({ hashed });
-});
-
-// Backpressure: bound queue
-class BoundedPool extends WorkerPool {
-  constructor(script, size, maxQueue) { super(script, size); this.maxQueue = maxQueue; }
-  run(...args) {
-    if (this.queue.length >= this.maxQueue) return Promise.reject(new Error('Pool overloaded'));
-    return super.run(...args);
+// worker.js
+const { parentPort } = require('node:worker_threads');
+parentPort.on('message', ({ id, input }) => {
+  try {
+    const result = expensiveCompute(input);
+    parentPort.postMessage({ id, result });
+  } catch (error) {
+    parentPort.postMessage({ id, error: error.message });
   }
-}
-
-// Cancellation
-const ac = new AbortController();
-const promise = pool.run('resizeImage', { buf, width: 100 });
-ac.signal.addEventListener('abort', () => {
-  // ... pool needs to know taskId to send abort to worker
-  pool.cancel(taskId);
 });
+
+// main.js
+const pool = new WorkerPool('./worker.js', 4);
+const results = await Promise.all(items.map((i) => pool.run(i)));
+await pool.close();
 ```
 
-## Step-by-step dry run
+---
 
-`size=2`, 5 tasks submitted at t=0:
-
-```
-t=0    pool: idle=[W1, W2], queue=[]
-       run(t1) → queue=[t1]; _drain → W1 picks t1; idle=[W2], queue=[]
-       run(t2) → queue=[t2]; _drain → W2 picks t2; idle=[], queue=[]
-       run(t3) → queue=[t3]; _drain (idle empty) → no-op
-       run(t4) → queue=[t3,t4]
-       run(t5) → queue=[t3,t4,t5]
-
-t=100  W1 done with t1 → onMessage → resolve t1 promise; W1 → idle
-       _drain → W1 picks t3; idle=[], queue=[t4,t5]
-
-t=150  W2 done with t2 → resolve; W2 → idle
-       _drain → W2 picks t4; queue=[t5]
-
-t=200  W1 done with t3 → resolve; idle=[W1]; pick t5; queue=[]
-t=250  W2 done with t4 → resolve
-t=300  W1 done with t5 → resolve
-
-(if W1 crashes at t=200: exit handler → reject t3's promise; _replace spawns W1'; idle=[W1', W2])
-```
-
-## How to think aloud in the interview
-
-> "Pool of N workers (typically `os.cpus().length`). Idle list + task queue + pending Map. On submit, push to queue + `_drain`. `_drain` matches idle to queue. Each task is a `postMessage({id, method, args})`; reply matches by id. Worker crash handler: reject pending tasks for that worker, respawn, refill idle. Use only for CPU-bound work — I/O is already concurrent on one thread. Backpressure: bounded queue. Transferables for big payloads. Cancellation by ID — pre-dispatch splice or post-dispatch abort message."
-
-## Important takeaways
-
-- **CPU-bound only.** I/O doesn't need workers.
-- **`hardwareConcurrency`** as default size.
-- **Idle list + queue + pending Map** is the pattern.
-- **Crash recovery** — reject pending, respawn.
-- **Backpressure** — bound the queue.
-- **Transferables** for big payloads.
-- **Boot time matters** — never spawn-per-task.
-
-## Variants
-
-- **`piscina`** (Node) — production-grade worker pool with abort, queue limits, idle timeout.
-- **Shared queue via SharedArrayBuffer** — high-throughput lock-free queue.
-- **Dedicated worker per route** — when a worker holds expensive state (ML model in memory).
-- **Worker scaling** — grow/shrink pool based on queue length.
-- **Browser-side pool** — same pattern; `new Worker(url)`; `navigator.hardwareConcurrency`.
-
-## Revision notes
+## 9. Step-by-step dry run
 
 ```
-WorkerPool:
-  workers + idle + queue + pending Map(id → {resolve,reject,worker})
-  run(method, args):
-    queue.push; _drain()
-  _drain():
-    while (idle.length && queue.length):
-      w = idle.shift(); t = queue.shift()
-      id = next; pending.set; w.postMessage({id, method, args}, transfer)
-  worker.on('message', {id, result|error}):
-    resolve/reject pending[id]; idle.push(worker); _drain()
-  worker.on('error'|'exit'):
-    reject pending tasks for that worker; respawn; idle.push(new worker)
-  
-  CPU-BOUND only
-  size = hardwareConcurrency
-  boot ~20-100ms — pool, don't spawn-per-task
-  backpressure: bounded queue
-  transferables for big payloads
+4 workers, 10 tasks:
+
+t=0    constructor: spawn 4 workers (each ~20ms cold start, parallel)
+       idle=[W1, W2, W3, W4]; queue=[]
+t=20   warm pool ready.
+       run × 10 → queue=[T1..T10]; pending size 10
+       _drain: idle.pop() × 4 → dispatch T1..T4. idle=[].
+       queue=[T5..T10].
+t=80   W1 done → onResult → pending.delete(T1.id); idle=[W1].
+       _drain → dispatch T5 to W1. idle=[].
+       queue=[T6..T10].
+...
+t=180  all 10 done. idle=[W1,W2,W3,W4]; queue=[]; pending=size 0.
+
+Crash scenario:
+W2 mid-T2 crashes → onCrash(W2):
+  workers.splice(W2 out).
+  W2._taskId = T2.id → reject T2's Promise.
+  _spawn() new worker W5; idle.push(W5).
+  _drain → dispatch next queued task.
 ```
+
+---
+
+## 10. Common confusion + traps
+
+1. **Spawn per request** — kills perf.
+2. **No taskId correlation** — results delivered to wrong caller.
+3. **No crash recovery** — task hangs forever.
+4. **`postMessage` huge data** — copies; use transferList or SAB.
+5. **Workers for I/O** — pointless; event loop handles I/O natively.
+6. **Forgetting to terminate on close** — process hangs at exit.
+7. **No idle list** — must scan workers to find free.
+
+---
+
+## 11. Senior follow-ups & variants
+
+### Variant 1 — Piscina
+Production: auto-recycle on crash, backpressure, abort signal, worker reuse limits.
+
+### Variant 2 — AbortSignal cancellation
+Post `{ type: 'abort', id }` to worker; worker checks periodically and exits early.
+
+### Variant 3 — Backpressure
+Bound `queue.length`; reject `run` when full.
+
+### Variant 4 — Priority queue input
+Sort by priority; high-priority tasks jump the queue.
+
+### Variant 5 — `SharedArrayBuffer` for in-out
+Avoid `postMessage` overhead; share memory directly.
+
+### Variant 6 — Cluster vs worker_threads
+Cluster forks processes (OS isolation); workers share process (cheaper, shared memory).
+
+---
+
+## 12. How to think aloud
+
+> "Pre-spawn N workers at construction — eliminates ~30ms cold start. `run(input)` assigns taskId, pushes to queue, drains. Dispatch posts `{id, input}` to a free worker; result `onMessage` looks up taskId in pending map, resolves Promise, frees worker, re-drains. Crash recovery: replace worker, reject in-flight task. Production: Piscina has all this plus backpressure, abort, recycle limits. When NOT to pool: light I/O — event loop alone handles thousands of concurrent fetches better than 8 workers each waiting on one. Trap: spawn-per-request; no taskId correlation; no crash recovery; postMessage huge data."
+
+---
+
+## 13. 60-second revision
+
+> - **Warm pool** of N pre-spawned workers.
+> - **Idle list** + **queue** + **pending Map<id, {resolve, reject}>**.
+> - **`run(input)`** queues with new id; `_drain` dispatches to free worker.
+> - **`onMessage`** looks up id, resolves, frees worker, re-drains.
+> - **Crash recovery:** replace worker, reject in-flight task.
+> - **`close()`** terminates all workers.
+> - **Production:** Piscina (recycling, backpressure, abort).
+> - **Trap:** spawn-per-request; missing correlation; no crash recovery; pool for I/O.
+
+---
+
+**Related:** [worker-threads-vs-event-loop.md](./worker-threads-vs-event-loop.md) · [`10-machine-coding-patterns/async-pool.md`](../10-machine-coding-patterns/async-pool.md) · [`10-machine-coding-patterns/async-semaphore.md`](../10-machine-coding-patterns/async-semaphore.md) · [postmessage-roundtrip.md](./postmessage-roundtrip.md)
+
+**Concept primer:** [`concepts/event-loop.md`](../../concepts/event-loop.md)

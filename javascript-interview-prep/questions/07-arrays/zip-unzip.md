@@ -1,213 +1,251 @@
-# zip / unzip arrays (Python-style)
+# zip / unzip (Python-style)
 
-## Source
-- Canonical lodash `_.zip` / `_.unzip` interview problem (BFE.dev #97, codedamn, GreatFrontEnd).
-- Lodash refs: https://lodash.com/docs/4.17.15#zip, https://lodash.com/docs/4.17.15#unzip
-- Inspired by Python's `zip()` builtin.
+> **Difficulty:** Foundation   |   **Time:** ~10 min   |   **Prereqs:** [transpose-matrix.md](./transpose-matrix.md), [polyfill-reduce.md](./polyfill-reduce.md)
+>
+> **Source:** BFE.dev #97. Lodash `_.zip` / `_.unzip`. Python `zip()`.
 
-## Why this question matters in interviews
-`zip` is the "do you know functional utilities?" filter. It's also a stealth test of: (1) handling variable arity (`...arrays`), (2) **length policy** — stop-at-shortest vs pad-to-longest, (3) **transpose intuition** (zip is matrix transposition), and (4) **`reduce` fluency** (for unzip). Backend candidates use zip-style logic constantly: pairing parallel result arrays, building DataFrame-like structures, batching mixed-source data. Failing to handle the length-mismatch case professionally is a junior tell.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+`zip(...arrays)` combines K arrays of length N into N tuples of K elements. `unzip(tuples)` is the inverse. Stop-at-shortest by default.
+
+**Verification examples**
+
 ```js
-// zip — combine multiple arrays into an array of tuples
 zip([1, 2, 3], ['a', 'b', 'c']);
-// → [[1, 'a'], [2, 'b'], [3, 'c']]
+// [[1, 'a'], [2, 'b'], [3, 'c']]
 
-zip([1, 2, 3], ['a', 'b'], [true, false, true]);
-// stop-at-shortest → [[1, 'a', true], [2, 'b', false]]
+zip([1, 2, 3], ['a', 'b']);
+// [[1, 'a'], [2, 'b']]              ← stop at shortest
 
-// unzip — inverse: array of tuples → tuple of arrays
 unzip([[1, 'a'], [2, 'b'], [3, 'c']]);
-// → [[1, 2, 3], ['a', 'b', 'c']]
+// [[1, 2, 3], ['a', 'b', 'c']]
+
+zip();                                // []
+zip([]);                              // []
 ```
 
-### Runtime / engine behavior
-- `zip` is **matrix transposition**. `m` arrays of `n` elements → `n` arrays of `m` elements.
-- Length policy (lodash default): **stop at the shortest input array.** Equivalent to `Math.min(...arrays.map(a => a.length))`. Python's `zip` does the same. `itertools.zip_longest` (Python) and lodash `_.zipWith` with explicit length give the pad-to-longest variant.
-- Result is always a new array — pure function. No input mutation.
-- For unzip, the natural pattern is `reduce` over the input rows, pushing each column-value into its column array.
+**Constraints**
+- Stop-at-shortest (lodash/Python default).
+- Pad-to-longest variant: `zip_longest`.
+- Pure: no input mutation.
+- Variable arity: `...arrays`.
 
-### Edge cases (the interview traps)
-1. **Mismatched lengths** — what do you do? Stop-at-shortest is the safe default and matches lodash/Python. Document the choice.
-2. **Empty input** — `zip()` (no args) → `[]`. `zip([])` → `[]`. `zip([], [1, 2])` → `[]` (shortest is 0).
-3. **`unzip([])`** — empty input → empty output `[]`.
-4. **Ragged unzip** — `unzip([[1], [2, 3]])`. Should column 1 have a hole at index 0? Lodash returns `[[1, 2], [undefined, 3]]` (fills with undefined). Decide policy.
-5. **Sparse arrays** — `zip([1, , 3], [a, b, c])`. The hole becomes `undefined` in the tuple. Most candidates miss this.
-6. **TypedArrays** — `zip(new Uint8Array([1,2]), [10,20])` works but result is plain Array of tuples; the TypedArray semantics don't propagate.
-7. **`zipWith(iteratee, ...arrays)`** — the lodash variant that lets you transform each tuple. Common follow-up.
-8. **zip is its own inverse**: `unzip(zip(...arrs))` recovers `arrs` (if all equal length). Memorize.
+---
 
-## Brute force approach
-Manual nested loops:
-```js
-function zipBrute(...arrays) {
-  const len = Math.min(...arrays.map(a => a.length));
-  const result = [];
-  for (let i = 0; i < len; i++) {
-    const tuple = [];
-    for (let j = 0; j < arrays.length; j++) {
-      tuple.push(arrays[j][i]);
-    }
-    result.push(tuple);
-  }
-  return result;
-}
+## 2. Plain-English restatement
+
+`zip` pairs corresponding elements across multiple arrays into tuples. `unzip` is the inverse. `zip` is matrix transposition. Stop at shortest by default.
+
+---
+
+## 3. Why this matters in interviews
+
+Tests variable arity, length policy, transpose intuition, reduce fluency. Backend pairs parallel arrays / builds DataFrame-like structures.
+
+---
+
+## 4. Mental model
+
 ```
-This is fine — it's actually the optimal pattern, just expressed verbosely. Refactoring to `Array.from` / `map` is style, not algorithm.
+   zip(...arrays):
+     n = min(arrays.map(a => a.length))    ← stop at shortest
+     out = []
+     for i in 0..n-1:
+       out.push(arrays.map(a => a[i]))
+     return out
+   
+   zip_longest(...arrays, fillValue = undefined):
+     n = max(...lengths)
+     for i in 0..n-1:
+       out.push(arrays.map(a => i < a.length ? a[i] : fillValue))
 
-## Optimal approach
-- **zip**: compute `len = Math.min(...arrays.map(a => a.length))`, then build `result[i] = arrays.map(a => a[i])` for `i in [0, len)`. O(m × n).
-- **unzip**: reduce over rows. For each row, push each value into the corresponding column. `acc[j] ??= []; acc[j].push(row[j])`. O(m × n).
+   unzip(tuples):
+     return zip(...tuples)               ← transpose!
+   
+   zipWith(fn, ...arrays):
+     same as zip but applies fn to each tuple before pushing.
+```
 
-Both are O(input size). Can't do better — output is the same size as input.
+---
 
-## Solution (JavaScript)
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. `zip([1, 2], ['a'])` length?
+> 2. How is zip related to transpose?
+> 3. `zip()` (no args)?
+
+---
+
+## 6. Brute force — walked through
 
 ```js
-/**
- * zip — combine N arrays element-wise, stopping at the shortest.
- *
- * zip([1,2,3], ['a','b','c']) → [[1,'a'], [2,'b'], [3,'c']]
- *
- * @param  {...Array} arrays
- * @returns {Array<Array>}
- */
 function zip(...arrays) {
-  if (arrays.length === 0) return [];
-  const len = Math.min(...arrays.map(a => a.length));
-  return Array.from({ length: len }, (_, i) =>
-    arrays.map(arr => arr[i])
+  const n = Math.min(...arrays.map(a => a.length));
+  return Array.from({ length: n }, (_, i) => arrays.map(a => a[i]));
+}
+```
+
+Clean; lodash-compatible. Variants for unzip + longest.
+
+---
+
+## 7. The unlocking insight
+
+> **`zip(...arrays)` is `transpose(arrays)` with stop-at-shortest. `unzip = zip(...tuples)`. Map per index across all arrays.**
+
+Three properties:
+
+1. **`Math.min(...lengths)`** — stop-at-shortest.
+2. **`zip(...arrays) === transpose(arrays)`.**
+3. **`unzip === zip(...tuples)`.**
+
+---
+
+## 8. Solution (annotated)
+
+```js
+function zip(...arrays) {
+  if (arrays.length === 0) return [];                                     // step 1: empty arity
+  const n = Math.min(...arrays.map((a) => a.length));                     // step 2: stop-at-shortest
+  return Array.from({ length: n }, (_, i) =>                              // step 3: per index
+    arrays.map((a) => a[i])                                                // step 4: pluck across arrays
   );
 }
 
-/**
- * zipLongest — pad to the longest with a fill value (default undefined).
- * Mirrors Python's itertools.zip_longest.
- */
-function zipLongest(arrays, fillValue = undefined) {
-  if (arrays.length === 0) return [];
-  const len = Math.max(...arrays.map(a => a.length));
-  return Array.from({ length: len }, (_, i) =>
-    arrays.map(arr => (i < arr.length ? arr[i] : fillValue))
-  );
-}
-
-/**
- * unzip — inverse of zip. Array of tuples → tuple of arrays.
- *
- * unzip([[1,'a'], [2,'b'], [3,'c']]) → [[1,2,3], ['a','b','c']]
- */
 function unzip(tuples) {
-  if (tuples.length === 0) return [];
-  return tuples.reduce((acc, row) => {
-    row.forEach((val, j) => {
-      (acc[j] ??= []).push(val);
-    });
-    return acc;
-  }, []);
+  return zip(...tuples);                                                   // step 5: transpose
 }
 
-/**
- * zipWith — zip + per-tuple transform.
- *
- * zipWith((a, b) => a + b, [1,2,3], [10,20,30]) → [11,22,33]
- */
+function zipLongest(fillValue, ...arrays) {
+  if (arrays.length === 0) return [];
+  const n = Math.max(...arrays.map((a) => a.length));
+  return Array.from({ length: n }, (_, i) =>
+    arrays.map((a) => (i < a.length ? a[i] : fillValue)),
+  );
+}
+
 function zipWith(fn, ...arrays) {
-  return zip(...arrays).map(tuple => fn(...tuple));
+  if (arrays.length === 0) return [];
+  const n = Math.min(...arrays.map((a) => a.length));
+  return Array.from({ length: n }, (_, i) =>
+    fn(...arrays.map((a) => a[i])),                                       // step 6: apply per tuple
+  );
 }
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
-Input 1 — equal-length zip:
 ```js
-zip([1, 2, 3], ['a', 'b', 'c'], [true, false, true]);
-// arrays.length = 3, lengths = [3,3,3], len = 3
-// i=0: arrays.map(a => a[0]) = [1, 'a', true]
-// i=1: [2, 'b', false]
-// i=2: [3, 'c', true]
-// → [[1,'a',true], [2,'b',false], [3,'c',true]]
+zip([1, 2, 3], ['a', 'b', 'c']);                              // [[1,'a'],[2,'b'],[3,'c']]
+zip([1, 2, 3], ['a', 'b']);                                   // [[1,'a'],[2,'b']]
+zip([1, 2, 3], ['a', 'b', 'c'], [true, false, true]);         // 3 tuples of 3
+
+unzip([[1, 'a'], [2, 'b'], [3, 'c']]);                        // [[1,2,3], ['a','b','c']]
+
+zipLongest(null, [1, 2, 3], ['a', 'b']);                      // [[1,'a'],[2,'b'],[3,null]]
+
+zipWith((a, b) => a + b, [1, 2, 3], [10, 20, 30]);            // [11, 22, 33]
+zipWith((a, b) => ({ a, b }), [1, 2], ['x', 'y']);            // [{a:1,b:'x'}, {a:2,b:'y'}]
+
+// Empty cases
+zip();                                                         // []
+zip([]);                                                       // []
+zip([], [1, 2]);                                              // [] (min is 0)
+
+// Build an object from keys + values arrays
+function objFromArrays(keys, values) {
+  return Object.fromEntries(zip(keys, values));
+}
+objFromArrays(['a', 'b'], [1, 2]);                            // {a: 1, b: 2}
 ```
 
-Input 2 — unequal length (stop-at-shortest):
-```js
-zip([1, 2, 3, 4], ['a', 'b']);
-// lengths = [4, 2], len = 2
-// i=0: [1, 'a']
-// i=1: [2, 'b']
-// → [[1,'a'], [2,'b']]
-// 3 and 4 are dropped.
+---
+
+## 9. Step-by-step dry run
+
+```
+zip([1, 2, 3], ['a', 'b']):
+  n = min(3, 2) = 2.
+  i=0: arrays.map(a => a[0]) → [1, 'a']. push.
+  i=1: → [2, 'b']. push.
+  Return [[1, 'a'], [2, 'b']].
+
+unzip([[1, 'a'], [2, 'b'], [3, 'c']]):
+  Spread: zip([1,'a'], [2,'b'], [3,'c']).
+  n = min(2, 2, 2) = 2.
+  i=0: [1, 2, 3]. push.
+  i=1: ['a', 'b', 'c']. push.
+  Return [[1, 2, 3], ['a', 'b', 'c']].
+
+zip([], [1, 2]):
+  n = min(0, 2) = 0.
+  Loop empty.
+  Return [].
+
+zipWith((a, b) => a*b, [1, 2, 3], [10, 20, 30]):
+  n=3.
+  i=0: fn(1, 10) = 10.
+  i=1: fn(2, 20) = 40.
+  i=2: fn(3, 30) = 90.
+  Return [10, 40, 90].
 ```
 
-Input 3 — unzip:
-```js
-unzip([[1, 'a'], [2, 'b'], [3, 'c']]);
-// row=[1,'a']: acc[0]=[1], acc[1]=['a']
-// row=[2,'b']: acc[0]=[1,2], acc[1]=['a','b']
-// row=[3,'c']: acc[0]=[1,2,3], acc[1]=['a','b','c']
-// → [[1,2,3], ['a','b','c']]
-```
+---
 
-Input 4 — ragged unzip (the trap):
-```js
-unzip([[1, 'a'], [2], [3, 'c', true]]);
-// row=[1,'a']:   acc[0]=[1], acc[1]=['a']
-// row=[2]:       acc[0]=[1,2]                 // acc[1] NOT touched
-// row=[3,'c',true]: acc[0]=[1,2,3], acc[1]=['a','c'], acc[2]=[true]
-// → [[1,2,3], ['a','c'], [true]]
-// Note: acc[1] has only 2 entries (the 'b' row didn't contribute).
-// Lodash's _.unzip would fill the gap with `undefined`.
-```
+## 10. Common confusion + traps
 
-Lodash-compatible version requires pre-allocating to max-row-length and filling gaps explicitly. Worth mentioning in the interview.
+1. **Pad-to-longest by default** — no; stop-at-shortest.
+2. **Empty input** — `zip() === []`; `zip([]) === []`.
+3. **Sparse arrays** — hole becomes `undefined` in tuple.
+4. **Mutation** — neither zip nor unzip mutates.
+5. **Single array input** — `zip([1,2,3])` → `[[1],[2],[3]]` (each element wrapped).
+6. **TypedArray** — works; result is plain Array of tuples.
+7. **`zip` vs `zipWith`** — zipWith applies a fn per tuple.
 
-## Important takeaways
+---
 
-**Syntax to memorize**
-- `zip(...arrays)`: `len = Math.min(...arrays.map(a => a.length))`. Build with `Array.from({length: len}, (_, i) => arrays.map(a => a[i]))`.
-- `unzip(tuples)`: `reduce((acc, row) => { row.forEach((v, j) => (acc[j] ??= []).push(v)); return acc; }, [])`.
-- `unzip(zip(a, b)) === [a, b]` when `a.length === b.length`. Round-trip guarantee.
+## 11. Senior follow-ups & variants
 
-**Patterns to reuse**
-- **Transpose** — zip is exactly matrix transpose. The same code transposes a 2D matrix: `zip(...matrix)`.
-- **Parallel array → array of records** — common pattern: `zip(headers, values).map(([h, v]) => ({[h]: v}))` to build objects from CSV-style columns.
-- **`Array.from({length: n}, fn)`** — the idiomatic way to build a fixed-size array with computed values. Cleaner than `new Array(n).fill().map(...)`.
-- **`??=` shorthand** — `acc[j] ??= []` is the modern way to init-if-missing.
+### Variant 1 — `zip_longest` (pad)
+Like Python `itertools.zip_longest`.
 
-**Common mistakes**
-- Returning an empty array for `zip([], [1, 2])` is correct — but make sure your code doesn't crash with `Math.min(...[].map(...))` returning `Infinity` (which then makes `Array.from({length: Infinity})` blow up). Guard `if (arrays.length === 0) return []`.
-- Confusing zip with concat: `zip([1,2], [3,4])` is `[[1,3],[2,4]]`, NOT `[1,2,3,4]`.
-- Forgetting that zip is its own inverse — useful sanity check during dry-runs.
-- Pre-allocating with the wrong length (using max when you want shortest).
+### Variant 2 — `zipObject(keys, values)`
+Lodash variant; returns `Object.fromEntries(zip(keys, values))`.
 
-**Related questions**
-- `array-set-ops` — also operates on multiple arrays.
-- Matrix transpose (specific case of zip applied to 2D).
-- Python's `zip` / `itertools.zip_longest` / `enumerate` (`zip` with indices is `Object.entries(arr)` cousin).
-- `Object.fromEntries(zip(keys, values))` — build object from parallel arrays.
+### Variant 3 — Lazy zip
+Generator yielding tuples; for huge inputs.
 
-## Variants
+### Variant 4 — Async zip
+`zipAsync` for parallel async iterables.
 
-1. **`zip_longest` with fill value** — Python-style. Cover above. Trivial change: `Math.max` instead of `Math.min` + fill missing slots.
+### Variant 5 — `unzip` with ragged tuples
+Spec: pad shorter columns with undefined or holes.
 
-2. **`zipWith` (lodash)** — "Take a function as the first arg and apply it to each tuple." `zipWith((a, b) => a + b, [1,2], [3,4])` → `[4, 6]`.
+---
 
-3. **`unzipWith`** — inverse of `zipWith`. Less common but symmetric.
+## 12. How to think aloud
 
-4. **Lazy zip with generators** — "What if the inputs are infinite generators?" Pivot to `function* zipGen(...iters) { ... }`, pulling one value from each, stopping when any returns `done`. Tests iterator-protocol knowledge.
+> "`zip` is variadic: `function zip(...arrays)`. Length policy is stop-at-shortest (lodash/Python default) — `n = Math.min(...arrays.map(a => a.length))`. Per index `i`, build tuple `arrays.map(a => a[i])`. `Array.from({length: n}, mapper)` for clean one-liner. `unzip` is just `zip(...tuples)` — they're inverses (both are matrix transpose). Variants: `zipLongest(fill, ...arrays)` pads with fill value; `zipWith(fn, ...arrays)` applies a function per tuple before pushing — useful for sums, object builds. Empty cases: `zip()` → `[]`; `zip([], [1, 2])` → `[]` (min is 0). Sparse arrays: holes become `undefined` in tuple. `zipObject(keys, values)` = `Object.fromEntries(zip(keys, values))`. Trap: pad-to-longest by default (wrong); empty edge cases; expecting mutation (pure)."
 
-5. **Object-zip** — "Zip keys and values into an object: `zipObject(['a','b'], [1,2])` → `{a:1, b:2}`." One-liner: `Object.fromEntries(zip(keys, values))`.
+---
 
-## Revision notes
+## 13. 60-second revision
 
-> **zip / unzip — 60 second recap**
-> - `zip(...arrays)` → array of tuples, stops at **shortest** input.
-> - `unzip(tuples)` → array of column-arrays. Inverse of zip.
-> - Default length policy: **stop-at-shortest** (matches Python and lodash).
-> - `zipLongest` pads to the longest with a fill value.
-> - `unzip(zip(a, b)) === [a, b]` when lengths match.
-> - **Trap:** ragged unzip — lodash fills gaps with `undefined`; naive `reduce` doesn't.
-> - **Family:** matrix transpose, `Object.fromEntries(zip(...))`, `zipWith`, `zipObject`.
+> - **`zip(...arrays)`** — variadic, stop-at-shortest.
+> - **`Math.min(...lengths)`** for n.
+> - **`zip = transpose`; `unzip = zip(...tuples)`.**
+> - **`zipLongest`** pads to longest.
+> - **`zipWith`** applies fn per tuple.
+> - **`zipObject(k, v)`** = `Object.fromEntries(zip(k, v))`.
+> - **`zip()`** → `[]`.
+> - **Pure** — no mutation.
+> - **Trap:** pad default (wrong); empty edges; holes → undefined.
+
+---
+
+**Related:** [transpose-matrix.md](./transpose-matrix.md) · [polyfill-map.md](./polyfill-map.md) · [polyfill-reduce.md](./polyfill-reduce.md)
+
+**Concept primer:** [`concepts/arrays.md`](../../concepts/arrays.md)

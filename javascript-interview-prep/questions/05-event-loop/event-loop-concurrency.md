@@ -1,183 +1,231 @@
-# Event Loop and Concurrency (Conceptual)
+# Event Loop and Concurrency — the four-layer mental model
 
-## Source
-- codedamn: https://codedamn.com/news/javascript/event-loop-concurrency
-- Canonical mental model used in every senior interview for Node/JS roles.
+> **Difficulty:** Senior   |   **Time:** ~15 min   |   **Prereqs:** [`concepts/event-loop.md`](../../concepts/event-loop.md), [`concepts/promises.md`](../../concepts/promises.md)
+>
+> **Source:** Canonical opener for every senior JS/Node round.
 
-## Why this question matters in interviews
-Every senior JS round opens with some flavor of "JavaScript is single-threaded but non-blocking — explain how." If you give a hand-wavy "it uses an event loop" answer, the bar is set low for the rest of the session. The correct answer in 90 seconds names: **call stack**, **Web APIs / libuv**, **task queue (macrotasks)**, **microtask queue**, **the rule that the microtask queue drains to empty between every macrotask**, and (for Node) **`process.nextTick` runs before microtasks**. Backend engineers also need to explain how I/O is offloaded: libuv's thread pool handles fs, dns, crypto; the kernel handles sockets via epoll/kqueue.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### The mental model
+Explain how JavaScript achieves concurrency on a single thread. Be specific about: call stack, microtask queue, macrotask queue (libuv phases in Node), `process.nextTick`, and the rule that microtasks drain to empty between every macrotask.
+
+**Verification examples**
+
+| Question                                                         | Correct answer                                          |
+|------------------------------------------------------------------|---------------------------------------------------------|
+| What runs first: `Promise.resolve().then(fn)` or `setTimeout(fn, 0)`? | `Promise.then` — microtask drains before next macrotask |
+| What's the priority of `process.nextTick`?                        | Higher than microtasks; Node-specific queue            |
+| How many libuv phases are there?                                   | 6: timers, pending, idle/prepare, poll, check, close   |
+| Does the event loop run on a separate thread?                      | No — it IS the main thread                              |
+| How does `fs.readFile` "not block"?                                | Dispatches to libuv thread pool; cb queued in poll phase |
+
+**Constraints**
+- JS is single-threaded; concurrency = interleaved callbacks.
+- Parallelism requires `worker_threads`, `cluster`, or Web Workers.
+- Microtasks drain to empty between every macrotask.
+- `process.nextTick` outranks microtasks.
+
+---
+
+## 2. Plain-English restatement
+
+JavaScript runs on one thread. To stay responsive, it doesn't *do* the work for I/O — it hands it to libuv (or browser APIs) and continues. When the work completes, a callback is queued. The event loop is a scheduler that picks one callback at a time from prioritized queues. The headline rule: **all currently-queued microtasks run before the next macrotask**.
+
+---
+
+## 3. Why this matters in interviews
+
+A hand-wavy "it uses an event loop" answer sets a low bar for the rest of the session. The senior answer names the four layers: **stack → nextTick → microtask → next phase** — and explains microtasks drain to empty between every macrotask.
+
+---
+
+## 4. Mental model
+
 ```
-  ┌─────────────────────────┐
-  │       Call Stack         │   single thread runs sync JS
-  └────────────┬─────────────┘
-               │ when empty
-               ▼
-  ┌─────────────────────────┐
-  │   nextTick queue (Node)  │   drain to empty first
-  ├─────────────────────────┤
-  │   Microtask queue        │   then drain to empty
-  │  (Promise jobs,          │
-  │   queueMicrotask)        │
-  └────────────┬─────────────┘
-               │ pick ONE
-               ▼
-  ┌─────────────────────────┐
-  │   Next libuv phase       │   timers → pending → poll → check → close
-  │   (browser: task queue)  │
-  └─────────────────────────┘
+   ┌─────────────────────────┐
+   │       Call Stack         │   single thread runs sync JS
+   └────────────┬─────────────┘
+                │ when empty
+                ▼
+   ┌─────────────────────────┐
+   │  process.nextTick (Node) │   drain to empty FIRST
+   ├─────────────────────────┤
+   │  Microtask queue         │   then drain to empty
+   │  (Promise.then,          │
+   │   queueMicrotask, await) │
+   └────────────┬─────────────┘
+                │ pick ONE
+                ▼
+   ┌─────────────────────────┐
+   │  Next libuv phase        │   timers → pending → poll → check → close
+   │  (browser: task queue)   │
+   └─────────────────────────┘
+
+   Between EVERY single phase callback: re-drain nextTick + microtask.
+
+   libuv phases (Node):
+   1. timers          setTimeout / setInterval
+   2. pending cb's    deferred system errors
+   3. idle / prepare  internal libuv
+   4. poll            I/O callbacks (fs, net); BLOCKS here
+   5. check           setImmediate
+   6. close           'close' events
 ```
 
-### Concurrency without threads
-- **Concurrency vs parallelism** — JS gives you *concurrency* (multiple in-flight tasks interleaved) without *parallelism* (multiple cores running JS at once). All JS code in a single isolate runs on one thread.
-- **Parallelism IS available** via: `worker_threads` (Node), Web Workers (browser), `cluster` (Node multi-process), libuv's internal thread pool (used for fs / crypto / dns — but only the C++ side is parallel; the JS callback always queues back on the main thread).
-- **Non-blocking I/O** — when JS calls `fs.readFile`, Node hands the syscall to libuv. libuv either uses the kernel's async API (epoll for sockets) or its 4-thread default pool (for fs). The main thread returns to the event loop immediately. When the syscall completes, the callback is queued in libuv's **poll phase**.
+---
 
-### Priority order (Node, exact)
-1. **Current sync code** finishes on the call stack.
-2. **`process.nextTick` queue** drains completely.
-3. **Microtask queue** drains completely (Promise `.then` / `.catch` / `.finally`, `queueMicrotask`, `await` continuations).
-4. **Next libuv phase** picks ONE callback from its queue and runs it.
-5. After that callback, repeat from step 2 (nextTick + microtasks drain between every single phase callback).
+## 5. Try it yourself first
 
-The "drain to empty" rule for microtasks is the most common interview gotcha. It means an infinite `Promise.resolve().then(loop)` chain **starves all I/O** indefinitely.
+> **Predict before reading on:**
+> 1. What's the output of `setTimeout(()=>log(1),0); Promise.resolve().then(()=>log(2)); log(3)`?
+> 2. What runs first: `process.nextTick(fn)` or `Promise.resolve().then(fn)`?
+> 3. Why does `for(;;){}` block timers?
 
-### Browser vs Node differences
-- Browser has a single "task queue" (timers, DOM events, fetch callbacks, etc.) and a single microtask queue. No phases, no `process.nextTick`. Animation frames live in their own queue serviced by `requestAnimationFrame`.
-- Node has six libuv phases (timers / pending / idle-prepare / poll / check / close) plus the `nextTick` queue (not part of libuv) and the microtask queue (V8-managed).
-- `setImmediate` only exists in Node (it runs in the **check** phase).
+---
 
-### Edge cases (interview traps)
-1. **`Promise.resolve().then(...)` runs before `setTimeout(..., 0)`.** Microtask drains before next macrotask.
-2. **`await` is sugar for `.then`.** Code after `await` runs in a microtask.
-3. **`process.nextTick` runs before Promise jobs.** Yes, even before `Promise.resolve().then`.
-4. **Microtask starvation** — recursively scheduling microtasks blocks the entire libuv loop. Same for `process.nextTick` (even more aggressively).
-5. **`setImmediate` vs `setTimeout(0)`** — non-deterministic order from main module, deterministic (immediate first) from inside an I/O callback.
-6. **Long sync work blocks everything** — including microtasks. Single-threaded means single-threaded.
-7. **`async` function called synchronously** runs synchronously up to the first `await`, THEN suspends — common bug source.
+## 6. Brute force — walked through
 
-## Brute force approach
-"Everything is a callback queue, JS picks one at a time." This misses the macrotask/microtask split entirely. If the interviewer asks "what runs first, `setTimeout(fn, 0)` or `Promise.resolve().then(fn)`?" you'll get it wrong. Don't lead with this answer.
+### Wrong attempt 1: "everything's a queue, picks one at a time"
+Misses microtask/macrotask split. Can't predict ordering.
 
-## Optimal approach
-Lead with the four-layer model: **stack → nextTick → microtask → next phase**. Then explain that microtasks drain to empty between every macrotask (this is the load-bearing fact). Mention libuv phases by name for Node. Show that you know `Promise.resolve().then` beats `setTimeout(0)`. Close with how I/O is offloaded to libuv's thread pool / kernel epoll.
+### Wrong attempt 2: "the event loop runs in a background thread"
+No — IS the main thread.
 
-## Solution (JavaScript)
+### Wrong attempt 3: "Promise.then runs on a worker"
+No — microtask on the same thread.
+
+---
+
+## 7. The unlocking insight
+
+> **Four priority layers: (1) sync stack, (2) `process.nextTick`, (3) microtasks, (4) one macrotask. Layers 2+3 drain to EMPTY between every macrotask.**
+
+Three properties:
+
+1. **Microtasks drain to empty** — most common interview gotcha.
+2. **`nextTick > microtasks`** — Node-specific.
+3. **I/O offloaded** to libuv thread pool (fs/dns/crypto) or kernel epoll (sockets).
+
+---
+
+## 8. Solution (annotated)
 
 ```js
-// Canonical demonstration: explains everything in one snippet.
-console.log('1. sync start');
+console.log('1: sync start');
 
-setTimeout(() => console.log('5. setTimeout(0)'), 0);
-setImmediate(() => console.log('6. setImmediate'));      // Node only
+setTimeout(() => console.log('5: setTimeout(0)'), 0);                // step 1: macrotask (timers)
+setImmediate(() => console.log('6: setImmediate'));                  // step 2: macrotask (check, Node)
 
-Promise.resolve().then(() => console.log('4. promise.then (microtask)'));
+Promise.resolve().then(() => console.log('4: promise.then'));        // step 3: microtask
 
-process.nextTick(() => console.log('3. process.nextTick'));  // Node only
+process.nextTick(() => console.log('3: process.nextTick'));          // step 4: nextTick (Node)
 
-console.log('2. sync end');
+console.log('2: sync end');
 
-// Predicted output (Node, from main module):
-// 1. sync start
-// 2. sync end
-// 3. process.nextTick
-// 4. promise.then (microtask)
-// 5. setTimeout(0)        ← order with setImmediate non-deterministic from main
-// 6. setImmediate         ← but DETERMINISTIC inside an I/O callback (immediate first)
+// Output (Node, main module):
+// 1: sync start
+// 2: sync end
+// 3: process.nextTick                ← drained first
+// 4: promise.then                    ← microtask drain
+// 5: setTimeout(0)                   ← order vs 6 non-deterministic from main
+// 6: setImmediate                    ← inside I/O cb, 6 always beats 5
 ```
 
+**Try it yourself**
+
 ```js
-// What "non-blocking I/O" actually means
 const fs = require('node:fs');
 
 console.log('A');
 fs.readFile('/etc/hosts', () => {
-  console.log('D — runs in libuv poll phase callback');
-  setTimeout(() => console.log('F — timers phase'), 0);
-  setImmediate(() => console.log('E — check phase, DETERMINISTIC here'));
+  console.log('D — poll phase');
+  setTimeout(() => console.log('F'), 0);
+  setImmediate(() => console.log('E — check (deterministic here)'));
 });
 console.log('B');
-Promise.resolve().then(() => console.log('C — microtask, drains before any phase'));
+Promise.resolve().then(() => console.log('C'));
 
-// Output:
-// A
-// B
-// C
-// D
-// E    (setImmediate beats setTimeout when scheduled from inside an I/O cb)
-// F
+// A, B, C, D, E, F (setImmediate beats setTimeout inside I/O cb)
 ```
 
-## Step-by-step dry run
+---
 
-For the first snippet:
+## 9. Step-by-step dry run
 
-| Tick | Call stack | nextTick Q | Microtask Q | Timers | Check (setImmediate) |
-|------|-----------|------------|-------------|--------|----------------------|
-| 0 | `console.log('1.')` | — | — | — | — |
-| 0 | `setTimeout` registers `fn5` | — | — | `[fn5]` | — |
-| 0 | `setImmediate` registers `fn6` | — | — | `[fn5]` | `[fn6]` |
-| 0 | `.then` enqueues `fn4` | — | `[fn4]` | `[fn5]` | `[fn6]` |
-| 0 | `process.nextTick` enqueues `fn3` | `[fn3]` | `[fn4]` | `[fn5]` | `[fn6]` |
-| 0 | `console.log('2.')` | `[fn3]` | `[fn4]` | `[fn5]` | `[fn6]` |
-| 0 | stack empty → drain nextTick | run `fn3` → log `3.` | `[fn4]` | `[fn5]` | `[fn6]` |
-| 0 | nextTick empty → drain microtasks | — | run `fn4` → log `4.` | `[fn5]` | `[fn6]` |
-| 1 | enter timers phase | — | — | run `fn5` → log `5.` | `[fn6]` |
-| 1 | enter check phase | — | — | — | run `fn6` → log `6.` |
+```
+Walk the first snippet's queues:
 
-Output: `1, 2, 3, 4, 5, 6`. (The 5/6 order can flip from main module due to timer arming jitter; it's deterministic inside an I/O callback.)
+Sync execution:
+  log '1'
+  register setTimeout cb5 → Timers=[cb5]
+  register setImmediate cb6 → Check=[cb6]
+  schedule promise.then cb4 → MQ=[cb4]
+  schedule nextTick cb3 → NT=[cb3]
+  log '2'
 
-## Important takeaways
+Sync done; drain queues:
+  drain NT: run cb3 → log '3'. NT=[].
+  drain MQ: run cb4 → log '4'. MQ=[].
 
-**The 4 layers (memorize)**
-1. Call stack (sync)
-2. `process.nextTick` queue (Node only)
-3. Microtask queue (Promise jobs, `queueMicrotask`)
-4. Macrotask: one callback from the next libuv phase / browser task queue
+Loop iteration:
+  Timers phase: run cb5 → log '5'. Then drain NT/MQ (empty).
+  Check phase:  run cb6 → log '6'. Then drain NT/MQ.
 
-Layers 2 + 3 drain **completely** between each step of layer 4.
+Output: 1, 2, 3, 4, 5, 6 (5 vs 6 can flip from main due to timer-arm jitter).
+```
 
-**The 6 libuv phases (memorize the names + one example each)**
-1. **timers** — `setTimeout`, `setInterval` callbacks
-2. **pending callbacks** — deferred system errors (e.g., TCP ECONNREFUSED)
-3. **idle, prepare** — internal libuv housekeeping
-4. **poll** — I/O callbacks (fs, net) + blocking wait for new I/O
-5. **check** — `setImmediate` callbacks
-6. **close callbacks** — `socket.on('close', ...)`
+---
 
-**Concurrency model — one-liners**
-- "JS is single-threaded; concurrency is achieved by *cooperative interleaving* of callbacks on the event loop."
-- "Parallelism requires `worker_threads`, `cluster`, or Web Workers."
-- "libuv uses a 4-thread pool (configurable via `UV_THREADPOOL_SIZE`) for fs/dns/crypto and kernel epoll/kqueue for sockets."
+## 10. Common confusion + traps
 
-**Common mistakes**
-- Saying "the event loop runs in a separate thread" — it doesn't, it IS the main thread.
-- Saying "Promise.then puts work on a background thread" — no, it's a microtask on the SAME thread.
-- Forgetting that microtasks drain between phases (not just after sync code).
-- Conflating `process.nextTick` with `setImmediate`. They are very different.
+1. **"Event loop runs in another thread"** — no, IS main thread.
+2. **"Promise.then is on a worker"** — no, microtask same thread.
+3. **Microtasks drain only at end of sync** — no, between every phase callback (Node 11+).
+4. **`process.nextTick` is a microtask** — no, separate higher-priority queue.
+5. **Infinite microtask chain** — starves all macrotasks (I/O, timers).
+6. **`async` fn runs entirely later** — no, sync up to first `await`, then suspends.
+7. **`setImmediate` vs `setTimeout(0)` from main is deterministic** — non-deterministic; deterministic only inside I/O cb.
 
-## Variants
+---
 
-1. **Output prediction** — interviewer dumps a snippet with mixed `setTimeout`, `Promise`, `await`, `process.nextTick`. See `microtask-macrotask-order.md` and `nexttick-vs-setimmediate.md`.
+## 11. Senior follow-ups & variants
 
-2. **"How would you parallelize CPU work?"** — answer: `worker_threads` for compute; pass data via `postMessage` or `SharedArrayBuffer` for zero-copy.
+### Variant 1 — "How parallelize CPU work?"
+`worker_threads` for compute; pass data via `postMessage` or `SharedArrayBuffer` for zero-copy.
 
-3. **"What's the difference between `node` and `bun`/`deno`?"** — they replace libuv with their own loops (Bun uses `uvloop`-like, Deno uses tokio). Same conceptual model, different implementation.
+### Variant 2 — `cluster` vs `worker_threads`
+Cluster forks processes (separate event loops, IPC); worker_threads share process, separate V8 isolates.
 
-4. **"How does `cluster` differ from `worker_threads`?"** — cluster forks processes (separate event loops, IPC); worker_threads share the process but have separate isolates.
+### Variant 3 — Bun/Deno vs Node
+Replace libuv with their own loops (Bun: `uvloop`-like, Deno: tokio). Same conceptual model.
 
-## Revision notes
+### Variant 4 — `UV_THREADPOOL_SIZE`
+Defaults to 4; tune for crypto-heavy workloads.
 
-> **event-loop-concurrency — 60 second recap**
-> - **Single thread, single call stack.** Concurrency via interleaved callbacks.
-> - **Priority:** stack → `process.nextTick` → microtasks → next libuv phase.
-> - Microtasks **drain to empty** between every macrotask — most common gotcha.
+### Variant 5 — Event-loop lag measurement
+`perf_hooks.monitorEventLoopDelay()` or schedule `setImmediate` and measure delta.
+
+---
+
+## 12. How to think aloud
+
+> "Single-threaded, single call stack. Concurrency via interleaved callbacks. Priority: stack → `process.nextTick` → microtasks → next libuv phase callback. Between every phase callback, re-drain nextTick + microtasks. Six libuv phases: timers, pending, idle/prepare, poll, check, close. `setImmediate` → check; `setTimeout(0)` → timers. I/O offloaded to libuv thread pool (fs/dns/crypto) or kernel epoll (sockets). Parallelism via `worker_threads`, `cluster`, or Web Workers. Trap: infinite microtask chain starves I/O. Trap: `async` fn runs sync until first await."
+
+---
+
+## 13. 60-second revision
+
+> - **4 layers:** stack → nextTick → microtask → one macrotask.
+> - **Microtasks drain to empty** between every macrotask (Node 11+).
 > - **6 libuv phases:** timers, pending, idle/prepare, poll, check, close.
-> - `setImmediate` → check phase. `setTimeout(0)` → timers phase.
-> - I/O is offloaded to libuv thread pool (fs/dns/crypto) or kernel epoll (sockets).
-> - Parallelism: `worker_threads`, `cluster`, or `child_process`.
-> - **Trap:** infinite microtask chain starves I/O. Same for `process.nextTick` (worse).
-> - **Trap:** `async` fn runs sync up to first `await`, then suspends.
+> - **`setImmediate`** → check; **`setTimeout(0)`** → timers.
+> - **I/O offloaded** to libuv thread pool or kernel epoll.
+> - **Parallelism:** worker_threads, cluster, Web Workers.
+> - **Trap:** "event loop is another thread"; infinite microtask chain starves I/O; `async` runs sync up to first `await`.
+
+---
+
+**Related:** [microtask-macrotask-order.md](./microtask-macrotask-order.md) · [nodejs-event-loop-phases.md](./nodejs-event-loop-phases.md) · [nexttick-vs-setimmediate.md](./nexttick-vs-setimmediate.md) · [predict-mixed-async-output.md](./predict-mixed-async-output.md)
+
+**Concept primer:** [`concepts/event-loop.md`](../../concepts/event-loop.md)

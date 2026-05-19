@@ -1,205 +1,279 @@
-# TypedArray Basics
+# TypedArray basics
 
-## Source / Origin
-- ES2015 `Int8Array`, `Uint8Array`, `Int32Array`, etc. + `ArrayBuffer`.
-- Asked at: Cloudflare, Razorpay, AWS — perf-focused roles.
-- Concept reference: `concepts/arrays.md`.
+> **Difficulty:** Senior   |   **Time:** ~10 min   |   **Prereqs:** [holey-vs-packed-arrays.md](./holey-vs-packed-arrays.md)
+>
+> **Source:** ES2015. Cloudflare, Razorpay, AWS — perf-focused roles.
 
-## Why this question matters in interviews
-Regular `Array` is a generic, heap-allocated, polymorphic container — slow for numeric work. `TypedArray` wraps a contiguous `ArrayBuffer` of bytes typed as a specific numeric type. Senior bar: you can list the 11 typed-array types, know the byte boundary (Uint8Array is byte-aligned, Int32 is 4-byte-aligned), and understand views (multiple typed-array views over one buffer).
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+`ArrayBuffer` + TypedArray views. Why fixed-type contiguous storage beats `Array` for numeric work. Views over shared buffer.
+
+**Verification examples**
+
 ```js
-// Backing buffer
-const buf = new ArrayBuffer(16);            // 16 bytes
-const i32 = new Int32Array(buf);            // 4 elements (16/4)
+const buf = new ArrayBuffer(16);
+const i32 = new Int32Array(buf);                  // 4 elems × 4 bytes
 i32[0] = 0x12345678;
-const u8 = new Uint8Array(buf);             // 16 elements (same memory!)
-u8[0]; u8[1]; u8[2]; u8[3];                  // 0x78 0x56 0x34 0x12 (little-endian)
+const u8 = new Uint8Array(buf);                   // 16 elems × 1 byte (same memory)
+u8[0]; u8[1]; u8[2]; u8[3];                       // 0x78 0x56 0x34 0x12 (little-endian)
 
 // Without explicit buffer
-const arr = new Int32Array(1024);            // also allocates 4 KB buffer
-arr.length;                                  // 1024
-arr.byteLength;                              // 4096
-arr.buffer instanceof ArrayBuffer;           // true
+const arr = new Int32Array(1024);
+arr.byteLength;                                    // 4096
+arr.buffer instanceof ArrayBuffer;                 // true
 ```
 
-### The 11 typed-array types
-| Type | Bytes/elem | Range |
-|---|---|---|
-| `Int8Array` | 1 | -128..127 |
-| `Uint8Array` | 1 | 0..255 |
-| `Uint8ClampedArray` | 1 | 0..255 (clamped, not wrapped) |
-| `Int16Array` | 2 | -32768..32767 |
-| `Uint16Array` | 2 | 0..65535 |
-| `Int32Array` | 4 | -2^31..2^31-1 |
-| `Uint32Array` | 4 | 0..2^32-1 |
-| `Float32Array` | 4 | IEEE 754 single |
-| `Float64Array` | 8 | IEEE 754 double |
-| `BigInt64Array` | 8 | -2^63..2^63-1 |
-| `BigUint64Array` | 8 | 0..2^64-1 |
+**Constraints**
+- 11 TypedArray types; differ in element size and signedness.
+- Multiple views over same buffer share memory.
+- Default endianness is little (platform).
+- TypedArray sort is NUMERIC by default (vs Array.sort lex default).
+- No holes possible — always packed.
 
-### Edge cases / traps
-1. **No `.push`/`.pop`.** Fixed size. Use `.set()` or create new.
-2. **Out-of-range writes silently wrap (or clamp for Uint8ClampedArray).** `u8[0] = 300` → `44`; `u8c[0] = 300` → `255`.
-3. **Endianness**: typed-array views use host byte order. For network/file IO use `DataView` which lets you specify.
-4. **`Uint8ClampedArray`** rounds floats to integers (for canvas image data).
-5. **Shared buffer**: multiple views over one ArrayBuffer alias the same memory.
-6. **`SharedArrayBuffer`** for cross-worker; requires `Atomics` for safe writes.
-7. **Garbage collection**: views keep the buffer alive; orphaning a buffer doesn't release memory if any view exists.
-8. **`subarray` vs `slice`** — `subarray` is a view over the same buffer (no copy); `slice` is a copy.
-9. **Iteration**: typed arrays are iterable; `for..of` works.
-10. **`Array.from(typedArr)`** copies to regular Array.
+---
 
-## Mental Model
+## 2. Plain-English restatement
+
+`ArrayBuffer` is raw bytes. TypedArray (Int32Array, Float32Array, etc.) is a typed view over those bytes — contiguous, fixed type, fast numeric ops.
+
+---
+
+## 3. Why this matters in interviews
+
+Generic `Array` is heap-allocated, polymorphic, slow for numerics. TypedArray is contiguous, fixed-type, much faster — and the underlying primitive for WebGL, audio, crypto, networking.
+
+---
+
+## 4. Mental model
 
 ```
-   ArrayBuffer (16 bytes):
-   ┌──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┐
-   │  │  │  │  │  │  │  │  │  │  │  │  │  │  │  │  │
-   └──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┘
-      0  1  2  3  4  5  6  7  8  9 ...
-
-   Int32Array view:  [w0]   [w1]   [w2]   [w3]
-                     0..3   4..7   8..11  12..15
-
-   Uint8Array view:  [b0 b1 b2 b3 b4 b5 b6 b7 b8 b9 b10 b11 b12 b13 b14 b15]
-                     same buffer, different lens
+   ArrayBuffer:  raw bytes; no methods to read/write directly.
+   TypedArray:   typed view over an ArrayBuffer.
+   DataView:     manual endian + offset control over an ArrayBuffer.
+   
+   11 TypedArray types:
+   Int8Array      1 byte   -128..127
+   Uint8Array     1 byte   0..255
+   Uint8ClampedArray 1 byte 0..255 (clamps overflow; for canvas)
+   Int16Array     2 byte   -32k..32k
+   Uint16Array    2 byte   0..65k
+   Int32Array     4 byte   ±2^31
+   Uint32Array    4 byte   0..2^32
+   Float32Array   4 byte   IEEE single
+   Float64Array   8 byte   IEEE double
+   BigInt64Array  8 byte   ±2^63 (BigInt-backed)
+   BigUint64Array 8 byte   0..2^64
+   
+   Views over same buffer share memory:
+     const buf = new ArrayBuffer(8);
+     new Int32Array(buf)[0] = 1;
+     new Uint8Array(buf)[0]; // 0x01 (little endian byte 0)
+   
+   Endianness:
+     TypedArrays use PLATFORM endianness (almost always little).
+     DataView lets you specify per read/write.
+   
+   Differences from Array:
+     fixed length (cannot push/splice).
+     fixed type (writes coerce, not throw).
+     numeric default sort.
+     no holes.
 ```
 
-## Why interviewers care
+---
 
-- **Memory awareness** — heap vs typed.
-- **Binary protocols** — file formats, network, WebGL.
-- **Perf intuition** — typed arrays are 5-10× faster for numeric loops.
+## 5. Try it yourself first
 
-## Common confusion
+> **Predict before reading on:**
+> 1. Can you push to a TypedArray?
+> 2. What does `int32[0] = 1.5` do?
+> 3. Why use `DataView` instead of TypedArray?
 
-- **"`Array` and `Int32Array` are interchangeable."** Typed arrays don't have `.push`, mutate via index, fixed size, numeric-only.
-- **"Endian doesn't matter in JS."** Within one process, no. Across machines, yes — use DataView.
-- **"`subarray` makes a copy."** It doesn't — view over same buffer.
-- **"`Uint8Array` is bytes; `Buffer` is the same."** Node's `Buffer` extends `Uint8Array` but has more methods and historic baggage.
+---
 
-## Brute force
+## 6. Brute force — walked through
 
 ```js
-const arr = new Array(1024).fill(0);
-for (let i = 0; i < 1024; i++) arr[i] = i;
-// works, but each element is a JS Number wrapper (typed nan-box / SMI / heapnumber)
+// Generic Array for byte work — slow
+const bytes = [];
+for (let i = 0; i < 1_000_000; i++) bytes.push(0);
 ```
 
-`Int32Array` for the same task: 4× less memory, ~5-10× faster numeric loop.
+Polymorphic Array; slow numerics. Use `new Uint8Array(1_000_000)`.
 
-## Optimal approach
+---
 
-For numeric work or binary IO: pick the typed array type that fits the data; use `DataView` for endian-explicit access.
+## 7. The unlocking insight
 
-## Solution
+> **TypedArray = ArrayBuffer + typed view. Fixed length, fixed type, contiguous. Multiple views over one buffer share memory.**
+
+Three properties:
+
+1. **`ArrayBuffer`** raw bytes.
+2. **TypedArray view** — typed access.
+3. **Multiple views** share memory.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
-// 1. Numeric loop
-const samples = new Float32Array(48000);     // 1 second of audio @ 48kHz
-for (let i = 0; i < samples.length; i++) samples[i] = Math.sin(i * 0.01);
+// Allocation
+const buf = new ArrayBuffer(16);                                          // step 1: 16 bytes raw
+const i32 = new Int32Array(buf);                                           // step 2: view as 4 int32
+i32[0] = 0x12345678;
 
-// 2. Binary protocol with DataView (endian explicit)
-const buf = new ArrayBuffer(8);
-const view = new DataView(buf);
-view.setUint32(0, 0xDEADBEEF, false);        // big-endian
-view.getUint8(0);                            // 0xDE
+const u8 = new Uint8Array(buf);                                            // step 3: same memory, byte view
+console.log(u8[0]);                                                        // 0x78 (little-endian)
+console.log(u8[1]);                                                        // 0x56
 
-// 3. Aliasing for type punning
-function floatToBits(x) {
-  const buf = new ArrayBuffer(4);
-  new Float32Array(buf)[0] = x;
-  return new Uint32Array(buf)[0];
+// Type coercion on write (no throw)
+i32[0] = 1.7;                                                              // truncates to 1
+i32[0] = '5';                                                              // coerces to 5
+i32[0] = NaN;                                                              // 0 (int)
+new Uint8Array(1)[0] = 300;                                                // 300 % 256 = 44 (wraps)
+new Uint8ClampedArray(1)[0] = 300;                                         // 255 (clamps)
+
+// Implicit buffer allocation
+const arr = new Int32Array(1024);                                          // step 4: buffer auto-allocated
+arr.length;                                                                // 1024
+arr.byteLength;                                                            // 4096
+
+// Slicing & views
+const slice = arr.subarray(100, 200);                                      // step 5: view, shares buffer
+slice[0] = 99;
+arr[100];                                                                  // 99 — shared
+
+const copy = arr.slice(100, 200);                                          // step 6: copy
+copy[0] = 88;
+arr[100];                                                                  // 99 — independent
+
+// DataView for endian control
+const dv = new DataView(buf);
+dv.setUint32(0, 0x12345678, /* littleEndian */ true);                      // step 7: explicit endian
+dv.getUint32(0, false);                                                    // read as big-endian
+```
+
+**Try it yourself**
+
+```js
+// Read a binary file (Node)
+const fs = require('node:fs');
+const buffer = fs.readFileSync('image.bin');                              // Node Buffer
+const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+const width = view.getUint32(0, true);
+const height = view.getUint32(4, true);
+
+// Float32 audio sample
+const audio = new Float32Array(44100);   // 1 sec @ 44.1kHz
+for (let i = 0; i < 44100; i++) {
+  audio[i] = Math.sin(2 * Math.PI * 440 * i / 44100);  // 440Hz tone
 }
-floatToBits(1.0);                            // 1065353216 (IEEE 754 single representation)
 
-// 4. Zero-copy transfer to worker
-const data = new Uint8Array(1024 * 1024 * 10);   // 10 MB
-worker.postMessage(data.buffer, [data.buffer]);   // transferable; sender loses access
-data.byteLength;                                  // 0 after transfer
+// Cross-thread transfer (zero-copy)
+const big = new Float32Array(1_000_000);
+worker.postMessage(big, [big.buffer]);    // ownership transferred; original now empty
 
-// 5. Subarray vs slice
-const big = new Int32Array(100);
-const sub = big.subarray(0, 10);                  // view (shares memory)
-const cpy = big.slice(0, 10);                     // copy (own buffer)
-sub[0] = 99; big[0];                              // 99 (shared)
-cpy[0] = 77; big[0];                              // 99 (independent)
+// Sort is numeric by default
+new Int32Array([10, 1, 5]).sort();        // [1, 5, 10]  — vs Array [1, 10, 5]
 
-// 6. Wrap vs clamp
-const u8 = new Uint8Array(1);
-u8[0] = 300; u8[0];                               // 44 (wrap, 300 % 256)
-const u8c = new Uint8ClampedArray(1);
-u8c[0] = 300; u8c[0];                             // 255 (clamp)
+// Sum vs Array (typed arrays often 2-5x faster on V8)
+function sumTyped(arr) {
+  let s = 0;
+  for (let i = 0; i < arr.length; i++) s += arr[i];
+  return s;
+}
 ```
 
-## Dry run
+---
+
+## 9. Step-by-step dry run
 
 ```
-const buf = new ArrayBuffer(8);     // 8 bytes, all zero
-const u8  = new Uint8Array(buf);
-const u32 = new Uint32Array(buf);   // 2 elements
+const buf = new ArrayBuffer(8);
+const i32 = new Int32Array(buf);     // 2 elems
+const u8 = new Uint8Array(buf);      // 8 elems
+i32[0] = 0x12345678;
 
-u8[0] = 0xFF;  // buf: [FF 00 00 00 00 00 00 00]
-u32[0];        // 0x000000FF on little-endian, 0xFF000000 on big-endian
-                // (V8 is little-endian on common architectures)
+Memory layout (little-endian):
+  byte 0: 0x78  ← LSB
+  byte 1: 0x56
+  byte 2: 0x34
+  byte 3: 0x12  ← MSB
+  byte 4-7: 0  (unused)
 
-u32[1] = 0xDEADBEEF;
-u8[4..7];       // [EF BE AD DE] (little-endian)
+u8[0] = 0x78. u8[1] = 0x56. u8[2] = 0x34. u8[3] = 0x12.
+
+Modify via u8:
+  u8[0] = 0xFF.
+  i32[0] = ?  Now bytes 0xFF 0x56 0x34 0x12 = 0x123456FF.
+
+DataView for big-endian:
+  dv.setInt32(0, 0x12345678, false);   // big-endian
+  Memory: 0x12 0x34 0x56 0x78.
+  i32[0] (little) reads bytes as 0x78563412.
+
+Type coercion writes:
+  Int32 [0] = 1.5 → 1 (truncate).
+  Uint8 [0] = 300 → 44 (wrap mod 256).
+  Uint8Clamped [0] = 300 → 255 (saturate).
 ```
 
-## How to think aloud
+---
 
-> "TypedArray is a view over an ArrayBuffer with a specific numeric type. Fixed size, no push/pop, numeric only. Faster than Array for numeric loops because elements are unboxed contiguous memory. Multiple views can overlay the same buffer for type punning. DataView lets you specify endian — use for binary protocols and file formats. Uint8ClampedArray clamps, others wrap. For zero-copy across workers, transfer the underlying buffer."
+## 10. Common confusion + traps
 
-## Important takeaways
+1. **`push` / `pop`** — not available on TypedArray (fixed length).
+2. **Float assigned to Int** — truncates silently.
+3. **Overflow** — wraps for Uint (mod 256), clamps for Uint8Clamped.
+4. **Endianness** — TypedArray uses platform (little); DataView is explicit.
+5. **`slice` vs `subarray`** — slice copies; subarray shares buffer.
+6. **Sort is numeric** by default (different from Array).
+7. **No holes possible** — assignment to large index throws RangeError if beyond length.
 
-- **11 types**: Int/Uint 8/16/32, Float 32/64, BigInt 64.
-- **Fixed size, numeric only.**
-- **Views over ArrayBuffer**; multiple views alias same memory.
-- **`subarray` is a view; `slice` copies.**
-- **DataView for endian-explicit IO.**
-- **`Uint8ClampedArray` clamps; others wrap.**
-- **Transferables for cross-worker zero-copy.**
+---
 
-## Variants
+## 11. Senior follow-ups & variants
 
-- **`SharedArrayBuffer`** + Atomics — cross-worker shared memory.
-- **`DataView`** — endian-explicit, byte-granular access.
-- **Node `Buffer`** — extends Uint8Array, has additional methods (`writeUInt32BE`, etc.).
-- **WebGL/WebAssembly memory** — directly typed-array backed.
-- **`SharedArrayBuffer` + COOP/COEP** — browsers require headers.
+### Variant 1 — `DataView` for explicit endian
+Required for network protocols, file formats.
 
-## Revision notes
+### Variant 2 — `SharedArrayBuffer`
+Across workers; needs Atomics for safety.
 
-```
-typed arrays:
-  Int8/Uint8/Uint8Clamped, Int16/Uint16, Int32/Uint32, Float32/Float64, BigInt64/BigUint64
-  view over ArrayBuffer; fixed size; numeric only
+### Variant 3 — Zero-copy transfer
+`postMessage(typed, [typed.buffer])`.
 
-ArrayBuffer:
-  raw bytes; multiple views alias same memory
+### Variant 4 — WebGL / WebGPU
+TypedArrays are the buffer format.
 
-DataView:
-  endian-explicit access (getUint32(off, littleEndian))
+### Variant 5 — Node Buffer
+Subclass of Uint8Array; same memory model + extra methods.
 
-subarray vs slice:
-  subarray → view (shares buffer)
-  slice    → copy (new buffer)
+---
 
-clamp vs wrap:
-  Uint8ClampedArray → 300 → 255
-  other Uint        → 300 → wrap
+## 12. How to think aloud
 
-USES:
-  numeric loops (5-10× faster)
-  binary protocols (DataView)
-  WebGL/WebAssembly
-  zero-copy worker transfer (postMessage transferable)
-  type punning (alias buffer with different views)
+> "TypedArrays are typed views over `ArrayBuffer` (raw bytes). 11 types: Int8/16/32, Uint8/16/32, Uint8Clamped, Float32/64, BigInt64/Uint64. Each has fixed element size — Int32Array elements are 4 bytes. Multiple views over the same buffer share memory: `new Int32Array(buf)[0] = 1; new Uint8Array(buf)[0]` reads byte 0 (0x01 little-endian). Differences from Array: fixed length (no push/pop), fixed type (writes coerce silently — 1.5 → 1, 300 → 44 for Uint8 via wrap, 255 for Uint8Clamped via saturation), no holes possible, numeric default sort (`[10,1,5].sort()` → `[1,5,10]` — different from Array's lex default). Performance: contiguous memory, no polymorphism, 2-5× faster numeric loops in V8. Endianness: TypedArrays use platform (almost always little-endian); for explicit control (network protocols, file formats) use `DataView` which takes endian parameter per read/write. `subarray` returns view sharing buffer; `slice` copies. Zero-copy cross-thread: `postMessage(typed, [typed.buffer])` transfers ownership; original empty after. Use cases: binary protocols, WebGL buffers, audio samples, crypto, file parsers, Node Buffer."
 
-NOT FOR: heterogeneous data, dynamic-size lists, non-numeric
-```
+---
+
+## 13. 60-second revision
+
+> - **`ArrayBuffer`** = raw bytes; TypedArray = typed view.
+> - **11 types** — Int8/16/32, Uint, Float32/64, BigInt64.
+> - **Fixed length + type** — no push, coerces writes.
+> - **Multiple views** share buffer.
+> - **`subarray` shares, `slice` copies.**
+> - **Numeric sort default** (not lex).
+> - **Endianness:** TypedArray = platform; DataView = explicit.
+> - **Zero-copy transfer** via `postMessage` + transferList.
+> - **Trap:** assume push; truncation on Int; overflow wrap vs clamp.
+
+---
+
+**Related:** [holey-vs-packed-arrays.md](./holey-vs-packed-arrays.md) · [`05-event-loop/structured-clone-cost.md`](../05-event-loop/structured-clone-cost.md) · [`06-streams/web-streams-readable.md`](../06-streams/web-streams-readable.md)
+
+**Concept primer:** [`concepts/arrays.md`](../../concepts/arrays.md)

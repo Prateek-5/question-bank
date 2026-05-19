@@ -1,228 +1,292 @@
 # Quick sort with pivot selection
 
-## Source
-- Canonical divide-and-conquer interview problem.
-- LeetCode #912 "Sort an Array": https://leetcode.com/problems/sort-an-array/
-- Reference (Lomuto vs Hoare partition): https://en.wikipedia.org/wiki/Quicksort
+> **Difficulty:** Medium   |   **Time:** ~12 min   |   **Prereqs:** [merge-sort.md](./merge-sort.md)
+>
+> **Source:** LeetCode #912. Quickselect (LeetCode #215) shares partition.
 
-## Why this question matters in interviews
-Quicksort is the **partition primitive** for everything from `nth_element` to `select` to randomized algorithms. Interviewers ask it because it has a *non-obvious* worst case (already-sorted input with first-element pivot → `O(n²)`) and a *non-obvious* fix (randomized or median-of-3 pivot). The conversation around "why your code is `O(n²)` and how to make it `O(n log n)` expected" is what separates senior candidates. As a backend engineer you'll meet quicksort as the engine behind the C `qsort()` and the standard-library sort in many languages pre-2018, and the partition step shows up in **Quickselect** (LC #215 "Kth Largest Element") — a constant in real interviews.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+In-place quicksort. Discuss worst-case (O(n²) on sorted input with bad pivot) and fixes (random/median-of-3).
 
-Lomuto partition (simpler to write, slightly slower constants):
+**Verification examples**
+
+```js
+quickSort([3, 1, 4, 1, 5, 9, 2, 6]);     // [1, 1, 2, 3, 4, 5, 6, 9]
+quickSort([]);                            // []
+quickSort([3, 3, 3]);                     // [3, 3, 3]
+```
+
+**Constraints**
+- Average O(n log n); worst O(n²).
+- O(log n) stack with median-of-3 pivot.
+- In-place (no extra array per level).
+- Unstable.
+
+---
+
+## 2. Plain-English restatement
+
+Pick pivot; partition into ≤ pivot vs > pivot; recurse each side. Bad pivot → O(n²). Random/median-of-3 → O(n log n) expected.
+
+---
+
+## 3. Why this matters in interviews
+
+Partition primitive for Quickselect (k-th element). Senior bar: discuss worst case + fix.
+
+---
+
+## 4. Mental model
+
+```
+   Lomuto partition (simple, last-pivot):
+     pivot = arr[hi]
+     i = lo - 1
+     for j = lo..hi-1:
+       if arr[j] <= pivot:
+         i++; swap arr[i], arr[j]
+     swap arr[i+1], arr[hi]
+     return i + 1
+   
+   Hoare partition (faster, two-pointer):
+     pivot = arr[lo]
+     i = lo - 1, j = hi + 1
+     while true:
+       do i++; while arr[i] < pivot
+       do j--; while arr[j] > pivot
+       if i >= j: return j
+       swap arr[i], arr[j]
+   
+   Worst case:
+     Already-sorted + first/last-element pivot → partitions of size n-1 + 0.
+     T(n) = T(n-1) + O(n) → O(n²).
+     Stack depth n → RangeError on V8.
+   
+   Fixes:
+     Random pivot.
+     Median-of-3 (lo, mid, hi).
+     3-way partition for many duplicates.
+   
+   Tail recursion optim (manual):
+     Always recurse on smaller half first; iterate larger.
+     Stack bounded by O(log n).
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. Why does sorted input + last-pivot hit O(n²)?
+> 2. Stack depth without fix?
+> 3. Stable?
+
+---
+
+## 6. Brute force — walked through
+
+```js
+function quickSortNaive(arr) {
+  if (arr.length <= 1) return arr;
+  const pivot = arr[0];
+  const less = arr.slice(1).filter(x => x < pivot);
+  const equal = arr.filter(x => x === pivot);
+  const greater = arr.slice(1).filter(x => x > pivot);
+  return [...quickSortNaive(less), ...equal, ...quickSortNaive(greater)];
+}
+```
+
+Allocates arrays — not in-place. O(n log n) expected.
+
+---
+
+## 7. The unlocking insight
+
+> **Partition in-place; recurse on each side. Use random/median-of-3 pivot to avoid O(n²). Tail-recurse smaller for O(log n) stack.**
+
+Three properties:
+
+1. **In-place partition**.
+2. **Random or median-of-3 pivot.**
+3. **Tail-recurse smaller** half.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
 function quickSort(arr, lo = 0, hi = arr.length - 1) {
   if (lo >= hi) return arr;
-  const p = partitionLomuto(arr, lo, hi);
+  const p = partitionLomuto(arr, lo, hi);                                  // step 1: partition
   quickSort(arr, lo, p - 1);
   quickSort(arr, p + 1, hi);
   return arr;
 }
 
 function partitionLomuto(arr, lo, hi) {
-  const pivot = arr[hi];                  // last-element pivot
-  let i = lo - 1;
-  for (let j = lo; j < hi; j++) {
-    if (arr[j] <= pivot) {
-      i++;
-      [arr[i], arr[j]] = [arr[j], arr[i]];
-    }
-  }
-  [arr[i + 1], arr[hi]] = [arr[hi], arr[i + 1]];   // pivot to its slot
-  return i + 1;
-}
-```
+  // Median-of-3 pivot to avoid O(n²) on sorted input
+  const mid = (lo + hi) >> 1;
+  if (arr[mid] < arr[lo]) [arr[lo], arr[mid]] = [arr[mid], arr[lo]];
+  if (arr[hi] < arr[lo]) [arr[lo], arr[hi]] = [arr[hi], arr[lo]];
+  if (arr[mid] < arr[hi]) [arr[mid], arr[hi]] = [arr[hi], arr[mid]];      // step 2: put median at hi
 
-Hoare partition (faster, fewer swaps, but trickier index bookkeeping):
-
-```js
-function partitionHoare(arr, lo, hi) {
-  const pivot = arr[lo + ((hi - lo) >> 1)];   // middle element
-  let i = lo - 1, j = hi + 1;
-  while (true) {
-    do { i++; } while (arr[i] < pivot);
-    do { j--; } while (arr[j] > pivot);
-    if (i >= j) return j;
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-}
-// Then recurse on (lo, j) and (j + 1, hi) — note `j`, not `j-1`.
-```
-
-### Runtime / engine behavior
-- **Average time:** `O(n log n)` — recurrence `T(n) = 2T(n/2) + O(n)` when pivot splits roughly evenly.
-- **Worst time:** `O(n²)` — when pivot is always the min or max (e.g., first-element pivot on already-sorted data). Recurrence degenerates to `T(n) = T(n-1) + O(n)`.
-- **Best time:** `O(n log n)` — perfectly balanced splits.
-- **Space:** `O(log n)` average recursion depth, `O(n)` worst (degenerate splits). **In-place** — no aux array, unlike merge sort.
-- **Not stable** — partition swaps reorder equal elements.
-- **Cache behavior:** excellent. Sequential scans with two pointers; tight inner loop. This is why quicksort generally beats merge sort on random in-RAM data despite the same big-O.
-- **JS engine note:** V8 *was* quicksort pre-7.0 (Oct 2018) and was therefore unstable. ES2019 mandated stability, V8 switched to TimSort. Quicksort is no longer used by `Array.prototype.sort` but it's still the algorithm you'd implement in interview.
-
-### Pivot strategies (the senior conversation)
-1. **First element** — `arr[lo]`. **Worst case: already-sorted input → O(n²).** Don't use.
-2. **Last element** — `arr[hi]`. Same worst case (reverse-sorted now). The Lomuto example above uses this; for interview you'd add randomization (next).
-3. **Random** — `arr[lo + Math.floor(Math.random() * (hi - lo + 1))]` swapped to the pivot slot. **Expected `O(n log n)` for any input.** The standard defensive choice.
-4. **Median-of-3** — take `arr[lo]`, `arr[mid]`, `arr[hi]`, pick the median, swap into the pivot slot. Cheap and reliably good on near-sorted data (which is common in practice). What `qsort` and Java's primitive sort use.
-5. **Median-of-medians** — true `O(n)` worst-case pivot selection. `O(n log n)` worst-case sort, but huge constants. Theoretical only — never in interview code.
-
-### Edge cases
-1. **Empty / single element** — `lo >= hi` guard handles both.
-2. **All equal elements** — Lomuto degrades to `O(n²)` because every comparison is `<=`. Fix with **3-way partitioning** (Dutch National Flag) → `O(n)` on all-equal input.
-3. **Already-sorted with first/last pivot** — the famous `O(n²)` trap. **Always mention this**, even if your code is randomized.
-4. **Reverse-sorted with first/last pivot** — same `O(n²)` trap.
-5. **Recursion depth** — pathological splits push depth to `O(n)`. For `n = 100k`, you can blow V8's default ~10–15k stack. Fix: recurse on the smaller side, **iterate on the larger** (tail-call elimination by hand).
-6. **Duplicates** — if pivot equals many elements, two-way partition wastes work. Switch to 3-way (Dutch Flag) for duplicate-heavy data.
-7. **In-place mutation** — caller's array is sorted. If they want a copy, slice first.
-
-## Brute force approach
-Naive: pick first element, partition into two new arrays, recurse, concatenate. Loses the in-place advantage and allocates `O(n²)` in the worst case for the new arrays. Mention only to dismiss in favor of in-place partition.
-
-## Optimal approach
-In-place partition (Lomuto for clarity, Hoare for speed). **Randomize the pivot** to make worst case astronomically unlikely on adversarial input. Recurse on the smaller partition first and iterate on the larger (manual tail-call) to cap stack at `O(log n)`. For duplicate-heavy input, use 3-way partition.
-
-## Solution (JavaScript)
-
-```js
-/**
- * In-place quicksort with randomized pivot.
- * Time: O(n log n) expected, O(n²) worst-case (extremely unlikely with randomization).
- * Space: O(log n) expected stack, O(n) worst.
- * NOT stable.
- *
- * @param {number[]} arr  mutated in place
- * @param {number}   [lo=0]
- * @param {number}   [hi=arr.length-1]
- */
-function quickSort(arr, lo = 0, hi = arr.length - 1) {
-  while (lo < hi) {
-    const p = partition(arr, lo, hi);
-    // Recurse on the smaller half, iterate on the larger:
-    // keeps stack depth at O(log n) even with bad splits.
-    if (p - lo < hi - p) {
-      quickSort(arr, lo, p - 1);
-      lo = p + 1;
-    } else {
-      quickSort(arr, p + 1, hi);
-      hi = p - 1;
-    }
-  }
-  return arr;
-}
-
-function partition(arr, lo, hi) {
-  // Randomized pivot — defeats already-sorted worst case
-  const r = lo + Math.floor(Math.random() * (hi - lo + 1));
-  [arr[r], arr[hi]] = [arr[hi], arr[r]];      // move pivot to end
   const pivot = arr[hi];
   let i = lo - 1;
   for (let j = lo; j < hi; j++) {
     if (arr[j] <= pivot) {
       i++;
-      [arr[i], arr[j]] = [arr[j], arr[i]];
+      [arr[i], arr[j]] = [arr[j], arr[i]];                                 // step 3: swap
     }
   }
   [arr[i + 1], arr[hi]] = [arr[hi], arr[i + 1]];
   return i + 1;
 }
 
-/**
- * 3-way partition (Dutch National Flag) — best when many duplicates.
- * Linear time on all-equal input.
- */
+// 3-way partition for many duplicates (Dutch national flag)
 function quickSort3Way(arr, lo = 0, hi = arr.length - 1) {
   if (lo >= hi) return arr;
-  const r = lo + Math.floor(Math.random() * (hi - lo + 1));
-  [arr[r], arr[lo]] = [arr[lo], arr[r]];
-  const pivot = arr[lo];
-  let lt = lo, gt = hi, i = lo + 1;
+  let lt = lo, gt = hi, i = lo;
+  const pivot = arr[lo + Math.floor(Math.random() * (hi - lo + 1))];       // step 4: random
   while (i <= gt) {
-    if      (arr[i] < pivot) { [arr[lt], arr[i]] = [arr[i], arr[lt]]; lt++; i++; }
-    else if (arr[i] > pivot) { [arr[gt], arr[i]] = [arr[i], arr[gt]]; gt--;      }
-    else                     { i++; }
+    if (arr[i] < pivot)      [arr[i++], arr[lt++]] = [arr[lt], arr[i]];
+    else if (arr[i] > pivot) [arr[i], arr[gt--]]   = [arr[gt], arr[i]];
+    else i++;
   }
   quickSort3Way(arr, lo, lt - 1);
   quickSort3Way(arr, gt + 1, hi);
   return arr;
 }
+
+// Quickselect — k-th smallest, average O(n)
+function quickSelect(arr, k) {
+  let lo = 0, hi = arr.length - 1;
+  while (lo <= hi) {
+    const p = partitionLomuto(arr, lo, hi);
+    if (p === k) return arr[p];
+    if (p < k) lo = p + 1;
+    else hi = p - 1;
+  }
+  return undefined;
+}
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
-Input: `quickSort([3, 6, 1, 8, 2, 5])`, pretend the random pivot picks `arr[hi] = 5` for the top call.
+```js
+quickSort([3, 1, 4, 1, 5, 9, 2, 6]);                         // [1, 1, 2, 3, 4, 5, 6, 9]
+quickSort([3, 3, 3, 3]);                                      // [3, 3, 3, 3]
 
-Lomuto partition with pivot=5, lo=0, hi=5:
-- i = -1
-- j=0: `arr[0]=3 <= 5` → i=0, swap arr[0] with arr[0] (no-op). Array: `[3, 6, 1, 8, 2, 5]`.
-- j=1: `arr[1]=6 <= 5`? no. Skip.
-- j=2: `arr[2]=1 <= 5` → i=1, swap arr[1] with arr[2]. Array: `[3, 1, 6, 8, 2, 5]`.
-- j=3: `arr[3]=8 <= 5`? no. Skip.
-- j=4: `arr[4]=2 <= 5` → i=2, swap arr[2] with arr[4]. Array: `[3, 1, 2, 8, 6, 5]`.
-- End loop. Swap arr[i+1=3] with arr[hi=5]. Array: `[3, 1, 2, 5, 6, 8]`. Return 3.
+// Worst-case (sorted + last-pivot, no median):
+const sorted = Array.from({length: 10_000}, (_, i) => i);
+// With median-of-3: O(n log n).
+// Without (just last-element): O(n²) — slow.
 
-Now recurse on `[3, 1, 2]` (lo=0, hi=2) and `[6, 8]` (lo=4, hi=5).
+// Quickselect — 5th smallest
+quickSelect([3, 1, 4, 1, 5, 9, 2, 6].slice(), 4);            // 4 (0-indexed → 5th)
 
-Left, pivot=2:
-- j=0: 3 <= 2? no.
-- j=1: 1 <= 2 → i=0, swap arr[0] with arr[1]. `[1, 3, 2]`.
-- End. Swap arr[1] with arr[2]. `[1, 2, 3]`. Return 1. Recurse on `[1]` and `[3]` — both base cases.
+// Compare with sort
+[3, 1, 4, 1, 5, 9, 2, 6].sort((a, b) => a - b)[4];           // 4
+// quickSelect avg O(n) vs sort O(n log n) — when only k needed.
+```
 
-Right, pivot=8:
-- j=4: 6 <= 8 → i=4, swap arr[4] with arr[4] (no-op).
-- End. Swap arr[5] with arr[5] (no-op). Return 5.
-- Recurse on `[6]` and `[]` — both base cases.
+---
 
-Final array: `[1, 2, 3, 5, 6, 8]`. Total swaps: ~5, comparisons: ~9.
+## 9. Step-by-step dry run
 
-## Important takeaways
+```
+quickSort([3, 1, 4, 1]):
+  partition([3,1,4,1], 0, 3):
+    median-of-3: lo=3, mid=1, hi=1. After:
+      arr[lo]=1 (min), arr[mid]=3 (max), arr[hi]=1 (median).
+      But median-of-3 expects a unique-ish picker; with [3,1,4,1] median is between 1 and 3.
+      For simplicity say pivot = 1 at hi.
+    pivot=1. i=-1.
+    j=0 (3): 3<=1? No.
+    j=1 (1): 1<=1? Yes. i=0. swap[0][1] → [1,3,4,1].
+    j=2 (4): 4<=1? No.
+    Swap arr[1][hi=3]: [1,1,4,3].
+    return 1.
+  
+  quickSort([1,1,4,3], 0, 0): base.
+  quickSort([1,1,4,3], 2, 3):
+    partition([1,1,4,3], 2, 3): pivot=3. j=2 (4): >3. swap arr[2][3] = [1,1,3,4]. return 2.
+    quickSort(2, 1): base. quickSort(3, 3): base.
+  
+  Result: [1,1,3,4].
 
-**Syntax to memorize**
-- Lomuto: `i = lo - 1`; for each `j` in `[lo, hi)`, if `arr[j] <= pivot` then `++i` and swap. Final swap of `arr[i+1]` with pivot.
-- Hoare: two pointers walking inward, swap inversions, return when they cross. Recurse on `(lo, j)` and `(j+1, hi)`.
-- **Randomize the pivot. Always.** It's two lines that defeat the entire worst-case scenario.
+Worst case (sorted, last-pivot):
+  [1,2,3,4,5], pivot=5.
+  Partition: all ≤ 5 → i increments through. final i=4 (index of last). p=4.
+  Recurse [0..3], [5..5].
+  [1,2,3,4], pivot=4 → similar → recurse [0..2].
+  ...
+  Each level: n-1 partition + 0 partition. Total O(n) per level × n levels = O(n²).
+  Stack depth n.
 
-**Patterns to reuse**
-- The **partition** primitive alone solves **Quickselect** (LC #215 "Kth Largest Element") in average `O(n)`: only recurse into the side containing index k.
-- Dutch National Flag (3-way partition) is the canonical solution to LC #75 "Sort Colors."
-- Randomization-as-worst-case-mitigation is the same trick used in randomized binary search trees, skip lists, and hash table seed randomization (defeating HashDoS).
+With median-of-3:
+  Pivot is median of [lo, mid, hi] — middle value.
+  Sorted input: median = mid = 3. Partition balanced. O(n log n).
 
-**Common mistakes**
-- Using `arr[lo]` or `arr[hi]` as pivot without randomization, then getting roasted by interviewer's already-sorted test case.
-- Off-by-one in Hoare (recursing on `(lo, j-1)` instead of `(lo, j)` — common bug).
-- Claiming quicksort is stable. It is **not**.
-- Claiming `O(1)` space because it's "in-place." Stack space is `O(log n)` average, `O(n)` worst — not constant.
-- Forgetting the "all equal elements → O(n²) in Lomuto" trap. Mention 3-way partition.
-- Allocating new arrays per recursion ("simple" quicksort) — defeats the in-place advantage.
+3-way for [3,3,3,3,3]:
+  All equal. lt stays at lo; gt stays at hi; range collapses.
+  O(n) for this case.
+```
 
-**Related questions**
-- Quickselect — kth smallest/largest in expected `O(n)`. Partition once, recurse into one side.
-- Sort colors (Dutch National Flag, LC #75).
-- Merge sort (`09-recursion/merge-sort.md`) — sister algorithm; stable + `O(n log n)` worst-case, costs `O(n)` space.
+---
 
-## Variants
+## 10. Common confusion + traps
 
-1. **Quickselect** — find the k-th smallest in average `O(n)`. After partition, recurse only into the half containing index k. Classic LC #215.
+1. **Last-element pivot on sorted** — O(n²).
+2. **No median-of-3** — vulnerable.
+3. **Stable assumption** — quicksort UNstable.
+4. **Stack overflow** — naive on sorted ~10-15k.
+5. **Many duplicates** — 3-way partition.
+6. **Quickselect inplace** — yes (no copy).
+7. **`<` vs `<=`** in partition — both work; `<=` for left-bias.
 
-2. **3-way partition (Dutch Flag)** — handles many duplicates in `O(n)`. Code above. Used by Java's `Arrays.sort` for primitives.
+---
 
-3. **Introsort** — start with quicksort, switch to heapsort when recursion depth exceeds `2 log₂ n`. Used by C++'s `std::sort`. Guarantees `O(n log n)` worst case while keeping quicksort's average constant factor.
+## 11. Senior follow-ups & variants
 
-4. **Iterative quicksort** — replace recursion with an explicit stack of `(lo, hi)` pairs. Useful when stack space is tight or you're in a non-TCO environment (V8). Note: the "recurse on smaller, iterate on larger" trick in the solution achieves the same memory bound while keeping the code readable.
+### Variant 1 — 3-way partition (Dutch flag)
+For arrays with many duplicates.
 
-5. **Median-of-3 / median-of-medians pivot** — alternative pivots. Median-of-3 is cheap and helps on near-sorted data; median-of-medians gives true `O(n log n)` worst case but is theoretical (huge constants).
+### Variant 2 — Random pivot
+Avoids adversarial sorted input.
 
-## Revision notes
+### Variant 3 — Quickselect (LeetCode #215)
+K-th element O(n) average.
 
-> **quick sort — 60 second recap**
-> - In-place divide-and-conquer; **partition** then recurse.
-> - Average **`O(n log n)`**, worst **`O(n²)`** — already-sorted with first-pivot.
-> - **Always randomize the pivot** (or median-of-3). Two lines, defeats worst case.
-> - Space: `O(log n)` average stack, `O(n)` worst. **No aux array** (unlike merge sort).
-> - **Not stable.** ES2019 requires stability ⇒ V8 dropped quicksort, switched to TimSort.
-> - **Trap 1:** all-equal elements → Lomuto degenerates to `O(n²)`. Use **3-way partition** (Dutch Flag).
-> - **Trap 2:** unbounded recursion depth on bad pivots — recurse on smaller half, iterate on larger.
-> - Partition primitive → **Quickselect** (kth-largest in `O(n)` average).
-> - Pivot strategies: first (bad), last (bad), random (defensive), median-of-3 (practical winner), median-of-medians (theoretical).
+### Variant 4 — Introsort
+Quicksort + heapsort fallback for guaranteed O(n log n).
+
+### Variant 5 — Parallel quicksort
+Recursive branches can run in parallel.
+
+---
+
+## 12. How to think aloud
+
+> "Quicksort: pick a pivot, partition array into ≤ pivot vs > pivot, recurse on each side. Average O(n log n); worst O(n²) — non-obvious worst-case is already-sorted input with first/last-element pivot, where each partition is n-1 + 0, recurrence becomes T(n) = T(n-1) + O(n) = O(n²), and stack depth is n (RangeError on V8 for n > 10-15k). Fixes: random pivot, or median-of-3 (pivot = median of `arr[lo], arr[mid], arr[hi]`). Median-of-3 is deterministic and handles sorted input. For many duplicates, 3-way partition (Dutch national flag): `< pivot | == pivot | > pivot` regions — avoids O(n²) on `[5, 5, 5, ..., 5]`. Lomuto partition is simpler (last-element pivot, single forward scan with swap); Hoare partition is faster (two pointers crossing) but trickier index bookkeeping. Quicksort is UNSTABLE — equal-keyed elements may swap. The partition step is the primitive behind Quickselect (LeetCode #215 'K-th largest') — pick pivot, recurse into the side containing k, O(n) average. Introsort: hybrid quicksort + heapsort fallback on deep recursion, used in C++ std::sort. Tail-recurse smaller side first to bound stack at O(log n). Trap: last-pivot on sorted (O(n²)); no fallback for adversarial; expecting stability; assuming O(n log n) without fix."
+
+---
+
+## 13. 60-second revision
+
+> - **Partition + recurse** each side.
+> - **Average O(n log n);** worst O(n²) on sorted + last-pivot.
+> - **Median-of-3 / random pivot** avoids worst.
+> - **3-way partition** for duplicates.
+> - **UNSTABLE.**
+> - **Lomuto simple; Hoare faster.**
+> - **Quickselect** = partition for k-th, O(n) avg.
+> - **Introsort** hybrid for guarantee.
+> - **Trap:** O(n²) sorted; stable assumption; no fix.
+
+---
+
+**Related:** [merge-sort.md](./merge-sort.md) · [`07-arrays/stable-sort-discussion.md`](../07-arrays/stable-sort-discussion.md) · [backtracking-template.md](./backtracking-template.md)
+
+**Concept primer:** [`concepts/recursion-and-the-call-stack.md`](../../concepts/recursion-and-the-call-stack.md)

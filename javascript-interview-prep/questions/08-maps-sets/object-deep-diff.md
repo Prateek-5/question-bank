@@ -1,184 +1,279 @@
 # Implement `diff(a, b)` — deep difference of two objects
 
-## Source
-- LeetCode #2700 "Differences Between Two Objects" — https://leetcode.com/problems/differences-between-two-objects/
-- Variants: lodash `_.isEqualWith` / `_.differenceWith`, json-patch RFC 6902.
+> **Difficulty:** Medium   |   **Time:** ~15 min   |   **Prereqs:** [is-object-empty.md](./is-object-empty.md), [`09-recursion/deep-merge-with-cycles.md`](../09-recursion/deep-merge-with-cycles.md)
+>
+> **Source:** LeetCode #2700. Audit logs, API comparison, JSON patch.
 
-## Why this question matters in interviews
-Object diff is the natural escalation from "is this empty?" — you walk **two** keysets, recurse on nested values, and report **what changed**. It's a small problem that exercises a surprising stack: `Set` union over keys, recursion with cycle detection via `WeakMap`, type-discrimination (primitive vs array vs object), and clean output shape (path-keyed vs nested). Backend engineers use this constantly: comparing API responses, generating audit logs, building config-change diffs for deploys, computing JSON patches for syncing. The interviewer is also checking whether you'll **`Object.keys` the union** (correct) versus only one side (subtly wrong — misses keys removed in `b`).
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+Walk two objects, recurse on nested values, report `[old, new]` at leaves where they differ. Union of keysets.
+
+**Verification examples**
+
 ```js
-function diff(a, b) {
-  // Different types or one is primitive -> the whole thing differs.
-  if (typeof a !== typeof b || isPrim(a) || isPrim(b) || Array.isArray(a) !== Array.isArray(b)) {
+diff({a: 1, b: 2}, {a: 1, b: 3});                // {b: [2, 3]}
+diff({a: {x: 1}}, {a: {x: 2}});                  // {a: {x: [1, 2]}}
+diff({a: 1}, {a: 1});                            // {}
+diff({a: 1, b: 2}, {a: 1});                      // {b: [2, undefined]}
+diff([1, 2], [1, 3]);                            // {1: [2, 3]}
+diff([1, 2], {0: 1, 1: 2});                      // [[1,2], {0:1, 1:2}] (type differ)
+```
+
+**Constraints**
+- Union of keys (don't miss b-only keys).
+- Leaves where different → `[a, b]` tuple.
+- No-diff subtree → `{}`.
+- Type mismatch (array vs object) → whole differs.
+- `null` is `typeof === 'object'` — guard.
+
+---
+
+## 2. Plain-English restatement
+
+Recursive walk. At leaves: `a === b ? {} : [a, b]`. At nested: union keysets, recurse, include only non-empty results.
+
+---
+
+## 3. Why this matters in interviews
+
+Exercises Set union over keys, recursion with cycle detection, type discrimination, clean output shape.
+
+---
+
+## 4. Mental model
+
+```
+   diff(a, b):
+     if typeof differs, or one is primitive, or array-ness differs:
+       return a === b ? {} : [a, b]
+     
+     out = {}
+     keys = Set(Object.keys(a) ∪ Object.keys(b))
+     for k of keys:
+       sub = diff(a[k], b[k])
+       if sub is [a, b] or has keys → out[k] = sub
+     return out
+   
+   Leaf rule:
+     a === b: empty diff {}.
+     else: tuple [a, b].
+   
+   Output shape:
+     LeetCode contract: leaves are 2-tuples, parents are objects.
+     Empty object means "no diff at this subtree."
+   
+   Cycle safety:
+     WeakMap<a, WeakSet<b>> of seen pairs.
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. Why Set union over keys?
+> 2. `null` handling?
+> 3. Array vs object differ — what's the output?
+
+---
+
+## 6. Brute force — walked through
+
+```js
+function brute(a, b) {
+  if (typeof a !== typeof b) return [a, b];
+  if (typeof a !== 'object' || a === null || b === null) {
     return a === b ? {} : [a, b];
   }
   const out = {};
-  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  // BUG: only walks a's keys — misses b-only keys.
+  for (const k of Object.keys(a)) {
+    const sub = brute(a[k], b[k]);
+    if (Array.isArray(sub) || Object.keys(sub).length) out[k] = sub;
+  }
+  return out;
+}
+```
+
+Misses keys in `b` not in `a`.
+
+---
+
+## 7. The unlocking insight
+
+> **Recursive walk; union keysets at each level; leaves are tuples `[a, b]`; parents are objects; empty `{}` = no diff.**
+
+Three properties:
+
+1. **Union keysets** — Set(a.keys ∪ b.keys).
+2. **Leaf rule:** `===` → `{}`; else `[a, b]`.
+3. **Type mismatch** at non-leaf → whole subtree differs.
+
+---
+
+## 8. Solution (annotated)
+
+```js
+const isPrim = (v) => v === null || typeof v !== 'object';
+
+function diff(a, b, seen = new WeakMap()) {
+  // Cycle safety
+  if (!isPrim(a) && !isPrim(b)) {
+    if (seen.get(a)?.has(b)) return {};                                    // step 1: cycle
+    if (!seen.has(a)) seen.set(a, new WeakSet());
+    seen.get(a).add(b);
+  }
+
+  // Type mismatch or primitive
+  if (
+    typeof a !== typeof b ||
+    isPrim(a) || isPrim(b) ||
+    Array.isArray(a) !== Array.isArray(b)
+  ) {
+    return a === b ? {} : [a, b];                                          // step 2: leaf
+  }
+
+  // Both same-shape object/array — union keysets
+  const out = {};
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);           // step 3: union
   for (const k of keys) {
-    const sub = diff(a[k], b[k]);
-    if (Array.isArray(sub) || (sub && Object.keys(sub).length)) {
-      out[k] = sub;
+    const sub = diff(a[k], b[k], seen);                                   // step 4: recurse
+    if (Array.isArray(sub) || Object.keys(sub).length) {
+      out[k] = sub;                                                        // step 5: keep non-empty
     }
   }
   return out;
 }
-const isPrim = (v) => v === null || typeof v !== 'object';
 ```
 
-### Runtime / engine behavior
-- The LeetCode contract uses a **discriminator output**: leaves where `a !== b` become `[a, b]` (a 2-tuple), and parents recursively become nested objects keyed by the same path. An empty object `{}` means "no diff at this subtree."
-- `new Set([...Object.keys(a), ...Object.keys(b)])` — classic **union over keysets**. `Set` dedupes for free. Walking only `Object.keys(a)` would miss keys that exist in `b` but not `a`.
-- For cycle safety in real code, pair each visit with a `WeakMap<a, WeakSet<b>>` of seen `(a, b)` pairs. (LeetCode tests don't include cycles, but mention it.)
-- Property order in the output: keys are inserted in iteration order of the `Set`, which is insertion order — `a`'s keys first, then any `b`-only keys.
-
-### Edge cases (these are the interview traps)
-1. **`null` is `typeof === 'object'`** — must short-circuit `null`/`undefined` before recursing. `diff(null, {a: 1})` should return `[null, {a:1}]`, not crash.
-2. **Array vs object mismatch** — `diff([1,2], {0:1, 1:2})` should treat them as different (one is array, one isn't). Check `Array.isArray(a) !== Array.isArray(b)` early.
-3. **Arrays of different length** — your code walks the union of indices. Missing indices become `undefined` on one side → leaf diff `[1, undefined]` or `[undefined, 2]`. Acceptable for LeetCode; real diffs use LCS / json-patch.
-4. **NaN equality** — `NaN !== NaN`. If you want "NaN equals NaN" semantics, use `Object.is(a, b)` at the leaf check.
-5. **Order sensitivity for arrays** — `diff([1,2,3], [3,2,1])` reports diffs at indices 0 and 2. Expected, but worth flagging.
-6. **Cycles** — `a.self = a`. Naïve recursion stack-overflows. Add `WeakMap` seen-pair tracking.
-7. **Same reference shortcut** — `if (a === b) return {}` saves work on shared subtrees.
-8. **Special types** — `Date`, `RegExp`, `Map`, `Set`. The naive walk treats them as plain objects; usually wrong. For LeetCode, assume JSON-shaped input.
-9. **Symbol keys** — `Object.keys` skips them. If you need them, also union `Object.getOwnPropertySymbols`.
-
-## Brute force approach
-`JSON.stringify(a) === JSON.stringify(b)` to detect equality, then bisect to find the differing path. O(n) string compare gives boolean only — useless for reporting *what* differs. Also lies about key order (`{a:1,b:2}` vs `{b:2,a:1}` stringify differently in some engines).
-
-## Optimal approach
-Single recursive walk. At each node:
-1. Reference-equal? Return empty diff.
-2. Either is primitive (or type mismatch)? Return the leaf tuple `[a, b]` if unequal, else empty.
-3. Both are objects/arrays of the matching kind? Build a `Set` union of keys, recurse on each, collect only the non-empty sub-diffs.
-
-Time: O(n) where n is total nodes in the union. Space: O(d) recursion + O(k) for the seen-set if cycles are handled.
-
-## Solution (JavaScript)
+**Try it yourself**
 
 ```js
-/**
- * Deep diff of two values.
- * Leaves where a !== b -> [a, b].
- * Internal nodes -> object of same shape with only differing keys.
- * Same value (deep-equal) at any subtree -> omitted from the parent.
- *
- * @param {unknown} a
- * @param {unknown} b
- * @returns {object | [unknown, unknown]}
- */
-function diff(a, b) {
-  const seen = new WeakMap();   // a -> WeakSet<b>, cycle guard
+diff({a: 1, b: 2}, {a: 1, b: 3});                            // {b: [2, 3]}
+diff({a: {x: 1, y: 2}}, {a: {x: 1, y: 3}});                  // {a: {y: [2, 3]}}
+diff({a: 1}, {a: 1});                                         // {}
+diff({a: 1, b: 2}, {a: 1});                                   // {b: [2, undefined]}
+diff(null, {a: 1});                                            // [null, {a:1}]
+diff([1, 2, 3], [1, 4, 3]);                                  // {1: [2, 4]}
+diff([1, 2], {0: 1, 1: 2});                                   // [[1,2], {0:1, 1:2}]
 
-  function isPrim(v) {
-    return v === null || typeof v !== 'object';
+// JSON-Patch RFC 6902 variant
+function jsonPatch(a, b, path = '') {
+  if (a === b) return [];
+  if (isPrim(a) || isPrim(b) || typeof a !== typeof b || Array.isArray(a) !== Array.isArray(b)) {
+    return [{ op: 'replace', path, value: b }];
   }
-
-  function walk(a, b) {
-    // Identity short-circuit (also handles NaN if you swap in Object.is)
-    if (a === b) return EMPTY;
-
-    // Type mismatch or one is primitive -> leaf diff
-    if (isPrim(a) || isPrim(b) || Array.isArray(a) !== Array.isArray(b)) {
-      return Object.is(a, b) ? EMPTY : [a, b];
-    }
-
-    // Cycle guard: if (a, b) already in flight, treat as equal subtree
-    let set = seen.get(a);
-    if (set && set.has(b)) return EMPTY;
-    if (!set) { set = new WeakSet(); seen.set(a, set); }
-    set.add(b);
-
-    const out = {};
-    const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
-    for (const k of keys) {
-      const sub = walk(a[k], b[k]);
-      if (sub !== EMPTY) out[k] = sub;
-    }
-    return Object.keys(out).length ? out : EMPTY;
+  const ops = [];
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  for (const k of keys) {
+    const subPath = `${path}/${k}`;
+    if (!(k in a)) ops.push({ op: 'add', path: subPath, value: b[k] });
+    else if (!(k in b)) ops.push({ op: 'remove', path: subPath });
+    else ops.push(...jsonPatch(a[k], b[k], subPath));
   }
-
-  const EMPTY = {};
-  const result = walk(a, b);
-  return result === EMPTY ? {} : result;
+  return ops;
 }
 ```
 
-## Step-by-step dry run
+---
 
-Input:
-```js
-const a = { x: 1, y: { a: 2, b: 'old' }, z: [1, 2, 3] };
-const b = { x: 1, y: { a: 2, b: 'new' }, z: [1, 4, 3], extra: true };
+## 9. Step-by-step dry run
 
-diff(a, b);
+```
+diff({a: 1, b: {x: 2}}, {a: 1, b: {x: 3, y: 4}}):
+
+Top: both objects, same array-ness.
+  keys = Set{'a', 'b'}.
+  
+  k='a': diff(1, 1):
+    Primitive, equal → {}.
+    {} not Array, no keys → don't include in out.
+  
+  k='b': diff({x:2}, {x:3, y:4}):
+    Both objects.
+    keys = Set{'x', 'y'}.
+    
+    k='x': diff(2, 3):
+      Primitive, not equal → [2, 3].
+    
+    k='y': diff(undefined, 4):
+      typeof differs (undefined vs number).
+      Both primitives.
+      undefined !== 4 → [undefined, 4].
+    
+    out_b = {x: [2, 3], y: [undefined, 4]}.
+  
+  out_b has keys → include in top.
+  
+  Final: {b: {x: [2, 3], y: [undefined, 4]}}.
+
+diff(null, {a:1}):
+  isPrim(null) true.
+  typeof null === 'object', typeof {a:1} === 'object'.
+  But isPrim(null) || isPrim(b)? isPrim(null) is true.
+  Branch fires → null === {a:1}? No → return [null, {a:1}].
+
+diff([1,2], {0:1, 1:2}):
+  Both typeof 'object'.
+  Array.isArray differs → branch fires.
+  [1,2] === {0:1,1:2}? No → return [[1,2], {0:1,1:2}].
 ```
 
-Trace:
-1. Top call. Both are objects, neither is array. Union keys: `{x, y, z, extra}`.
-2. `x`: both `1`. `walk(1, 1)` → `a === b` → `EMPTY`. Skip.
-3. `y`: both objects. Recurse. Union keys: `{a, b}`.
-   - `a`: both `2`. `EMPTY`. Skip.
-   - `b`: `'old'` vs `'new'`. Both primitive, unequal → return `['old', 'new']`. Push into `out.b`.
-   - Return `{ b: ['old', 'new'] }`. Push into `out.y`.
-4. `z`: both arrays. Recurse. Union indices: `{'0', '1', '2'}`.
-   - `'0'`: both `1`. Skip.
-   - `'1'`: `2` vs `4`. Return `[2, 4]`. Push into `out['1']`.
-   - `'2'`: both `3`. Skip.
-   - Return `{ '1': [2, 4] }`. Push into `out.z`.
-5. `extra`: `undefined` vs `true`. Both primitive, unequal → return `[undefined, true]`. Push into `out.extra`.
-6. Top-level result:
-```js
-{
-  y: { b: ['old', 'new'] },
-  z: { '1': [2, 4] },
-  extra: [undefined, true],
-}
-```
+---
 
-## Important takeaways
+## 10. Common confusion + traps
 
-**Syntax to memorize**
-- `new Set([...Object.keys(a), ...Object.keys(b)])` — union of two keysets.
-- `Array.isArray(a) !== Array.isArray(b)` — detect array-vs-object mismatch.
-- `null`-check **before** `typeof === 'object'`.
-- `Object.is(a, b)` for `NaN`-safe leaf compare.
-- `WeakMap<a, WeakSet<b>>` for cycle guard.
+1. **Walk only `a`'s keys** — miss b-only.
+2. **`null` is `typeof === 'object'`** — guard with isPrim.
+3. **Array vs object** — explicit check.
+4. **Output shape** — leaves `[a, b]`, parents `{}` for no-diff.
+5. **Cycles** — WeakMap pair tracking.
+6. **`Date`/`RegExp`** — treated as objects; would walk enumerable props (empty); === check would still pass for same ref. Decide policy.
+7. **Empty object vs no-diff** — disambiguate via spec.
 
-**Patterns to reuse**
-- Set-union over keysets is the same shape as: deep-equal, deep-merge, deep-clone-with-overrides, structuredClone polyfill.
-- `EMPTY` sentinel returned up the call stack to signal "skip me" — cleaner than threading an `omit` flag.
+---
 
-**Common mistakes**
-- Walking only `Object.keys(a)` — misses keys that exist only in `b`. Top reason candidates fail this question.
-- Forgetting `null` is `typeof === 'object'` → recursing into `null` → crash.
-- Treating arrays like objects with no index check — `diff([1,2,3], {})` should be a wholesale leaf, not "key 0,1,2 missing."
-- Returning the same `{}` literal both as "empty diff" and as a real result — using a `EMPTY` sentinel via reference compare disambiguates cleanly.
-- Forgetting cycles. Test with `a.self = a`.
+## 11. Senior follow-ups & variants
 
-**Related questions**
-- Deep equality (`isEqual`) — same walk but returns boolean.
-- Deep merge — same walk but combines instead of comparing.
-- json-patch (RFC 6902) — output is an array of `{ op, path, value }` operations, replayable.
-- `Object.keys` union vs `Reflect.ownKeys` (includes symbols).
+### Variant 1 — JSON-Patch RFC 6902
+Output ops: add/remove/replace with paths.
 
-## Variants
+### Variant 2 — Path-keyed output
+`{'a.b.c': [old, new]}` — flatter for log lines.
 
-1. **Path-keyed flat output** — instead of nested objects, output `{ "y.b": ['old', 'new'], "z.1": [2, 4] }`. Easier to scan in logs. Track path string while recursing.
+### Variant 3 — `_.isEqualWith`
+Lodash with custom comparator.
 
-2. **JSON Patch (RFC 6902)** — produce `[{ op: 'replace', path: '/y/b', value: 'new' }, ...]`. Replayable on the source to produce the target. Used by Kubernetes, FHIR, JSON-Patch libraries.
+### Variant 4 — Apply diff
+Reverse: `apply(a, diff) === b`.
 
-3. **Custom equality / ignore keys** — pass `{ ignore: ['updatedAt'], eq: (a,b) => ... }` for fuzzy compares (timestamps, IDs that don't matter). Common in test-snapshot diffing.
+### Variant 5 — Streaming diff
+For huge objects; yield ops lazily.
 
-## Revision notes
+---
 
-> **diff — 60 second recap**
-> - Recurse with `Set` union of both keysets. Skip same-value subtrees.
-> - Leaf format: `[a, b]`. Internal: nested object of only-differing keys.
-> - Guards: `null`-check first, `Array.isArray` mismatch is a wholesale diff, `Object.is` for NaN.
-> - Cycles: `WeakMap<a, WeakSet<b>>`.
-> - **Trap:** walking only `Object.keys(a)` — misses keys in `b` only.
-> - Family: `isEqual`, `merge`, `structuredClone`, json-patch — same two-tree walk.
+## 12. How to think aloud
+
+> "Object deep-diff: walk both, union keysets at each level, recurse on values. Leaf rule: `a === b ? {} : [a, b]` — empty object means 'no diff here,' tuple means 'differ.' Parent rule: collect non-empty sub-diffs into an object. Critical: must union `Object.keys(a) ∪ Object.keys(b)` — walking only `a`'s keys misses keys removed in `b` (or added in `b` only). Type discrimination: `null` is `typeof === 'object'` so guard with an `isPrim` helper (`v === null || typeof v !== 'object'`); also check `Array.isArray(a) !== Array.isArray(b)` to treat array-vs-object as whole-differ. Cycle safety: WeakMap<a, WeakSet<b>> tracking seen pairs — if revisit same pair, treat as equal (assume same subtree). Output shape options: (1) recursive `{key: [a, b] | nested}` (LeetCode #2700); (2) JSON-Patch RFC 6902 — `[{op: 'replace', path: '/a/b', value: x}, ...]` for transmission; (3) path-keyed flat — `{'a.b.c': [old, new]}` for log lines. Lodash `_.isEqualWith` for custom comparator. Trap: walking only a's keys; null type-of; array vs object same-typeof; cycles."
+
+---
+
+## 13. 60-second revision
+
+> - **Union keysets** at each level (don't miss b-only).
+> - **Leaf:** `a === b ? {} : [a, b]`.
+> - **Parent:** include non-empty sub-diffs.
+> - **`null` is object-typed** — isPrim guard.
+> - **`Array.isArray(a) !== Array.isArray(b)`** → whole differ.
+> - **Cycles:** WeakMap<a, WeakSet<b>>.
+> - **JSON-Patch RFC 6902** for transmission.
+> - **Apply diff = inverse.**
+> - **Trap:** only walk a; null typeof; array vs object.
+
+---
+
+**Related:** [is-object-empty.md](./is-object-empty.md) · [convert-object-to-json-string.md](./convert-object-to-json-string.md) · [`07-arrays/structured-clone-vs-spread.md`](../07-arrays/structured-clone-vs-spread.md) · [`09-recursion/deep-merge-with-cycles.md`](../09-recursion/deep-merge-with-cycles.md)
+
+**Concept primer:** [`concepts/maps-sets.md`](../../concepts/maps-sets.md), [`concepts/recursion-and-the-call-stack.md`](../../concepts/recursion-and-the-call-stack.md)

@@ -1,187 +1,293 @@
-# Implement a Writable stream with `_write(chunk, enc, cb)` and backpressure
+# Writable stream — `_write(chunk, enc, cb)` + backpressure
 
-## Source
-- codedamn "Stream Writable Lab": https://codedamn.com/problem/OHvS9lh7Ac_Ncg72qGorb
-- Canonical Node.js docs: `stream.Writable`, `_write`, `_writev`, `_final`.
+> **Difficulty:** Senior   |   **Time:** ~15 min   |   **Prereqs:** [`concepts/streams.md`](../../concepts/streams.md), [backpressure-demo.md](./backpressure-demo.md)
+>
+> **Source:** Node `stream.Writable`. Every backend stream sink (DB inserter, S3 uploader, log forwarder) is a Writable.
 
-## Why this question matters in interviews
-Writables are where backend engineers spend most of their stream time — every sink is a Writable: DB inserter, S3 uploader, log forwarder, websocket fan-out. The interview probe is always the same: "Implement `_write(chunk, encoding, callback)` for a [DB / queue / file] sink." The candidates who pass call `cb()` exactly once, signal backpressure properly, and override `_final` for graceful shutdown. The candidates who fail call `cb()` zero times (the pipeline hangs), twice (`ERR_MULTIPLE_CALLBACK`), or do async work without awaiting it inside `_write` (data loss). Nail this one and you've demonstrated mastery.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### The contract of `_write(chunk, encoding, callback)`
-- `chunk`: the data Node is asking you to persist (Buffer or whatever in `objectMode`).
-- `encoding`: the encoding of `chunk` if it's a string. Mostly ignorable in `objectMode`.
-- `callback(err?)`: **MUST be called exactly once.**
-  - Calling `cb()` with no arg → success, Node is free to send the next chunk.
-  - Calling `cb(err)` → error, Node destroys the stream and the consumer sees `'error'`.
-  - **Not calling it** → the Writable hangs forever, the producer eventually stalls due to backpressure. Most common bug.
-  - **Calling twice** → throws `ERR_MULTIPLE_CALLBACK`.
+Subclass `Writable` and implement `_write(chunk, encoding, callback)`. Optional: `_writev` for batch, `_final` for graceful shutdown, `_destroy` for cleanup.
 
-### How backpressure actually works
-1. Producer calls `writable.write(chunk)`.
-2. Internally Node appends `chunk` to its buffer and calls `_write` if not already busy.
-3. If buffer size ≥ `highWaterMark`, `write()` returns `false` — producer is supposed to pause.
-4. When `_write`'s callback fires, Node pulls the next chunk from the buffer and calls `_write` again.
-5. When the buffer drops below HWM, Node emits `'drain'` — producer can resume.
-
-**Net effect:** the speed at which you call `cb()` controls how fast the producer can write. Slow `cb()` = natural rate limit.
-
-### `_writev(chunks, cb)` — batched writes
-If many `write()` calls queue up before `_write` finishes one, Node will batch them. Override `_writev(chunks, cb)` to receive them as an array — huge perf win for DB sinks (`INSERT ... VALUES (), (), ()` instead of N round trips).
-
-### `_final(cb)` — graceful shutdown
-Called once when the producer calls `writable.end()`. Your last chance to flush a buffer, COMMIT a transaction, close a DB connection. Always call `cb()`.
-
-### `_destroy(err, cb)` — failure shutdown
-Called on `destroy()` (manual or from `pipeline` error). Release resources unconditionally.
-
-## Brute force approach
-"I'll just push every chunk into an array and `console.log` at end." Works, but ignores backpressure (you'll buffer infinite memory), ignores async I/O, and skips `_final`. Reject this for any real sink.
-
-## Optimal approach
-Subclass `Writable` (or pass `write` in options). In `_write`, kick off the async I/O and call `cb` only after it completes (or rejects). Override `_writev` for batching. Override `_final` for flush logic. Override `_destroy` to release resources on error/abort.
-
-## Solution (JavaScript)
+**Verification examples**
 
 ```js
-'use strict';
 const { Writable } = require('node:stream');
 
-/**
- * A Writable sink that simulates a batched DB inserter.
- * Buffers up to `batchSize` records, then flushes asynchronously.
- * Honors backpressure: cb() fires only after the flush completes.
- */
-class BatchInsertStream extends Writable {
-  /**
-   * @param {(rows: object[]) => Promise<void>} flushFn
-   */
-  constructor(flushFn, { batchSize = 100, ...opts } = {}) {
-    super({ objectMode: true, highWaterMark: batchSize * 2, ...opts });
-    this.flushFn = flushFn;
-    this.batchSize = batchSize;
-    this.buffer = [];
+class DbBatchWriter extends Writable {
+  constructor(opts = {}) {
+    super({ objectMode: true, highWaterMark: 100, ...opts });
   }
-
-  // Called once per chunk in objectMode.
-  _write(chunk, _encoding, cb) {
-    this.buffer.push(chunk);
-    if (this.buffer.length >= this.batchSize) {
-      this._flush().then(() => cb(), cb);     // cb(err) on rejection
-    } else {
-      cb();                                   // accepted, not yet flushed
+  async _write(record, enc, cb) {
+    try {
+      await db.insert(record);
+      cb();                                                              // EXACTLY once
+    } catch (err) {
+      cb(err);                                                            // propagate
     }
   }
-
-  // Optimization: receive the whole pending batch in one call.
-  _writev(chunks, cb) {
-    for (const { chunk } of chunks) this.buffer.push(chunk);
-    if (this.buffer.length >= this.batchSize) {
-      this._flush().then(() => cb(), cb);
-    } else {
-      cb();
-    }
+  _writev(chunks, cb) {                                                  // batch
+    const records = chunks.map((c) => c.chunk);
+    db.bulkInsert(records).then(() => cb()).catch(cb);
   }
-
-  // Called on .end() — flush remainder.
-  _final(cb) {
-    this._flush().then(() => cb(), cb);
-  }
-
-  // Called on .destroy(err) or pipeline error — discard buffer.
-  _destroy(err, cb) {
-    this.buffer.length = 0;
-    cb(err);
-  }
-
-  async _flush() {
-    if (this.buffer.length === 0) return;
-    const batch = this.buffer;
-    this.buffer = [];
-    await this.flushFn(batch);
+  _final(cb) {                                                            // graceful close
+    db.commit().then(() => cb()).catch(cb);
   }
 }
+```
 
-// Usage with pipeline
+**Constraints**
+- `callback` MUST be called exactly once.
+- Not calling → stream hangs forever.
+- Calling twice → `ERR_MULTIPLE_CALLBACK`.
+- `_writev` for batched writes (DB INSERT VALUES).
+- `_final` for graceful shutdown.
+
+---
+
+## 2. Plain-English restatement
+
+A Writable consumes chunks. Override `_write(chunk, encoding, callback)`; do your async work; call `callback()` exactly once on success or `callback(err)` on failure. The speed of `callback` controls how fast the producer writes — natural backpressure.
+
+---
+
+## 3. Why this matters in interviews
+
+Most stream time on backend is on the Writable side. Interview probe: "Implement `_write` for a DB sink." Pass = `cb()` once + backpressure + `_final`.
+
+---
+
+## 4. Mental model
+
+```
+   class extends Writable:
+     super({ objectMode, highWaterMark });
+     
+     _write(chunk, encoding, callback):
+       // Do async work. Call callback exactly ONCE.
+       doAsync()
+         .then(() => callback())          ← success
+         .catch(err => callback(err));    ← failure
+     
+     _writev(chunks, callback):           ← batch optimization
+       // Receive array of chunks queued while previous _write was busy.
+       // Useful for DB: INSERT INTO t VALUES (), (), () instead of N round trips.
+     
+     _final(callback):                    ← graceful shutdown (.end())
+       // Flush buffers, commit transactions, close connections.
+     
+     _destroy(err, callback):              ← failure shutdown
+       // Release resources unconditionally.
+
+   Backpressure:
+     - Producer calls writable.write(chunk).
+     - Internal buffer grows.
+     - If buffer ≥ highWaterMark, write() returns false.
+     - Producer should pause until 'drain'.
+     - SPEED of callback controls producer rate.
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. What happens if you forget to call `callback`?
+> 2. What does `_writev` give you over `_write`?
+> 3. Where do you commit a transaction — `_write`, `_writev`, or `_final`?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: synchronous push to array
+Ignores backpressure; OOM on large input.
+
+### Wrong attempt 2: forget to call cb
+Stream hangs; producer eventually stalls due to backpressure.
+
+### Wrong attempt 3: call cb twice
+`ERR_MULTIPLE_CALLBACK` thrown.
+
+---
+
+## 7. The unlocking insight
+
+> **`_write` must call callback exactly once. Speed of callback = backpressure. `_writev` for batch; `_final` for graceful close; `_destroy` for cleanup.**
+
+Three properties:
+
+1. **Exactly-one callback** — never zero, never twice.
+2. **`_writev` batches** for DB sinks.
+3. **`_final` for graceful flush**.
+
+---
+
+## 8. Solution (annotated)
+
+```js
+const { Writable } = require('node:stream');
+
+class DbBatchWriter extends Writable {
+  constructor({ batchSize = 100, ...opts } = {}) {
+    super({ objectMode: true, highWaterMark: batchSize, ...opts });
+    this.batchSize = batchSize;
+  }
+
+  async _write(record, enc, cb) {                                       // step 1: single write
+    try {
+      await db.insert(record);
+      cb();                                                              // step 2: success
+    } catch (err) {
+      cb(err);                                                            // step 3: error
+    }
+  }
+
+  async _writev(chunks, cb) {                                            // step 4: batch write
+    const records = chunks.map((c) => c.chunk);
+    try {
+      await db.bulkInsert(records);
+      cb();
+    } catch (err) {
+      cb(err);
+    }
+  }
+
+  async _final(cb) {                                                      // step 5: graceful close
+    try {
+      await db.commit();
+      await db.close();
+      cb();
+    } catch (err) {
+      cb(err);
+    }
+  }
+
+  _destroy(err, cb) {                                                     // step 6: failure cleanup
+    db.rollback().finally(() => cb(err));
+  }
+}
+```
+
+**Try it yourself**
+
+```js
 const { pipeline } = require('node:stream/promises');
 const { Readable } = require('node:stream');
 
-async function fakeInsert(rows) {
-  await new Promise((r) => setTimeout(r, 50));   // simulate DB latency
-  console.log(`inserted ${rows.length} rows`);
-}
+await pipeline(
+  Readable.from(asyncRecordSource()),                                    // producer
+  new DbBatchWriter(),                                                    // sink
+);
+// All errors propagated; all streams destroyed on failure.
 
-(async () => {
-  const source = Readable.from(
-    (function* () { for (let i = 0; i < 250; i++) yield { id: i }; })(),
-  );
-  await pipeline(source, new BatchInsertStream(fakeInsert, { batchSize: 100 }));
-  // logs: "inserted 100 rows", "inserted 100 rows", "inserted 50 rows"
-})();
+// Without _writev: 1000 records → 1000 INSERT statements.
+// With _writev: 1000 records batched into ~10 bulk INSERTs.
+
+// Forgetting cb() test
+class Hanging extends Writable {
+  _write(chunk, enc, cb) {
+    // forgot cb()!
+  }
+}
+// Pipeline hangs forever waiting for cb.
 ```
 
-## Step-by-step dry run
+---
 
-Source emits 250 objects, batchSize=100, HWM=200.
+## 9. Step-by-step dry run
 
-| Tick | Producer state | Buffer | DB | Notes |
-| --- | --- | --- | --- | --- |
-| 1 | wrote 1..100 | 100 rows queued | idle | `_write` fires for each. At chunk 100, buffer hits batchSize → kick off async flush, hold `cb` until DB returns. |
-| 2 | producer paused | 100 rows in DB flush | flushing... | `write()` returned `false` for chunk 200, producer waits for `'drain'`. |
-| 3 | flush completes (50ms) | empty | "inserted 100 rows" | `cb()` fires → Node pulls next chunk. Eventually buffer fills again. |
-| 4 | wrote 101..200 | 100 rows | idle | Second flush kicks off. |
-| 5 | source emits 201..250 then EOF | 50 rows | flushing 101..200 | `writable.end()` is called. |
-| 6 | second flush done | 50 rows | "inserted 100 rows" | Node calls `_final(cb)`. |
-| 7 | `_final` flushes remainder | empty | "inserted 50 rows" | `cb()` → emits `'finish'` → pipeline resolves. |
+```
+new DbBatchWriter() with batchSize 100:
 
-**Critical observation:** the producer is naturally rate-limited by DB latency. 250 rows × 50ms per 100-row batch = 3 flushes ≈ 150ms total. No queue grew unbounded; no row was lost; no chunk was double-inserted.
+Producer calls writable.write(record1):
+  Node appends to internal buffer; calls _write(record1, _, cb).
+  _write awaits db.insert (e.g., 5ms).
+  cb() fires → Node pulls next chunk.
 
-**What goes wrong without `_final`:** the last 50 rows sit in `this.buffer` forever. Pipeline resolves successfully but data is lost. Silent bug.
+If producer is fast and calls write() many times before _write completes:
+  Node queues chunks in buffer.
+  Once buffer ≥ highWaterMark (100), write() returns false.
+  Producer should pause.
 
-## Important takeaways
+When previous _write's cb fires:
+  If multiple chunks queued, Node CALLS _writev with batch.
+  _writev does db.bulkInsert. Faster than N _writes.
 
-**Syntax to memorize**
-- `super({ objectMode, highWaterMark })` in constructor.
-- `_write(chunk, encoding, cb)` — call `cb()` **exactly once**.
-- `_writev(chunks, cb)` for batching (chunks is `[{ chunk, encoding }, ...]`).
-- `_final(cb)` for graceful shutdown.
-- `_destroy(err, cb)` for failure / abort shutdown.
+Producer calls writable.end():
+  Buffer drains via _write/_writev.
+  After buffer empty, _final(cb) called.
+  _final commits + closes.
+  cb() → emit 'finish'.
 
-**Patterns to reuse**
-- "Buffer N, flush async" is the universal sink pattern: log shippers, metrics aggregators, Postgres COPY, ES `_bulk`, Kafka batch producer.
-- `.then(() => cb(), cb)` — concise way to convert a promise into a node-style callback.
-- Pair `_final` with a `_destroy` that *discards* the buffer; on error you don't want to half-commit.
+If _write errors (cb(err)):
+  Node destroys writable.
+  Emit 'error'.
+  _destroy(err, cb) called for cleanup.
+  pipeline rejects.
 
-**Common mistakes**
-- Calling `cb` synchronously after kicking off async work — defeats backpressure, producer races ahead.
-- Calling `cb` twice (e.g. once in `.then` and again in error handler) → `ERR_MULTIPLE_CALLBACK`.
-- Throwing from `_write` — wrap in try/catch and pass to `cb(err)`.
-- Forgetting `_final` → lost data on `end()`.
-- Setting `highWaterMark` too low for the I/O latency: e.g. HWM=1 with 50ms-per-write means 20 rows/sec max. Make HWM ≥ batch size.
-- `pipeline(src, dst)` where `dst._write` never calls `cb` → pipeline hangs with no error. Worst kind of bug.
+If you forget cb():
+  Stream waits forever. Producer eventually stalls (buffer never drains).
+  No error emitted. Diagnostically painful.
 
-**Related**
-- `readable-stream-push.md` — building the producer.
-- `stream-pipeline-error-handling.md` — what happens when `cb(err)` fires.
-- `stream-pipeline-lab.md` — putting Readable + Transform + your Writable together.
+If you call cb twice:
+  ERR_MULTIPLE_CALLBACK thrown. Crashes process unless caught.
+```
 
-## Variants
+---
 
-1. **Concurrent flushes** — instead of waiting for each flush before the next, allow up to `concurrency` flushes in flight. Use a semaphore in `_write`; in `_final`, await all in-flight before calling `cb`. Common for high-throughput sinks but harder to get right (order is no longer guaranteed).
+## 10. Common confusion + traps
 
-2. **Retry on transient error** — wrap `flushFn` with a retry loop with exponential backoff. Only call `cb(err)` after final retry fails. Be careful: holding `cb` for long means the producer stalls — that's often what you want, but mention the tradeoff.
+1. **Forget `cb()`** — hangs forever.
+2. **Call `cb` twice** — `ERR_MULTIPLE_CALLBACK`.
+3. **Async work without await** — data loss.
+4. **Skip `_writev`** — N round trips instead of batch.
+5. **Skip `_final`** — no graceful commit/close.
+6. **Throw in `_write`** — uncaught.
+7. **Use `_destroy` for normal close** — `_final` for graceful, `_destroy` for failure.
 
-3. **`Writable.toWeb()` / Web Streams interop** — modern Node exposes `Writable.toWeb()` returning a `WritableStream` from the Web Streams spec. Useful for code that needs to run in browsers, Cloudflare Workers, Deno. Mention this as a 2026 awareness item.
+---
 
-## Revision notes
+## 11. Senior follow-ups & variants
 
-> **Writable from scratch — 60 second recap**
-> - Subclass `Writable`, set `{ objectMode, highWaterMark }`.
-> - `_write(chunk, encoding, cb)` — call `cb()` EXACTLY ONCE. Async work? Call `cb` only after it finishes.
-> - `cb()` = success → Node sends next chunk. `cb(err)` = fail → stream destroyed.
-> - `.write()` returns `false` when buffer ≥ HWM → producer should pause.
-> - Override `_writev` for batched writes (DB INSERTs, S3 multipart).
-> - Override `_final(cb)` for flush-on-end. Skipping this = silent data loss.
-> - Override `_destroy(err, cb)` for failure cleanup — discard buffer, close handles.
-> - Trap: calling cb twice → `ERR_MULTIPLE_CALLBACK`. Forgetting cb → hang.
+### Variant 1 — Object mode for record streams
+HWM = entry count; tune to DB batch size.
+
+### Variant 2 — `cork()`/`uncork()` for explicit batching
+Different from `_writev`; producer-side batching.
+
+### Variant 3 — TCP socket as Writable
+Same `_write` shape; `cb` after `socket.write` completes.
+
+### Variant 4 — Backpressure across TCP
+Network is slow consumer; same mechanism end-to-end.
+
+### Variant 5 — Test with `pipeline()`
+Modern way to wire producer → sink with error propagation.
+
+---
+
+## 12. How to think aloud
+
+> "Subclass Writable; override `_write(chunk, encoding, callback)`. Do async work; call `callback()` EXACTLY once — success no arg, error `cb(err)`. Not calling → stream hangs forever (most common bug). Calling twice → `ERR_MULTIPLE_CALLBACK`. SPEED of callback controls backpressure naturally. For batch sinks (DB INSERT VALUES (), (), ()), override `_writev(chunks, cb)` — Node delivers all queued chunks as an array. For graceful shutdown (commit transaction, close connection), override `_final(cb)` — runs once on `.end()`. For failure cleanup (rollback on error), override `_destroy(err, cb)`. With `pipeline()`, errors propagate and all streams destroyed automatically. Trap: forget cb; double cb; async work without await; skip _writev (perf); throw in _write (uncaught)."
+
+---
+
+## 13. 60-second revision
+
+> - **Subclass `Writable`; override `_write(chunk, enc, cb)`.**
+> - **`cb()` EXACTLY once** — never zero, never twice.
+> - **Speed of `cb`** controls producer rate (backpressure).
+> - **`_writev(chunks, cb)`** for batch sinks (DB bulk INSERT).
+> - **`_final(cb)`** for graceful shutdown.
+> - **`_destroy(err, cb)`** for failure cleanup.
+> - **Object mode** for record streams; HWM = entry count.
+> - **Use `pipeline()`** for error propagation.
+> - **Trap:** forget cb (hang); double cb (throw); skip _writev (perf); throw (uncaught).
+
+---
+
+**Related:** [readable-stream-push.md](./readable-stream-push.md) · [backpressure-demo.md](./backpressure-demo.md) · [stream-pipeline-lab.md](./stream-pipeline-lab.md) · [stream-pipeline-error-handling.md](./stream-pipeline-error-handling.md)
+
+**Concept primer:** [`concepts/streams.md`](../../concepts/streams.md)

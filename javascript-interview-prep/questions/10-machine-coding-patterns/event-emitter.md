@@ -1,93 +1,162 @@
 # Implement an `EventEmitter`
 
-## Source
-- Canonical machine-coding interview problem (LeetCode #2694 "Event Emitter", Node.js source: `events` module, BFE.dev).
-- LeetCode reference: https://leetcode.com/problems/event-emitter/
+> **Difficulty:** Medium   |   **Time:** ~20 min   |   **Prereqs:** [`concepts/maps-sets.md`](../../concepts/maps-sets.md), [`concepts/closures.md`](../../concepts/closures.md)
+>
+> **Source:** [LeetCode 2694 — Event Emitter](https://leetcode.com/problems/event-emitter/). Node.js `events` module. The #1 most-asked machine-coding problem for backend roles.
 
-## Why this question matters in interviews
-EventEmitter is the **#1 most-asked machine-coding problem for Node.js / backend roles**. It tests four things at once: (1) Map/Set data structure choice, (2) returning an unsubscribe handle vs ID-based unsubscribe, (3) the **once** decorator and its self-removing wrapper, (4) memory-leak awareness. Every Node engineer uses EventEmitter daily — streams, http, child_process, custom domain events — so interviewers expect a clean, idiomatic implementation in under 10 minutes. The senior-level differentiators are: returning a `subscription` object with `.unsubscribe()` (vs the older `off(event, fn)` API), handling listener-during-emit safely (callbacks added in a handler shouldn't fire in the current emit), and discussing wildcards / once / max-listeners.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
-```js
-const emitter = new EventEmitter();
-const sub = emitter.subscribe('user:login', (user) => console.log(user));
-emitter.emit('user:login', { id: 1 });   // logs { id: 1 }
-sub.unsubscribe();
-emitter.emit('user:login', { id: 1 });   // nothing
-
-emitter.once('boot', () => console.log('booted'));
-emitter.emit('boot');   // logs
-emitter.emit('boot');   // nothing
-```
-
-Internal shape:
-```js
+**Signature**
+```ts
 class EventEmitter {
-  constructor() { this.events = new Map(); /* Map<eventName, Set<fn>> */ }
+  subscribe(event: string, fn: Function): { unsubscribe(): void };
+  on(event: string, fn: Function): { unsubscribe(): void };   // alias
+  once(event: string, fn: Function): { unsubscribe(): void };
+  off(event: string, fn: Function): void;
+  emit(event: string, ...args: any[]): any[];
 }
 ```
 
-### Runtime / engine behavior
-- `Map<string, Set<fn>>` is the textbook choice. `Set` gives O(1) add/remove and de-dupes (same `fn` registered twice is stored once).
-- **Order matters** in some semantics — Node's `EventEmitter` fires handlers in **registration order**. `Set` preserves insertion order in JS, so it works. If interviewer insists on duplicates allowed (rare), switch to `Array`.
-- **Snapshot on emit**: when iterating handlers to fire them, take a snapshot (`[...set]`) so that handlers added or removed during emit don't break iteration. This is a classic concurrent-modification bug.
-- **`once`**: wrap the handler in a function that calls the real one and then unsubscribes itself. Store the wrapper, not the original — so the wrapper is what `off` removes.
-- Callbacks fire **synchronously** in Node's EventEmitter (unlike Promise.then). Mention this — many candidates assume async.
+**Input / Output examples**
 
-### Edge cases (these are the interview traps)
-1. **Unsubscribe during emit** — if a handler calls `sub.unsubscribe()` during the emit loop, the next handlers must still fire. Snapshot the listeners first.
-2. **Subscribe during emit** — newly added handlers should **not** fire in the current emit. Snapshot handles this for free.
-3. **Same fn subscribed twice** — Set: stored once. Array: stored twice and fires twice. Node's default is "twice." Decide and state it.
-4. **`once` + `off`** — calling `off(event, fn)` where `fn` is the original (not the wrapper) — does it remove? In Node, `removeListener` walks both. Implement by storing a `wrapped → original` map, or by exposing `sub.unsubscribe()` so the caller doesn't need to track the wrapper.
-5. **Emit with no handlers** — should be a no-op, never throw. Special exception: Node throws on `'error'` event with no listeners. Mention but don't implement unless asked.
-6. **Max listeners warning** — Node warns at 10 listeners. Skip unless asked.
-7. **Wildcard / namespacing** — `emitter.on('user.*', fn)`. Not standard; advanced variant.
-8. **Memory leaks** — forgetting to `off` keeps closures alive. Single most common bug in Node services. Always pair `on` with `off` in lifecycles, or use `AbortSignal` (Node 18+).
+| Setup                                                                                       | Behaviour                                              |
+|---------------------------------------------------------------------------------------------|---------------------------------------------------------|
+| `sub = e.subscribe('x', fn); e.emit('x', 1); sub.unsubscribe(); e.emit('x', 1)`            | first emit fires fn, second doesn't                    |
+| `e.once('boot', fn); e.emit('boot'); e.emit('boot')`                                       | fn fires once; second emit is no-op                    |
+| `e.emit('unknown')`                                                                         | returns `[]`; no error                                  |
+| Same `fn` subscribed twice via `Set`                                                        | stored once; fires once per emit                       |
+| `e.subscribe('x', fn)` inside another `fn` during emit                                     | new fn does NOT fire in current emit                  |
+| `sub.unsubscribe()` inside an emit handler                                                  | next handlers in snapshot still fire                  |
 
-## Brute force approach
-A plain object keyed by event name, value = array. Works, but suffers from the usual prototype-pollution risk (`emitter.emit('toString')` could trip on inherited stuff). Skip — use `Map`.
+**Constraints**
+- Map<event, Set<fn>> internal shape.
+- Return `{ unsubscribe }` handle from subscribe (better than ID-based).
+- Snapshot listeners before iterating in emit (concurrent-modification safety).
+- `once` wraps `fn` in a self-removing wrapper.
+- Fire handlers synchronously (Node parity).
 
-## Optimal approach
-`Map<eventName, Set<fn>>`. `subscribe(event, fn)` adds, returns `{ unsubscribe }` closing over the set + fn. `emit(event, ...args)` snapshots the set and calls each. `once(event, fn)` wraps `fn` to self-remove, then `subscribe`s the wrapper. O(1) subscribe / unsubscribe, O(N) emit where N = listener count.
+---
 
-## Solution (JavaScript)
+## 2. Plain-English restatement
+
+A topic-keyed callback registry. `subscribe(event, fn)` adds a listener and returns a handle to remove it. `emit(event, ...args)` calls every listener for that event, in registration order, with the args. `once(event, fn)` is `subscribe` + auto-remove after the first fire. The trickiness is letting handlers safely subscribe/unsubscribe **during** an emit — solved by snapshotting the listener set first.
+
+---
+
+## 3. Why this matters in interviews
+
+EventEmitter is the **#1 most-asked machine-coding problem for Node.js / backend roles**. It tests four things at once: (1) Map/Set choice, (2) returning an unsubscribe handle vs ID-based unsubscribe, (3) the `once` decorator with self-removing wrapper, (4) memory-leak awareness. Every Node engineer uses it daily — streams, http, child_process, custom domain events.
+
+---
+
+## 4. Mental model
+
+```
+   ┌──────────────────────────────────────────┐
+   │ events: Map<string, Set<fn>>             │
+   ├──────────────────────────────────────────┤
+   │ 'user:login'  → { fnA, fnB }            │
+   │ 'order:done'  → { fnC }                  │
+   │ 'boot'        → { wrappedOnceFn }        │
+   └──────────────────────────────────────────┘
+
+   subscribe('user:login', fnX):
+     events.get('user:login').add(fnX)
+     return { unsubscribe: () => set.delete(fnX) }
+
+   emit('user:login', payload):
+     listeners = [...events.get('user:login')]   ← snapshot
+     for fn of listeners: fn.apply(this, payload)
+
+   once('boot', fn):
+     wrapper = (...args) => { sub.unsubscribe(); fn(...args) }
+     sub = subscribe('boot', wrapper)
+     return sub
+```
+
+**Snapshot-before-iterate** is the key trick: handlers added or removed during emit don't break iteration.
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. If handler A unsubscribes itself and subscribes handler C during one emit, does C fire this round?
+> 2. Why prefer a returned `{unsubscribe}` over a separate `off(event, fn)` API?
+> 3. With `once(event, fn)`, what gets stored in the set — `fn` or a wrapper?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: plain object as registry
+```js
+this.events = {};
+// events['toString']  ← inherits from Object.prototype
+```
+Prototype pollution risk + `__proto__` collisions. Use `Map`.
+
+### Wrong attempt 2: iterate the live set
+```js
+emit(event, ...args) {
+  for (const fn of this.events.get(event) || []) fn(...args);
+}
+```
+If `fn` unsubscribes itself, JS `Set` iteration handles it. But if `fn` *subscribes* a new handler, it may or may not fire — engine-dependent. Snapshot first.
+
+### Wrong attempt 3: storing `fn` for `once` instead of wrapper
+```js
+once(event, fn) {
+  fn._wasOnce = true;
+  this.subscribe(event, fn);
+}
+emit() {
+  ... if (fn._wasOnce) remove; ...
+}
+```
+Tag-based logic is brittle. Wrap `fn` in a self-removing closure instead.
+
+---
+
+## 7. The unlocking insight
+
+> **`Map<event, Set<fn>>` for O(1) ops + insertion-order iteration. `subscribe` returns `{ unsubscribe }` closing over set+fn. `emit` snapshots the set before iterating. `once` wraps in a self-removing wrapper.**
+
+Three properties:
+
+1. **`Map` of `Set`s** — O(1) add/delete, Set preserves insertion order, no proto pollution.
+2. **Return-handle pattern** — `{ unsubscribe }` survives renames and beats string-keyed `off(event, fn)`.
+3. **Snapshot in emit** — `[...set]` lets handlers mutate the set during iteration without bugs.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
 class EventEmitter {
   constructor() {
-    /** @type {Map<string, Set<Function>>} */
-    this.events = new Map();
+    this.events = new Map();                                     // step 1: Map<event, Set<fn>>
   }
 
-  /**
-   * Subscribe a listener.
-   * @param {string} event
-   * @param {Function} fn
-   * @returns {{ unsubscribe: () => void }}
-   */
   subscribe(event, fn) {
     if (!this.events.has(event)) this.events.set(event, new Set());
     const set = this.events.get(event);
-    set.add(fn);
+    set.add(fn);                                                  // step 2: add listener
 
     return {
-      unsubscribe: () => {
+      unsubscribe: () => {                                        // step 3: return handle
         set.delete(fn);
-        if (set.size === 0) this.events.delete(event);
+        if (set.size === 0) this.events.delete(event);            // tidy: drop empty bucket
       },
     };
   }
 
-  // Alias for the Node-style API
   on(event, fn) { return this.subscribe(event, fn); }
 
-  /**
-   * Subscribe a listener that fires once, then auto-unsubscribes.
-   */
   once(event, fn) {
-    const wrapper = (...args) => {
+    const wrapper = (...args) => {                                // step 4: self-removing wrapper
       sub.unsubscribe();
       fn.apply(this, args);
     };
@@ -95,119 +164,155 @@ class EventEmitter {
     return sub;
   }
 
-  /**
-   * Remove a specific listener (Node-style API).
-   * Less ergonomic than the returned-handle approach — prefer subscribe().
-   */
-  off(event, fn) {
+  off(event, fn) {                                                // step 5: legacy API
     const set = this.events.get(event);
     if (!set) return;
     set.delete(fn);
     if (set.size === 0) this.events.delete(event);
   }
 
-  /**
-   * Emit synchronously. Returns the array of return values from listeners.
-   */
   emit(event, ...args) {
     const set = this.events.get(event);
     if (!set || set.size === 0) return [];
-    // Snapshot to allow unsubscribe / subscribe during emit.
-    const listeners = [...set];
+    const listeners = [...set];                                   // step 6: SNAPSHOT
     return listeners.map((fn) => fn.apply(this, args));
   }
 }
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
-Input:
 ```js
 const e = new EventEmitter();
+
 const s1 = e.subscribe('msg', (x) => console.log('A:', x));
 const s2 = e.subscribe('msg', (x) => {
   console.log('B:', x);
-  s2.unsubscribe();             // unsub during emit
-  e.subscribe('msg', (y) => console.log('C:', y));  // sub during emit
+  s2.unsubscribe();                                  // unsub self during emit
+  e.subscribe('msg', (y) => console.log('C:', y));   // sub during emit
 });
 
-e.emit('msg', 1);    // first
-e.emit('msg', 2);    // second
-```
+e.emit('msg', 1);     // A: 1 / B: 1   (C does NOT fire — added after snapshot)
+e.emit('msg', 2);     // A: 2 / C: 2
 
-Trace:
-- After both subscribes: `events = { msg: Set{ A, B } }`.
-- `emit('msg', 1)`:
-  - Snapshot listeners = `[A, B]`.
-  - Call `A(1)` → logs `A: 1`.
-  - Call `B(1)` → logs `B: 1`. Inside B: `s2.unsubscribe()` → set becomes `{ A }`. Then `subscribe(C)` → set becomes `{ A, C }`. The current iteration uses the snapshot `[A, B]`, so C does NOT fire this round.
-  - Iteration ends.
-- After first emit: `events = { msg: Set{ A, C } }`.
-- `emit('msg', 2)`:
-  - Snapshot = `[A, C]`.
-  - `A(2)` → logs `A: 2`.
-  - `C(2)` → logs `C: 2`.
-
-Final output:
-```
-A: 1
-B: 1
-A: 2
-C: 2
-```
-
-This trace specifically demonstrates the "snapshot during emit" property. Without snapshotting, mutating the set during iteration would either skip C / re-fire B / throw, depending on the data structure.
-
-Now `once`:
-```js
+// once
 e.once('boot', () => console.log('boot fired'));
-e.emit('boot');   // logs 'boot fired'
-e.emit('boot');   // nothing — wrapper already removed itself
+e.emit('boot');       // boot fired
+e.emit('boot');       // (nothing)
 ```
 
-## Important takeaways
+---
 
-**Syntax to memorize**
-- `events = new Map()` of `event → Set<fn>`.
-- `subscribe` returns `{ unsubscribe }` — closure over the set + fn.
-- `emit` **snapshots** listeners (`[...set]`) before iterating.
-- `once` wraps fn in a self-removing wrapper.
+## 9. Step-by-step dry run
 
-**Patterns to reuse**
-- "Return an unsubscribe handle" is universally better than "store an ID and call `off(id)`". Pattern shows up in: RxJS `Subscription`, DOM `AbortSignal`, Firebase `onSnapshot`, React `useEffect` cleanup. Always prefer.
-- Map-of-Set for "categories with members" is a recurring shape: pub/sub topics, event listeners, room-based websocket clients.
-- Snapshot-before-iterate is the cure for concurrent-modification bugs anywhere you have callbacks that can mutate the listener list.
+```
+const e = new EventEmitter()
+const s1 = e.subscribe('msg', A)
+            → events = { msg: Set{A} }
+const s2 = e.subscribe('msg', B)
+            → events = { msg: Set{A, B} }
 
-**Common mistakes**
-- Iterating a `Set` while mutating it (e.g., `forEach` + `delete`) — works in JS Sets (`Set.forEach` handles deletion safely), but the **subscribe-during-emit** case is the real risk. Snapshot always.
-- Storing only the original `fn` in `once` — then `off(event, fn)` looks for the wrapper and fails. Either store the mapping or return an unsubscribe handle (cleaner).
-- Forgetting to clean up empty event sets — leaves a growing `events` map. `set.size === 0 → delete` keeps it tidy.
-- Letting subscribers throw kill the emit loop — wrap each `fn.apply` in try/catch if you want isolation (Node's emitter does NOT — failures bubble).
+e.emit('msg', 1):
+  set = Set{A, B}
+  snapshot listeners = [A, B]
+  iterate snapshot:
+    fn=A:  A(1) → log 'A: 1'
+    fn=B:  B(1) → log 'B: 1'
+                  inside B:
+                    s2.unsubscribe() → set.delete(B) → set = Set{A}
+                    e.subscribe('msg', C) → set = Set{A, C}
+                  ↑ live set mutated; but iteration uses SNAPSHOT [A,B]
+                  → C does NOT fire this round
+  emit returns [undefined, undefined]
 
-**Related questions**
-- Pub/Sub — see pub-sub.md. Similar but topic-string-keyed, often supports wildcards and async dispatch.
-- Observable / RxJS — generalizes EventEmitter with backpressure and operators.
-- `AbortController` — modern cancellation primitive that pairs with `on(event, fn, { signal })`.
+after emit: events = { msg: Set{A, C} }
 
-## Variants
+e.emit('msg', 2):
+  snapshot = [A, C]
+  A(2) → log 'A: 2'
+  C(2) → log 'C: 2'
 
-1. **Wildcard topics** — `emitter.on('user.*', fn)` fires for any event matching the pattern. Maintain a separate list of pattern listeners and match on emit. O(P) overhead per emit (P = pattern count).
+Output: A:1 / B:1 / A:2 / C:2
+```
 
-2. **Async emit** — `await emitter.emitAsync(event, ...args)` awaits each listener's return value (or all in parallel via `Promise.all`). Useful for hook systems.
+`once` dry run:
 
-3. **Max listeners limit** — Node's default 10-listener warning. Track per-event size; warn when exceeded.
+```
+e.once('boot', fn):
+  wrapper = (...args) => { sub.unsubscribe(); fn(...args) }
+  sub = subscribe('boot', wrapper)
+  events = { boot: Set{wrapper} }
 
-4. **AbortSignal integration** — `subscribe(event, fn, { signal })` auto-unsubscribes when signal aborts. Pairs nicely with `AbortController` for request-scoped lifecycles.
+e.emit('boot'):
+  snapshot = [wrapper]
+  wrapper() runs:
+    sub.unsubscribe() → events = { } (set drained, bucket removed)
+    fn() runs → 'boot fired'
 
-5. **Prepend** — `prependListener(event, fn)` inserts at the front. Requires `Array` instead of `Set`, or a two-list strategy.
+e.emit('boot'):
+  events.get('boot') = undefined → return []
+```
 
-## Revision notes
+---
 
-> **EventEmitter — 60 second recap**
-> - `events = Map<string, Set<fn>>`.
-> - `subscribe(event, fn)` → returns `{ unsubscribe }` (better than ID-based).
-> - `emit(event, ...args)` → **snapshot** listeners first, then iterate.
-> - `once(event, fn)` → wrap in a self-removing wrapper.
-> - **Trap:** mutating the set during iteration without snapshotting → subscribe-during-emit fires/misses unexpectedly.
-> - **Trap 2:** forgetting `off` → memory leak (closure retention).
-> - Family: Pub/Sub (topics + wildcards), Observable (RxJS), AbortSignal (modern cleanup).
+## 10. Common confusion + traps
+
+1. **Plain object instead of Map** — proto pollution / collisions.
+2. **No snapshot in emit** — subscribe-during-emit fires unexpectedly (engine-dependent).
+3. **Storing `fn` instead of wrapper for `once`** — `off(event, fn)` can't find the wrapper.
+4. **Forgetting to drop empty buckets** — `events` Map grows monotonically.
+5. **Letting handler throw kill emit loop** — Node EventEmitter does NOT catch; failures bubble. Decide policy.
+6. **Memory leak from forgotten `unsubscribe`** — closure-retained captures live forever.
+7. **Async emit confusion** — Node fires sync; if interviewer wants `emitAsync`, return `Promise.all`.
+
+---
+
+## 11. Senior follow-ups & variants
+
+### Variant 1 — Wildcard topics
+`e.on('user.*', fn)` — maintain a separate pattern list; match each `emit('user.x', ...)` against patterns. O(P) overhead per emit.
+
+### Variant 2 — Async emit
+```js
+async emitAsync(event, ...args) {
+  const set = this.events.get(event);
+  if (!set) return [];
+  const snapshot = [...set];
+  return Promise.all(snapshot.map((fn) => fn.apply(this, args)));
+}
+```
+Awaits each listener's return value. Useful for plugin/hook systems.
+
+### Variant 3 — Max listeners limit
+Node defaults to 10. Warn when `set.size > maxListeners`. Prevents leak detection.
+
+### Variant 4 — `AbortSignal` integration
+`subscribe(event, fn, { signal })` — auto-unsubscribes when `signal.aborted`. Pairs with request-scoped cleanup.
+
+### Variant 5 — `prependListener`
+Insert at front of list. Requires `Array` instead of `Set` (or two-list strategy).
+
+---
+
+## 12. How to think aloud
+
+> "`Map<event, Set<fn>>`. `subscribe` adds and returns `{unsubscribe}` closing over set+fn — better than ID-based `off`. `emit` SNAPSHOTS the listeners (`[...set]`) before iterating, so handlers can safely subscribe/unsubscribe mid-emit. `once` wraps `fn` in a self-removing closure stored as the listener. Tidy: drop empty buckets to avoid memory growth. Family: Pub/Sub (topics + wildcards), Observable/RxJS (operators + backpressure), AbortSignal (modern cleanup). Trap: plain object → proto pollution. Trap: iterating live set → subscribe-during-emit fires unexpectedly. Trap: forgotten unsubscribe → closure retention → memory leak."
+
+---
+
+## 13. 60-second revision
+
+> - **`events = Map<string, Set<fn>>`**.
+> - **`subscribe` → returns `{ unsubscribe }`** (handle closing over set+fn).
+> - **`emit` SNAPSHOTS** listeners (`[...set]`), then iterates.
+> - **`once`** = wrap `fn` in a self-removing wrapper.
+> - **Drop empty buckets** when `set.size === 0`.
+> - **Sync fire** (Node parity); `emitAsync` uses `Promise.all`.
+> - **Family:** Pub/Sub, Observable, AbortSignal.
+> - **Trap:** plain object; no snapshot; missing unsubscribe → memory leak.
+
+---
+
+**Related:** [pub-sub.md](./pub-sub.md) · [observable-subject.md](./observable-subject.md) · [`04-promises/abortcontroller-fanout.md`](../04-promises/abortcontroller-fanout.md) · [`02-closures/closure-with-cancel-token.md`](../02-closures/closure-with-cancel-token.md)
+
+**Concept primer:** [`concepts/maps-sets.md`](../../concepts/maps-sets.md), [`concepts/closures.md`](../../concepts/closures.md)

@@ -1,148 +1,237 @@
-# Implement `Object.create(proto, propsObj?)`
+# Polyfill `Object.create(proto, propsObj?)`
 
-## Source
-- Classic prototype-chain interview problem (BFE.dev #65, JS Polyfill series, Frontend Masters).
-- MDN reference: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/create
+> **Difficulty:** Medium   |   **Time:** ~10 min   |   **Prereqs:** [prototype-chain-inheritance.md](./prototype-chain-inheritance.md)
+>
+> **Source:** BFE.dev #65. Classic prototype-chain polyfill.
 
-## Why this question matters in interviews
-`Object.create` is the **most direct** way to set up a prototype chain — no constructors, no `new`, just "give me an object whose `[[Prototype]]` is exactly this." Implementing it forces you to articulate the "empty constructor trick" (`function F(){}; F.prototype = proto; return new F()`), which in turn explains how `new` wires the chain. The second argument — a `propsObj` with property descriptors — pulls in `Object.defineProperties` and forces you to talk about `value/writable/enumerable/configurable/get/set`. Backend engineers use `Object.create(null)` constantly for hash-map-shaped objects without `__proto__` pollution risks.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+`objectCreate(proto, propsObj?)` returns a fresh object whose `[[Prototype]] === proto`, plus optional descriptors.
+
+**Verification examples**
+
 ```js
-function objectCreate(proto, propsObj) {
-  if (proto !== null && (typeof proto !== 'object' && typeof proto !== 'function')) {
-    throw new TypeError('Object prototype may only be an Object or null');
-  }
-  function F() {}
-  F.prototype = proto;
-  const obj = new F();
-  if (propsObj !== undefined) Object.defineProperties(obj, propsObj);
-  return obj;
-}
+const proto = { greet() { return 'hi' } };
+const obj = objectCreate(proto);
+Object.getPrototypeOf(obj) === proto;                                   // true
+obj.greet();                                                            // 'hi'
+
+const dict = objectCreate(null);                                        // null prototype
+dict.toString;                                                          // undefined
+
+const withProps = objectCreate(proto, {
+  x: { value: 1, enumerable: true, writable: true, configurable: true },
+});
+withProps.x;                                                            // 1
 ```
 
-### Runtime / engine behavior
-- `new F()` does three things: (1) create a fresh `{}`, (2) set its `[[Prototype]]` to `F.prototype`, (3) call `F` with `this = new obj`. Since `F` is empty, step 3 is a no-op — we only care about step 2.
-- Assigning `F.prototype = proto` makes every `new F()` instance inherit from `proto`.
-- `Object.defineProperties(obj, descriptors)` accepts a map of `{ key: { value, writable, enumerable, configurable, get, set } }`. Defaults for absent flags are `false` — distinct from plain assignment (`obj.k = v`) where flags are `true`.
-- Modern engines also expose `Object.setPrototypeOf(obj, proto)`, but the empty-constructor trick predates it and is the canonical "polyfill" answer.
+**Constraints**
+- Throw TypeError for non-object/non-null prototype.
+- Allow functions as prototype (typeof 'function').
+- Optional `propsObj` is a descriptor map (defaults: all false).
 
-### Edge cases (these are the interview traps)
-1. **`null` prototype** — `Object.create(null)` produces a "dictionary object" with no inherited properties (no `toString`, no `hasOwnProperty`). Don't reject `null` in the type check.
-2. **Primitive prototype** — `Object.create(5)` must throw `TypeError`. Mirror that.
-3. **Functions as prototypes** — `typeof fn === 'function'`, not `'object'`. Allow it (functions are valid prototypes).
-4. **Descriptor defaults** — if interviewer asks "what's the difference between `Object.create(p, { x: { value: 1 } })` and `Object.create(p, { x: 1 })`?" — the second is wrong; descriptor values must be objects. And the first creates `x` as non-writable / non-enumerable / non-configurable by default.
-5. **`__proto__` accessor pollution** — pre-ES2022 polyfills used `obj.__proto__ = proto`, which respects the inherited `__proto__` setter and breaks for `null` protos. Use the empty-constructor trick or `Object.setPrototypeOf`.
-6. **Why not `Object.setPrototypeOf` directly?** In a polyfill scenario you're often implementing both. Also, `setPrototypeOf` mutates an existing object; `create` builds a fresh one — the trick mirrors `new` semantics exactly.
-7. **Cross-realm** — each realm has its own `Object`. `Object.create.call(otherRealmObject, ...)` works only because the function isn't realm-bound to its argument.
+---
 
-## Brute force approach
-"Just return `{ __proto__: proto }`." Works in modern engines but: (a) doesn't handle `null` prototype cleanly (well, it does in ES2015+ but breaks in older runtimes), (b) doesn't handle the second `propsObj` argument, (c) uses the legacy `__proto__` setter, which the spec discourages. Acceptable as a quick answer; not the polyfill an interviewer wants.
+## 2. Plain-English restatement
 
-## Optimal approach
-Empty constructor trick + `Object.defineProperties` for the second argument. Five lines, zero magic. The trick is canonical because it uses only `new`, which everyone agrees on.
+Make a fresh object with the given prototype. The classic "empty constructor trick" abuses `new F()` to wire the prototype chain — same mechanism `new` uses, just with an empty function.
 
-## Solution (JavaScript)
+---
+
+## 3. Why this matters in interviews
+
+Forces "empty constructor trick" articulation + property-descriptor literacy.
+
+---
+
+## 4. Mental model
+
+```
+   Object.create(proto, propsObj?):
+   
+   Trick:
+     function F() {}
+     F.prototype = proto;
+     const obj = new F();    // new wires obj.__proto__ = F.prototype = proto
+   
+   Why `new`?
+   - `new F()` does: create obj, set obj.__proto__ = F.prototype, call F.
+   - F is empty → no constructor side effects.
+   - We only care about the prototype wiring.
+   
+   propsObj (optional):
+   - Map of descriptors: { key: { value, writable, enumerable, configurable, get, set } }.
+   - Defaults: all false (different from plain assignment).
+   - Delegate to Object.defineProperties.
+   
+   Special cases:
+   - proto === null → dictionary object (no toString, no hasOwnProperty).
+   - typeof proto !== 'object' && typeof proto !== 'function' && proto !== null → TypeError.
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. Why use the "empty constructor trick" instead of `obj.__proto__ = proto`?
+> 2. What does `Object.create(null)` give you?
+> 3. What's the difference between `{x: 1}` (assignment) and `Object.create({}, {x: {value: 1}})` (defineProperty)?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: `{ __proto__: proto }`
+Works in modern engines but uses legacy `__proto__` setter; breaks for `null`.
+
+### Wrong attempt 2: skip type guard
+`objectCreate(5)` should throw; missing guard returns silently broken object.
+
+### Wrong attempt 3: ignore propsObj
+Misses second argument entirely.
+
+---
+
+## 7. The unlocking insight
+
+> **Empty constructor trick: `function F(){}; F.prototype = proto; return new F()`. Delegate `propsObj` to `Object.defineProperties`. Throw TypeError for invalid prototype.**
+
+Three properties:
+
+1. **Empty constructor trick** — abuses `new` for prototype wiring.
+2. **`Object.defineProperties`** for descriptor map.
+3. **Type guard** — null allowed; primitives throw.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
-/**
- * Polyfill for Object.create.
- * @param {object|null} proto
- * @param {Object<string, PropertyDescriptor>} [propsObj]
- * @returns {object}
- */
 function objectCreate(proto, propsObj) {
   if (proto !== null && typeof proto !== 'object' && typeof proto !== 'function') {
     throw new TypeError('Object prototype may only be an Object or null: ' + proto);
   }
 
-  // The "empty constructor" trick — `new F()` sets the new object's
-  // [[Prototype]] to F.prototype, which we've pointed at `proto`.
-  function F() {}
-  F.prototype = proto;
-  const obj = new F();
-
-  // For `Object.create(null)`, instances are not linked to Object.prototype
-  // at all — fine, the engine handles that.
+  function F() {}                                                       // step 1: empty constructor
+  F.prototype = proto;                                                  // step 2: set prototype
+  const obj = new F();                                                  // step 3: new wires chain
 
   if (propsObj !== undefined) {
-    Object.defineProperties(obj, propsObj);
+    Object.defineProperties(obj, propsObj);                              // step 4: descriptor map
   }
-
   return obj;
 }
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
-Input:
 ```js
-const animal = { eats: true, walk() { console.log('walking'); } };
+const proto = { greet() { return 'hi'; } };
+const obj = objectCreate(proto);
+Object.getPrototypeOf(obj) === proto;                                   // true
+obj.greet();                                                            // 'hi'
 
-const rabbit = objectCreate(animal, {
-  jumps:  { value: true, enumerable: true },
-  secret: { value: 42 } // defaults: non-enum, non-writable, non-config
+// null prototype
+const dict = objectCreate(null);
+dict.toString;                                                          // undefined (no chain)
+'toString' in dict;                                                     // false
+
+// With descriptors
+const o = objectCreate(proto, {
+  x: { value: 1, enumerable: true },                                    // writable, configurable default false
 });
+o.x;                                                                    // 1
+Object.getOwnPropertyDescriptor(o, 'x');
+// { value: 1, writable: false, enumerable: true, configurable: false }
 
-rabbit.eats;                    // ?
-rabbit.jumps;                   // ?
-Object.keys(rabbit);            // ?
-rabbit.secret = 99;             // ?
+// Primitive throws
+try { objectCreate(5); } catch (e) { e.message; }                       // 'may only be an Object or null'
 ```
 
-Trace:
-- `objectCreate(animal, { ... })`:
-  - `animal` is an object → type guard passes.
-  - `F` is created; `F.prototype = animal`.
-  - `obj = new F()` — fresh `{}` with `[[Prototype]]` pointing at `animal`.
-  - `Object.defineProperties(obj, { jumps: ..., secret: ... })` — adds two own props.
-- `rabbit.eats` — own lookup misses, walks chain → `animal.eats` → `true`.
-- `rabbit.jumps` — own prop → `true`.
-- `Object.keys(rabbit)` — own + enumerable. `jumps` is enumerable, `secret` isn't → `['jumps']`.
-- `rabbit.secret = 99` — in strict mode throws (non-writable); in sloppy mode silently fails. `rabbit.secret` stays `42`.
+---
 
-Sanity:
-- `objectCreate(null)` — `F.prototype = null`; `new F()` returns an object whose chain is `[null]`. `dict.hasOwnProperty` is `undefined` because there's no `Object.prototype` to inherit from. This is exactly what you want for safe dictionaries.
+## 9. Step-by-step dry run
 
-## Important takeaways
+```
+objectCreate(proto):
+  proto is an object → guard passes.
+  function F() {} declared.
+  F.prototype = proto.
+  obj = new F():
+    [[Construct]] creates obj.
+    obj.[[Prototype]] = F.prototype = proto.
+    F.apply(obj, []) → empty fn, no-op.
+    return obj.
+  Object.getPrototypeOf(obj) === proto ✓
 
-**Syntax to memorize**
-- `function F() {}` — must be empty. Anything inside runs on every "create."
-- `F.prototype = proto` — direct assignment, not via descriptor.
-- `Object.defineProperties` (plural) for the second arg — descriptors are objects with `value/writable/enumerable/configurable` or `get/set`.
+objectCreate(null):
+  proto === null → guard allows.
+  F.prototype = null.
+  new F() creates obj with obj.__proto__ = null.
+  obj has NO inherited methods.
 
-**Patterns to reuse**
-- The empty-constructor trick is **how `new` wires up the prototype chain** — internalize it because every class-related question is a variation.
-- `Object.create(null)` for safe hash maps — no `__proto__` setter trap, no inherited `hasOwnProperty`. Use `Object.hasOwn(map, key)` (ES2022) instead of `map.hasOwnProperty(key)`.
+objectCreate({x:1}, {y: {value: 2, enumerable: true}}):
+  obj = new F() with proto = {x:1}.
+  Object.defineProperties(obj, {y: {...}}):
+    Defines y with value 2, writable: false (default), enumerable: true.
+  Result: obj inherits x from proto, has own y.
+```
 
-**Common mistakes**
-- Using `Object.setPrototypeOf({}, proto)` and calling it the polyfill. Functionally correct but bypasses the teaching moment.
-- Forgetting that descriptor defaults are `false` — surprises candidates when their property is "missing" from `Object.keys`.
-- Passing `propsObj` as a flat `{ key: value }` instead of `{ key: { value: value } }`.
-- Returning `Object.assign({}, proto)` — that's a **shallow copy**, not inheritance. Mutations on `proto` won't reflect.
+---
 
-**Related questions**
-- `instanceof` polyfill (walks the chain `Object.create` builds)
-- Polyfill `new` operator (the empty-constructor trick is the same idea)
-- `Object.assign` vs `Object.create` (copy vs link)
+## 10. Common confusion + traps
 
-## Variants
+1. **`{ __proto__: proto }`** — legacy setter; breaks for null.
+2. **Skip null** in guard — `Object.create(null)` must work.
+3. **Ignore propsObj** — second argument is real.
+4. **Descriptor values must be objects** — `{x: 1}` is wrong; `{x: {value: 1}}` is right.
+5. **Defaults all false** — `defineProperty` differs from assignment.
+6. **`Object.setPrototypeOf`** — modern alternative; deopts engines.
+7. **Cross-realm** — each realm has own `Object`; `.call` works.
 
-1. **`Object.create(null)` dictionary** — "Why is `Object.create(null)` preferred over `{}` for lookup tables in backend code?" Answer: no prototype pollution risk, no inherited `__proto__` setter, `hasOwn` queries are unambiguous.
+---
 
-2. **Inheritance helper** — "Write `inherit(Child, Parent)` using `Object.create`." Standard pre-ES6 inheritance: `Child.prototype = Object.create(Parent.prototype); Child.prototype.constructor = Child;`.
+## 11. Senior follow-ups & variants
 
-3. **Descriptor-aware clone** — "Implement `deepCloneWithDescriptors(obj)` using `Object.create(Object.getPrototypeOf(obj), Object.getOwnPropertyDescriptors(obj))`." Preserves prototype AND descriptors — the spec-compliant clone.
+### Variant 1 — `Object.setPrototypeOf` alternative
+Modern but deopts engines.
 
-## Revision notes
+### Variant 2 — `Object.create(null)` use cases
+Dictionaries; no `__proto__` collisions with user keys.
 
-> **Object.create polyfill — 60 second recap**
-> - Empty constructor trick: `function F(){}; F.prototype = proto; return new F();`.
-> - Optional second arg → `Object.defineProperties(obj, propsObj)`.
-> - Type guard: `proto` must be object, function, or `null`. Reject primitives.
-> - Descriptor defaults are **false** (non-writable / non-enum / non-config). Set them explicitly.
-> - `Object.create(null)` → dictionary object, no chain to `Object.prototype`. Use for safe hash maps.
-> - **Trap:** passing `{ key: value }` instead of `{ key: { value } }` for the second arg.
-> - **Trap:** confusing copy (`Object.assign`) with link (`Object.create`) — the former snapshots, the latter inherits live.
+### Variant 3 — Descriptor defaults
+`defineProperty` defaults all false; assignment defaults all true.
+
+### Variant 4 — `Reflect.construct(F, args, new.target)`
+Modern construct with explicit prototype.
+
+### Variant 5 — Polyfill for ES5 target
+Babel emits the empty-constructor trick when targeting ES5.
+
+---
+
+## 12. How to think aloud
+
+> "Empty constructor trick: declare an empty `function F(){}`, set `F.prototype = proto`, return `new F()`. The `new` operator does 4 things — create obj, wire `obj.__proto__ = F.prototype`, run constructor (empty no-op), return obj. We piggyback on the prototype-wiring step. Why not `obj.__proto__ = proto`? That's a legacy setter that breaks for `null` prototype. Why not `Object.setPrototypeOf`? Polyfill scenario — and it deopts engines. Optional `propsObj` is a descriptor map (`{key: {value, writable, enumerable, configurable}}`); delegate to `Object.defineProperties`. Defaults are all FALSE in defineProperty (differs from assignment, where they're all true). Type guard: allow object/function/null; throw TypeError for primitives. `Object.create(null)` is the canonical 'dictionary' pattern — no inherited methods, safe for user-controlled keys (no `__proto__` pollution). Trap: legacy `__proto__` setter; ignoring propsObj; descriptor values not being objects."
+
+---
+
+## 13. 60-second revision
+
+> - **Empty constructor trick:** `function F(){}; F.prototype = proto; return new F()`.
+> - **Type guard:** allow object/function/null; throw for primitives.
+> - **`propsObj`** → delegate to `Object.defineProperties`.
+> - **Descriptor defaults all FALSE** (differs from assignment).
+> - **`Object.create(null)`** = dictionary; no `__proto__`, no `toString`.
+> - **vs `{ __proto__: proto }`** — legacy setter; breaks for null.
+> - **vs `Object.setPrototypeOf`** — modern but deopts.
+> - **Trap:** ignore propsObj; primitive value as descriptor (must be object).
+
+---
+
+**Related:** [prototype-chain-inheritance.md](./prototype-chain-inheritance.md) · [polyfill-new.md](./polyfill-new.md) · [defineproperty-vs-assignment.md](./defineproperty-vs-assignment.md) · [object-setprototypeof-perf-trap.md](./object-setprototypeof-perf-trap.md)
+
+**Concept primer:** [`concepts/prototype.md`](../../concepts/prototype.md)

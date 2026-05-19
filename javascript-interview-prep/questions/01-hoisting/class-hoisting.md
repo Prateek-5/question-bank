@@ -1,66 +1,113 @@
 # Class declaration hoisting
 
-## Source
-Canonical senior-JS interview problem. MDN reference: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Classes#hoisting
+> **Difficulty:** Medium   |   **Time:** ~12 min   |   **Prereqs:** [tdz-let-const.md](./tdz-let-const.md), [function-declaration-vs-expression-hoisting.md](./function-declaration-vs-expression-hoisting.md)
+>
+> **Source:** MDN Classes hoisting. Senior JS gate question.
 
-## Why this question matters in interviews
-Senior screens love this one because it's a "gotcha" that filters out candidates who pattern-match `class` to `function`. Most engineers know function declarations are fully hoisted; they assume `class` is too, since both create constructable callables. Wrong — `class` follows `let`/`const`/TDZ semantics. As a backend engineer working with TypeScript / NestJS / Mongoose / TypeORM models, you'll occasionally hit "Cannot access 'Foo' before initialization" in a circular dependency or a misordered import, and the fix requires knowing exactly how class hoisting works. This question also stress-tests your understanding of the broader TDZ concept.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
-```js
-// Function declaration — fully hoisted, callable before its line
-greet();                          // works
-function greet() { console.log('hi'); }
+Does `class` hoist like `function` or like `let`/`const`?
 
-// Class declaration — hoisted but in TDZ
-new Foo();                        // ReferenceError: Cannot access 'Foo' before initialization
-class Foo {}
+**Verification examples**
 
-// Class expression — only the binding is hoisted (per var/let/const rules)
-new Bar();                        // ReferenceError (TDZ on const)
-const Bar = class { };
+| Setup                                              | Result                                              |
+|----------------------------------------------------|------------------------------------------------------|
+| `greet(); function greet(){}`                       | works (function decl fully hoisted)                |
+| `new Foo(); class Foo {}`                           | **ReferenceError** (class is TDZ — like `let`)     |
+| `class Child extends Parent {}; class Parent {}`    | ReferenceError (Parent in TDZ at extends eval)     |
+| `class Foo {}; class Foo {}` (same scope)           | SyntaxError (redeclaration)                         |
+| Class body inside `if (cond) { class X {} }`        | block-scoped; invisible outside                    |
 
-// Named class expression
-const C = class NamedC {
-  who() { return NamedC.name; }   // NamedC is locally visible inside the class body
-};
-new C().who();                    // 'NamedC'
-// console.log(NamedC);            // ReferenceError outside
+**Constraints**
+- `class` hoists like `let`/`const` — into TDZ.
+- Class body is always strict mode.
+- `extends ParentExpr` evaluates at declaration line; Parent must be initialized.
+- Block-scoped (no sloppy escape hatch).
+
+---
+
+## 2. Plain-English restatement
+
+`class Foo {}` is roughly equivalent to `const Foo = class {...}` — the binding hoists into TDZ. Any access (read, write, `new`, `typeof`) before the declaration line throws ReferenceError. **NOT** like function declarations (fully hoisted with body).
+
+---
+
+## 3. Why this matters in interviews
+
+Gotcha question. Most engineers know function declarations are fully hoisted; assume `class` is too. Senior bar: knows it's TDZ + can explain WHY (extends clauses, computed keys, static initializers must run in source order).
+
+---
+
+## 4. Mental model
+
+```
+   Mental shortcut: class Foo {} ≈ const Foo = class {...}
+   
+   Both hoist the BINDING but not the value (until declaration line runs).
+   
+   ┌─────────────────────────────────────────────────────────┐
+   │ function decl   → fully hoisted (body + name)            │
+   │                   callable from line 1                   │
+   ├─────────────────────────────────────────────────────────┤
+   │ class decl      → hoisted to LE as <uninitialized> (TDZ) │
+   │                   ReferenceError on access before line   │
+   ├─────────────────────────────────────────────────────────┤
+   │ let/const decl  → hoisted to LE as <uninitialized> (TDZ) │
+   └─────────────────────────────────────────────────────────┘
+   
+   Why class isn't fully hoisted:
+   - extends ParentExpr can have side effects.
+   - Computed keys [expr]() {} may need surrounding state.
+   - Static initializers run during class evaluation.
+   - Hoisting body would change observable order.
 ```
 
-### Runtime / engine behavior
-- During the **creation phase** of an Execution Context, `class` declarations register a binding in the **Lexical Environment** as `<uninitialized>` — identical to `let`/`const`.
-- The class binding remains in TDZ until the `class Foo {}` line runs in the execution phase.
-- This is **distinct from function declarations**, which register with the full function object during creation and are callable immediately.
-- The reason: classes can have computed property keys, `extends` clauses with arbitrary expressions, and static initializers — all of which must run in source order. Hoisting the full body would change the meaning of `extends getBase()` if `getBase` had side effects.
-- A class declaration is essentially `const ClassName = class {...}` with a few extra rules (the class body is implicitly strict-mode; the class name binds twice — once outside, once inside the body).
-- Classes are **block-scoped**. `if (cond) { class X {} } typeof X` → `'undefined'`.
+---
 
-### Edge cases (interview traps)
-1. **`typeof Foo` before declaration throws** (TDZ), just like `let`.
-2. **Inheritance + TDZ** — `class Child extends Parent {} class Parent {}` → `ReferenceError` when evaluating `extends Parent`, because `Parent` is in TDZ when `Child`'s `extends` clause runs.
-3. **Re-declaration is SyntaxError** at parse — `class Foo {}; class Foo {};` won't run.
-4. **Hoisting inside a block** — `class` declarations are strictly block-scoped (no sloppy-mode escape hatch like function decls).
-5. **Implicit strict mode** — the body of a class is always strict, even if the surrounding code isn't. This affects `this`, `with`, octal literals, etc.
-6. **Static blocks and class fields** — they execute during the `class Foo {}` evaluation, top-to-bottom. Any TDZ violation inside (e.g., a static block referencing the class itself before its initializer) throws.
-7. **`new.target`** — inside the constructor, `new.target` is the class being instantiated (useful for abstract-class enforcement).
+## 5. Try it yourself first
 
-## Brute force approach
-Rusty candidate: *"Classes are hoisted like functions, so you can use them before declaration."* Wrong, but a very common answer. The interviewer is probing exactly this misconception. Corollary mistake: *"Classes aren't hoisted at all."* Also wrong — they are, but in TDZ. The right answer threads the needle: hoisted (binding registered) + uninitialized (TDZ) = ReferenceError on early access.
+> **Predict before reading on:**
+> 1. Does `new Foo(); class Foo {}` throw?
+> 2. `class Child extends Parent {} class Parent {}` — what happens?
+> 3. Is class body strict mode automatically?
 
-## Optimal approach
-Frame `class` as **syntactic sugar over `const ClassName = class {...}` with extra rules**. Then `class` hoisting follows the `const` rules: binding registered during creation, in TDZ until the declaration line runs. Mention the **why**: classes contain arbitrary expressions (`extends`, computed keys, static initializers) that must run in source order — hoisting the body would break that contract.
+---
 
-## Solution (JavaScript)
+## 6. Brute force — walked through
+
+### Wrong attempt 1: "class hoists like function"
+WRONG. Classes hoist like let/const (TDZ).
+
+### Wrong attempt 2: "classes aren't hoisted"
+Also wrong. They ARE — into TDZ.
+
+### Wrong attempt 3: "extends accepts string"
+`extends` evaluates an arbitrary expression — must result in a constructor.
+
+---
+
+## 7. The unlocking insight
+
+> **`class` hoists binding into Lexical Environment as `<uninitialized>` (TDZ). Same as `let`/`const`. Access before declaration line throws. Class body is always strict mode. `extends ParentExpr` evaluates at declaration line — if Parent in TDZ, throws.**
+
+Three properties:
+
+1. **TDZ like `let`/`const`** — NOT like function.
+2. **Strict by default** — class body always strict.
+3. **`extends` evaluates at declaration line** — ordering matters.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
-// === The classic trap ===
+// THE classic trap
 try {
-  new Animal();                       // ReferenceError — TDZ
+  new Animal();                                                       // step 1: TDZ → ReferenceError
 } catch (e) {
-  console.log('Pre-decl:', e.message); // 'Cannot access ...'
+  console.log('Pre-decl:', e.message);                                 // 'Cannot access ...'
 }
 
 class Animal {
@@ -68,102 +115,156 @@ class Animal {
   speak() { return `${this.name} makes a sound`; }
 }
 
-console.log(new Animal('rex').speak()); // 'rex makes a sound'
+new Animal('rex').speak();                                              // 'rex makes a sound'
 
-// === Inheritance + TDZ ===
+// Inheritance + TDZ
 try {
-  class Dog extends Mammal {}         // Mammal in TDZ at this moment
+  class Dog extends Mammal {}                                          // step 2: Mammal in TDZ
 } catch (e) {
   console.log('Inherit:', e.message);
 }
 
 class Mammal extends Animal {}
 
-// Now this works:
 class Dog extends Mammal {
   speak() { return `${this.name} barks`; }
 }
-console.log(new Dog('rex').speak());  // 'rex barks'
+new Dog('rex').speak();                                                 // 'rex barks'
 
-// === Class expression with named binding ===
+// Class expression with named binding
 const Cat = class FelineImpl {
-  static who() { return FelineImpl.name; }  // local name visible inside
+  static who() { return FelineImpl.name; }                              // step 3: inner name local
 };
-console.log(Cat.who());                // 'FelineImpl'
-// console.log(typeof FelineImpl);     // ReferenceError — not in outer scope
+Cat.who();                                                              // 'FelineImpl'
+// FelineImpl outside → ReferenceError
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
-**Module Execution Context — Creation phase**
+```js
+// Mental shortcut: class ≈ const + class expression
+class Foo {}
+// ≈
+const Foo = class {};
 
-| Binding   | Environment | Initial value         |
-|-----------|-------------|-----------------------|
-| `Animal`  | LE          | `<uninitialized>` (TDZ) |
-| `Mammal`  | LE          | `<uninitialized>` (TDZ) |
-| `Dog`     | LE          | `<uninitialized>` (TDZ) |
-| `Cat`     | LE          | `<uninitialized>` (TDZ) |
+// Both hoist binding, not value.
 
-(The class names live in the LE just like `let`/`const`.)
+// Class body strict mode
+class Bar {
+  method() {
+    octals = 0o7;                                                       // SyntaxError in body
+  }
+}
 
-**Execution phase**
+// extends with arbitrary expression
+function makeBase() { return class { hi() { return 'hi'; } }; }
+class Sub extends makeBase() {}
+new Sub().hi();                                                         // 'hi'
 
-1. `try { new Animal() }` → resolve `Animal` → binding in `<uninitialized>` → `ReferenceError: Cannot access 'Animal' before initialization`. Catch prints `Pre-decl: ...`.
-2. `class Animal {...}` line executes:
-   - Evaluate the class body (define methods, set up prototype).
-   - Bind `Animal` to the class object. TDZ for `Animal` ends.
-3. `new Animal('rex').speak()` → works → `'rex makes a sound'`.
-4. `try { class Dog extends Mammal {} }`:
-   - Engine begins evaluating the `class Dog` declaration.
-   - The `extends` clause evaluates `Mammal` → still in TDZ → `ReferenceError`. Catch prints.
-   - The first `Dog` declaration was **inside a try block** — the binding for `Dog` in the outer LE was already registered during creation, but the **assignment to it never happens**, so the second `class Dog` below can still complete. *(In practice, you'd avoid wrapping a class declaration in a try block — this is purely for illustration.)*
-5. `class Mammal extends Animal {}` → `Animal` is initialized → succeeds. `Mammal` binding initialized.
-6. `class Dog extends Mammal {...}` → succeeds. `Dog` initialized.
-7. `new Dog('rex').speak()` → `'rex barks'`.
-8. `const Cat = class FelineImpl {...}` → evaluates the class expression. The expression itself binds `FelineImpl` inside its own scope (the class body's LE), and binds `Cat` in the outer LE.
-9. `Cat.who()` → calls the static method. Inside, `FelineImpl.name === 'FelineImpl'`. Prints `'FelineImpl'`.
+// Redeclaration
+class A {}
+// class A {}                                                            // SyntaxError (same scope)
 
-## Important takeaways
+// Block scope
+if (true) { class X {} }
+typeof X;                                                                // 'undefined' (block-scoped)
+```
 
-**Syntax to memorize**
-- `class` declaration → hoisted to enclosing **block** as `<uninitialized>` (TDZ).
-- TDZ semantics: read/write/`typeof`/`new` before declaration line all throw `ReferenceError: Cannot access 'X' before initialization`.
-- Class body is **always strict mode**.
-- Class expression with a name: the inner name is local to the class body (useful for self-references).
+---
 
-**Patterns to reuse**
-- Treat `class Foo {}` mentally as `const Foo = class {...}` — same hoisting and TDZ rules.
-- For abstract classes, check `new.target === AbstractClass` in the constructor and throw.
-- For circular dependencies between class modules, restructure imports — don't try to "hoist around" TDZ.
+## 9. Step-by-step dry run
 
-**Common mistakes**
-- Assuming `class` hoists like `function`. It doesn't.
-- Writing `class Child extends Parent {} class Parent {}` and getting a confusing TDZ error. Order matters.
-- Forgetting that class bodies are strict — code that worked outside (e.g., implicit globals, `arguments.callee`) breaks inside.
+```
+Module creation phase:
+  Animal → LE: <uninitialized> (TDZ)
+  Mammal → LE: <uninitialized> (TDZ)
+  Dog    → LE: <uninitialized> (TDZ)
+  Cat    → LE: <uninitialized> (TDZ)
 
-**Related questions**
-- TDZ with `let`/`const`
-- Function declaration vs expression hoisting
-- ES module hoisting and circular imports
-- Prototype chain and `extends`
+Module execution phase:
+  1. try { new Animal() } → resolve Animal → <uninitialized> → ReferenceError
+     catch: log 'Pre-decl: Cannot access Animal before initialization'
+  
+  2. class Animal {...}:
+     evaluate class body (methods, prototype).
+     bind Animal to class object. TDZ ends.
+  
+  3. new Animal('rex').speak() → 'rex makes a sound'
+  
+  4. try { class Dog extends Mammal {} }:
+     evaluate Dog declaration.
+     evaluate extends Mammal → Mammal in TDZ → ReferenceError.
+     catch logs.
+  
+  5. class Mammal extends Animal {}:
+     evaluate extends Animal (Animal initialized) → succeeds.
+     bind Mammal.
+  
+  6. class Dog extends Mammal {...} → succeeds.
+  
+  7. new Dog('rex').speak() → 'rex barks'
+  
+  8. const Cat = class FelineImpl {...}:
+     evaluate class expression.
+     FelineImpl is bound INSIDE the class body's LE.
+     Cat is bound in outer LE.
+  
+  9. Cat.who() → 'FelineImpl' (inner name visible via Function.name).
+```
 
-## Variants
+---
 
-1. **Why is `class` not hoisted like `function`?** — Because class bodies contain arbitrary expressions (`extends getBase()`, computed keys `[expr]() {}`, static initializers) that must execute in source order with their side effects. Hoisting the body would change observable behavior.
+## 10. Common confusion + traps
 
-2. **TDZ + static block self-reference** — inside `static { ... }`, can you reference the class name? Yes, but only after the static block runs (mostly fine in practice since the body is evaluated top-to-bottom). Computed keys evaluated BEFORE static blocks may hit TDZ.
+1. **`class` hoists like `function`** — no, like `let`/`const`.
+2. **`class` isn't hoisted** — it is, into TDZ.
+3. **Class body not strict** — always strict.
+4. **`extends` accepts any value** — must be constructor or null.
+5. **Block-scoped sloppy escape** — none (unlike function decls in blocks).
+6. **Named class expression's inner name visible outside** — no, local to body.
+7. **Circular import + class** — late-loaded module sees other class in TDZ.
 
-3. **Circular import + class TDZ** — in Node ESM, file A `import { B } from './b.js'`; file B `import { A } from './a.js'`; both export classes that extend each other. The later-loaded module sees the other in TDZ → `ReferenceError`. Fix: refactor to break the cycle or lazy-load.
+---
 
-## Revision notes
+## 11. Senior follow-ups & variants
 
-> **class hoisting — 60 second recap**
-> - `class` is hoisted into the enclosing block's LE as `<uninitialized>` — same as `let`/`const`. **TDZ applies.**
-> - Pre-declaration access (`new Foo`, `typeof Foo`, `Foo.prop`) → `ReferenceError: Cannot access 'Foo' before initialization`.
-> - **Not** like `function` declaration (which is fully hoisted).
-> - Mental model: `class Foo {}` ≈ `const Foo = class {...}` + extra rules.
-> - Class body is **always strict mode**, even in sloppy surroundings.
-> - `extends ParentClass` evaluates the parent expression at the declaration line → if `Parent` is in TDZ, throws.
-> - Block-scoped; no sloppy-mode escape hatch.
-> - **Trap:** ordering matters for inheritance: declare parents before children.
-> - **Trap:** named class expression (`class Foo {}` as RHS) — `Foo` is visible only inside the class body, not outside.
+### Variant 1 — Why not hoist body?
+Computed keys, `extends`, static initializers must run in source order; hoisting body would change observable behavior.
+
+### Variant 2 — Static block self-reference
+Inside `static {}`, can reference class name (after the block evaluates). Computed keys before static blocks may hit TDZ.
+
+### Variant 3 — Circular ESM import + class
+A imports B; B imports A; both export classes extending each other → ReferenceError at runtime. Restructure or lazy-load.
+
+### Variant 4 — `class X extends null`
+Valid; prototype chain ends. `new X()` throws by default.
+
+### Variant 5 — Class expression for IIFE
+`const C = (class { ... })()` — class expressions can be called immediately (rare).
+
+---
+
+## 12. How to think aloud
+
+> "Mental shortcut: `class Foo {}` ≈ `const Foo = class {...}` + extra rules. Hoists binding into Lexical Environment as `<uninitialized>` — TDZ until declaration line. Same as `let`/`const`, NOT like function decl (which fully hoists). Pre-declaration access (read, write, `new`, `typeof`) throws ReferenceError. Why not hoist body? Class body contains arbitrary expressions — `extends` clauses, computed keys, static initializers — that must run in source order. Hoisting would change observable behavior. `extends ParentExpr` evaluates at declaration line; if Parent is in TDZ, throws. Class body is always strict mode. Block-scoped — no sloppy escape. Named class expression's inner name is local to body (good for self-reference). Trap: 'classes hoist like functions'; circular ESM imports."
+
+---
+
+## 13. 60-second revision
+
+> - **`class Foo {}` ≈ `const Foo = class {...}`** + extras.
+> - **Hoisted into LE as TDZ** — same as `let`/`const`.
+> - **Pre-decl access** (read, write, `new`, `typeof`) → ReferenceError.
+> - **NOT like function decl** (which fully hoists).
+> - **Class body always strict mode** (implicit).
+> - **`extends ParentExpr`** evaluates at decl line — Parent must be initialized.
+> - **Block-scoped;** no sloppy escape.
+> - **Named class expression inner name** local to body.
+> - **Trap:** "class hoists like function"; circular ESM imports.
+
+---
+
+**Related:** [tdz-let-const.md](./tdz-let-const.md) · [function-declaration-vs-expression-hoisting.md](./function-declaration-vs-expression-hoisting.md) · [class-static-block-hoisting.md](./class-static-block-hoisting.md) · [circular-import-live-binding-quiz.md](./circular-import-live-binding-quiz.md)
+
+**Concept primer:** [`concepts/hoisting.md`](../../concepts/hoisting.md), [`concepts/prototype.md`](../../concepts/prototype.md)

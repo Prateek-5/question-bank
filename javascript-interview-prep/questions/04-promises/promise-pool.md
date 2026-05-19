@@ -1,106 +1,202 @@
-# Implement `promisePool(functions, n)` / `asyncPool(limit, items, iterFn)`
+# Implement `asyncPool(concurrency, tasks)` — bounded concurrency over async work
 
-## Source
-- LeetCode #2636 "Promise Pool": https://leetcode.com/problems/promise-pool/
-- Canonical: every batch-processing backend service, every web scraper, every S3 multi-uploader. Inspired by `p-limit` / `async-pool` / `bluebird.map({ concurrency })`.
+> **Difficulty:** Medium   |   **Time:** ~30 min   |   **Prereqs:** [promise-all-polyfill.md](./promise-all-polyfill.md), [`concepts/promises.md`](../../concepts/promises.md)
+>
+> **Source:** [LeetCode 2636 — Promise Pool](https://leetcode.com/problems/promise-pool/); inspired by `p-limit`, `async-pool`, `bluebird.map({ concurrency })`.
 
-## Why this question matters in interviews
-**This is the single most-asked promises problem at senior backend interviews.** It tests whether you can think in terms of a *running worker pool* (true concurrency control) vs *fixed chunks* (the naive answer). Real backend code runs into this constantly — fan out 10k S3 uploads, fan out 1k DB updates, scrape 50k URLs without getting rate-limited. The interviewer is grading two things: (1) do you start with the chunk solution and recognize its weakness (latency-bound by the slowest task in each chunk), and (2) can you implement the proper running pool that picks up the next item the instant one finishes. Show both; explain why the running pool is what production code wants.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+**Signature**
+```ts
+function asyncPool<T>(
+  concurrency: number,
+  tasks: Array<() => Promise<T>>
+): Promise<T[]>;
+```
+
+**Input / Output examples**
+
+| Setup                                                                            | Behaviour                                              |
+|----------------------------------------------------------------------------------|---------------------------------------------------------|
+| `concurrency=2`, four tasks of [100, 400, 100, 100] ms                          | Total ~400 ms (bounded by slowest); results in input order |
+| Same tasks, **chunked** approach (n=2)                                          | Total ~500 ms (chunk waits for slowest each round)     |
+| `concurrency=1`                                                                  | Strictly sequential                                    |
+| `concurrency >= tasks.length`                                                    | All run in parallel                                    |
+| `tasks` empty                                                                   | Resolves with `[]` immediately                         |
+| `concurrency <= 0`                                                              | Throws `TypeError`                                     |
+| One task rejects (default fail-fast)                                            | Outer rejects; in-flight tasks complete but no new ones start |
+
+**Constraints**
+- **Running pool**, not chunked — workers grab the next task the instant one finishes.
+- Results in **input order**, not completion order.
+- JS is single-threaded — `i++` on the shared counter is race-free without locks.
+- Decide rejection semantics explicitly (fail-fast / allSettled / swallow).
+
+---
+
+## 2. Plain-English restatement
+
+You're given `N` async tasks and a concurrency budget. Run them so that at any moment at most `concurrency` are in flight. The instant one finishes, start the next waiting task — don't wait for the others in its "chunk" to finish first. Return results in the same order as the input.
+
+This is the universal pattern for "fan out 10k API calls but the API allows 5 concurrent." The naive chunked solution (slice into groups of N, await each chunk) leaves throughput on the table because the chunk waits for its slowest task. The running pool keeps every worker busy.
+
+---
+
+## 3. Why this matters in interviews
+
+**This is the single most-asked promises problem at senior backend interviews.** Real backend code hits this constantly — fan out S3 uploads, fan out DB writes, scrape URLs without getting rate-limited. The interviewer grades two things: (1) do you start with the chunk solution, recognize its weakness, and pivot to a running pool, and (2) can you implement the running pool correctly — shared counter, capture `idx` before `await`, preserve input order. Bonus signal: mention that JS's single-threadedness makes `i++` race-free without locks (most candidates from Java/Go/C++ instinctively reach for synchronization).
+
+---
+
+## 4. Mental model
+
+**N workers sharing a job board.** Each worker walks up to the board, grabs the next ticket (`i++`), goes off to do the work, returns to the board, grabs another. The board's counter increments atomically (single-threaded JS) so no two workers grab the same ticket. When the counter exceeds the task count, workers retire. `Promise.all(workers)` resolves when everyone's retired.
+
+```
+   tasks = [A, B, C, D, E, F]   (6 tasks)
+   concurrency = 2              (2 workers)
+
+   t=0:   W1 grabs A (idx=0, i→1)        W2 grabs B (idx=1, i→2)
+          [W1: A]    [W2: B]
+          
+   t=A:   W1 grabs C (idx=2, i→3)        W2 still on B
+          [W1: C]    [W2: B]
+          
+   t=C:   W1 grabs D (idx=3, i→4)        W2 still on B
+          [W1: D]    [W2: B]
+          
+   t=B:   W2 grabs E (idx=4, i→5)        W1 still on D
+          [W1: D]    [W2: E]
+          
+   ... eventually all done
+   results array (in input order): [A', B', C', D', E', F']
+```
+
+**Why the running pool beats chunking**: chunking forces every worker to wait for the slowest task in the current chunk. If one task takes 10s and the others take 100ms, three workers sit idle for 9.9s. The running pool has them picking up new work immediately.
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. With 4 tasks of `[100, 400, 100, 100]` ms and `concurrency=2`, what's the **chunked** total time vs the **running pool** total time?
+> 2. If you write `results[i++] = await tasks[i]()`, what goes wrong? (Hint: when does `i++` happen vs when does `i` get read?)
+> 3. Why is the shared counter `let i = 0` safe in JS without a lock?
+
+---
+
+## 6. Brute force — walked through
+
+### Approach 1: Chunked (the naive answer)
+
 ```js
-// LeetCode signature: functions are () => Promise; pool size n; return Promise<void>.
-async function promisePool(functions, n) {
-  // Running-pool approach.
+async function promisePoolChunked(tasks, n) {
+  const results = [];
+  for (let i = 0; i < tasks.length; i += n) {
+    const chunk = tasks.slice(i, i + n);
+    results.push(...(await Promise.all(chunk.map((f) => f()))));
+  }
+  return results;
+}
+```
+
+**Correct but suboptimal.** Every chunk waits for its slowest task before starting the next chunk. If chunk 1 has tasks of duration `[100, 400]` ms, then `[100, 100]` ms in chunk 2, total = 400 + 100 = **500 ms**. The running pool finishes in **400 ms** (worker 2 stays busy with the long task while worker 1 keeps grabbing 100ms tasks). With more skew, the gap widens dramatically.
+
+Present this first in the interview, then critique its latency penalty, then build the running pool.
+
+### Approach 2: Mutate `i` inside await — wrong!
+
+```js
+async function broken(tasks, n) {
   let i = 0;
-  async function worker() {
-    while (i < functions.length) {
-      const idx = i++;
-      await functions[idx]();
+  const results = [];
+  while (i < tasks.length) {
+    const batch = [];
+    for (let k = 0; k < n && i < tasks.length; k++) {
+      batch.push(tasks[i]());                   // BUG: i may have moved by the time we read
+      i++;
     }
+    results.push(...(await Promise.all(batch)));
   }
-  await Promise.all(Array.from({ length: Math.min(n, functions.length) }, worker));
+  return results;
 }
 ```
 
-### Runtime / engine behavior
-- JavaScript is single-threaded. "Concurrency" here means **interleaved async I/O**, not parallel CPU work. The pool limits how many in-flight promises exist at once.
-- Each `worker` is itself an async function. Multiple workers running in parallel **share** the index `i` via closure. The `i++` is **safe without locks** because JS is single-threaded — no two workers can read+write `i` simultaneously. (This is a non-obvious win of the JS model. Mention it.)
-- The `worker` returns when `i >= functions.length`. `Promise.all` of all workers resolves when every worker has returned — i.e., when all tasks are done.
+Subtle bug: `tasks[i]()` reads `i` *after* the increment in some interleaving. Always capture `idx = i++` first, *then* use `idx`.
 
-### Edge cases (interview traps)
-1. **`functions` empty** — resolve immediately with no work. `Array.from({ length: 0 })` produces `[]`, `Promise.all([])` resolves with `[]`. Trivially correct.
-2. **`n >= functions.length`** — start exactly `functions.length` workers; running more is wasted. Hence `Math.min(n, functions.length)`.
-3. **`n === 0` or negative** — what's the contract? Reject? Default to 1? Pick a sensible default and document. Don't silently hang.
-4. **A task rejects** — LeetCode's official problem treats rejections as "complete" (`.catch` swallow). Production usually wants fail-fast or `allSettled`-style. Always ask the interviewer "what should happen on reject?" before coding.
-5. **Tasks return values** — LeetCode's variant ignores them; production usually wants results **in input order**. Use an `results[idx] = await functions[idx]()` pattern (note `idx`, not `i`, because `i` has moved on).
-6. **Synchronous throws in a task** — `await functions[idx]()` converts them to rejections naturally inside an async function. If you call `functions[idx]()` outside an async context, wrap in `try/catch` or `Promise.resolve().then(functions[idx])`.
-7. **Order of completion vs order of start** — workers start sequentially in microtask order but finish in arbitrary order. If you care about completion order, capture `idx` from `i++` *before* awaiting.
-8. **Memory** — running pool keeps memory O(n), not O(functions.length). The naive chunk approach also uses O(n) but adds latency.
-
-## Brute force approach — chunked (presented first, then critiqued)
+### Approach 3: Add a mutex for `i++` — unnecessary!
 
 ```js
-async function promisePoolChunked(functions, n) {
-  for (let i = 0; i < functions.length; i += n) {
-    const chunk = functions.slice(i, i + n);
-    await Promise.all(chunk.map((f) => f()));
+const lock = new Mutex();
+async function worker() {
+  while (true) {
+    const idx = await lock.acquire(() => i++);   // BUG: pointless ceremony
+    // ...
   }
 }
 ```
 
-Correct but **suboptimal**: every chunk waits for its slowest task before starting the next chunk. If task #2 in chunk 1 takes 10s and tasks #1, #3, #4 take 100ms each, those three workers sit idle for 9.9s. Real workloads are heterogeneous — this leaves throughput on the table. State this clearly and switch to the running pool.
+JavaScript is single-threaded. The `i++` is one statement that completes atomically from JS's perspective — no other worker can interleave between the read and the write because there's only one execution thread. The mutex is dead code.
 
-## Optimal approach — running pool
+---
 
-Spawn `min(n, len)` worker coroutines. Each pulls the next index off a shared counter and awaits the corresponding task; loops until exhausted. The instant a task completes, that worker grabs the next one. Steady-state utilization stays at `n`.
+## 7. The unlocking insight
 
-## Solution (JavaScript)
+> **Spawn `min(concurrency, tasks.length)` worker coroutines. Each runs `while (i < tasks.length) { const idx = i++; results[idx] = await tasks[idx](); }`. Single-threaded JS makes `i++` race-free. `Promise.all` of all workers resolves when everyone's retired.**
+
+The shape is fixed by three observations:
+
+1. **Bounded concurrency** = exactly `N` workers running simultaneously. `Array.from({length: N}, worker)` spawns them.
+2. **Shared counter** for next-task assignment — JS is single-threaded, so `let idx = i++` is safe. Mention this in the interview; it's a non-obvious win.
+3. **Results in input order** — capture `idx = i++` *before* `await`, write to `results[idx]`. After the await, `i` has moved on; `idx` hasn't.
+
+Two semantic decisions you must make explicit:
+
+| Decision           | Options                                                        | When to pick which                                  |
+|--------------------|----------------------------------------------------------------|------------------------------------------------------|
+| Rejection policy   | fail-fast (Promise.all) / allSettled / swallow (LC spec)       | Ask the interviewer                                  |
+| Sync throws        | Wrap `tasks[idx]()` in `Promise.resolve().then(tasks[idx])` to catch sync throws as rejections | Always (safer)                  |
+
+**Memory:** `O(concurrency + tasks.length)` — the results array holds N entries (regardless of pool size). For huge tasks counts (streaming input), use the async-iterable variant in section 11.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
-/**
- * Run up to `concurrency` async tasks from `tasks` in parallel.
- * Returns results in the SAME order as the input.
- * Fails fast on first rejection (the in-flight tasks finish but no new ones start).
- *
- * @template T
- * @param {number} concurrency
- * @param {Array<() => Promise<T>>} tasks
- * @returns {Promise<T[]>}
- */
 async function asyncPool(concurrency, tasks) {
-  if (!Number.isInteger(concurrency) || concurrency < 1) {
+  if (!Number.isInteger(concurrency) || concurrency < 1) {           // step 1: validate
     throw new TypeError('concurrency must be a positive integer');
   }
-  if (tasks.length === 0) return [];
+  if (tasks.length === 0) return [];                                  // step 2: empty input
 
-  const results = new Array(tasks.length);
-  let nextIndex = 0;
+  const results = new Array(tasks.length);                            // step 3: input-order results
+  let nextIndex = 0;                                                  // step 4: shared counter
   let failed = false;
 
-  async function worker() {
+  async function worker() {                                           // step 5: each worker
     while (!failed) {
-      const idx = nextIndex++;
+      const idx = nextIndex++;                                          //   capture idx BEFORE await
       if (idx >= tasks.length) return;
-      // Wrap so a sync throw inside the task becomes a rejection.
-      results[idx] = await Promise.resolve().then(() => tasks[idx]());
+      results[idx] = await Promise.resolve()                           //   wrap to catch sync throws
+        .then(() => tasks[idx]());
     }
   }
 
   try {
-    await Promise.all(
+    await Promise.all(                                                  // step 6: spawn min(N, len) workers
       Array.from({ length: Math.min(concurrency, tasks.length) }, worker)
     );
     return results;
   } catch (err) {
-    failed = true; // stop further worker iterations
+    failed = true;                                                      // step 7: stop new tasks on fail
     throw err;
   }
 }
 
-// ----- LeetCode shape: no results, swallow rejections, return Promise<void> -----
+// LeetCode shape: swallow rejections, no return values
 async function promisePool(functions, n) {
   let i = 0;
   async function worker() {
@@ -113,11 +209,8 @@ async function promisePool(functions, n) {
     Array.from({ length: Math.min(n, functions.length) }, worker)
   );
 }
-```
 
-### `allSettled` flavour (no fail-fast)
-
-```js
+// allSettled flavour — never rejects; per-task status
 async function asyncPoolSettled(concurrency, tasks) {
   const results = new Array(tasks.length);
   let i = 0;
@@ -135,79 +228,202 @@ async function asyncPoolSettled(concurrency, tasks) {
 }
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
-Input:
 ```js
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const tasks = [
-  () => sleep(100).then(() => 'a'),  // 100ms
-  () => sleep(400).then(() => 'b'),  // 400ms
-  () => sleep(100).then(() => 'c'),  // 100ms
-  () => sleep(100).then(() => 'd'),  // 100ms
+  () => sleep(100).then(() => 'a'),
+  () => sleep(400).then(() => 'b'),
+  () => sleep(100).then(() => 'c'),
+  () => sleep(100).then(() => 'd'),
 ];
-asyncPool(2, tasks).then(console.log);
+
+console.time('pool');
+const results = await asyncPool(2, tasks);
+console.timeEnd('pool');                       // ~400 ms
+console.log(results);                          // ['a', 'b', 'c', 'd']  (input order)
 ```
 
-Trace (running pool, concurrency = 2):
-- `t=0`: workers W1, W2 spawn. W1 takes idx=0 (task 'a', 100ms). W2 takes idx=1 (task 'b', 400ms). `nextIndex = 2`.
-- `t=100`: W1 finishes 'a', `results[0]='a'`. W1 loops, takes idx=2 ('c', 100ms). `nextIndex = 3`.
-- `t=200`: W1 finishes 'c', `results[2]='c'`. W1 loops, takes idx=3 ('d', 100ms). `nextIndex = 4`.
-- `t=300`: W1 finishes 'd', `results[3]='d'`. W1 loops; `idx=4 >= 4`, W1 returns.
-- `t=400`: W2 finishes 'b', `results[1]='b'`. W2 loops; W2 returns.
-- `Promise.all([W1, W2])` resolves. Returns `['a', 'b', 'c', 'd']`.
+---
 
-Total wall time: **400ms** (bound by the single slow task).
+## 9. Step-by-step dry run
 
-Compare to **chunked(n=2)**:
-- `t=0–400`: chunk ['a','b'] — finishes at t=400 (waiting on 'b').
-- `t=400–500`: chunk ['c','d'] — finishes at t=500.
-- Total: **500ms**. That extra 100ms is the chunked penalty. With more skew, the gap widens dramatically.
+Input: `concurrency=2`, `tasks = [100ms-'a', 400ms-'b', 100ms-'c', 100ms-'d']`.
 
-## Important takeaways
+Values-first trace:
 
-**Syntax to memorize**
-- `Array.from({ length: k }, worker)` to spawn `k` workers.
-- Shared `nextIndex` counter via closure — single-threaded JS makes `i++` race-free.
-- Capture `idx = i++` **before** awaiting, then use `idx` for `results[idx]`.
+| Time (ms) | W1 state          | W2 state          | `nextIndex` | `results`                       |
+|-----------|-------------------|-------------------|-------------|----------------------------------|
+| 0         | start A (idx=0)   | start B (idx=1)   | 2           | `[_, _, _, _]`                  |
+| 100       | A done; results[0]='a'; start C (idx=2) | still on B | 3           | `['a', _, _, _]`                |
+| 200       | C done; results[2]='c'; start D (idx=3) | still on B | 4           | `['a', _, 'c', _]`              |
+| 300       | D done; results[3]='d'; nextIndex>=len; return | still on B | 4    | `['a', _, 'c', 'd']`            |
+| 400       | retired           | B done; results[1]='b'; return | 4 | `['a', 'b', 'c', 'd']`         |
+| 400       | `Promise.all([W1, W2])` resolves         |             | returns `['a', 'b', 'c', 'd']`  |
 
-**Patterns to reuse**
-- Same skeleton powers: rate-limited batch processors, paginated API consumers, bulk upload helpers, web scrapers, fan-out DB writes.
-- Wrap with `pRetry`-style retry around `tasks[idx]()` to add resilience.
+**Total wall time: 400 ms** — bound by the single slow task.
 
-**Common mistakes**
-- Submitting the chunked answer and not mentioning the running-pool improvement.
-- Forgetting `Math.min(n, len)` and spawning more workers than needed.
-- Awaiting `i` instead of `idx` for results — `i` mutates and you'll overwrite or misalign.
-- Forgetting that JS is single-threaded — adding a "lock" for `i++` (real submissions have this — it's wasted code).
-- Failing to handle empty input or `concurrency <= 0`.
-- Not deciding the rejection semantics up front (fail-fast vs allSettled vs swallow).
+**Compare chunked** (concurrency=2):
 
-**Related questions**
-- `Promise.all` polyfill (different — fans out all at once, no limit).
-- Token-bucket rate limiter (concurrency over time, not in-flight count).
-- Worker queue with backpressure (producer waits for room).
+| Time (ms) | Chunk action                       | Output         |
+|-----------|-------------------------------------|----------------|
+| 0–400     | chunk [a, b]: waits for slower (b)  | —              |
+| 400       | chunk [a, b] done                   | `['a', 'b']`   |
+| 400–500   | chunk [c, d]: both finish in 100ms  | —              |
+| 500       | chunk [c, d] done                   | `['a', 'b', 'c', 'd']` |
 
-## Variants
+**Total: 500 ms** — 100ms penalty from chunking. With more skew, the gap widens.
 
-1. **Streaming generator-input** — accept an async iterable of tasks (so memory stays O(concurrency), not O(tasks)). Pull via `for await`. Pattern for "process every line of a 10GB file with concurrency 32".
+---
 
-2. **Per-task timeout + retry** — wrap each `tasks[idx]()` with `timeLimit` + `pRetry`. Composable.
+## 10. Common confusion + traps
 
-3. **Priority pool** — replace shared index with a priority queue; workers pop highest-priority items. Used in job runners.
+1. **Submitting the chunked answer without critiquing it.**
+   Always present both. Articulate the latency gap. The interviewer is checking whether you *recognize* the chunk solution's flaw.
 
-4. **Cancellation** — accept `AbortSignal`; on abort, set `failed = true` and abort each in-flight task's signal.
+2. **Spawning more workers than tasks.**
+   `concurrency=10, tasks.length=3` should spawn 3 workers, not 10. Use `Math.min(concurrency, tasks.length)`.
 
-5. **Dynamic concurrency** — expose `setConcurrency(k)` that spawns more workers if k goes up, lets idle workers exit if k goes down. Used in autotuning systems.
+3. **Awaiting `i` instead of `idx`.**
+   `results[i++]` reads `i` *after* mutation in some interleavings. Always capture `const idx = i++;` *first*.
 
-## Revision notes
+4. **Adding a "lock" for `i++`.**
+   JS is single-threaded. The increment is atomic. No lock needed. Mention this in the interview — it's a senior signal.
 
-> **promisePool / asyncPool — 60 second recap**
-> - **Running pool** beats **chunked**: workers grab next index the instant one finishes; steady-state utilization stays at `n`.
-> - Spawn `min(n, tasks.length)` worker coroutines. Each: `while (i < tasks.length) { const idx = i++; await tasks[idx](); }`.
-> - JS is single-threaded — `i++` is race-free, no lock needed. **State this in the interview.**
-> - Preserve input order with `results[idx]` (capture `idx` *before* the await).
-> - Decide rejection semantics: fail-fast (Promise.all behaviour) vs allSettled vs swallow (LC spec).
-> - Empty array → resolve `[]` immediately. `n === 0` → throw/reject.
-> - Family: rate limiter, paginated consumer, bulk uploader, scraper — all the same skeleton.
-> - **Trap:** writing the chunked solution and not articulating the latency penalty. Show both, explain the gap.
+5. **Empty input or `concurrency <= 0`.**
+   Empty: return `[]` immediately. `concurrency <= 0`: throw `TypeError`. Don't hang.
+
+6. **Not deciding rejection semantics.**
+   Fail-fast (`Promise.all`), allSettled (per-task status), or swallow (LC spec). Ask the interviewer; document the choice.
+
+7. **Sync throws in a task body.**
+   `tasks[idx]()` may throw synchronously (not return a Promise). Wrap with `Promise.resolve().then(() => tasks[idx]())` to convert to a rejection.
+
+8. **Memory pinning by holding all promise wrappers.**
+   For `tasks.length = 10^6` with `concurrency = 10`, the pool itself only holds 10 in-flight promises. But your `tasks` array of factory functions holds all 10^6 — that's the caller's memory cost. For streaming, see Variant 1.
+
+---
+
+## 11. Senior follow-ups & variants
+
+### Variant 1 — Async-iterable input (streaming, O(concurrency) memory)
+
+For unbounded sources (file lines, paginated API), don't preload all tasks:
+
+```js
+async function asyncPoolStream(concurrency, asyncIter, taskFn) {
+  const iter = asyncIter[Symbol.asyncIterator]();
+  const results = [];
+  let idx = 0;
+  async function worker() {
+    while (true) {
+      const myIdx = idx++;
+      const { value, done } = await iter.next();
+      if (done) return;
+      results[myIdx] = await taskFn(value);
+    }
+  }
+  await Promise.all(Array.from({ length: concurrency }, worker));
+  return results;
+}
+```
+
+Memory stays O(concurrency) regardless of source size.
+
+### Variant 2 — Per-task timeout + retry composition
+
+```js
+const wrapped = tasks.map((t) => () =>
+  retryWithBackoff(({ signal }) => timeLimit(t({ signal }), 5_000), { retries: 3 })
+);
+await asyncPool(10, wrapped);
+```
+
+Pool + per-task timeout + per-task retry. Composes cleanly.
+
+### Variant 3 — Priority pool
+
+Replace the shared counter with a priority queue. Workers pop highest-priority items. Used in job runners (e.g., Bull, Sidekiq-style queues).
+
+```js
+class PriorityPool {
+  constructor(concurrency) {
+    this.heap = new MinHeap();
+    this.workers = concurrency;
+  }
+  add(task, priority) {
+    this.heap.push({ task, priority });
+    this._tick();
+  }
+  // ... workers pull from heap ...
+}
+```
+
+### Variant 4 — Cancellation via AbortSignal
+
+```js
+async function asyncPool(concurrency, tasks, { signal } = {}) {
+  // ... same shape, plus:
+  async function worker() {
+    while (!failed && !signal?.aborted) {
+      const idx = nextIndex++;
+      if (idx >= tasks.length) return;
+      results[idx] = await tasks[idx]({ signal });
+    }
+  }
+}
+```
+
+Caller can abort the whole pool. Each task receives the signal so it can cancel its own work.
+
+### Variant 5 — Dynamic concurrency
+
+Expose `setConcurrency(k)`. Increasing spawns more workers; decreasing lets idle workers exit. Used in autotuning systems (e.g., bandwidth-adaptive uploaders).
+
+```js
+function createPool(initialConcurrency) {
+  let concurrency = initialConcurrency;
+  let workersAlive = 0;
+  async function spawnWorker() { workersAlive++; /* ... worker loop ... */ workersAlive--; }
+  return {
+    submit(task) { /* enqueue; spawn if workersAlive < concurrency */ },
+    setConcurrency(k) {
+      concurrency = k;
+      while (workersAlive < concurrency) spawnWorker();
+      // shrinking happens naturally — workers see `workersAlive > concurrency` and exit
+    },
+  };
+}
+```
+
+### Variant 6 — `Promise.allSettled` style — never rejects
+
+Already shown in section 8 as `asyncPoolSettled`. Each task returns `{ status, value | reason }`. Useful when you want to process all results regardless of partial failures.
+
+---
+
+## 12. How to think aloud in the interview
+
+> "I'll present two approaches. First, the chunked solution: slice into groups of N, await each chunk. It's correct but the chunk waits for its slowest task — leaves throughput on the table. Better: a running pool. Spawn `min(N, tasks.length)` worker coroutines. Each loops: grab `idx = i++`, await `tasks[idx]()`, write `results[idx]`. JS is single-threaded so `i++` is race-free — no lock needed. Workers retire when `idx >= len`. `Promise.all(workers)` resolves when everyone's retired. Two policy decisions: fail-fast vs allSettled vs swallow, and whether to wrap each task in `Promise.resolve().then(...)` to catch sync throws. For streaming input, swap the array for an async-iterable so memory stays O(concurrency). Composes with retry, per-attempt timeout, AbortSignal cancellation."
+
+---
+
+## 13. 60-second revision
+
+> - **Running pool > chunked.** Workers grab next task the instant one finishes.
+> - **Spawn `min(N, tasks.length)`** worker coroutines. Shared `let i = 0` counter.
+> - **Capture `idx = i++` before `await`.** Then `results[idx] = await tasks[idx]()`.
+> - **JS is single-threaded** — `i++` is race-free, no lock needed. **State this aloud.**
+> - **Preserve input order** via `results[idx]`.
+> - **Empty input** → `[]` immediately. **`concurrency <= 0`** → throw.
+> - **Rejection policy** is a design decision: fail-fast / allSettled / swallow.
+> - **Sync throws** → wrap `tasks[idx]()` with `Promise.resolve().then(...)`.
+> - **Family:** rate limiter, paginated consumer, bulk uploader, scraper, fanout-to-N-replicas.
+> - **Trap:** chunked answer with no critique; using `i` instead of `idx`; adding a needless lock.
+
+---
+
+**Related:** [promise-all-polyfill.md](./promise-all-polyfill.md) · [retry-with-backoff.md](./retry-with-backoff.md) · [promise-time-limit.md](./promise-time-limit.md) · [abortcontroller-fanout.md](./abortcontroller-fanout.md) · [`10-machine-coding-patterns/async-semaphore.md`](../10-machine-coding-patterns/async-semaphore.md)
+
+**Concept primer:** [`concepts/promises.md`](../../concepts/promises.md)

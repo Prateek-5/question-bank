@@ -1,234 +1,294 @@
-# TTL Map with auto-eviction (setTimeout vs lazy)
+# TTL Map with auto-eviction — setTimeout vs lazy
 
-## Source
-- Real backend pattern: every session store, in-memory cache, rate limiter, and idempotency-key tracker uses some form of TTL Map.
-- Inspired by Redis `EXPIRE`, `node-cache`, `lru-cache` (with `maxAge`), and Cloudflare Workers' KV TTL semantics.
+> **Difficulty:** Senior   |   **Time:** ~15 min   |   **Prereqs:** [lru-cache-with-map.md](./lru-cache-with-map.md)
+>
+> **Source:** Redis EXPIRE, node-cache, lru-cache. Session stores, rate limiters, idempotency keys.
 
-## Why this question matters in interviews
-TTL Map sits at the intersection of three senior-level concerns: **timer management** (when do you set / clear / fire?), **memory pressure** (active timers vs lazy expiry), and **API design** (`get` returns `undefined` when expired vs throws vs returns the stale value with a flag). Interviewers love it because there's no single right answer — they want to hear you **compare two implementations** and articulate when each wins. For backend roles it's directly applicable: session stores, JWT blacklists, rate limiters, dedup windows, idempotency keys, OTP caches. If you've ever built a "delete after N seconds" feature, you've built a TTL Map (or you should have).
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+Cache with per-entry TTL. Compare active (setTimeout per entry) vs lazy (check on read) eviction.
+
+**Verification examples**
+
 ```js
-// Lazy expiry — check timestamp on read.
+const m = new TTLMap(60_000);
+m.set('session-abc', userId);
+m.get('session-abc');                    // userId
+// 60 seconds later
+m.get('session-abc');                    // undefined
+
+m.set('one-shot', value, 5_000);         // explicit 5s TTL
+```
+
+**Constraints**
+- Per-entry TTL (default + override).
+- Active: per-entry setTimeout; need clearTimeout on overwrite/delete.
+- Lazy: check `Date.now() >= entry.exp` on access.
+- Use `Date.now()` (wall clock), not `performance.now()` (relative).
+
+---
+
+## 2. Plain-English restatement
+
+Either schedule a timer per entry (active) or check timestamp lazily on read. Tradeoffs in timer churn vs memory drift.
+
+---
+
+## 3. Why this matters in interviews
+
+Three senior concerns: timer management, memory pressure, API design (`get` returns undefined when expired). No single right answer — compare.
+
+---
+
+## 4. Mental model
+
+```
+   Lazy expiry:
+     set(k, v, ttl): store {value, exp: now + ttl}.
+     get(k): if exp < now, delete + return undefined.
+     No timers. Memory grows until read or sweep.
+     Wins: simple, zero timer overhead.
+     Loses: stale entries linger; need periodic sweep or size cap.
+   
+   Active expiry (per-entry setTimeout):
+     set(k, v, ttl): clearTimeout(old); store; schedule timeout.
+     On timer fire: delete entry.
+     Memory always bounded by live entries.
+     Wins: bounded memory.
+     Loses: timer churn (overwrite-heavy = thrash); each timer holds Map ref; consider .unref().
+   
+   Hybrid:
+     Lazy + periodic sweep (every minute clear expired).
+   
+   Clocks:
+     Date.now() — wall clock, JUMPS on NTP sync. OK for short TTLs.
+     performance.now() — high-res monotonic, RELATIVE. Don't use for absolute TTLs.
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. Lazy vs active — which for high overwrite?
+> 2. Why not `performance.now`?
+> 3. Where do timers leak if not cleared?
+
+---
+
+## 6. Brute force — walked through
+
+```js
+// Active without clearTimeout — leaks phantom deletions
+function set(k, v) {
+  this.store.set(k, v);
+  setTimeout(() => this.store.delete(k), ttl);   // older timer still fires later → drops new entry
+}
+```
+
+Bug: overwrite leaves old timer, which deletes the new value when it fires.
+
+---
+
+## 7. The unlocking insight
+
+> **Lazy: check exp on read; cheap; sweeps optional. Active: per-entry timer; bounded memory; clearTimeout on overwrite/delete. Trade timer churn vs memory drift.**
+
+Three properties:
+
+1. **`Date.now()`** for absolute TTL.
+2. **`clearTimeout`** in active on overwrite.
+3. **Lazy needs sweep or cap** to bound memory.
+
+---
+
+## 8. Solution (annotated)
+
+```js
+// Lazy
 class LazyTTLMap {
-  #store = new Map();                          // key -> { value, expiresAt }
+  #store = new Map();                                                     // step 1: {value, exp}
   constructor(defaultTtl = 60_000) { this.defaultTtl = defaultTtl; }
 
   set(key, value, ttl = this.defaultTtl) {
-    this.#store.set(key, { value, expiresAt: Date.now() + ttl });
+    this.#store.set(key, { value, exp: Date.now() + ttl });
   }
   get(key) {
     const entry = this.#store.get(key);
     if (!entry) return undefined;
-    if (Date.now() >= entry.expiresAt) {
-      this.#store.delete(key);                 // opportunistic cleanup
+    if (Date.now() >= entry.exp) {                                         // step 2: lazy check
+      this.#store.delete(key);
       return undefined;
     }
     return entry.value;
   }
+  has(key) { return this.get(key) !== undefined; }                         // step 3: side-effect check
+  delete(key) { return this.#store.delete(key); }
+
+  sweep() {                                                                  // step 4: optional periodic
+    const now = Date.now();
+    for (const [k, e] of this.#store) {
+      if (now >= e.exp) this.#store.delete(k);
+    }
+  }
 }
-```
 
-### Runtime / engine behavior
-- **Active eviction (per-entry setTimeout):** every `set()` schedules a timer; expiry happens automatically. The timer holds a reference to the Map and the key — the Node event loop keeps the process alive unless `timer.unref()` is called.
-- **Lazy eviction (check on read):** no timers; entries linger until accessed. Memory can grow unbounded if entries are written and never read. Best paired with a periodic sweep or a max-size cap.
-- `Date.now()` returns ms since epoch. Don't use `performance.now()` for TTLs — it's high-resolution monotonic but **relative**, and resets between processes / windows.
-- `setTimeout` in Node returns a Timeout object; in browsers it's a number. Both go to `clearTimeout`. Active eviction must `clearTimeout` the previous timer on overwrite, or you'll get phantom deletions.
-- Hidden cost: **timer churn**. If a key is overwritten 1000 times per second, naive active eviction creates and clears 1000 timers/sec. V8's timer code is fast but not free; lazy eviction has zero such cost.
-
-### Edge cases (these are the interview traps)
-1. **Overwriting an existing key** — active eviction MUST clear the prior `setTimeout` before scheduling a new one. Otherwise the old timer fires and deletes the *new* value.
-2. **`ttl = 0` or negative** — by spec, an immediately-expired entry. Lazy: returns `undefined` on first read. Active: `setTimeout(fn, 0)` defers to next tick — actually wrong, you'd want to delete synchronously. Decide and document.
-3. **Process keep-alive** — long-lived active timers keep Node from exiting. Use `timer.unref()` if appropriate.
-4. **Clock drift / system time changes** — `Date.now()` jumps if the user changes their clock. For TTLs short enough not to care, ignore. For long TTLs (hours+), consider monotonic time + offset.
-5. **Memory bound** — lazy eviction without a periodic sweep can leak memory. Pair it with a max-size LRU bound or a background sweep timer.
-6. **Read-on-expiry timing** — `Date.now() >= entry.expiresAt` (inclusive) is the safe comparison. Strict `>` lets the boundary millisecond return a stale value.
-7. **Mass eviction on shutdown** — active eviction leaves timers in flight; `clear()` must walk and `clearTimeout` each one.
-8. **Iteration during expiry** — `for...of map.entries()` during a sweep that mutates the map: in V8, deleting current key is safe; deleting future keys mid-iteration may skip them. Use `Array.from(map.keys())` to snapshot first.
-9. **`has(key)` semantics** — should `has()` honor TTL? Yes, but it requires the same expiry check as `get()`. Otherwise `has(k) === true && get(k) === undefined` is observable, which is confusing.
-
-## Brute force approach
-Plain `Map` + a single global `setInterval` that walks every entry and deletes expired ones. **Works** but O(n) per sweep regardless of how many entries are actually expired. Fine for small n; wasteful otherwise. Use it as a baseline you'd refine. (It's actually a viable production pattern with `setInterval(sweep, 1000)` for low-throughput caches.)
-
-## Optimal approach
-There are **two production-grade approaches** and the interviewer wants to hear both, plus when to pick which.
-
-**A. Active eviction (per-entry `setTimeout`)** — eager. Each `set()` schedules a timer that deletes the key when TTL elapses. Memory is tight (no expired entries linger). Cost: one timer per entry, plus timer churn on overwrites. Good for low-write-rate caches with many reads — session stores, OTPs.
-
-**B. Lazy eviction (check timestamp on read)** — `get()` checks `Date.now() >= expiresAt` and returns `undefined` for expired entries. Zero timers. Memory may grow if entries are never read. Good for high-write-rate caches where most entries naturally get overwritten — rate limiters, dedup windows.
-
-**Hybrid:** lazy expiry on read + periodic background sweep (e.g. every 60s, walk the Map and delete expired). Best general-purpose answer.
-
-## Solution (JavaScript)
-
-```js
-/**
- * (A) Active eviction — per-entry setTimeout.
- * Pros: tight memory; auto-clean.
- * Cons: timer per entry; churn on overwrites.
- */
+// Active (per-entry timeout)
 class ActiveTTLMap {
-  #store = new Map();                          // key -> value
-  #timers = new Map();                         // key -> timeout handle
-
+  #store = new Map();                                                     // key → {value, timer}
   constructor(defaultTtl = 60_000) { this.defaultTtl = defaultTtl; }
 
   set(key, value, ttl = this.defaultTtl) {
-    // Critical: clear any prior timer for this key.
-    if (this.#timers.has(key)) clearTimeout(this.#timers.get(key));
-
-    this.#store.set(key, value);
+    if (this.#store.has(key)) {
+      clearTimeout(this.#store.get(key).timer);                            // step 5: clear old
+    }
     const timer = setTimeout(() => {
       this.#store.delete(key);
-      this.#timers.delete(key);
     }, ttl);
-    if (typeof timer.unref === 'function') timer.unref();   // don't block process exit
-    this.#timers.set(key, timer);
+    if (typeof timer.unref === 'function') timer.unref();                  // step 6: don't keep process alive
+    this.#store.set(key, { value, timer });
   }
-
-  get(key) { return this.#store.get(key); }
+  get(key) { return this.#store.get(key)?.value; }
   has(key) { return this.#store.has(key); }
-
   delete(key) {
-    if (this.#timers.has(key)) clearTimeout(this.#timers.get(key));
-    this.#timers.delete(key);
+    const entry = this.#store.get(key);
+    if (!entry) return false;
+    clearTimeout(entry.timer);                                              // step 7: clean timer
     return this.#store.delete(key);
   }
-
   clear() {
-    for (const t of this.#timers.values()) clearTimeout(t);
-    this.#timers.clear();
+    for (const e of this.#store.values()) clearTimeout(e.timer);
     this.#store.clear();
   }
-
-  get size() { return this.#store.size; }
 }
 
-/**
- * (B) Lazy eviction — check on read.
- * Pros: zero timers; cheap writes.
- * Cons: expired entries linger until read or swept.
- */
-class LazyTTLMap {
-  #store = new Map();                          // key -> { value, expiresAt }
-
-  constructor(defaultTtl = 60_000) { this.defaultTtl = defaultTtl; }
-
-  set(key, value, ttl = this.defaultTtl) {
-    this.#store.set(key, { value, expiresAt: Date.now() + ttl });
+// Hybrid: lazy + periodic sweep
+class HybridTTLMap extends LazyTTLMap {
+  constructor(defaultTtl, sweepIntervalMs = 60_000) {
+    super(defaultTtl);
+    this.sweepTimer = setInterval(() => this.sweep(), sweepIntervalMs);
+    this.sweepTimer.unref?.();
   }
-
-  get(key) {
-    const entry = this.#store.get(key);
-    if (!entry) return undefined;
-    if (Date.now() >= entry.expiresAt) {
-      this.#store.delete(key);                 // opportunistic cleanup
-      return undefined;
-    }
-    return entry.value;
-  }
-
-  has(key) { return this.get(key) !== undefined; }
-
-  delete(key) { return this.#store.delete(key); }
-  clear() { this.#store.clear(); }
-
-  /** Optional periodic sweep — call from setInterval. */
-  sweep() {
-    const now = Date.now();
-    for (const [k, { expiresAt }] of this.#store) {
-      if (now >= expiresAt) this.#store.delete(k);
-    }
-  }
-
-  get size() { return this.#store.size; }
+  stop() { clearInterval(this.sweepTimer); }
 }
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
 ```js
-const ttl = new LazyTTLMap(100);              // default 100ms
+const m = new LazyTTLMap(5_000);
+m.set('k', 1);
+m.get('k');                                                   // 1
+// wait 6 sec
+m.get('k');                                                   // undefined (deleted on access)
 
-ttl.set('a', 1);                              // expiresAt = t=100
-ttl.set('b', 2, 500);                         // expiresAt = t=500
+// Active version — bounded memory
+const m2 = new ActiveTTLMap(5_000);
+m2.set('session', userId);
+// 5 sec later, automatically deleted
 
-// t=50
-ttl.get('a');                                 // entry exists, 50 < 100 → returns 1
-ttl.get('b');                                 // returns 2
+// Overwrite — active version clears old timer
+m2.set('k', 1, 10_000);
+m2.set('k', 2, 10_000);    // first timer cleared; only second fires
 
-// t=150
-ttl.get('a');                                 // 150 >= 100 → delete + return undefined
-ttl.get('b');                                 // 150 < 500 → returns 2
-
-// t=600
-ttl.get('b');                                 // 600 >= 500 → delete + return undefined
-ttl.size;                                     // 0
+// Idempotency-key store
+class IdempotencyStore extends LazyTTLMap {
+  isProcessed(key) { return this.get(key) === true; }
+  markProcessed(key, ttl) { this.set(key, true, ttl); }
+}
 ```
 
-Active version: at `t=100`, the `setTimeout` for `'a'` fires and deletes it from `#store` and `#timers`. No `get` needed. At `t=500`, same for `'b'`.
+---
 
-## Important takeaways
+## 9. Step-by-step dry run
 
-**Syntax to memorize**
-- Lazy: store `{ value, expiresAt }`; check `Date.now() >= expiresAt` in `get`.
-- Active: pair Map of values with Map of timer handles; **always clear the prior timer on overwrite**.
-- `timer.unref()` keeps active eviction from blocking process exit.
+```
+LazyTTLMap, ttl=5000:
+  t=0:    set('k', 1) → store: {k: {value:1, exp:5000}}.
+  t=2000: get('k') → 2000 < 5000 → return 1.
+  t=6000: get('k') → 6000 ≥ 5000 → delete, return undefined.
 
-**Patterns to reuse**
-- **Per-entry timer + handle Map** is the same skeleton used by: idempotency-key TTL, JWT blacklist with auto-cleanup, scheduled-event dispatcher.
-- **Timestamp + lazy check** is the skeleton used by: rate limiter (timestamp of last token grant), cache-with-stale-while-revalidate, "show notification for N seconds."
-- **Hybrid (lazy + periodic sweep)** is the production-grade default. Used by `node-cache`, Redis (active expiry + sampled lazy expiry), browser caches.
+ActiveTTLMap, ttl=5000:
+  t=0:    set('k', 1) → setTimeout(5000) → store: {k: {value:1, timer:T1}}.
+  t=5000: T1 fires → store.delete('k').
+  t=6000: get('k') → undefined.
 
-**Common mistakes**
-- Forgetting to `clearTimeout` the prior timer on overwrite → ghost deletions.
-- Lazy `has()` that doesn't check expiry → `has(k) && get(k) === undefined` paradox.
-- Using `>` instead of `>=` in the expiry check → boundary-ms staleness.
-- Allowing unbounded lazy growth without a sweep or size cap → memory leak.
-- Active eviction with `setTimeout` that captures the whole Map in closure → if you `delete` the cache reference but timers are still pending, the Map stays alive until the last timer fires.
-- Using `performance.now()` for TTLs — high-resolution but doesn't survive process restart; use `Date.now()`.
+Overwrite, active:
+  t=0:  set('k', 1, 10000) → T1 (10s).
+  t=2:  set('k', 2, 10000):
+        store.has('k') → clearTimeout(T1). Schedule T2 (10s).
+  t=12: T2 fires → delete. (T1 never fires; was cleared.)
+  
+  Without clearTimeout:
+    T1 fires at t=10 (it was set at t=0 for 10s).
+    T1 callback: store.delete('k').
+    Now value 2 also deleted (set at t=2, intended to live until t=12). PHANTOM DELETION.
 
-**When to pick which**
-| Workload                              | Better choice         | Why                                  |
-|---------------------------------------|-----------------------|--------------------------------------|
-| Few keys, long TTLs, mostly reads     | Active                | Tight memory; cheap reads            |
-| Many writes, frequent overwrites      | Lazy                  | No timer churn                       |
-| Very high cardinality + low read rate | Lazy + periodic sweep | Cap memory without timer-per-key     |
-| Need exact "fire callback at expiry"  | Active                | Lazy can't notify on expiry          |
-| Read-heavy, predictable access        | Lazy                  | Reads do the work that gets used     |
+Lazy memory drift:
+  Set 1M entries with TTL 1s. Never read again. None deleted. Memory grows.
+  Mitigate: periodic sweep or size cap.
 
-State the tradeoff. Interviewers love hearing "it depends, and here's the rubric."
+Active timer churn:
+  set('rate-limit-user-42', n) every request, 1000 req/sec.
+  Each set: clear + new setTimeout. V8 timer overhead noticeable.
+  Lazy avoids this.
+```
 
-**Related questions**
-- LRU Cache (LeetCode #146) — combine with TTL for full-fledged cache
-- Rate limiter (sliding window, token bucket)
-- Idempotency key store
-- Stale-while-revalidate cache
+---
 
-## Variants
+## 10. Common confusion + traps
 
-1. **TTL + LRU combo** — bound both memory and freshness. On `set`, if size > max, evict the LRU. On `get`, check TTL then bump recency.
+1. **No clearTimeout** — phantom deletions.
+2. **`performance.now()`** for TTL — relative, not absolute.
+3. **Lazy without sweep** — memory grows.
+4. **Timer pins process** — `.unref()` in Node.
+5. **Wall clock jumps** — NTP sync can skip TTLs.
+6. **Concurrent set/delete** — JS single-threaded; safe per turn.
+7. **`has()` without expiry check** — returns stale true.
 
-2. **Refresh-on-access** — every `get` resets the TTL (sliding expiry, like a session). Trivial change in lazy: `entry.expiresAt = Date.now() + ttl` in `get`. In active: clear timer and re-set.
+---
 
-3. **Expiry callback** — `new TTLMap({ onExpire: (k, v) => ... })`. Active version invokes it in the timer callback; lazy invokes it in `get` when it discovers an expired entry.
+## 11. Senior follow-ups & variants
 
-4. **Per-key custom TTL** — already supported above (`set(k, v, ttl)`).
+### Variant 1 — LRU + TTL
+Combine eviction; expire on access.
 
-5. **Background sweep variant** — `LazyTTLMap` + `setInterval(() => map.sweep(), 60_000)`. Best general-purpose answer.
+### Variant 2 — Single coalesced sweep timer
+One setInterval; cheaper than N setTimeouts.
 
-6. **Async TTL Map for distributed caches** — wraps Redis `SET key value EX ttl`. Same API, different backend. Mention if asked about scale.
+### Variant 3 — Monotonic clock for short TTLs
+`process.hrtime.bigint()` Node — but tracking across reboot is harder.
 
-## Revision notes
+### Variant 4 — Distributed (Redis)
+EXPIRE / PEXPIRE; PERSIST.
 
-> **ttl-map — 60 second recap**
-> - **Two implementations**, pick based on workload:
->   - **Active** — per-entry `setTimeout`; tight memory; timer churn on overwrites. **Must clearTimeout on overwrite.**
->   - **Lazy** — store `{value, expiresAt}`; check `Date.now() >= expiresAt` on read. Zero timers; expired entries linger until accessed.
-> - **Hybrid** — lazy + periodic `setInterval(sweep)` — production-grade default.
-> - Lazy `has()` must run the same expiry check as `get()`.
-> - Active: `timer.unref()` so the process can exit.
-> - Use `Date.now()`, not `performance.now()`.
-> - Family: LRU+TTL combo cache, idempotency key store, rate limiter.
+### Variant 5 — Heap-ordered expiry
+Min-heap keyed by exp; pop expired on access.
+
+---
+
+## 12. How to think aloud
+
+> "TTL Map has two implementation poles. **Lazy**: check `Date.now() >= entry.exp` on every read; if expired, delete and return undefined. No timers, simple, cheap on overwrite-heavy workloads. Memory drift: entries written and never read linger forever → pair with periodic sweep or size cap. **Active**: per-entry `setTimeout(() => delete, ttl)`; bounded memory; but on overwrite MUST `clearTimeout` the old timer (otherwise the old timer fires and deletes the new value — phantom deletion bug). Timer churn: heavy overwrite (e.g., rate-limit per request) means thousands of timer creates/clears per second — overhead matters. In Node, call `timer.unref()` so timers don't keep the process alive. **Hybrid**: lazy + a single `setInterval` sweep — best of both. **Clock**: use `Date.now()` (wall clock, ms since epoch) for absolute TTL; `performance.now()` is high-res MONOTONIC but RELATIVE — wrong for TTL. Wall clock can jump on NTP sync — minor for short TTLs. Variants: combine with LRU (max-size + TTL); distributed via Redis EXPIRE; min-heap of expiries for O(log n) earliest. Use cases: session stores, idempotency keys, JWT blacklists, rate-limit buckets, OTP caches. Trap: no clearTimeout (phantom delete); lazy without sweep (memory grows); performance.now (relative); not unref'ing timer."
+
+---
+
+## 13. 60-second revision
+
+> - **Lazy:** check on read; sweep optional; no timer churn.
+> - **Active:** per-entry setTimeout; bounded memory; clearTimeout on overwrite.
+> - **Hybrid:** lazy + periodic sweep.
+> - **`Date.now()`** — wall clock; `performance.now()` is relative.
+> - **`.unref()`** in Node so timer doesn't pin process.
+> - **Combine with LRU** for max-size.
+> - **Min-heap** for O(log n) earliest expiry.
+> - **Distributed:** Redis EXPIRE.
+> - **Trap:** no clearTimeout (phantom); lazy no sweep; performance.now; no unref.
+
+---
+
+**Related:** [lru-cache-with-map.md](./lru-cache-with-map.md) · [cache-invalidate-by-tag.md](./cache-invalidate-by-tag.md) · [weakref-finalization-registry.md](./weakref-finalization-registry.md) · [`05-event-loop/settimeout-vs-setimmediate.md`](../05-event-loop/settimeout-vs-setimmediate.md)
+
+**Concept primer:** [`concepts/maps-sets.md`](../../concepts/maps-sets.md), [`concepts/event-loop-architecture.md`](../../concepts/event-loop-architecture.md)

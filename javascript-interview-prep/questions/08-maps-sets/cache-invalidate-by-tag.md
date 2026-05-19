@@ -1,243 +1,304 @@
-# Cache invalidation by tag (Redis-style)
+# Cache invalidation by tag
 
-## Source
-- Inspired by Next.js `revalidateTag()`, Vercel's Data Cache, Cloudflare Cache API `purgeByTag`, and Varnish's BAN-by-tag pattern.
-- Reference: Next.js cache invalidation docs (https://nextjs.org/docs/app/api-reference/functions/revalidateTag), Redis Cache Tags pattern.
+> **Difficulty:** Senior   |   **Time:** ~15 min   |   **Prereqs:** [lru-cache-with-map.md](./lru-cache-with-map.md), [ttl-map.md](./ttl-map.md)
+>
+> **Source:** Next.js `revalidateTag`, Vercel Data Cache, Cloudflare `purgeByTag`, Varnish BAN.
 
-## Why this question matters in interviews
-"Cache invalidation by tag" is the **two-Map data-modeling problem** that separates engineers who reach for the right structure from those who try to brute-force it with linear scans. Every senior backend engineer hits this: when product data changes, invalidate every cache entry tagged `product:123`. When a user logs out, invalidate every cache entry tagged `user:42`. The naïve answer (scan all entries, check tags array, delete matches) is O(n) per invalidation. The interview-worthy answer maintains a **secondary index** — `Map<tag, Set<key>>` — that makes invalidation O(|entries-with-that-tag|), independent of total cache size. It's the same skeleton as SQL secondary indexes, full-text inverted indexes, and event-bus topic subscriptions. Nailing this question signals you can design data structures, not just use them.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+Cache entries have one or more tags. Invalidate-by-tag should be O(|entries with that tag|), not O(total cache).
+
+**Verification examples**
+
+```js
+const c = new TaggedCache();
+c.set('user:42:profile', {...}, ['user:42', 'profile']);
+c.set('user:42:settings', {...}, ['user:42', 'settings']);
+c.set('post:7', {...}, ['post:7']);
+
+c.invalidateTag('user:42');               // evicts 2 entries
+c.get('user:42:profile');                 // undefined
+c.get('post:7');                          // still there
+```
+
+**Constraints**
+- O(1) get/set.
+- O(matching entries) invalidate-by-tag.
+- Reverse index needed for cleanup on `set`/`delete`.
+- All references removed (no dangling).
+
+---
+
+## 2. Plain-English restatement
+
+Two maps: primary `Map<key, value>` and secondary `Map<tag, Set<key>>`. On set: link tags both ways. On invalidateTag: walk tag→keys, delete each.
+
+---
+
+## 3. Why this matters in interviews
+
+Two-Map data-modeling problem. Same skeleton as SQL secondary indexes, inverted indexes, event-bus topic routing. Signals you can design structures, not just use them.
+
+---
+
+## 4. Mental model
+
+```
+   Primary:    Map<key, value>
+   Tag index:  Map<tag, Set<key>>
+   Reverse:    Map<key, Set<tag>>    ← needed for cleanup on delete/overwrite
+   
+   set(key, value, tags):
+     delete(key)                          ← clean old tag links
+     primary.set(key, value)
+     reverse.set(key, Set(tags))
+     for t in tags:
+       tagIndex.get(t) ?? .set(t, new Set())
+       tagIndex.get(t).add(key)
+   
+   delete(key):
+     primary.delete(key)
+     for t in reverse.get(key) ?? []:
+       tagIndex.get(t).delete(key)
+       if tagIndex.get(t).size === 0: tagIndex.delete(t)
+     reverse.delete(key)
+   
+   invalidateTag(tag):
+     keys = tagIndex.get(tag) ?? Set()
+     for k of [...keys]:    ← clone, since delete mutates
+       delete(k)
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. Why reverse index?
+> 2. Why clone the Set before iterating in invalidateTag?
+> 3. What happens on set with new tags for existing key?
+
+---
+
+## 6. Brute force — walked through
+
+```js
+class NaiveCache {
+  data = new Map();           // {value, tags}
+  invalidateTag(tag) {
+    for (const [k, e] of this.data) {           // O(n) — scans ALL
+      if (e.tags.includes(tag)) this.data.delete(k);
+    }
+  }
+}
+```
+
+O(n) per invalidation. For 1M entries, slow.
+
+---
+
+## 7. The unlocking insight
+
+> **Two-Map design: primary + secondary tag→keys index + reverse key→tags for cleanup. O(matches) invalidation.**
+
+Three properties:
+
+1. **Forward + reverse indexes.**
+2. **Cleanup on delete/overwrite.**
+3. **Clone keys before mutating iteration.**
+
+---
+
+## 8. Solution (annotated)
+
 ```js
 class TaggedCache {
-  #store = new Map();                          // key -> value
-  #tagIndex = new Map();                       // tag -> Set<key>
-  #keyTags = new Map();                        // key -> Set<tag> (reverse index)
+  #store = new Map();                                                     // step 1: primary
+  #tagIndex = new Map();                                                  // step 2: tag → keys
+  #keyTags = new Map();                                                   // step 3: key → tags (reverse)
 
   set(key, value, tags = []) {
-    this.delete(key);                          // clean old tag links
+    this.delete(key);                                                      // step 4: clean old links
     this.#store.set(key, value);
     const tagSet = new Set(tags);
     this.#keyTags.set(key, tagSet);
     for (const t of tagSet) {
       if (!this.#tagIndex.has(t)) this.#tagIndex.set(t, new Set());
-      this.#tagIndex.get(t).add(key);
+      this.#tagIndex.get(t).add(key);                                      // step 5: forward link
     }
   }
 
-  invalidateTag(tag) {
-    const keys = this.#tagIndex.get(tag);
-    if (!keys) return 0;
-    for (const k of keys) this.delete(k);
-    return keys.size;
-  }
-}
-```
-
-### Runtime / engine behavior
-- **Primary store** (`Map<key, value>`): standard cache. O(1) get/set/delete.
-- **Tag index** (`Map<tag, Set<key>>`): inverted index. Maps every tag to the set of keys carrying it. `invalidateTag(t)` walks `#tagIndex.get(t)` (O(|entries with that tag|)) and deletes each from the primary store.
-- **Reverse index** (`Map<key, Set<tag>>`): needed to clean up the tag index when a single key is deleted. Without it, `delete(k)` would have to walk every tag's Set looking for `k` — O(#tags) per delete.
-- Total space overhead: O(total tag-key pairs) — same as the count of "(key, tag)" edges. If each key has ~3 tags, the indexes weigh ~3x the primary store.
-- `Set.add` / `Set.delete` are O(1). Iteration order is insertion order.
-
-### Edge cases (these are the interview traps)
-1. **Overwriting a key with different tags** — `set('a', v1, ['t1'])` then `set('a', v2, ['t2'])` must remove `'a'` from `t1`'s Set. Naive implementations leak tag→key references forever. The reverse index `#keyTags` solves this: read old tags, remove from tag index, write new.
-2. **Invalidating an empty tag** — `invalidateTag('nonexistent')` should return 0, not throw.
-3. **A key with no tags** — should still be cacheable; just skip the tag-index work.
-4. **Tag with one remaining key, then delete** — after `delete(k)`, if `tagIndex.get(t)` is now empty, you can either leave the empty Set in place (wasteful) or delete the tag entry. Production caches usually clean up.
-5. **Concurrent modification during invalidation** — iterating `#tagIndex.get(tag)` while `delete()` removes from it: in JS, V8 allows removing the current key during `for...of` on a Set. But `delete()` also mutates `#tagIndex` itself — same Set being iterated. Snapshot with `Array.from(...)` to be safe.
-6. **Invalidation cascade** — should invalidating `tag:product` also invalidate `tag:product:123`? No, by default tags are strings, not hierarchies. If you want prefix invalidation, that's a different data structure (Trie or a third index).
-7. **Tag explosion** — keys with hundreds of tags inflate memory. Cap tags per key, or use compact bitset-based tags for known small tag-universe.
-8. **TTL interaction** — when a TTL expires a key, the tag index must also be cleaned. Easy to forget. Make `delete` the single source of cleanup, and have the TTL handler call it.
-
-## Brute force approach
-Single `Map<key, { value, tags }>`. `invalidateTag(tag)` scans every entry, checks if `entry.tags.includes(tag)`, deletes if so. **O(n) per invalidation** where n = total entries — independent of how many entries actually have the tag. For a 10⁶-entry cache invalidating a tag that hits 5 entries, you still scan all 10⁶. Fine on a toy cache; terrible at scale.
-
-## Optimal approach
-**Maintain three Maps:**
-
-1. `#store: Map<key, value>` — primary cache.
-2. `#tagIndex: Map<tag, Set<key>>` — for each tag, the set of keys carrying it. Lets `invalidateTag(t)` directly enumerate affected keys in O(|hits|).
-3. `#keyTags: Map<key, Set<tag>>` — reverse index. Lets `delete(k)` remove `k` from every tag's Set in O(|tags-of-k|), no scan.
-
-Cost model:
-- `set(k, v, tags)`: O(|tags|).
-- `delete(k)`: O(|tags-of-k|).
-- `invalidateTag(t)`: O(|keys-with-t|).
-- Storage: O(total (key, tag) edges).
-
-The trade is **memory for time**. Pay 2-3x storage to make tagged invalidation proportional to the work done, not the cache size.
-
-## Solution (JavaScript)
-
-```js
-/**
- * Cache with O(1) tagged invalidation via inverted index.
- */
-class TaggedCache {
-  #store = new Map();                          // key -> value
-  #tagIndex = new Map();                       // tag -> Set<key>
-  #keyTags = new Map();                        // key -> Set<tag>
-
-  /** @param {string} key  @param {*} value  @param {string[]} tags */
-  set(key, value, tags = []) {
-    if (this.#store.has(key)) this.#unlinkKey(key);       // clear old tags
-
-    this.#store.set(key, value);
-
-    if (tags.length === 0) return;
-    const tagSet = new Set(tags);                          // dedupe
-    this.#keyTags.set(key, tagSet);
-    for (const t of tagSet) {
-      let keys = this.#tagIndex.get(t);
-      if (!keys) { keys = new Set(); this.#tagIndex.set(t, keys); }
-      keys.add(key);
-    }
+  get(key) {
+    return this.#store.get(key);
   }
 
-  get(key) { return this.#store.get(key); }
-  has(key) { return this.#store.has(key); }
-
-  /** Delete a single key and clean up its tag links. */
   delete(key) {
     if (!this.#store.has(key)) return false;
-    this.#unlinkKey(key);
-    return this.#store.delete(key);
+    this.#store.delete(key);
+    const tags = this.#keyTags.get(key);
+    if (tags) {
+      for (const t of tags) {                                              // step 6: unlink
+        const keys = this.#tagIndex.get(t);
+        keys.delete(key);
+        if (keys.size === 0) this.#tagIndex.delete(t);                     // step 7: clean empty
+      }
+      this.#keyTags.delete(key);
+    }
+    return true;
   }
 
-  /** Invalidate all entries carrying `tag`. Returns count deleted. */
   invalidateTag(tag) {
     const keys = this.#tagIndex.get(tag);
     if (!keys) return 0;
-
-    // Snapshot — we're about to mutate `keys` via `delete()` -> `#unlinkKey`.
-    const snapshot = [...keys];
-    for (const k of snapshot) this.delete(k);
-    this.#tagIndex.delete(tag);                            // tag is now empty
-    return snapshot.length;
-  }
-
-  clear() {
-    this.#store.clear();
-    this.#tagIndex.clear();
-    this.#keyTags.clear();
-  }
-
-  get size() { return this.#store.size; }
-
-  /** Internal: remove `key` from every tag's Set without touching #store. */
-  #unlinkKey(key) {
-    const tags = this.#keyTags.get(key);
-    if (!tags) return;
-    for (const t of tags) {
-      const keys = this.#tagIndex.get(t);
-      if (!keys) continue;
-      keys.delete(key);
-      if (keys.size === 0) this.#tagIndex.delete(t);       // cleanup empty tag
+    let count = 0;
+    for (const k of [...keys]) {                                            // step 8: clone (delete mutates)
+      if (this.delete(k)) count++;
     }
-    this.#keyTags.delete(key);
+    return count;
+  }
+
+  invalidateAllTags(tags) {
+    let total = 0;
+    for (const t of tags) total += this.invalidateTag(t);
+    return total;
   }
 }
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
 ```js
-const cache = new TaggedCache();
+const c = new TaggedCache();
+c.set('user:42:profile', { name: 'A' }, ['user:42', 'profile']);
+c.set('user:42:settings', { lang: 'en' }, ['user:42', 'settings']);
+c.set('user:7:profile', { name: 'B' }, ['user:7', 'profile']);
 
-cache.set('product:1', { name: 'Shoe' },  ['products', 'category:footwear']);
-cache.set('product:2', { name: 'Sock' },  ['products', 'category:footwear']);
-cache.set('product:3', { name: 'Lamp' },  ['products', 'category:home']);
-cache.set('user:42',   { name: 'Alice' }, ['users']);
+c.get('user:42:profile');                                     // {name:'A'}
+
+c.invalidateTag('user:42');                                   // 2 (evicts profile + settings)
+c.get('user:42:profile');                                     // undefined
+c.get('user:7:profile');                                      // {name:'B'} — still there
+
+c.invalidateTag('profile');                                   // 1 (evicts user:7 profile only)
+
+// Combine with TTL
+class TaggedTTLCache extends TaggedCache {
+  set(key, value, opts = {}) {
+    const { tags = [], ttl = 60_000 } = opts;
+    super.set(key, { value, exp: Date.now() + ttl }, tags);
+  }
+  get(key) {
+    const entry = super.get(key);
+    if (!entry) return undefined;
+    if (entry.exp < Date.now()) { this.delete(key); return undefined; }
+    return entry.value;
+  }
+}
+
+// Stats
+c.size;                                                        // ... add accessor
+c.tagSize('user:42');                                          // number of entries tagged
 ```
 
-State after writes:
-- `#store`: 4 entries.
-- `#tagIndex`:
-  - `'products'` → `{'product:1', 'product:2', 'product:3'}`
-  - `'category:footwear'` → `{'product:1', 'product:2'}`
-  - `'category:home'` → `{'product:3'}`
-  - `'users'` → `{'user:42'}`
-- `#keyTags`: 4 entries, each mapping the key to its tag Set.
+---
 
-Now invalidate `'category:footwear'`:
+## 9. Step-by-step dry run
 
-```js
-cache.invalidateTag('category:footwear');    // returns 2
+```
+c.set('user:42:profile', v1, ['user:42', 'profile']):
+  delete('user:42:profile') → no-op.
+  store: {'user:42:profile': v1}.
+  keyTags: {'user:42:profile': Set{'user:42', 'profile'}}.
+  tagIndex:
+    'user:42' → Set{'user:42:profile'}.
+    'profile' → Set{'user:42:profile'}.
+
+c.set('user:42:settings', v2, ['user:42', 'settings']):
+  store: {..., 'user:42:settings': v2}.
+  tagIndex:
+    'user:42' → Set{'user:42:profile', 'user:42:settings'}.
+    'settings' → Set{'user:42:settings'}.
+
+c.invalidateTag('user:42'):
+  keys = Set{'user:42:profile', 'user:42:settings'}.
+  Clone: ['user:42:profile', 'user:42:settings'].
+  
+  delete('user:42:profile'):
+    store.delete. tags=Set{'user:42','profile'}.
+    tagIndex['user:42'].delete(key) → Set{'user:42:settings'}.
+    tagIndex['profile'].delete(key) → Set{} → delete 'profile' tag entirely.
+    keyTags.delete.
+  
+  delete('user:42:settings'):
+    store.delete. tags=Set{'user:42','settings'}.
+    tagIndex['user:42'].delete → Set{} → delete 'user:42' tag.
+    tagIndex['settings'].delete → Set{} → delete 'settings'.
+    keyTags.delete.
+  
+  Return 2.
+
+Why clone before iterate:
+  invalidateTag iterates tagIndex.get(tag).
+  Each delete(k) mutates that same set (removes k).
+  Mutating Set during iteration → undefined behavior in JS spec.
+  Clone via [...keys] is safe.
 ```
 
-Trace:
-- `#tagIndex.get('category:footwear')` → Set `{'product:1', 'product:2'}`.
-- Snapshot: `['product:1', 'product:2']`.
-- `delete('product:1')`:
-  - `#unlinkKey('product:1')`: tags are `['products', 'category:footwear']`. Remove `'product:1'` from `#tagIndex.get('products')` → leaves `{'product:2', 'product:3'}`. Remove from `'category:footwear'` Set → leaves `{'product:2'}` (we'll clear it below).
-  - `#store.delete('product:1')`.
-- `delete('product:2')`: similar. After unlink, `'category:footwear'` Set is now empty → deleted from `#tagIndex`. `'products'` Set is now `{'product:3'}`.
-- `#tagIndex.delete('category:footwear')` (already gone, no-op).
-- Returns 2.
+---
 
-Final state: `#store` has `'product:3'` and `'user:42'`. `#tagIndex` has `'products' → {'product:3'}`, `'category:home' → {'product:3'}`, `'users' → {'user:42'}`. **Indexes are consistent — no dangling pointers.**
+## 10. Common confusion + traps
 
-## Important takeaways
+1. **No reverse index** — can't clean tagIndex on delete; orphans.
+2. **Iterate Set during mutation** — broken.
+3. **Don't clean empty tag entries** — tagIndex grows.
+4. **`set` over existing key** — must clean old tags first.
+5. **Overlapping tags** — single invalidateTag removes from multiple tag indexes.
+6. **TTL + tags** — combine; check expiry in get/set.
+7. **Concurrent access** — JS single-threaded; safe per turn.
 
-**Syntax to memorize**
-- Three Maps: primary, tag-to-keys, key-to-tags.
-- `Map<tag, Set<key>>` is the inverted index — the heart of tagged invalidation.
-- `Map<key, Set<tag>>` is the reverse index — the unsung hero that makes single-key deletes cheap.
-- Snapshot before iterating + mutating: `for (const k of [...keys])` — `Array.from(keys)`.
+---
 
-**Patterns to reuse**
-- **Inverted index** — same data shape powers full-text search (`Map<term, Set<docId>>`), event bus subscriptions (`Map<topic, Set<handler>>`), permission checks (`Map<role, Set<userId>>`), feature flags by segment.
-- **Two-way index for cheap removal** — any time you have a many-to-many relation in memory, maintain both directions. The cost is memory + write complexity; the reward is constant-time deletion from either side.
-- **Snapshot-before-mutate** — when you're iterating a collection that the loop body mutates, materialize the iteration target first.
+## 11. Senior follow-ups & variants
 
-**Common mistakes**
-- Single Map with tags-as-array on each entry → O(n) invalidation. The trap question.
-- Forgetting the reverse `#keyTags` index → `delete(k)` becomes O(#tags-globally).
-- Forgetting to unlink old tags when overwriting a key → tag index accumulates dead pointers; `invalidateTag` returns count > actual deletes.
-- Iterating `#tagIndex.get(tag)` while calling `delete()` inside the loop — `delete` mutates the same Set. Snapshot first.
-- Not cleaning up empty tag Sets → memory leak over time as tags churn.
-- Forgetting that TTL-driven expiry must also call `delete()` so the indexes stay consistent.
+### Variant 1 — TTL + Tags
+Combined eviction policies.
 
-**Complexity table**
-| Op                   | Time                       | Space (delta)              |
-|----------------------|----------------------------|----------------------------|
-| `set(k, v, tags)`    | O(\|tags\|)                | O(\|tags\|)                |
-| `get(k)` / `has(k)`  | O(1)                       | 0                          |
-| `delete(k)`          | O(\|tags-of-k\|)           | -O(\|tags-of-k\|)          |
-| `invalidateTag(t)`   | O(\|keys-with-t\|)         | -O(\|edges-of-t\|)         |
+### Variant 2 — LRU + Tags
+Track recency + tag invalidation.
 
-**Related questions**
-- LRU Cache (combine with this for production cache)
-- Event bus with topic subscriptions
-- Full-text inverted index (Lucene-style)
-- LeetCode #146 LRU Cache, #460 LFU Cache
+### Variant 3 — Persistent (Redis)
+SADD/SREM tag→keys; DEL on invalidate.
 
-## Variants
+### Variant 4 — Hierarchical tags
+`user:*` invalidates all `user:42`, `user:7`.
 
-1. **Hierarchical tags** — `product`, `product:123`, `product:123:price`. Invalidating `product` should invalidate everything beneath. Use a **Trie of tags** instead of a flat Map. Or normalize to a list of prefixes when tagging and store each prefix in the flat index.
+### Variant 5 — Eventbus integration
+Publish event → invalidateTag on subscribers.
 
-2. **Wildcard tags** — `invalidateTagPattern('user:*')`. Either iterate all tag keys (O(#tags)) or pre-build a Trie. The flat Map doesn't naturally support patterns.
+---
 
-3. **TTL + tagged invalidation combo** — extend `set` to take a `ttl` and combine with the LazyTTLMap pattern. Expiry must go through `delete()` so the indexes stay consistent.
+## 12. How to think aloud
 
-4. **Distributed version (Redis)** — use Redis Sets keyed by tag (`SADD tag:products key1`), with `SMEMBERS` and pipelined `DEL`. Same algorithm, different substrate. Mention this for "scale" questions.
+> "Tag-based cache invalidation: naive scan-all is O(n) per call — for million-entry caches, dies. Senior answer: secondary index `Map<tag, Set<key>>` for O(matches) invalidation. Also need `Map<key, Set<tag>>` reverse index — when entry is deleted (or overwritten), we must clean it out of every tag's Set; without reverse index, we'd have to scan tagIndex looking for the key. Three structures: primary `Map<key, value>`, forward tag index `Map<tag, Set<key>>`, reverse `Map<key, Set<tag>>`. `set(key, value, tags)`: delete-first (cleans old tag links), then primary.set, reverse.set, and add to each forward tag Set. `delete(key)`: remove from primary, look up reverse tags, remove key from each forward Set (clean empty tag entries), remove reverse entry. `invalidateTag(tag)`: clone the tag's key-Set first (`[...keys]`) — iterating Set while mutating it is undefined; then delete each. Combine with TTL: check expiry on get. Production: Redis SADD/SREM for distributed; tag-prefix hierarchies (`user:*`). Trap: missing reverse index (orphan tag entries); iterating Set during delete (UB); not cleaning empty tag entries (tagIndex grows); forgetting to clean old tags on set-over."
 
-5. **Reference counting per (key, tag)** — if the same tag can be attached multiple times (e.g. by different writers), use `Map<tag, Map<key, count>>` instead of `Map<tag, Set<key>>`. Decrement on delete; remove when count hits 0.
+---
 
-6. **Memory-bounded LRU + tags** — when size exceeds limit, evict LRU. Eviction goes through `delete()` so indexes stay consistent. This is essentially Next.js's data cache.
+## 13. 60-second revision
 
-## Revision notes
+> - **Two indexes:** tag→keys forward, key→tags reverse.
+> - **`set` deletes first** for clean tag links.
+> - **`delete` removes from all tag sets** + cleans empty tags.
+> - **`invalidateTag` clones key set** before iterate (delete mutates).
+> - **O(matches)** invalidation, not O(n).
+> - **Combine TTL/LRU** as needed.
+> - **Hierarchical tags** for wildcards.
+> - **Distributed:** Redis SADD/SREM equivalent.
+> - **Trap:** no reverse; iterate-mutate; orphan tag entries.
 
-> **cache-invalidate-by-tag — 60 second recap**
-> - **Three Maps**: `store: Map<k,v>`, `tagIndex: Map<tag, Set<k>>`, `keyTags: Map<k, Set<tag>>`.
-> - `set(k, v, tags)`: O(|tags|). On overwrite, **unlink old tags first**.
-> - `delete(k)`: O(|tags-of-k|) — uses reverse index.
-> - `invalidateTag(t)`: O(|keys-with-t|), **snapshot** the key Set before mutating.
-> - Clean up empty tag Sets to avoid leaks.
-> - Pattern: **inverted index + reverse index** = constant-time many-to-many removal.
-> - Same skeleton as event-bus topics, full-text search, permission lookups.
-> - Naïve single-Map answer is O(n) per invalidation — the trap.
+---
+
+**Related:** [lru-cache-with-map.md](./lru-cache-with-map.md) · [ttl-map.md](./ttl-map.md) · [`10-machine-coding-patterns/event-emitter.md`](../10-machine-coding-patterns/event-emitter.md)
+
+**Concept primer:** [`concepts/maps-sets.md`](../../concepts/maps-sets.md)

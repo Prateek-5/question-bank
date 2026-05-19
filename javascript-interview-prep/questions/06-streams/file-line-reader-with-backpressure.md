@@ -1,18 +1,20 @@
-# File Line Reader with Backpressure
+# File line reader with backpressure
 
-## Source / Origin
-- Classic "read this big log file line by line" question.
-- Asked at: Razorpay, Atlassian, Cloudflare.
-- Concept reference: `concepts/streams.md`, sibling `ndjson-splitter.md`.
+> **Difficulty:** Medium   |   **Time:** ~10 min   |   **Prereqs:** [async-iterator-pagination.md](./async-iterator-pagination.md), [backpressure-demo.md](./backpressure-demo.md)
+>
+> **Source:** Razorpay, Atlassian, Cloudflare. Classic "tail this 10GB log" question.
 
-## Why this question matters in interviews
-Read a 10 GB log file without OOMing and with throttling-aware processing. Senior bar: you use Node's `readline.createInterface` *or* an async generator over `fs.createReadStream`, handle backpressure (slow consumer doesn't blow buffer), and use `for await` for clean integration.
+---
 
-## Concepts involved
+## 1. Problem statement
+
+Read a large log file line by line without OOMing. Slow consumer must throttle reader.
+
+**Verification examples**
 
 ```js
-import { createReadStream } from 'node:fs';
-import { createInterface } from 'node:readline';
+const { createReadStream } = require('node:fs');
+const { createInterface } = require('node:readline');
 
 async function* readLines(path) {
   const stream = createReadStream(path, { encoding: 'utf8' });
@@ -21,130 +23,260 @@ async function* readLines(path) {
 }
 
 for await (const line of readLines('/var/log/big.log')) {
-  await process(line);   // pipeline awaits → backpressure
+  await process(line);                                                    // slow consumer; backpressure
 }
 ```
 
-### Edge cases / traps
-1. **`crlfDelay: Infinity`** — treats CR-LF as one line break (not two).
-2. **`for await` honors backpressure** — slow consumer slows reader.
-3. **Encoding**: `utf8` decodes; binary mode if you need raw bytes.
-4. **Open file descriptors** — `for await` cleanup closes the stream; `break`/`throw` also closes.
-5. **Stream pause/resume** automatic via `for await`.
-6. **Large lines** — readline buffers entire line in memory; bound if untrusted input.
-7. **Error handling** — wrap in try/catch; `for await` rethrows.
-8. **Cancellation** — AbortSignal supported in modern Node (`createInterface({ input, signal })`).
+**Constraints**
+- Memory O(line size), not O(file size).
+- Slow consumer slows reader via `for await` backpressure.
+- `crlfDelay: Infinity` handles CRLF as one break.
+- `for await` cleanup closes stream on early break.
 
-## Mental Model
+---
+
+## 2. Plain-English restatement
+
+`fs.createReadStream` reads bytes; `readline.createInterface` splits into lines. `for await` consumes one line at a time, awaiting each. Slow consumer naturally throttles the reader.
+
+---
+
+## 3. Why this matters in interviews
+
+Practical backend skill — log tail, NDJSON ingest, CSV processing. Tests `readline` + async iteration + backpressure literacy.
+
+---
+
+## 4. Mental model
 
 ```
-   file → fs.ReadStream (Node Readable) → readline.Interface (line emitter)
-   for await (line of rl) — pulls one line at a time, pauses underlying read when consumer is busy
+   File on disk
+   ↓
+   fs.createReadStream (Node Readable)
+     chunks at highWaterMark (default 64KB)
+   ↓
+   readline.createInterface (line emitter)
+     splits chunks on \n (and \r\n with crlfDelay: Infinity)
+   ↓
+   for await (line of rl)
+     consumer awaits per line
+     SLOW consumer → readline pauses → readStream pauses
+   ↓
+   await process(line)
+     network call, DB write, etc.
+
+   Backpressure END-TO-END:
+   - process(line) takes 100ms.
+   - readline only emits next line when consumer awaits.
+   - readStream only reads next chunk when readline drains.
+   - Disk reads paced by consumer.
+   
+   Cleanup:
+   - for await break → close readline → close readStream → close fd.
+   - throw → same.
 ```
 
-## Solution
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. Does `for await` automatically apply backpressure?
+> 2. Why `crlfDelay: Infinity`?
+> 3. What happens to the file descriptor if you `break` mid-iteration?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: `readFileSync('big.log').split('\n')`
+OOM on 10GB file.
+
+### Wrong attempt 2: `readStream.on('data')` accumulating
+Manual buffering; harder to apply backpressure.
+
+### Wrong attempt 3: ignore `crlfDelay`
+Windows files: `\r` in line content.
+
+---
+
+## 7. The unlocking insight
+
+> **`for await` over `readline.createInterface` gives line-by-line iteration with automatic backpressure. Slow consumer slows reader. `crlfDelay: Infinity` for CRLF safety. Cleanup automatic on break/throw.**
+
+Three properties:
+
+1. **`readline` over `fs.createReadStream`** — line emitter.
+2. **`for await` auto backpressure** — consumer drives pace.
+3. **`crlfDelay: Infinity`** for CRLF treatment.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
-import { createReadStream } from 'node:fs';
-import { createInterface } from 'node:readline';
+const { createReadStream } = require('node:fs');
+const { createInterface } = require('node:readline');
 
-async function processFile(path, fn) {
+async function* readLines(path, { signal } = {}) {                      // step 1: generator wrapper
+  const stream = createReadStream(path, { encoding: 'utf8' });
   const rl = createInterface({
-    input: createReadStream(path, { encoding: 'utf8' }),
-    crlfDelay: Infinity,
+    input: stream,
+    crlfDelay: Infinity,                                                  // step 2: CRLF as one break
+    signal,                                                               // step 3: AbortSignal support
   });
-  let lineNo = 0;
-  try {
-    for await (const line of rl) {
-      lineNo++;
-      await fn(line, lineNo);
-    }
-  } catch (e) {
-    e.lineNo = lineNo;
-    throw e;
-  } finally {
-    rl.close();
-  }
+  for await (const line of rl) yield line;                                 // step 4: forward + auto cleanup
 }
 
 // Usage
-await processFile('/var/log/big.log', async (line, n) => {
-  if (line.includes('ERROR')) await sendAlert(line);
-});
+for await (const line of readLines('/var/log/big.log')) {
+  await processLine(line);                                                 // step 5: slow consumer throttles
+}
 
-// With AbortController (Node 17+)
-import { setTimeout as sleep } from 'node:timers/promises';
+// With cancellation
 const ac = new AbortController();
-setTimeout(() => ac.abort(), 60_000);
+setTimeout(() => ac.abort(), 30_000);
+
 try {
-  const rl = createInterface({ input: createReadStream(path), signal: ac.signal, crlfDelay: Infinity });
-  for await (const line of rl) await handle(line);
-} catch (e) {
-  if (e.name === 'AbortError') console.log('cancelled');
-  else throw e;
-}
-
-// Backpressure demo: slow consumer
-async function* readBatched(path, batchSize = 100) {
-  let batch = [];
-  for await (const line of readLines(path)) {
-    batch.push(line);
-    if (batch.length === batchSize) { yield batch; batch = []; }
+  for await (const line of readLines('/var/log/big.log', { signal: ac.signal })) {
+    await processLine(line);
   }
-  if (batch.length) yield batch;
-}
-
-for await (const batch of readBatched('/big.log', 1000)) {
-  await bulkInsertDb(batch);
-  // backpressure: reader pauses while we await bulkInsertDb
+} catch (err) {
+  if (err.name === 'AbortError') console.log('cancelled');
+  else throw err;
 }
 ```
 
-## Dry run
+**Try it yourself**
+
+```js
+// Aggregate count
+let errorCount = 0;
+for await (const line of readLines('/var/log/app.log')) {
+  if (line.includes('ERROR')) errorCount++;
+}
+console.log('errors:', errorCount);
+
+// Early termination
+for await (const line of readLines('/var/log/big.log')) {
+  console.log(line);
+  if (lineMatchesSomething(line)) break;                                  // closes stream automatically
+}
+
+// Pipeline composition
+const { pipeline } = require('node:stream/promises');
+const { Readable } = require('node:stream');
+
+await pipeline(
+  Readable.from(readLines('/var/log/app.log')),
+  async function* (lines) {
+    for await (const line of lines) {
+      if (line.includes('ERROR')) yield line;
+    }
+  },
+  fs.createWriteStream('errors.log'),
+);
+```
+
+---
+
+## 9. Step-by-step dry run
 
 ```
-file: "line1\nline2\nline3"
-fs.ReadStream → readline → emits "line1", "line2", "line3"
-for await: process line1 (await 50ms) → readline pauses underlying read
-50ms later: pull "line2" → process → pause
-...
-EOF: loop ends; rl.close()
+const lines = readLines('big.log');
+
+for await (line of lines):
+  Internally:
+    iter = lines[Symbol.asyncIterator]()
+    while:
+      {value, done} = await iter.next()
+      if done break
+      // body with line
+      await processLine(line)    ← 100ms; this is what throttles upstream
+
+readline emits line:
+  fs.createReadStream reads chunk (~64KB).
+  readline splits on \n.
+  Emits line via 'line' event (under the hood).
+  async iter wraps this.
+
+Backpressure chain:
+  processLine awaits 100ms.
+  for await pauses → iter.next() promise unresolved.
+  readline waits → no more 'line' emissions.
+  fs.createReadStream pauses → no disk reads.
+
+When processLine resolves:
+  for await calls iter.next() again.
+  readline checks: buffered lines? yes → emit next.
+  If buffer empty → fs reads next chunk → readline splits → emits.
+
+Early break:
+  for await calls iter.return().
+  readline closes interface.
+  fs.createReadStream destroyed; fd released.
+
+Throw inside loop:
+  same as break + error propagated.
+
+Total memory:
+- Current line in flight.
+- ~64KB buffer in readStream.
+- Constant regardless of file size.
 ```
 
-Memory stays O(line length), not O(file size).
+---
 
-## How to think aloud
+## 10. Common confusion + traps
 
-> "Use `readline.createInterface` over `fs.createReadStream`. `for await` on the interface gives line-by-line iteration with backpressure — slow consumer paces the reader. `crlfDelay: Infinity` for CR-LF safety. Try/finally to close the interface even on error. For batching, accumulate N lines and yield batches. AbortSignal for cancellation in modern Node."
+1. **`readFileSync.split('\n')`** — OOM on large files.
+2. **No `crlfDelay`** — Windows file `\r` in line content.
+3. **Manual `data` handler** — easy to mess up backpressure.
+4. **Forget `for await`** for backpressure — `forEach` is eager.
+5. **Promise.all inside loop** — defeats throttling.
+6. **Large lines** — readline buffers entire line; bound for safety.
+7. **No AbortSignal threading** — can't cancel mid-read.
 
-## Important takeaways
+---
 
-- **`createInterface` + `for await`** = clean, backpressure-aware.
-- **`crlfDelay: Infinity`** for CR-LF.
-- **Backpressure automatic** via `for await`.
-- **Always close in finally.**
-- **Batch for downstream efficiency** (DB inserts, API sends).
-- **AbortSignal** in modern Node.
+## 11. Senior follow-ups & variants
 
-## Variants
+### Variant 1 — Tail follow
+`fs.createReadStream(path, { start: position })`; re-read on `'change'`.
 
-- **Custom splitter via `stream.Transform`** — for non-newline delimiters.
-- **Reverse-read** for log tailing — read from end of file.
-- **`tail -f` semantics** — watch for appends.
-- **Compressed input** — pipe through `zlib.createGunzip()` before readline.
+### Variant 2 — Multi-file
+Sequentially `for await` over each file.
 
-## Revision notes
+### Variant 3 — Compressed file
+`pipeline(createReadStream, zlib.createGunzip(), readline)`.
 
-```
-readline-based line reader:
-  rl = createInterface({input: createReadStream(path), crlfDelay: Infinity})
-  for await (const line of rl): await fn(line)
-  finally rl.close()
+### Variant 4 — Parallel processing
+`p-limit` semaphore inside loop (careful — concurrency 1 keeps backpressure).
 
-backpressure: for await pauses upstream when consumer awaits
-batching: accumulate N lines per batch
+### Variant 5 — Web Streams
+`new ReadableStream` + `pipeThrough(LineSplitter)`.
 
-cancel: AbortSignal in createInterface (Node 17+)
-encoding: utf8 in ReadStream options
-memory: O(line length), not O(file size)
-```
+---
+
+## 12. How to think aloud
+
+> "`fs.createReadStream` is a Node Readable; `readline.createInterface({ input, crlfDelay: Infinity })` is a line emitter built on top. `for await` over the readline interface gives line-by-line iteration with AUTOMATIC backpressure: each iteration awaits — if `process(line)` takes 100ms, readline only emits the next line when the consumer is ready, which means `fs.createReadStream` only reads the next chunk when readline's buffer drains. Backpressure flows end-to-end. Memory: O(line size + chunk buffer), not O(file size). `crlfDelay: Infinity` treats CRLF as one line break (Windows files have `\r\n`). Cleanup automatic on break or throw — `for await` calls `.return()` on the async iterator, which closes the readline interface, which destroys the read stream, which releases the file descriptor. AbortSignal support via `createInterface({ signal })` — abort throws AbortError out of the for-await. Trap: `readFileSync.split` (OOM); manual `data` handler (backpressure broken); `Promise.all` inside loop (defeats throttling); huge lines (readline buffers entire line)."
+
+---
+
+## 13. 60-second revision
+
+> - **`fs.createReadStream` + `readline.createInterface`** — line emitter.
+> - **`for await (line of rl)`** — auto backpressure.
+> - **`crlfDelay: Infinity`** for CRLF.
+> - **Memory O(line size)** — not O(file size).
+> - **`break`/`throw`** auto-closes fd.
+> - **`AbortSignal`** via `createInterface({ signal })`.
+> - **Compose with pipeline** for filter/transform stages.
+> - **Trap:** readFileSync.split (OOM); manual data handler; Promise.all inside loop.
+
+---
+
+**Related:** [async-iterator-pagination.md](./async-iterator-pagination.md) · [backpressure-demo.md](./backpressure-demo.md) · [transform-line-parser.md](./transform-line-parser.md) · [stream-pipeline-lab.md](./stream-pipeline-lab.md)
+
+**Concept primer:** [`concepts/streams.md`](../../concepts/streams.md)

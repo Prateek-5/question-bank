@@ -1,163 +1,219 @@
-# Implement `isEmpty(obj)` — detect empty object or array
+# Implement `isEmpty(obj)` — empty object/array/Map/Set
 
-## Source
-- LeetCode #2727 "Is Object Empty" — https://leetcode.com/problems/is-object-empty/
-- Variants on codedamn, BFE.dev, Frontend Masters.
+> **Difficulty:** Foundation   |   **Time:** ~5 min   |   **Prereqs:** [object-vs-map-vs-set.md](./object-vs-map-vs-set.md)
+>
+> **Source:** LeetCode #2727. 30-sec warmup that filters seniors.
 
-## Why this question matters in interviews
-This is the 30-second warm-up before the real interview begins. It looks trivial, but every senior candidate who reaches for `Object.keys(obj).length === 0` without thinking is silently scored down because it misses three things: it's **O(n)** when O(1) is possible, it skips **symbol keys**, and it blows up on **arrays vs plain objects vs Maps/Sets**. Backend engineers see this in real life — short-circuiting `if (!isEmpty(filters)) buildWhereClause(filters)` runs on every request, so the O(1) version is the right answer. The follow-up question is always "what if it's a Map?" — that's the bridge into the maps-sets bucket.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+Return true if input has no own properties / no elements. Handle plain object, array, Map, Set, null.
+
+**Verification examples**
+
 ```js
-// Bad — allocates a whole array of keys
-Object.keys(obj).length === 0;
+isEmpty({});                              // true
+isEmpty({a: 1});                          // false
+isEmpty([]);                              // true
+isEmpty([1]);                             // false
+isEmpty(new Map());                       // true
+isEmpty(new Set());                       // true
+isEmpty(null);                            // true
+```
 
-// Better — O(1), short-circuits on first key
-for (const _ in obj) return false;
-return true;
+**Constraints**
+- O(1) — short-circuit, don't allocate keys array.
+- `Object.keys(null)` throws; guard.
+- Map/Set: use `.size`.
+- Consider symbol keys for completeness.
 
-// Best — handles Map/Set/Array uniformly
+---
+
+## 2. Plain-English restatement
+
+Short-circuit at first key/element. Don't allocate full keys list. Branch by collection type.
+
+---
+
+## 3. Why this matters in interviews
+
+Looks trivial. Senior signal: O(1) over O(n), handle Map/Set, symbol keys, null guard.
+
+---
+
+## 4. Mental model
+
+```
+   Naive: Object.keys(obj).length === 0   ← O(n) + alloc.
+   
+   Better: for..in short-circuit:
+     for (const _ in obj) return false
+     return true
+   → O(1) if any key exists; first hit short-circuits.
+   But: for..in walks prototype enumerable; misses symbols.
+   
+   Best:
+     - null/undefined → true.
+     - Array → length === 0.
+     - Map/Set → size === 0.
+     - Plain object → for..in + Object.getOwnPropertySymbols.
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. Why is `Object.keys(o).length === 0` O(n)?
+> 2. Does `for..in` see symbols?
+> 3. Does `Object.keys(new Map())` work?
+
+---
+
+## 6. Brute force — walked through
+
+```js
+const isEmptyBrute = (o) => Object.keys(o).length === 0;
+```
+
+Issues: O(n); null throws; misses symbols; lies for Map (always 0).
+
+---
+
+## 7. The unlocking insight
+
+> **Branch by type. for..in short-circuits at first key (O(1)). Map/Set need `.size`. Null guard first.**
+
+Three properties:
+
+1. **Short-circuit** for O(1).
+2. **Type branch** — Map/Set differ.
+3. **Null guard** first.
+
+---
+
+## 8. Solution (annotated)
+
+```js
 function isEmpty(o) {
-  if (o == null) return true;
-  if (Array.isArray(o)) return o.length === 0;
-  if (o instanceof Map || o instanceof Set) return o.size === 0;
-  for (const _ in o) return false;          // O(1) short-circuit
-  return Object.getOwnPropertySymbols(o).length === 0;
+  if (o == null) return true;                                              // step 1: null guard
+  if (Array.isArray(o)) return o.length === 0;                            // step 2: array
+  if (o instanceof Map || o instanceof Set) return o.size === 0;          // step 3: Map/Set
+  for (const _ in o) return false;                                         // step 4: O(1) string keys
+  return Object.getOwnPropertySymbols(o).length === 0;                    // step 5: symbol keys
 }
 ```
 
-### Runtime / engine behavior
-- `Object.keys(o)` walks **own enumerable string keys**, allocates an array, returns it. **O(n)** in keys + heap alloc.
-- `for...in` walks own + **inherited** enumerable string keys. The first hit short-circuits — **O(1)** if any key exists. Skips symbols.
-- `Object.getOwnPropertySymbols(o)` is needed because symbols are invisible to both `for...in` and `Object.keys`.
-- Arrays are objects whose own-key set is `['0','1',...,'length']`. `Object.keys([])` is `[]`, so the polyfill also accidentally works on `[]` — but `length` is the canonical check.
-- `Map` / `Set` don't expose keys as own-properties at all; you **must** use `.size`. `Object.keys(new Map([['a',1]]))` returns `[]` and lies.
-
-### Edge cases (these are the interview traps)
-1. **`null` / `undefined` input** — `Object.keys(null)` throws `TypeError`. Always guard first.
-2. **Arrays vs objects** — `Object.keys([1,2,3])` returns `['0','1','2']`, so the keys check works, but `length` is faster and intent-clearer.
-3. **Map and Set** — `Object.keys(map)` returns `[]` because map entries are internal slots, not properties. Always use `.size`.
-4. **Symbol keys** — `{ [Symbol('x')]: 1 }` is **not empty** but `Object.keys` says it is. Bonus-point territory.
-5. **Inherited keys** — `for...in` walks the prototype chain. `Object.create({ foo: 1 })` is "empty" by own-keys but `for...in` will see `foo`. Use `Object.hasOwn(o, k)` inside the loop if strict own-only is required.
-6. **Object.create(null)** — has no prototype, no inherited keys. Works fine with both methods.
-7. **Class instances with only methods** — methods on the prototype are not own-keys, so `Object.keys(new MyClass())` may legitimately be empty.
-8. **Frozen / sealed objects** — irrelevant to emptiness but interviewers may bait you. Frozen empty is still empty.
-
-## Brute force approach
-`JSON.stringify(obj) === '{}'`. Works for plain JSON-safe objects but: (a) O(n) serialization, (b) silently drops symbol/function/undefined values, (c) throws on cycles, (d) lies about Map/Set (returns `'{}'`). Don't ship it.
-
-## Optimal approach
-Type-discriminate, then use the cheapest emptiness check for each type:
-- `null/undefined` → empty.
-- Array → `.length === 0`.
-- Map/Set → `.size === 0`.
-- Plain object → `for...in` + short-circuit, optionally check own-symbols.
-
-O(1) for all cases. No allocations.
-
-## Solution (JavaScript)
+**Try it yourself**
 
 ```js
-/**
- * Returns true if the value is "empty":
- *   - null / undefined
- *   - [] for arrays
- *   - Map/Set of size 0
- *   - object with no own enumerable string OR symbol keys
- *
- * O(1) — short-circuits on the first key.
- */
-function isEmpty(value) {
-  if (value == null) return true;
+isEmpty({});                                                  // true
+isEmpty({a: 1});                                              // false
+isEmpty([]);                                                   // true
+isEmpty([0]);                                                  // false
+isEmpty(new Map());                                           // true
+isEmpty(new Map([['a', 1]]));                                 // false
+isEmpty(new Set([1]));                                        // false
+isEmpty(null);                                                 // true
+isEmpty(undefined);                                            // true
+isEmpty('');                                                   // false (string is not object)
 
-  if (Array.isArray(value)) return value.length === 0;
+// Symbol-only object
+const sym = Symbol('s');
+isEmpty({[sym]: 1});                                          // false
 
-  if (value instanceof Map || value instanceof Set) {
-    return value.size === 0;
-  }
+// Prototype-inherited only — own-keys check
+class Foo { bar() {} }
+isEmpty(new Foo());                                           // true (no own keys)
 
-  // Plain object (or class instance)
-  if (typeof value === 'object') {
-    // Short-circuit string-keyed scan over OWN keys only.
-    for (const key in value) {
-      if (Object.hasOwn(value, key)) return false;
-    }
-    // Symbols are invisible to for...in
-    return Object.getOwnPropertySymbols(value).length === 0;
-  }
-
-  // Primitives — strings/numbers/etc are not "objects"; throw or return true
-  // depending on contract. LeetCode expects: assume input is array or object.
-  return true;
-}
+// LeetCode #2727 likely doesn't require Map/Set handling; verify scope.
 ```
 
-## Step-by-step dry run
+---
 
-Input cases:
-```js
-isEmpty({});                        // -> true
-isEmpty({ x: 1 });                  // -> false
-isEmpty([]);                        // -> true
-isEmpty([undefined]);               // -> false (length is 1)
-isEmpty(new Map());                 // -> true
-isEmpty(new Map([['a', 1]]));       // -> false
-isEmpty(new Set());                 // -> true
-isEmpty(null);                      // -> true
-isEmpty({ [Symbol('s')]: 1 });      // -> false (symbol-only)
-isEmpty(Object.create({ x: 1 }));   // -> true (inherited, not own)
+## 9. Step-by-step dry run
+
+```
+isEmpty({a:1, b:2}):
+  Not null. Not array. Not Map/Set.
+  for (_ in obj): first iteration 'a' → return false.
+  O(1).
+
+isEmpty({}):
+  Not null/array/Map/Set.
+  for..in body never runs (no keys).
+  Continue past for.
+  Object.getOwnPropertySymbols({}).length = 0 → true.
+
+isEmpty(Object.keys(huge)):
+  Allocates [...huge keys array] then checks length.
+  O(n) + heap alloc.
+
+isEmpty(new Map([['a', 1]])):
+  instanceof Map → size===0? size is 1. Return false.
+  
+  vs naive Object.keys(new Map([['a',1]])).length === 0:
+    Object.keys on a Map returns [] (no own enumerable properties).
+    Naive returns true incorrectly.
+
+isEmpty({[sym]: 1}):
+  for..in skips symbols → body doesn't run.
+  getOwnPropertySymbols → [sym]. length 1 → return false.
 ```
 
-Trace of `isEmpty({ [Symbol('s')]: 1 })`:
-1. Not `null`. Not array. Not Map/Set. typeof is `'object'`.
-2. `for...in` loops over enumerable string keys. There are none — loop body doesn't execute.
-3. Fall through to `getOwnPropertySymbols(value)` → `[Symbol('s')]`, length 1 → return `false`. Correct.
+---
 
-Trace of `isEmpty(Object.create({ x: 1 }))`:
-1. typeof is `'object'`. `for...in` sees the inherited `x`.
-2. `Object.hasOwn(value, 'x')` is `false` → we **don't** return false; loop continues.
-3. No more keys. `getOwnPropertySymbols` is empty → return `true`. Correct.
+## 10. Common confusion + traps
 
-## Important takeaways
+1. **`Object.keys(null)` throws** — guard.
+2. **`for..in` walks prototype** — usually OK; could see inherited.
+3. **`Map` empty via `Object.keys`** — lies; always 0.
+4. **`isEmpty(0)` / `isEmpty('')`** — primitives; define behavior.
+5. **Symbols missed** — getOwnPropertySymbols.
+6. **`hasOwnProperty` for safety** — for..in body short-circuits before this matters.
+7. **Frozen empty object** — still empty.
 
-**Syntax to memorize**
-- Guard `null/undefined` first — `Object.keys(null)` throws.
-- `for (const k in o) if (Object.hasOwn(o, k)) return false; return true;` — the O(1) own-keys check.
-- `.size` for Map/Set, `.length` for arrays. **Never** `Object.keys()` on them.
-- `Object.getOwnPropertySymbols(o).length` for the symbol-aware version.
+---
 
-**Patterns to reuse**
-- "Type-discriminate then dispatch" — recurring shape for any utility that has to handle Object / Array / Map / Set uniformly (deep clone, deep diff, deep equal, serializer).
-- Short-circuit iteration via `for...in return false` — same pattern beats `array.some(...)` for hot paths.
+## 11. Senior follow-ups & variants
 
-**Common mistakes**
-- Reaching for `Object.keys(o).length === 0` — works on the LeetCode test but burns O(n) and misses symbols.
-- Forgetting Map/Set have no own enumerable keys. `Object.keys(map)` is `[]`. Burned.
-- `JSON.stringify(o) === '{}'` — see brute force section.
-- Forgetting `null` is `typeof === 'object'`. `Object.keys(null)` throws.
+### Variant 1 — Strict own-keys
+`for..in` + `hasOwnProperty`.
 
-**Related questions**
-- Deep equality (`isEqual`)
-- Deep diff (`differencesBetween(a, b)`) — same keyset walk
-- `Object.fromEntries(Object.entries(o).filter(...))` for pruning
-- `Object.groupBy` (ES2024)
+### Variant 2 — `Reflect.ownKeys`
+All own keys (strings + symbols).
 
-## Variants
+### Variant 3 — Custom collections
+Duck-type by `.size` or `[Symbol.iterator]`.
 
-1. **Strict own-only** — "Don't peek at the prototype chain." Drop the `for...in` and use `Object.keys(o).length + Object.getOwnPropertySymbols(o).length === 0`. Slower (allocates two arrays) but explicit.
+### Variant 4 — Deep "is-empty"
+All nested values are empty.
 
-2. **Deep-empty** — "Return true if all leaf values are also empty: `{ a: {}, b: [] }` is empty." Recurse into nested objects/arrays; mind cycles via `WeakSet`.
+### Variant 5 — Object check (not array/Map/Set)
+`Object.prototype.toString.call(o) === '[object Object]'`.
 
-3. **Map of empties** — "Given a Map<string, T>, return true if every value is empty." Combine `isEmpty` with `Array.from(map.values()).every(isEmpty)`.
+---
 
-## Revision notes
+## 12. How to think aloud
 
-> **isEmpty — 60 second recap**
-> - Guard `null/undefined` first.
-> - Array → `.length`. Map/Set → `.size`. Object → `for...in` short-circuit.
-> - `Object.keys(o).length === 0` is O(n) and **lies about Map/Set/symbols**.
-> - Inherited keys: skip with `Object.hasOwn(o, k)`.
-> - Symbol keys: `Object.getOwnPropertySymbols(o).length`.
-> - **Trap:** `Object.keys(new Map([...]))` returns `[]`. Map entries are internal slots.
+> "isEmpty looks trivial but the 30-second answer (`Object.keys(o).length === 0`) is wrong on three counts: O(n) + heap allocation when O(1) is possible; throws on null; lies on Map (returns 0 for non-empty Map because Map's items aren't own enumerable keys). Correct: null guard first; Array → `length === 0`; Map/Set → `size === 0`; plain object → `for (const _ in o) return false` short-circuits at first key (O(1)), then handle symbol keys via `Object.getOwnPropertySymbols`. for..in walks prototype enumerable; usually OK because Object.prototype has none, but for strict own-keys use `Object.hasOwn` (ES2022) or `hasOwnProperty.call`. Skip symbols? Default for..in skips them — for completeness explicitly check. Variants: `Reflect.ownKeys` returns both strings and symbols (own keys only — not inherited); duck-type custom collections by `.size` or `Symbol.iterator`; deep is-empty for nested. Trap: Object.keys length (O(n)); null throws; Map via keys-length (lies); missed symbols."
+
+---
+
+## 13. 60-second revision
+
+> - **Null guard first.**
+> - **Array → `length === 0`.**
+> - **Map/Set → `size === 0`.**
+> - **Object: `for..in` short-circuits O(1).**
+> - **Symbols via `getOwnPropertySymbols`.**
+> - **Avoid `Object.keys(o).length`** — O(n) + alloc.
+> - **`Object.keys(map)`** lies (always 0).
+> - **Trap:** null throws; missed Map; missed symbols.
+
+---
+
+**Related:** [object-vs-map-vs-set.md](./object-vs-map-vs-set.md) · [object-deep-diff.md](./object-deep-diff.md) · [convert-object-to-json-string.md](./convert-object-to-json-string.md)
+
+**Concept primer:** [`concepts/maps-sets.md`](../../concepts/maps-sets.md)

@@ -1,191 +1,233 @@
 # Method chaining — the `return this` builder pattern
 
-## Source
-- Common machine-coding interview problem ("build a chainable QueryBuilder" / "implement jQuery-style chaining" / "fluent API design").
-- Reference: lodash `chain`, knex.js query builder, mongoose query API, jQuery — all use this pattern.
+> **Difficulty:** Easy-Medium   |   **Time:** ~10 min   |   **Prereqs:** [this-keyword-nodejs.md](./this-keyword-nodejs.md)
+>
+> **Source:** Knex.js, mongoose, jQuery, lodash chain. Common machine-coding interview.
 
-## Why this question matters in interviews
-The builder pattern is a quick way to test three things at once: (1) do you know that prototype methods return `this` to enable chaining, (2) can you separate **mutation** of accumulator state from **terminal** materialization (`.build()` / `.execute()`), and (3) do you understand why `this` flows correctly through prototype methods. It's also the most realistic prototype question — every senior backend engineer has used or built a query builder (SQL, GraphQL, HTTP client). When you ship a fluent API, this is the skeleton.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+Build a fluent API (QueryBuilder) where methods return `this` to enable chaining.
+
+**Verification examples**
+
+```js
+const sql = new QueryBuilder('users')
+  .where('age', '>', 18)
+  .where('status', '=', 'active')
+  .orderBy('name')
+  .limit(10)
+  .build();
+
+// "SELECT * FROM users WHERE age > 18 AND status = 'active' ORDER BY name ASC LIMIT 10"
+```
+
+**Constraints**
+- Each mutator returns `this`.
+- Terminal method (`.build()` / `.execute()`) returns materialized result.
+- State accumulated on instance.
+
+---
+
+## 2. Plain-English restatement
+
+Methods that mutate state return `this` so you can chain. Terminal method finalizes and returns the result.
+
+---
+
+## 3. Why this matters in interviews
+
+Real backend pattern (query builders, ORMs, jQuery). Tests `this` flow + state separation.
+
+---
+
+## 4. Mental model
+
+```
+   class Builder {
+     mutator() {
+       this._state.something = value;
+       return this;                  ← THE pattern
+     }
+     terminal() {
+       return finalizeOf(this._state);
+     }
+   }
+   
+   builder.a().b().c().build()
+            ▲   ▲   ▲    ▲
+            this this this final result
+
+   State stored on instance (this._field).
+   Methods on prototype.
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. Why return `this` from mutator methods?
+> 2. Where does state live — prototype or instance?
+> 3. What does the terminal method return?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: return undefined
+Chain breaks at first call.
+
+### Wrong attempt 2: return new instance per call
+Wastes allocations; harder to track state.
+
+### Wrong attempt 3: state on prototype
+Shared across instances — bug.
+
+---
+
+## 7. The unlocking insight
+
+> **Mutator methods return `this`. State on instance via `this._field`. Terminal method materializes.**
+
+Three properties:
+
+1. **`return this`** — enable chaining.
+2. **State on instance** — not prototype.
+3. **Terminal method** materializes.
+
+---
+
+## 8. Solution (annotated)
+
 ```js
 class QueryBuilder {
   constructor(table) {
-    this.table = table;
+    this.table = table;                                                  // step 1: instance state
     this._where = [];
     this._orderBy = null;
     this._limit = null;
   }
+
   where(field, op, value) {
     this._where.push({ field, op, value });
-    return this;                         // <- the headline of the pattern
+    return this;                                                          // step 2: chain
   }
+
   orderBy(field, dir = 'ASC') {
     this._orderBy = { field, dir };
     return this;
   }
+
   limit(n) {
     this._limit = n;
     return this;
   }
-  build() {
-    // Terminal — does NOT return `this`. Returns the materialized query.
-    return {
-      sql: this._compile(),
-      params: this._params(),
-    };
-  }
-}
 
-const q = new QueryBuilder('users')
-  .where('age', '>', 18)
-  .where('country', '=', 'IN')
-  .orderBy('created_at', 'DESC')
-  .limit(10)
-  .build();
-```
-
-### Runtime / engine behavior
-- Every method on the prototype is shared across instances. `qb.where` is the same function for every `QueryBuilder` instance — only `this` changes.
-- `return this` works because `qb.method()` invokes `method` with `this = qb`. Returning `this` lets the **dot-chain** continue on the same instance.
-- Without `return this`, the second `.where(...)` would be called on `undefined` → `TypeError: Cannot read properties of undefined`.
-- Chain mutation accumulates state on the instance; `build()` snapshots it. This is mutation-based; an immutable variant returns a *new* builder from each method (slower but composable — see Variants).
-
-### Edge cases (these are the interview traps)
-1. **Forgetting `return this`** — chain breaks on the second call with a cryptic error. Most common bug.
-2. **`build()` returning `this`** — defeats the purpose. The terminal method should return the *result*, not the builder. Otherwise users can't tell when they're done.
-3. **Reuse after `build()`** — if `build()` doesn't reset state, subsequent calls on the same builder reuse stale state. Decide: either (a) `build()` is single-shot (throw on second call), or (b) `build()` clones state before snapshotting.
-4. **Arrow functions on the prototype** — never use `Foo.prototype.method = () => this._x`. Arrow `this` is lexical, points at the enclosing scope (likely `globalThis`). Methods must be regular functions.
-5. **Method as callback** — `array.forEach(qb.where)` loses `this`. Pre-bind: `array.forEach(qb.where.bind(qb))`. Worth flagging because chain users assume `this` is automatic.
-6. **Conditional chaining** — what if `.where(...)` should be a no-op when the value is null? Either return `this` unchanged (skip the push) or expose a `.when(cond, fn)` helper. Senior-friendly design choice.
-7. **Subclassing the builder** — if `OrderQueryBuilder extends QueryBuilder` adds `.orderItems(...)`, `return this` correctly preserves the subclass type (because `this` is the subclass instance). Important for fluent APIs over class hierarchies.
-8. **Immutable builders** — modern style: every method returns a new instance with copied state. Slower, but safer for shared/cached builders. Trade-off worth discussing.
-
-## Brute force approach
-"Pass all options to a single function call: `query('users', { where: [...], orderBy: ..., limit: ... })`." Works but loses the readability of fluent chains, conditional composition (`if (filter) qb.where(...)`), and the natural reuse of partial builders. The whole reason builders exist is to compose incrementally.
-
-## Optimal approach
-Mutation-based builder where every step returns `this` and a terminal `build()` (or `execute()` / `toSQL()`) returns the materialized output. State lives on the instance; methods live on the prototype. O(1) per chain step.
-
-## Solution (JavaScript)
-
-```js
-class QueryBuilder {
-  constructor(table) {
-    this._table = table;
-    this._where = [];
-    this._orderBy = null;
-    this._limit = null;
-    this._built = false;
-  }
-
-  where(field, op, value) {
-    if (value === undefined) return this;     // conditional skip
-    this._where.push({ field, op, value });
-    return this;
-  }
-
-  orderBy(field, dir = 'ASC') {
-    this._orderBy = { field, dir: dir.toUpperCase() };
-    return this;
-  }
-
-  limit(n) {
-    if (!Number.isInteger(n) || n < 0) throw new RangeError('limit must be non-neg integer');
-    this._limit = n;
-    return this;
-  }
-
-  // Terminal — does NOT return `this`. Returns the materialized output.
-  build() {
-    if (this._built) throw new Error('build() can only be called once');
-    this._built = true;
-
-    const params = [];
-    let sql = `SELECT * FROM ${this._table}`;
-
+  build() {                                                                // step 3: terminal
+    let sql = `SELECT * FROM ${this.table}`;
     if (this._where.length) {
-      const clauses = this._where.map(({ field, op, value }) => {
-        params.push(value);
-        return `${field} ${op} ?`;
-      });
-      sql += ` WHERE ${clauses.join(' AND ')}`;
+      sql += ' WHERE ' + this._where.map((c) => `${c.field} ${c.op} ${typeof c.value === 'string' ? `'${c.value}'` : c.value}`).join(' AND ');
     }
     if (this._orderBy) sql += ` ORDER BY ${this._orderBy.field} ${this._orderBy.dir}`;
-    if (this._limit !== null) sql += ` LIMIT ${this._limit}`;
-
-    return { sql, params };
+    if (this._limit != null) sql += ` LIMIT ${this._limit}`;
+    return sql;
   }
 }
-```
 
-## Step-by-step dry run
-
-Input:
-```js
-const q = new QueryBuilder('users')
+// Chain
+new QueryBuilder('users')
   .where('age', '>', 18)
-  .where('country', '=', 'IN')
-  .where('deleted_at', 'IS', undefined)   // skipped via conditional
-  .orderBy('created_at', 'DESC')
+  .where('status', '=', 'active')
+  .orderBy('name')
   .limit(10)
   .build();
 ```
 
-Trace:
-- `new QueryBuilder('users')` → instance with `_where=[]`, `_orderBy=null`, `_limit=null`, `_built=false`.
-- `.where('age', '>', 18)` → push `{age,>,18}` → returns `this` (the same instance).
-- `.where('country', '=', 'IN')` → push `{country,=,'IN'}` → returns `this`. Chain has 2 where clauses.
-- `.where('deleted_at', 'IS', undefined)` → `value === undefined` → skip push, return `this`. Chain unchanged.
-- `.orderBy('created_at', 'DESC')` → `_orderBy = {field:'created_at', dir:'DESC'}` → return `this`.
-- `.limit(10)` → integer check passes → `_limit = 10` → return `this`.
-- `.build()` → snapshots state. `_built = true`. Compiles:
-  - `sql = 'SELECT * FROM users WHERE age > ? AND country = ? ORDER BY created_at DESC LIMIT 10'`
-  - `params = [18, 'IN']`
-- Returns `{ sql, params }`. The variable `q` is now the **materialized output**, not the builder.
+**Try it yourself**
 
-Second `q.where(...)` call — `q` is the result object, not the builder, so `.where` is `undefined` → `TypeError`. This is desirable: the chain has a clear terminator.
+```js
+// Immutable variant (returns new instance per call — Redux-style)
+class ImmutableBuilder {
+  constructor(state = {}) { Object.assign(this, state); }
+  where(field, op, value) {
+    return new ImmutableBuilder({
+      ...this,
+      _where: [...(this._where || []), { field, op, value }],
+    });
+  }
+  // ...
+}
+// Trade-off: allocations per call, but safer for reuse.
+```
 
-## Important takeaways
+---
 
-**Syntax to memorize**
-- Every chainable method: `return this;` (last line, no exceptions).
-- Terminal method: returns the result, NOT `this`. Common names: `build()`, `execute()`, `toSQL()`, `compile()`.
-- Methods on the prototype (auto via `class` body); state on the instance (via `this._x = ...` in constructor).
+## 9. Step-by-step dry run
 
-**Patterns to reuse**
-- "Return `this` to chain" — same pattern in lodash `chain`, jQuery, Express middleware (`app.use().get().listen()`), mocha test setup (`describe.skip.only`), knex/mongoose query builders.
-- "Mutate state, then materialize via terminal" — separation of accumulation and execution. Same shape as Stream pipelines, RxJS observables, reducers.
+```
+new QueryBuilder('users')         → builder { table:'users', _where:[], _orderBy:null, _limit:null }
+  .where('age', '>', 18)           → builder._where pushed; return this → same builder
+  .where('status', '=', 'active')  → push; return this
+  .orderBy('name')                  → set; return this
+  .limit(10)                        → set; return this
+  .build()                          → assemble SQL from state, return string
 
-**Common mistakes**
-- Forgetting `return this` on one method — chain breaks mid-stream with a confusing error.
-- Using arrow functions in the class body — wait, ES2022 class fields with `=` *do* bind `this` lexically, but arrow methods would still need `this` from the instance. Just don't use arrows on the prototype.
-- Returning `this` from the terminal — users can't tell when they're done; chains never resolve.
-- Sharing one builder across requests without cloning — accumulator state leaks between requests. In backend code, prefer fresh builders per call or an immutable variant.
+Each chain step returns SAME builder instance; state accumulates.
+Terminal .build() returns finalized result.
+```
 
-**Related questions**
-- "Implement `_.chain(arr).filter(...).map(...).value()`" — same pattern, terminal is `.value()`.
-- Express-style middleware chains (`return next()`).
-- "What's the difference between this builder and a Promise chain?" (Builder is sync, accumulates state; Promise chains are async, pass values through.)
+---
 
-## Variants
+## 10. Common confusion + traps
 
-1. **Immutable builder** — "Make each method return a new builder instead of mutating." Inside each method: `const next = new QueryBuilder(this._table); Object.assign(next, this); next._where = [...this._where, newClause]; return next;`. Safer for shared/cached builders.
+1. **Return undefined** — breaks chain.
+2. **State on prototype** — shared across instances.
+3. **Mutator + terminal mixed** — separate concerns.
+4. **Methods need `this`** — arrow functions on object literal break.
+5. **Immutable variant** — heavier allocations but reuse-safe.
+6. **`new` not required** — `QueryBuilder('users')` without `new` → `this` undefined.
+7. **Reusing builder** — state persists; reset or use immutable.
 
-2. **Async terminal** — "What if `build()` should actually execute the SQL?" Make it `async execute() { return this._db.query(this._compile()); }`. Terminal returns a Promise; chain remains synchronous until then.
+---
 
-3. **Type-safe builder (TS)** — "How would you type this so that `.where(...)` after `.build()` is a compile error?" Phantom types / branded builders: `Builder<{ table: true; where: true; built: false }>` and `.build()` flips `built` to `true`, removing the chainable methods from the union.
+## 11. Senior follow-ups & variants
 
-## Revision notes
+### Variant 1 — Immutable variant
+Each method returns new instance; safer reuse, more allocations.
 
-> **method-chaining builder — 60 second recap**
-> - Every chainable method ends with `return this;`. Methods live on the prototype.
-> - Terminal method (`build` / `execute` / `toSQL`) returns the **materialized output**, NOT `this`.
-> - Chain works because `qb.method()` sets `this = qb`; returning `this` lets the next `.x(...)` resolve.
-> - Conditional chaining: return `this` unchanged when a no-op condition is met.
-> - **Trap:** forgetting `return this` on one method → cryptic `Cannot read properties of undefined`.
-> - **Trap:** arrow functions on the prototype — `this` is lexical, breaks chaining.
-> - **Trap:** reusing a builder after `build()` without reset → stale state. Either single-shot or clone-on-build.
-> - Subclasses naturally preserve type because `this` is the actual subclass instance.
+### Variant 2 — Async terminal
+`.execute()` returns Promise.
+
+### Variant 3 — Validation in terminal
+Throw if required fields missing.
+
+### Variant 4 — Type-safe TypeScript
+Generic state types narrow as you chain.
+
+### Variant 5 — Lazy evaluation
+Don't build SQL until `.execute()` runs.
+
+---
+
+## 12. How to think aloud
+
+> "Method chaining: each mutator returns `this`, so calls can be chained. State lives on the INSTANCE (`this._field`), not prototype (shared). Terminal method materializes the result (`.build()` returns string, `.execute()` returns Promise). Used by knex, mongoose, jQuery, lodash chain. Trade-off: mutable (shared state — single instance) vs immutable (returns new instance per call — safer reuse, more allocations). Trap: forget `return this` (chain breaks); state on prototype (shared); arrow methods on object literal (no `this` from receiver)."
+
+---
+
+## 13. 60-second revision
+
+> - **Mutator methods return `this`** — enable chain.
+> - **State on instance** (`this._field`), NOT prototype.
+> - **Terminal method** materializes.
+> - **Used in:** knex, mongoose, jQuery, lodash.
+> - **Immutable variant:** return new instance — safer reuse.
+> - **Trap:** forget return this; state on prototype; arrow in object literal.
+
+---
+
+**Related:** [this-keyword-nodejs.md](./this-keyword-nodejs.md) · [mixin-composition-pattern.md](./mixin-composition-pattern.md) · [getter-setter-via-prototype.md](./getter-setter-via-prototype.md)
+
+**Concept primer:** [`concepts/prototype.md`](../../concepts/prototype.md)

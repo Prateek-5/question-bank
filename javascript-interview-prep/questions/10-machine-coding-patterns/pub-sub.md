@@ -1,76 +1,126 @@
-# Implement a Pub/Sub (Observer pattern)
+# Implement a Pub/Sub bus with wildcards
 
-## Source
-- Canonical machine-coding / design-patterns interview problem (Gang of Four "Observer", Node.js EventEmitter, RxJS Subject, Redis pub/sub).
-- Reference: GoF Design Patterns, RxJS `Subject` source.
+> **Difficulty:** Medium   |   **Time:** ~25 min   |   **Prereqs:** [event-emitter.md](./event-emitter.md), [`concepts/maps-sets.md`](../../concepts/maps-sets.md)
+>
+> **Source:** GoF Observer, RxJS `Subject`, Redis pub/sub, MQTT topic broker.
 
-## Why this question matters in interviews
-Pub/Sub is the **conceptual sibling** of EventEmitter (see event-emitter.md), but interviewers ask it for a different reason: it tests whether you understand **decoupled communication**, **topic-based dispatch**, and the **unsubscribe-handle pattern**. As a backend engineer you've used pub/sub everywhere: Redis pub/sub, RabbitMQ topics, Kafka consumer groups, GraphQL subscriptions, internal event buses in modular monoliths. The interview implementation is small but the design choices are senior-level: **does `subscribe` return an unsubscribe handle (cleaner) or an ID (older)?**, **how do you support wildcards (`user.*`)?**, **is dispatch sync or async?**. A senior answer states the choices upfront and implements the clean version.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
-```js
-const pubsub = new PubSub();
-
-const unsub = pubsub.subscribe('user:login', (payload) => console.log(payload));
-pubsub.publish('user:login', { id: 1 });   // logs { id: 1 }
-unsub();
-pubsub.publish('user:login', { id: 1 });   // nothing — unsubscribed
-```
-
-Internal shape:
-```js
+**Signature**
+```ts
 class PubSub {
-  constructor() { this.subscribers = new Map(); /* Map<topic, Set<fn>> */ }
+  subscribe(topic: string, fn: (payload: any, topic: string) => void): () => void;
+  publish(topic: string, payload: any): void;
+  clear(topic?: string): void;
 }
 ```
 
-### Runtime / engine behavior
-- Topic strings are the routing key. Some implementations support **namespacing** (`user.profile.update`) and **wildcards** (`user.*`, `user.**`).
-- `Map<topic, Set<fn>>` is the textbook shape — same as EventEmitter — but pub/sub usually has additional features like wildcards, async dispatch, and last-value caching.
-- Returning an **unsubscribe function** from `subscribe` is the idiomatic modern API. Beats ID-based `unsubscribe(id)` because the handle closes over the right set + fn, no lookup needed.
-- Dispatch can be sync (cheap, deterministic order) or async (`queueMicrotask` / `setImmediate`) (callers don't block; harder to reason about). State which.
+**Input / Output examples**
 
-### Edge cases (these are the interview traps)
-1. **Pub/Sub vs EventEmitter** — practically the same data structure. Conceptually: EventEmitter is OO (instance has events of itself), Pub/Sub is a **global bus** (topics are decoupled from objects). Interviewers use the terms interchangeably; ask which they mean.
-2. **Wildcards** — `subscribe('user.*', fn)` should fire on `'user.login'`, `'user.logout'`, but not `'user.profile.update'`. `**` is "any depth." Implement separately from exact-match subscribers.
-3. **Unsubscribe during dispatch** — if a callback unsubscribes itself or others mid-publish, the iteration must not break. **Snapshot subscribers** before iterating (same as EventEmitter).
-4. **Same fn subscribed twice** — Set: stored once. Array: twice. Choose Set unless interviewer wants duplicates.
-5. **Memory leaks** — subscribers retained by closures forever if `unsubscribe` is never called. The single most common pub/sub bug in long-running services. Always pair with lifecycle teardown.
-6. **Publishing with no subscribers** — must be no-op, never throw.
-7. **Last-value cache (Subject behavior)** — RxJS `BehaviorSubject` replays the last published value to new subscribers. Worth implementing as a variant.
-8. **Cross-topic broadcasting** — `publish('*', payload)` to all subscribers regardless of topic. Avoid; usually a code smell.
+| Setup                                                                 | Behaviour                                            |
+|-----------------------------------------------------------------------|------------------------------------------------------|
+| `subscribe('user.login', fn); publish('user.login', x)`               | fn fires with `x`                                    |
+| `subscribe('user.*', fn); publish('user.login', x)`                   | fn fires (wildcard, one segment)                     |
+| `subscribe('user.**', fn); publish('user.profile.update', x)`         | fn fires (deep wildcard)                             |
+| `subscribe('user.*', fn); publish('user.profile.update', x)`          | fn does NOT fire (one-segment limit)                 |
+| `unsub = subscribe(...); unsub()`                                     | removes fn                                           |
+| `publish('unknown', x)`                                               | no error, no-op                                      |
 
-## Brute force approach
-Plain object keyed by topic. Same plain-object prototype-pollution risk. Skip; use Map.
+**Constraints**
+- `Map<topic, Set<fn>>` for exact match; separate list for wildcard patterns.
+- `subscribe` returns an unsubscribe function (closes over set + fn).
+- `publish` snapshots subscribers before iterating.
+- `*` = exactly one segment; `**` = one or more.
 
-## Optimal approach
-`Map<topic, Set<fn>>` for exact-match subscribers. `subscribe` returns an `unsubscribe` function that closes over the set + fn. `publish` snapshots and iterates.
+---
 
-For wildcards, maintain a separate list of `{pattern, fn}` and match patterns on publish — O(P) overhead where P = pattern count. Compile patterns to regexes once for speed.
+## 2. Plain-English restatement
 
-## Solution (JavaScript)
+A topic-string-keyed event bus. Anyone can subscribe to a topic (literal or wildcard pattern) and receive payloads published to matching topics. Decoupled from any source object — publishers and subscribers don't know each other. Used for Redis pub/sub, RabbitMQ topics, MQTT, GraphQL subscriptions, internal monorepo buses.
+
+---
+
+## 3. Why this matters in interviews
+
+Pub/Sub is the **conceptual sibling** of EventEmitter, but interviewers ask it for a different reason: it tests whether you understand **decoupled communication**, **topic-based dispatch**, and the **unsubscribe-handle pattern**. Senior bonus: wildcards (`*` and `**`), async dispatch, last-value cache (BehaviorSubject), distributed-pub/sub trade-offs.
+
+---
+
+## 4. Mental model
+
+```
+   ┌────────────────────────────────────────────────┐
+   │ subscribers: Map<topic, Set<fn>>              │
+   ├────────────────────────────────────────────────┤
+   │ 'user.login'  → { fnA, fnB }                  │
+   │ 'order.done'  → { fnC }                        │
+   └────────────────────────────────────────────────┘
+
+   ┌────────────────────────────────────────────────┐
+   │ patternSubs: [{ pattern: RegExp, fn }]         │
+   ├────────────────────────────────────────────────┤
+   │ /^user\.[^.]+$/   → wildFn   (single segment)  │
+   │ /^user\..+$/      → deepFn   (any depth)       │
+   └────────────────────────────────────────────────┘
+
+   publish('user.login', payload):
+     exact: snapshot Set{fnA, fnB} → fire both
+     patterns: regex.test('user.login') → fire matches
+```
+
+**`*` vs `**`:**
+- `user.*` matches `user.login`, `user.logout` — **exactly one segment after `user`**.
+- `user.**` matches `user.login`, `user.profile.update`, `user.x.y.z` — **one or more segments**.
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. With `subscribe('user.*', fn)`, does `publish('user.profile.update', x)` fire `fn`?
+> 2. If three subscribers exist and one unsubscribes itself during publish, do the other two still fire?
+> 3. Why return an unsubscribe function instead of an ID + `unsubscribe(id)`?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: plain object registry
+Proto pollution / collisions on keys like `'toString'`. Use `Map`.
+
+### Wrong attempt 2: linear scan all topic names on publish
+On every `publish`, walk every key in `subscribers` to find matches. O(N) per publish where N = unique topics. Use exact-match Map + separate pattern list instead — O(1) + O(P).
+
+### Wrong attempt 3: no snapshot in publish
+If a subscriber subscribes/unsubscribes during dispatch, iteration breaks or fires unexpected handlers. Always `[...set]` first.
+
+---
+
+## 7. The unlocking insight
+
+> **Two structures: `Map<topic, Set<fn>>` for exact match, `Array<{pattern, fn}>` for wildcards. Compile patterns to regex once. `subscribe` returns a closure that captures set+fn. `publish` snapshots, iterates exact subs, then regex-tests patterns.**
+
+Three properties:
+
+1. **Two-tier registry** — Map for O(1) exact match, list for O(P) wildcard.
+2. **Pre-compiled regex** — pattern compiled once at subscribe time, not per publish.
+3. **Snapshot-before-iterate** — concurrent-modification safety.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
-/**
- * Topic-keyed Pub/Sub with sync dispatch and unsubscribe-handle pattern.
- */
 class PubSub {
   constructor() {
-    /** @type {Map<string, Set<Function>>} */
-    this.subscribers = new Map();
-    /** @type {Array<{ pattern: RegExp, fn: Function }>} */
-    this.patternSubs = [];
+    this.subscribers = new Map();                                // step 1: exact match
+    this.patternSubs = [];                                        // step 2: wildcard entries
   }
 
-  /**
-   * Subscribe to a topic.
-   * Pattern subs: 'user.*' (single segment) or 'user.**' (any depth).
-   * @returns {() => void} unsubscribe function
-   */
   subscribe(topic, fn) {
-    if (topic.includes('*')) {
+    if (topic.includes('*')) {                                    // step 3: pattern branch
       const pattern = this._compilePattern(topic);
       const entry = { pattern, fn };
       this.patternSubs.push(entry);
@@ -78,36 +128,28 @@ class PubSub {
         this.patternSubs = this.patternSubs.filter((e) => e !== entry);
       };
     }
-
     if (!this.subscribers.has(topic)) this.subscribers.set(topic, new Set());
     const set = this.subscribers.get(topic);
     set.add(fn);
-    return () => {
+    return () => {                                                // step 4: unsubscribe handle
       set.delete(fn);
       if (set.size === 0) this.subscribers.delete(topic);
     };
   }
 
-  /**
-   * Publish a payload to a topic. Sync dispatch. Returns nothing.
-   */
   publish(topic, payload) {
     const exact = this.subscribers.get(topic);
-    const listeners = exact ? [...exact] : [];   // snapshot
+    const listeners = exact ? [...exact] : [];                    // step 5: snapshot
     for (const fn of listeners) {
-      try { fn(payload, topic); } catch (e) { /* isolate; pub/sub typically swallows */ }
+      try { fn(payload, topic); } catch {}
     }
-    // Wildcard dispatch
-    for (const { pattern, fn } of [...this.patternSubs]) {
+    for (const { pattern, fn } of [...this.patternSubs]) {        // step 6: wildcard fan-out
       if (pattern.test(topic)) {
-        try { fn(payload, topic); } catch (e) {}
+        try { fn(payload, topic); } catch {}
       }
     }
   }
 
-  /**
-   * Remove ALL subscribers for a topic (or globally if topic is omitted).
-   */
   clear(topic) {
     if (topic === undefined) {
       this.subscribers.clear();
@@ -117,123 +159,125 @@ class PubSub {
     }
   }
 
-  _compilePattern(topic) {
-    // 'user.**' → '^user\.(.+)$';  'user.*' → '^user\.([^.]+)$'
+  _compilePattern(topic) {                                        // 'user.*' → /^user\.[^.]+$/
     const escaped = topic
       .split('.')
-      .map((seg) => seg === '**' ? '.+' : seg === '*' ? '[^.]+' : seg.replace(/[.+?^${}()|[\]\\]/g, '\\$&'))
+      .map((seg) =>
+        seg === '**' ? '.+' :
+        seg === '*'  ? '[^.]+' :
+        seg.replace(/[.+?^${}()|[\]\\]/g, '\\$&'),
+      )
       .join('\\.');
     return new RegExp(`^${escaped}$`);
   }
 }
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
-Input:
 ```js
 const bus = new PubSub();
-
-const u1 = bus.subscribe('user.login',    (p) => console.log('exact:', p));
-const u2 = bus.subscribe('user.*',        (p, t) => console.log('wild:', t, p));
-const u3 = bus.subscribe('user.**',       (p, t) => console.log('deep:', t, p));
+const u1 = bus.subscribe('user.login',  (p)    => console.log('exact:', p));
+const u2 = bus.subscribe('user.*',      (p, t) => console.log('wild:',  t, p));
+const u3 = bus.subscribe('user.**',     (p, t) => console.log('deep:',  t, p));
 
 bus.publish('user.login', { id: 1 });
-bus.publish('user.profile.update', { id: 1, name: 'P' });
+// exact: { id: 1 } / wild: user.login { id: 1 } / deep: user.login { id: 1 }
+
+bus.publish('user.profile.update', { id: 1 });
+// deep: user.profile.update { id: 1 }   ← only ** matches
+
 u1();
 bus.publish('user.login', { id: 2 });
+// wild: user.login { id: 2 } / deep: user.login { id: 2 }
 ```
 
-Trace:
+---
 
-- After 3 subscribes:
-  - `subscribers = { 'user.login' → Set{ exactFn } }`
-  - `patternSubs = [{ /^user\.[^.]+$/, wildFn }, { /^user\..+$/, deepFn }]`
+## 9. Step-by-step dry run
 
-- `publish('user.login', {id:1})`:
-  - Exact: `[exactFn]` snapshot. Call → `exact: {id:1}`.
-  - Patterns: `/^user\.[^.]+$/` matches → `wild: user.login {id:1}`. `/^user\..+$/` matches → `deep: user.login {id:1}`.
-  - Output:
-    ```
-    exact: {id:1}
-    wild: user.login {id:1}
-    deep: user.login {id:1}
-    ```
+```
+Setup:
+  subscribers = { 'user.login' → Set{exactFn} }
+  patternSubs = [
+    { /^user\.[^.]+$/, wildFn },
+    { /^user\..+$/,    deepFn }
+  ]
 
-- `publish('user.profile.update', {id:1, name:'P'})`:
-  - Exact: no `'user.profile.update'` topic → empty snapshot.
-  - Patterns: `/^user\.[^.]+$/` → `user.profile.update` has two dots after user, segment `[^.]+` won't match → **no match**. `/^user\..+$/` → matches.
-  - Output:
-    ```
-    deep: user.profile.update {id:1, name:'P'}
-    ```
+publish('user.login', {id:1}):
+  exact = subscribers.get('user.login') = Set{exactFn}
+  snapshot listeners = [exactFn]
+  fire: exactFn({id:1}, 'user.login') → log 'exact: {id:1}'
+  for each pattern entry:
+    /^user\.[^.]+$/.test('user.login') → true → wildFn → log 'wild: user.login {id:1}'
+    /^user\..+$/.test('user.login')    → true → deepFn → log 'deep: user.login {id:1}'
 
-- `u1()` — unsubscribes `exactFn`. Now `subscribers.get('user.login')` is empty → topic is deleted.
+publish('user.profile.update', {id:1, name:'P'}):
+  exact = subscribers.get('user.profile.update') = undefined → []
+  patterns:
+    /^user\.[^.]+$/.test('user.profile.update') → false ([^.]+ won't match 'profile.update')
+    /^user\..+$/.test('user.profile.update')    → true → deepFn fires
 
-- `publish('user.login', {id:2})`:
-  - No exact subscribers.
-  - Both wildcard patterns still match `user.login`.
-  - Output:
-    ```
-    wild: user.login {id:2}
-    deep: user.login {id:2}
-    ```
+u1():
+  set.delete(exactFn) → set = {}
+  size === 0 → subscribers.delete('user.login')
 
-Note how single-star and double-star differ on depth. `*` = exactly one segment. `**` = one or more.
+publish('user.login', {id:2}):
+  exact = undefined → []
+  patterns still match → wildFn and deepFn fire
+```
 
-## Important takeaways
+---
 
-**Pub/Sub vs EventEmitter**
-- **Data structure**: identical (`Map<topic/event, Set<fn>>`).
-- **Mental model**: EventEmitter is an object emitting its own events. Pub/Sub is a **global bus** decoupled from any source object.
-- **Typical features**: Pub/Sub more often adds wildcards, last-value caching (BehaviorSubject), async dispatch. EventEmitter is usually plainer.
+## 10. Common confusion + traps
 
-**Syntax to memorize**
-- `Map<topic, Set<fn>>` + separate list for pattern subs.
-- `subscribe(topic, fn)` returns an **unsubscribe function** (closes over set + fn). Always prefer this over ID-based unsubscribe.
-- `publish(topic, payload)` snapshots subscribers before iterating.
+1. **ID-based unsubscribe** — outdated; the handle pattern is cleaner.
+2. **No snapshot in publish** — subscribe-during-publish bugs.
+3. **Plain object registry** — proto pollution.
+4. **Walking all topic names** for wildcard matching — O(N) per publish. Use separate pattern list with pre-compiled regex.
+5. **Letting one bad subscriber kill publish** — wrap each call in try/catch (pub/sub usually isolates failures).
+6. **Forgetting to drop empty topic Sets** — Map grows monotonically.
+7. **`*` vs `**` confusion** — clarify single-segment vs any-depth.
 
-**Patterns to reuse**
-- Unsubscribe-handle: identical to `useEffect` cleanup, RxJS `Subscription`, DOM `AbortSignal`. Universal modern pattern.
-- Map-of-Set: shows up in EventEmitter, room-based websockets, topic-based broker.
-- Wildcard matching via compiled regex: used by router libraries (Express, Koa-route), MQTT brokers, Redis pub/sub.
+---
 
-**Common mistakes**
-- ID-based unsubscribe (`const id = sub.subscribe(...); sub.unsubscribe(id)`) — outdated, ergonomic loss, no real upside.
-- Iterating subscribers without snapshotting → subscribe-during-publish causes inconsistent fan-out.
-- Letting one bad subscriber's exception kill the publish loop — wrap each call in try/catch (pub/sub typically isolates).
-- Forgetting to clean up empty topic sets → growing Map of empty Sets.
-- Implementing wildcards by linear scan of all topic names every publish — O(N*P). Compile patterns to regex once, match each pub against P patterns instead.
+## 11. Senior follow-ups & variants
 
-**Related questions**
-- EventEmitter — see event-emitter.md. Same DS, slightly different framing.
-- Redis pub/sub — distributed equivalent; topic-fanned, sync semantics, no persistence.
-- Kafka consumer groups — persistent log + ordered consumption + replay. Different beast.
-- RxJS `Subject` / `BehaviorSubject` / `ReplaySubject` — superset of pub/sub with operators.
-- GraphQL subscriptions — pub/sub over WebSocket.
+### Variant 1 — Async dispatch
+`queueMicrotask(() => fn(payload, topic))`. Publish never blocks; ordering shifts to microtask scheduling.
 
-## Variants
+### Variant 2 — BehaviorSubject (last-value cache)
+Stash last published value per topic; new subscribers receive it immediately on subscribe.
 
-1. **Wildcard topics** — `'user.*'` (one segment) and `'user.**'` (any depth). Shown above.
+### Variant 3 — ReplaySubject(n)
+Buffer last `n` values per topic; replay buffer on subscribe.
 
-2. **Async dispatch** — `queueMicrotask(() => fn(payload))` so publish never blocks. Useful in hot paths but reorders semantics; state clearly.
+### Variant 4 — Filtered subscribe
+`subscribe(topic, fn, { filter: p => p.userId === me })` — subscriber-side predicate.
 
-3. **Last-value cache (BehaviorSubject)** — `publish` stashes the last value per topic; new subscribers immediately receive the cached value.
+### Variant 5 — Distributed pub/sub
+Redis `PUBLISH/SUBSCRIBE` (at-most-once); Kafka consumer groups (at-least-once + replay); NATS. Bring up delivery-guarantee trade-offs.
 
-4. **Replay buffer (ReplaySubject)** — buffer last N values per topic; new subscribers get the buffer on subscribe.
+---
 
-5. **Filtered subscribe** — `subscribe(topic, fn, { filter: p => p.userId === me })`. Lets one subscriber receive only events it cares about.
+## 12. How to think aloud
 
-6. **Distributed pub/sub** — Redis `PUBLISH` / `SUBSCRIBE`, NATS, RabbitMQ topics. System-design follow-up: how do you handle delivery guarantees? (Redis: at-most-once; Kafka: at-least-once with offsets.)
+> "`Map<topic, Set<fn>>` for exact match, plus a separate array for wildcard patterns (compiled to regex once). `subscribe` returns an unsubscribe function — closes over set+fn, much cleaner than ID-based. `publish` snapshots subscribers before iterating to survive in-handler mutation. Wildcards: `*` = one segment, `**` = any depth. EventEmitter and Pub/Sub have the same data structure; the conceptual difference is that EventEmitter is an object emitting its own events, while Pub/Sub is a decoupled global bus. Trap: ID-based unsubscribe. Trap: no snapshot. Trap: linear scan over all topic names for wildcard matching — use the separate pattern list with regex pre-compilation."
 
-## Revision notes
+---
 
-> **Pub/Sub — 60 second recap**
-> - `Map<topic, Set<fn>>` for exact match + list of `{pattern, fn}` for wildcards.
-> - `subscribe(topic, fn)` returns an **unsubscribe function**, not an ID.
-> - `publish(topic, payload)`: snapshot exact subs, iterate; then iterate patterns, regex-test each.
-> - Sync dispatch by default; async (queueMicrotask) as variant.
-> - vs EventEmitter: same DS, conceptually a global bus.
-> - **Trap:** ID-based unsubscribe — outdated; always return a handle.
-> - **Trap 2:** no snapshot before iteration → subscribe-during-publish bugs.
-> - Family: RxJS Subject (BehaviorSubject, ReplaySubject), Redis pub/sub, Kafka.
+## 13. 60-second revision
+
+> - **`Map<topic, Set<fn>>` + `Array<{pattern, fn}>`**.
+> - **`subscribe` returns unsubscribe handle** (closure over set+fn).
+> - **`publish` snapshots** subs, fires exact, then regex-tests patterns.
+> - **`*`** = one segment; **`**`** = any depth.
+> - **Drop empty topic Sets** to avoid Map growth.
+> - **Family:** EventEmitter, Subject (BehaviorSubject, ReplaySubject), Redis/Kafka.
+> - **Trap:** ID-based unsubscribe; no snapshot; linear scan for wildcards.
+
+---
+
+**Related:** [event-emitter.md](./event-emitter.md) · [observable-subject.md](./observable-subject.md) · [`04-promises/abortcontroller-fanout.md`](../04-promises/abortcontroller-fanout.md)
+
+**Concept primer:** [`concepts/maps-sets.md`](../../concepts/maps-sets.md)

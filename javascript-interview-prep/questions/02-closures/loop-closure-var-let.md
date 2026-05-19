@@ -1,199 +1,317 @@
-# Loop Closure Bug: `var` vs `let` in `setTimeout`
+# The loop-closure bug — why `var` in a `setTimeout` loop prints the wrong thing
 
-## Source
-- Canonical JavaScript interview problem (asked at every JS-heavy interview; appears in You-Don't-Know-JS, Frontend Masters, MDN, and codedamn write-ups).
-- Reference: `canonical://closures/loop-var-let`
+> **Difficulty:** Medium   |   **Time:** ~15 min   |   **Prereqs:** [counter.md](./counter.md), [`concepts/closures.md`](../../concepts/closures.md), [`concepts/hoisting.md`](../../concepts/hoisting.md)
+>
+> **Source:** Canonical JS interview problem (Frontend Masters, MDN, *You Don't Know JS*).
 
-## Why this question matters in interviews
-This is **the** closure question. Every senior interviewer has it in their back pocket. It looks like a 3-line trick puzzle but actually tests three deep concepts at once: **`var` is function-scoped** (one binding per function call), **`let` is block-scoped** (a *fresh* binding per loop iteration), and **closures capture bindings by reference, not values**. Backend candidates who got fluent on Java/Go/Python often whiff this because Java's for-loop variable is also "fresh per iteration." JS's `var` isn't. If you stumble here, the interviewer immediately suspects every async/callback-heavy code you've ever written is buggy. Getting this crisp — with both fixes (`let` and IIFE) and a clean explanation of the per-iteration TDZ — is the closure equivalent of writing FizzBuzz cleanly.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### The buggy code
+**The code**
 ```js
 for (var i = 0; i < 3; i++) {
   setTimeout(() => console.log(i), 0);
 }
-// Output: 3, 3, 3   (not 0, 1, 2)
 ```
 
-### Why it prints `3, 3, 3` — the lexical environment view
-1. `var i` is **function-scoped** (or global-scoped if at the top level). The `var` declaration is hoisted to the top of the enclosing function and shares **one single binding** across the entire loop. There is exactly **one `i`** in memory.
-2. The loop runs synchronously:
-   - Iteration 1: `i=0`. `setTimeout(cb1, 0)` schedules `cb1` to fire on the next macrotask tick. `i++` → `i=1`.
-   - Iteration 2: `i=1`. `setTimeout(cb2, 0)` schedules `cb2`. `i++` → `i=2`.
-   - Iteration 3: `i=2`. `setTimeout(cb3, 0)` schedules `cb3`. `i++` → `i=3`.
-   - Loop condition `i<3` is now false. Loop exits with `i=3`.
-3. All three callbacks (`cb1`, `cb2`, `cb3`) are arrow functions whose `[[Environment]]` points at the **same enclosing LE** — the one that holds the **one** `i` binding. They didn't capture `i`'s value at scheduling time; they captured a reference to the binding.
-4. The call stack drains. The event loop now picks up macrotasks. Each callback runs and **reads `i` from the shared LE**. The current value is `3`. So all three log `3`.
+**Input / Output examples**
 
-This is the canonical "closures close over variables, not values" demonstration.
+| Code                                                          | Output      | Why                                          |
+|---------------------------------------------------------------|-------------|----------------------------------------------|
+| `for (var i = 0; i < 3; i++) setTimeout(() => log(i));`       | `3, 3, 3`   | shared `i` binding, loop ends before timers fire |
+| `for (let i = 0; i < 3; i++) setTimeout(() => log(i));`       | `0, 1, 2`   | fresh `i` binding per iteration              |
+| `for (var i = 0; i < 3; i++) (function (j) { setTimeout(() => log(j)); })(i);` | `0, 1, 2` | IIFE creates a fresh scope per iteration     |
+| `for (var i = 0; i < 3; i++) setTimeout(log.bind(null, i), 0);` | `0, 1, 2`   | `bind` snapshots `i` at bind-time            |
+| `[0,1,2].forEach(i => setTimeout(() => log(i)));`             | `0, 1, 2`   | callback parameter `i` is fresh per call     |
 
-### Fix 1 — `let` (preferred, ES6+)
+**Constraints**
+- Predict the output.
+- Provide at least two fixes (`let` and IIFE).
+- Articulate why closures capture **bindings**, not values.
+
+---
+
+## 2. Plain-English restatement
+
+You have a loop that schedules three `setTimeout`s. Each timer logs the loop variable. The naive expectation — `0, 1, 2` — is wrong with `var`. The actual output is `3, 3, 3`. The interviewer wants you to explain why, then show how to fix it.
+
+The "trick" is that `var` creates **one** variable shared across all loop iterations, and closures don't capture values — they capture references to bindings. By the time the timers fire, the shared variable has reached `3`.
+
+---
+
+## 3. Why this matters in interviews
+
+This is *the* closure question. Every senior interviewer has it in their back pocket. It looks like a three-line trick puzzle but actually tests three deep concepts at once: **`var` is function-scoped** (one binding per function call), **`let` is block-scoped** (a fresh binding per loop iteration), and **closures capture bindings by reference, not values**. Candidates from Java/Go/Python often whiff this because *their* for-loop variables are also "fresh per iteration." If you stumble here, the interviewer immediately suspects every async/callback-heavy code you've ever written is buggy. Getting it crisp — with both fixes and a clean explanation — is the closure equivalent of writing FizzBuzz cleanly.
+
+---
+
+## 4. Mental model
+
+Picture **three runners standing at a sign that says `i = ?`**. The sign is the loop variable. With `var`, there's **one** sign in the whole stadium; every runner reads it at the moment they finally start. With `let`, each runner gets their **own** sign, fixed at the moment the runner was placed.
+
+```
+   var i — single shared sign in the stadium:
+   
+            sign  ─── i: 0 → 1 → 2 → 3   (loop mutates the one sign)
+            
+            runner₁ scheduled at i=0, fires at end:  reads sign → 3
+            runner₂ scheduled at i=1, fires at end:  reads sign → 3
+            runner₃ scheduled at i=2, fires at end:  reads sign → 3
+   
+   ─────────────────────────────────────────────────────────────────
+   
+   let i — each runner gets their own sign:
+   
+            iter1: sign₁ ─── i: 0   runner₁ binds to sign₁  →  reads 0
+            iter2: sign₂ ─── i: 1   runner₂ binds to sign₂  →  reads 1
+            iter3: sign₃ ─── i: 2   runner₃ binds to sign₃  →  reads 2
+```
+
+The fix swaps "one shared mutable binding" for "fresh binding per iteration." The spec literally creates a new LE on each iteration when you use `let`.
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. With `var i`, do all callbacks fire after the loop finishes, or interleaved with it? (Hint: think about the call stack vs the task queue.)
+> 2. With `let i`, what specifically does the engine do at the start of each iteration that makes the bug disappear?
+> 3. Why doesn't `[0,1,2].forEach((i) => setTimeout(...))` have the bug, even though `i` is also a loop variable?
+
+---
+
+## 6. Brute force — walked through
+
+### The buggy version
+
 ```js
-for (let i = 0; i < 3; i++) {
+for (var i = 0; i < 3; i++) {
   setTimeout(() => console.log(i), 0);
 }
-// Output: 0, 1, 2
+// Output: 3, 3, 3
 ```
 
-#### Why `let` fixes it — per-iteration binding + TDZ
-- The `for (let i = ...; ...; ...)` syntax has a **special rule** in the ECMAScript spec: a fresh `i` binding is created **once per iteration**, in the block scope of the loop body.
-- Before each iteration's body runs, the engine:
-  1. Reads the *previous* iteration's `i`.
-  2. Creates a brand-new lexical environment for this iteration with its own `i` slot.
-  3. Copies the previous value into the new slot.
-  4. Runs the loop body (which can now bind closures to *this* iteration's `i`).
-  5. After the body, evaluates the increment `i++` against the *new* binding.
-- Each `setTimeout` callback's `[[Environment]]` points to *that iteration's* LE — a distinct slot per iteration. When the callbacks fire, each reads its own `i`. So you get `0, 1, 2`.
-- The **TDZ (temporal dead zone)** is relevant because `let` declarations are not hoisted to the top of the block in the readable sense — accessing `i` before the `let i = ...` line throws `ReferenceError`. Inside a `for (let)` loop, each iteration's binding has its own TDZ from the start of the iteration until initialization.
+Step-through:
 
-### Fix 2 — IIFE (Immediately Invoked Function Expression) — the pre-ES6 way
+1. `var i` is **function-scoped** (or global). The declaration hoists to the top of the enclosing scope; there's **one** binding named `i` in memory.
+2. The synchronous part of the loop runs:
+   - Iteration 1: `i=0`. `setTimeout(cb1, 0)` schedules `cb1` for the next macrotask tick. `i++` → `i=1`.
+   - Iteration 2: `i=1`. Schedule `cb2`. `i++` → `i=2`.
+   - Iteration 3: `i=2`. Schedule `cb3`. `i++` → `i=3`.
+   - Loop condition `3 < 3` is false. Loop exits with `i=3`.
+3. All three callbacks have `[[Environment]]` pointing at the **same** enclosing LE — the one with the single `i` binding. They didn't capture `i`'s value at scheduling time; they captured a reference.
+4. The call stack drains. The event loop picks up macrotasks. Each callback reads `i` from the shared LE — value is now `3`. All three log `3`.
+
+### Why "use a counter / use `await`" doesn't help
+
+```js
+for (var i = 0; i < 3; i++) {
+  await Promise.resolve();
+  setTimeout(() => console.log(i), 0);
+}
+```
+
+The `await` doesn't isolate `i`. The shared binding still grows to `3` by the time the timers fire. Adding `Promise.resolve()`, `await`, microtasks — none of them fix the binding-sharing problem.
+
+---
+
+## 7. The unlocking insight
+
+> **Closures capture *bindings* (named slots in a lexical environment), not values. `var` shares one binding across all loop iterations; `let` creates a fresh binding per iteration.**
+
+The ECMAScript spec has a special rule for `for (let i = ...; ...; ...)` loops: at the start of each iteration, the engine creates a **new** lexical environment with a fresh `i` slot, copies the previous iteration's value into it, runs the body, then advances. So callbacks scheduled in iteration 3 close over iteration 3's `i` — a different slot than iteration 2's.
+
+`var` has no such rule. The single `i` lives in the enclosing function's variable environment from the moment the loop starts. Every iteration mutates the same slot. Every closure scheduled during the loop reads the same slot when it eventually fires.
+
+**The IIFE fix replicates the per-iteration-binding manually:**
+
 ```js
 for (var i = 0; i < 3; i++) {
   (function (j) {
     setTimeout(() => console.log(j), 0);
   })(i);
 }
-// Output: 0, 1, 2
 ```
-- The IIFE creates a **new function scope per iteration** at the moment it's invoked.
-- The parameter `j` is a fresh binding per call, initialized to the current value of `i`.
-- The inner `setTimeout` callback closes over `j` — that iteration's `j`, not the shared `i`.
-- Conceptually this is what the engine does for you automatically when you write `for (let ...)` — except the engine does it more efficiently (no extra function call frame).
 
-### Edge cases / interview traps
-1. **`var` at the top of a script** — same problem, just at global scope (or module scope). `i` lives on `globalThis` (in scripts) or the module's TDZ-aware top-level LE.
-2. **`forEach` doesn't have the bug** — `[0,1,2].forEach(i => setTimeout(() => console.log(i), 0))` prints `0,1,2` even with `var` because the callback parameter `i` is a fresh binding per call. The bug is specific to *for-loops with shared variables*.
-3. **`const` in a for-loop** — `for (const i = 0; i < 3; i++)` throws because the increment tries to reassign. But `for (const x of arr)` works — each iteration's `x` is a fresh binding (same per-iteration semantics as `let`).
-4. **Arrow vs `function`** — irrelevant to the bug. Both capture the enclosing LE. The bug is about *where* `i` lives, not about `this`.
-5. **Why this matters for async/await** — the same bug bites with `await` in a `for (var)` loop. Use `let`.
-6. **Performance** — per-iteration binding has a tiny cost. In hot inner loops, V8 optimizes it away. Don't manually downgrade to `var` for "perf."
+The IIFE creates a new function scope per iteration at the moment of invocation. The parameter `j` is a fresh binding per call, initialized to the current `i`. The inner `setTimeout` callback closes over `j` — its iteration's `j` — not the shared `i`. Conceptually, `for (let)` does the same thing more efficiently (no extra call frame).
 
-### TDZ — temporal dead zone, briefly
-- `let` and `const` declarations are hoisted to the top of their block, **but not initialized**. Accessing them before the `let`/`const` line throws `ReferenceError` — that gap is the TDZ.
-- For a `for (let i = ...; ...; ...)` loop, each iteration's `i` binding has its own TDZ that closes at the moment of initialization.
-- TDZ is what makes `let`/`const` safer than `var` (which silently gives you `undefined`).
+**TDZ matters:** `let` declarations are hoisted to the top of their block but are in the **temporal dead zone** until initialized. Accessing them early throws `ReferenceError`. For each iteration in a `for (let)`, the new `i` has its own TDZ that closes the moment the iterator advances to the body.
 
-## Brute force approach
-The "buggy" version above is the brute attempt — and the bug surprises everyone who's worked in C/Java/Python first. Reject it not because it's slow but because it's *wrong*.
+---
 
-## Optimal approach
-Use `let`. The engine creates a fresh per-iteration binding for free; closures attached to each iteration see that iteration's value. If you can't use `let` (legacy ES5 codebase), wrap the body in an IIFE that takes the loop variable as a parameter.
-
-## Solution (JavaScript)
+## 8. Solution (annotated)
 
 ```js
-// --- The bug (avoid) -----------------------------------------------
-for (var i = 0; i < 3; i++) {
-  setTimeout(() => console.log("var:", i), 0);
+// --- The bug --------------------------------------------------------
+for (var i = 0; i < 3; i++) {                        // step 1: ONE `i` binding (function-scoped)
+  setTimeout(() => console.log(i), 0);               // step 2: callback closes over the SHARED `i`
 }
-// Logs: var: 3, var: 3, var: 3
+// Logs: 3, 3, 3 (by the time callbacks fire, loop is done; i = 3)
 
-// --- Fix 1: let (preferred) ----------------------------------------
-for (let i = 0; i < 3; i++) {
-  setTimeout(() => console.log("let:", i), 0);
+// --- Fix 1: let (preferred, ES6+) -----------------------------------
+for (let i = 0; i < 3; i++) {                        // step 1: fresh `i` binding per iteration
+  setTimeout(() => console.log(i), 0);               // step 2: each callback closes over its OWN `i`
 }
-// Logs: let: 0, let: 1, let: 2
+// Logs: 0, 1, 2
 
-// --- Fix 2: IIFE (pre-ES6 / legacy environments) -------------------
+// --- Fix 2: IIFE (pre-ES6 / legacy) ---------------------------------
 for (var i = 0; i < 3; i++) {
-  (function (j) {
-    setTimeout(() => console.log("iife:", j), 0);
-  })(i);
+  (function (j) {                                     // step 1: IIFE creates a new scope per iteration
+    setTimeout(() => console.log(j), 0);              // step 2: callback closes over `j` (this iteration's)
+  })(i);                                              // step 3: pass current `i` into `j`
 }
-// Logs: iife: 0, iife: 1, iife: 2
+// Logs: 0, 1, 2
 
-// --- Fix 3 (honorable mention): bind ------------------------------
+// --- Fix 3 (honourable mention): bind --------------------------------
 for (var i = 0; i < 3; i++) {
-  setTimeout(console.log.bind(null, "bind:", i), 0);
+  setTimeout(console.log.bind(null, i), 0);          // bind snapshots `i` at bind-time
 }
-// Logs: bind: 0, bind: 1, bind: 2
-// Works because `bind` snapshots the args at bind-time.
+// Logs: 0, 1, 2
 ```
 
-## Step-by-step dry run
+**Try it yourself**
+
+```js
+// 'After loop' is printed first because the loop is synchronous; timers wait for the next tick
+for (var i = 0; i < 3; i++) setTimeout(() => console.log(i), 0);
+console.log('after loop:', i);
+// after loop: 3
+// 3
+// 3
+// 3
+
+// forEach doesn't have the bug — callback parameter is fresh per call
+[0, 1, 2].forEach((i) => setTimeout(() => console.log(i), 0));
+// 0
+// 1
+// 2
+```
+
+---
+
+## 9. Step-by-step dry run
 
 Input:
+
 ```js
 for (var i = 0; i < 3; i++) {
   setTimeout(() => console.log(i), 100);
 }
-console.log("after-loop:", i);
+console.log('after loop:', i);
 ```
 
-Trace:
-1. `var i` hoisted to enclosing function/global scope. **One `i` binding** in the LE.
-2. **Synchronous phase (call stack):**
-   - Iteration 1: `i=0`. `setTimeout` registers `cb1` to fire after 100ms. Task queue: `[cb1]`. `i++` → `i=1`.
-   - Iteration 2: `i=1`. `setTimeout(cb2, 100)`. Task queue: `[cb1, cb2]`. `i++` → `i=2`.
-   - Iteration 3: `i=2`. `setTimeout(cb3, 100)`. Task queue: `[cb1, cb2, cb3]`. `i++` → `i=3`.
-   - Loop condition `3<3` false → loop exits.
-   - `console.log("after-loop:", i)` prints `after-loop: 3`.
-3. **Synchronous phase ends. Stack empties.** Event loop checks task queue.
-4. ~100ms later, timers expire (all three were scheduled with `t=100`, fire in order):
-   - `cb1` runs: looks up `i` via scope chain → finds the **single** `i` in the enclosing LE → value is `3`. Logs `3`.
-   - `cb2` runs: same lookup → `3`. Logs `3`.
-   - `cb3` runs: same lookup → `3`. Logs `3`.
+Values-first trace:
 
-Output order:
+| Phase | Step             | `i`     | Task queue           | Output                |
+|-------|------------------|---------|----------------------|-----------------------|
+| sync  | iter 1 schedules | `0 → 1` | `[cb1]`              | —                     |
+| sync  | iter 2 schedules | `1 → 2` | `[cb1, cb2]`         | —                     |
+| sync  | iter 3 schedules | `2 → 3` | `[cb1, cb2, cb3]`    | —                     |
+| sync  | post-loop log    | `3`     | (same)               | `after loop: 3`       |
+| t=100 | cb1 reads shared `i` | `3` | `[cb2, cb3]`         | `3`                   |
+| t=100 | cb2 reads shared `i` | `3` | `[cb3]`              | `3`                   |
+| t=100 | cb3 reads shared `i` | `3` | `[]`                 | `3`                   |
+
+With `let i`, three different LEs would exist on the heap by t=100; each `cb` would read its own `i` (0, 1, 2).
+
+---
+
+## 10. Common confusion + traps
+
+1. **"`var` gives me a fresh `i` per iteration."**
+   False. That's `let`. `var` is function-scoped; **one** binding shared across all iterations.
+
+2. **"Closures capture values."**
+   False. They capture **bindings** (references to slots). The captured value is whatever the slot holds **at the moment the closure runs**, not when it was defined.
+
+3. **"Adding `await` or `Promise.resolve()` fixes it."**
+   False. Same shared `i`. The microtask still reads the latest value.
+
+4. **`const` in the for-head breaks.**
+   `for (const i = 0; i < 3; i++)` throws on the increment (`i++` reassigns a const). But `for (const x of arr)` works — `x` is a fresh binding per iteration, like `let`.
+
+5. **`forEach`/`map` don't have the bug.**
+   The callback parameter is a fresh binding per call. So `[0,1,2].forEach((i) => setTimeout(() => log(i)))` prints `0, 1, 2` correctly even with the variable named `i`.
+
+6. **Confusing the bug with event-loop ordering.**
+   The `i = 3` value is fixed *before* any timer fires — the loop is synchronous. It's not a race. The bug is purely about binding sharing.
+
+7. **`var` at module top-level (ES modules).**
+   `var` in ES modules does NOT become a property of `globalThis`. It's module-scoped. Same loop bug still applies.
+
+8. **Arrow vs `function`.**
+   Irrelevant to the bug. Both capture the enclosing LE. The bug is about *where* `i` lives.
+
+---
+
+## 11. Senior follow-ups & variants
+
+### Variant 1 — Print 1..N with a 1-second delay between each
+
+Combines the closure fix with timer arithmetic.
+
+```js
+// Solution A: increasing delays
+for (let i = 1; i <= N; i++) {
+  setTimeout(() => console.log(i), i * 1000);
+}
+
+// Solution B: sequential await
+async function printRange(n) {
+  for (let i = 1; i <= n; i++) {
+    console.log(i);
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+}
 ```
-after-loop: 3
-3
-3
-3
+
+Solution B uses `for (let)` to avoid the same bug class in an async loop.
+
+### Variant 2 — `Promise.all` on `map` results
+
+The interviewer asks: "Does `[1,2,3].map(async (i) => fetch(i))` have the same bug?" Answer: **No.** The `map` callback parameter `i` is a fresh binding per call. Each async function captures its own `i`. Safe.
+
+### Variant 3 — `var` in `try/catch` in a loop
+
+`catch (e)` *does* have block scope per spec — `e` is per-iteration even inside a `for (var)` loop. Useful trivia for the same problem class.
+
+### Variant 4 — Force the `var` behaviour with `let`
+
+The interviewer flips the question: "Make this `for (let)` loop print `3, 3, 3`." Trick: declare `let i` outside the loop, then use `for (i = 0; ...; ...)` — now `i` is hoisted out of the for-head's block scope.
+
+```js
+let i;
+for (i = 0; i < 3; i++) setTimeout(() => console.log(i), 0);
+// Logs: 3, 3, 3
 ```
 
-Now swap `var` for `let`:
-- Iteration 1: a **fresh LE_iter1** is created with its own `i = 0`. `cb1` binds `[[Environment]] = LE_iter1`.
-- Iteration 2: **fresh LE_iter2** with `i = 1`. `cb2` binds to it.
-- Iteration 3: **fresh LE_iter3** with `i = 2`. `cb3` binds to it.
-- When the callbacks fire, each reads `i` from its own LE → `0, 1, 2`. Three independent slots on the heap.
+### Variant 5 — The IIFE generalizes
 
-## Important takeaways
+The IIFE trick is the **general mechanism for creating a new scope on demand** — pre-ES6 modules, jQuery plugins, polyfills all used it. Modern JS uses `let`/`const` + blocks, but the principle is the same.
 
-**Syntax to memorize**
-- `var` is function-scoped → one binding shared across all iterations.
-- `let` in a `for` head → fresh binding per iteration (special spec rule).
-- IIFE: `(function (j) { ... })(i)` — manual per-iteration scope.
-- `.bind(null, value)` — snapshots `value` at bind-time.
+---
 
-**Patterns to reuse**
-- "Make sure each closure captures its own copy of the loop variable" — comes up with `setTimeout`, `addEventListener`, async DB calls in a loop, `Promise.all(items.map(async ...))`, generator yield in a loop.
-- The IIFE trick is the **general mechanism for creating a new scope on demand** — pre-ES6 modules, jQuery plugins, polyfills all used it.
+## 12. How to think aloud in the interview
 
-**Common mistakes**
-- Assuming `var` gives you a fresh `i` per iteration (false; that's `let`).
-- Thinking closures capture *values* (false; they capture *bindings*).
-- "Fixing" it by adding `await` or `Promise.resolve()` — doesn't help, same shared `i`.
-- Using `const` in the for-head — fails on the increment.
-- Confusing the bug with the event-loop ordering (the `i=3` value is fixed *before* any callback runs — not a race).
+> "The output is `3, 3, 3`, not `0, 1, 2`. Reason: `var` is function-scoped, so there's one `i` shared across all iterations. Closures capture bindings, not values — when the timers fire, they all read the latest `i`, which is `3` because the loop has already finished. Three fixes: (1) `let` — spec creates a fresh `i` per iteration; (2) IIFE — manually create a new scope per iteration; (3) `setTimeout(log.bind(null, i), 0)` — `bind` snapshots `i` at bind-time. Preferred: `let`. `forEach` and `map` don't have the bug because the callback parameter is a fresh binding per call. Don't confuse this with the event loop — the bug exists even at `0ms` because the loop is synchronous."
 
-**Related questions**
-- "Predict the output: setTimeout vs Promise.then vs queueMicrotask in a loop" (event-loop bucket)
-- "Print 1..5 with a 1-second delay between each" (classic follow-up; needs `let` + setTimeout offsets, or sequential await)
-- `var` hoisting / TDZ questions (hoisting bucket)
-- Closures in Counter / once / debounce (same capture-by-reference mechanic, deliberate this time)
+---
 
-## Variants
+## 13. 60-second revision
 
-1. **Print 1..N with a 1-second delay between each** — combines this concept with timer arithmetic. Two solutions: (a) `let i` + `setTimeout(() => log(i), i * 1000)`, or (b) async function with `await sleep(1000)` in a `for (let)` loop.
-
-2. **`map` returning promises, then `Promise.all`** — interviewer asks "do I have the same bug?" Show that the `map` callback parameter is a fresh binding per call (like `forEach`), so `[1,2,3].map(async i => fetch(i))` is safe — *no* bug.
-
-3. **`var` in a try/catch in a loop** — `catch (e)` *does* have block scope (per spec) so `e` is per-iteration even without `let`. Useful trivia.
-
-4. **The reverse trick** — interviewer writes `for (let i = ...)` and asks how to *force* the buggy `var` behavior. Answer: declare `let i` outside the loop, then use `for (i = 0; ...; ...)`.
-
-## Revision notes
-
-> **loop closure var/let — 60 second recap**
-> - **The bug:** `for (var i = 0; i < N; i++) setTimeout(() => log(i))` prints `N` `N` times. One `i` binding shared across all iterations; loop finishes before any callback runs; all callbacks read the final `i`.
-> - **Root cause:** closures capture **bindings** (slots in an LE), not values. `var` is function-scoped → one slot.
-> - **Fix 1 (preferred):** `let` — spec creates a **fresh per-iteration binding** in the loop's block scope. Each callback closes over its own slot.
-> - **Fix 2 (legacy):** IIFE — `(function (j) { setTimeout(() => log(j)); })(i);` — manually creates a new function scope per iteration.
+> - **The bug:** `for (var i = 0; i < N; i++) setTimeout(() => log(i))` prints `N` `N` times. **One `i` binding shared**; loop ends before any callback fires; all callbacks read the final value.
+> - **Root cause:** closures capture **bindings**, not values. `var` is function-scoped → one slot.
+> - **Fix 1 (preferred):** `let` — spec creates a **fresh per-iteration binding**.
+> - **Fix 2 (legacy):** IIFE — `(function (j) { setTimeout(() => log(j)); })(i);` — new scope per iteration.
 > - **Fix 3 (cute):** `setTimeout(log.bind(null, i), 0)` — `bind` snapshots `i` at bind-time.
-> - **forEach/map don't have the bug** — callback parameter is fresh per call.
-> - **TDZ** matters here: `let` bindings hit the TDZ before initialization → throws on early access (safer than `var`'s `undefined`).
-> - **Don't confuse with event-loop ordering:** the `i=N` value is fixed *before* the event loop runs any callback.
-> - Family: any "closure inside a loop" pattern — async fetches, promise chains, generator yields.
+> - **`forEach` / `map` don't have the bug** — callback parameter is fresh per call.
+> - **TDZ** matters here: `let` bindings throw on early access (safer than `var`'s `undefined`).
+> - **Don't confuse with event-loop ordering:** `i` reaches the final value **before** any callback runs.
+> - **Family:** any "closure inside a loop" pattern — async fetches, promise chains, generator yields, React render callbacks.
+
+---
+
+**Related:** [counter.md](./counter.md) · [setinterval-stale-closure.md](./setinterval-stale-closure.md) · [closure-memory-leak-dom.md](./closure-memory-leak-dom.md) · [`05-event-loop/microtask-macrotask-order.md`](../05-event-loop/microtask-macrotask-order.md)
+
+**Concept primer:** [`concepts/closures.md`](../../concepts/closures.md), [`concepts/hoisting.md`](../../concepts/hoisting.md)

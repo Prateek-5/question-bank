@@ -1,137 +1,199 @@
-# Implement single-level `flatten(arr)` — one level of nesting
+# Single-level flatten
 
-## Source
-- codedamn "Flatten Array" lab: https://codedamn.com/problem/Bj6pjjD2gkDYOUVMrDywr
-- Equivalent to `Array.prototype.flat()` with default depth = 1.
+> **Difficulty:** Foundation   |   **Time:** ~5 min   |   **Prereqs:** none
+>
+> **Source:** codedamn lab. Native `Array.prototype.flat()`.
 
-## Why this question matters in interviews
-This is the **opener** — interviewers ask single-level flatten to gauge whether you reach for recursion or iteration when no recursion is needed. The whole point: **don't over-engineer**. A single-level flatten is just a `for-of` plus `push`/`push(...)`. Many candidates panic and write a recursive solution that flattens to infinite depth, then get docked for not reading the prompt. As a backend engineer you'll write this when expanding chunked DB results: `chunks.flat()` to get back a flat row list.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+Peel ONE level of nesting. Don't recurse.
+
+**Verification examples**
+
 ```js
-// Native — what we're re-implementing
-[1, [2, 3], [4, [5]]].flat();   // [1, 2, 3, 4, [5]]  — only ONE level peeled off
+flatten([1, [2, 3], [4, [5]]]);          // [1, 2, 3, 4, [5]]
+flatten([1, 2, 3]);                      // [1, 2, 3]
+flatten([[1], [2], [3]]);                // [1, 2, 3]
+flatten([]);                              // []
 ```
+
+**Constraints**
+- Single level only.
+- No recursion.
+- O(n) time.
+
+---
+
+## 2. Plain-English restatement
+
+For each element: if array, expand its items; else push. One level deep.
+
+---
+
+## 3. Why this matters in interviews
+
+Opener test — over-engineers fall into recursion when one-line for-of suffices. Read the prompt.
+
+---
+
+## 4. Mental model
+
+```
+   for item of arr:
+     if Array.isArray(item):
+       for x of item: out.push(x)
+     else: out.push(item)
+   
+   Equivalent: [].concat(...arr) — concat spread peels one level.
+   Equivalent: arr.flat() — native, default depth 1.
+
+   Anti-pattern:
+     reduce((a, b) => a.concat(b), [])   ← O(n²) on huge inputs (each concat copies).
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. Should you recurse?
+> 2. `flatten([])` returns?
+> 3. Difference from `flat(Infinity)`?
+
+---
+
+## 6. Brute force — walked through
+
+```js
+arr.reduce((a, b) => a.concat(b), [])    // works; O(n²) on huge
+```
+
+---
+
+## 7. The unlocking insight
+
+> **One level only. for-of + conditional push or `push(...item)`. No recursion.**
+
+Three properties:
+
+1. **No recursion** — single level.
+2. **`Array.isArray`** check.
+3. **Avoid `reduce+concat`** O(n²).
+
+---
+
+## 8. Solution (annotated)
 
 ```js
 function flatten(arr) {
   const out = [];
   for (const item of arr) {
     if (Array.isArray(item)) {
-      for (const x of item) out.push(x);   // peel exactly one level
+      for (const x of item) out.push(x);                                   // step 1: expand one level
     } else {
-      out.push(item);
-    }
-  }
-  return out;
-}
-```
-
-### Runtime / engine behavior
-- This is **non-recursive**. No call stack worries. O(n) time, O(n) output space.
-- `Array.prototype.concat` and the spread operator both flatten exactly one level: `[].concat([1, [2, [3]]])` → `[1, [2, [3]]]`. That makes a one-liner version trivial.
-- Spread (`[...a, ...b]`) allocates a new array each time — fine for short inputs, bad in a hot loop.
-- The reduce one-liner `arr.reduce((a, b) => a.concat(b), [])` reads cleanly but allocates a new array on every iteration → O(n²) in the worst case (each `concat` copies the accumulator). Mention this trade-off.
-
-### Edge cases (interview traps)
-1. **Non-array items at the top level** — `flatten([1, 2, 3])` should return `[1, 2, 3]`, not throw. Cover the base case.
-2. **Empty arrays** — `flatten([])` → `[]`. `flatten([[]])` → `[]`. `flatten([[], [1]])` → `[1]`.
-3. **Deeper nesting stays nested** — `flatten([1, [2, [3]]])` → `[1, 2, [3]]`, NOT `[1, 2, 3]`. The interviewer is watching for this.
-4. **Sparse arrays** — `flatten([1, , 3])` should produce `[1, 3]` if matching native semantics. Use `for (let i in arr)` or `for (let i = 0; i < arr.length; i++) if (i in arr)`.
-5. **Don't mutate input** — build a new array.
-6. **`null` / `undefined` items** — not arrays; push as-is.
-
-## Brute force approach
-The brute force IS the optimal here. No clever trick. The over-engineering trap is to write a recursive deep-flatten when only one level is asked for. Read the prompt; ask "single-level or full?" out loud.
-
-## Optimal approach
-Linear walk, conditional push or spread. O(n). The reduce/concat one-liner is acceptable for code-review style but call out the O(n²) concat-allocation cost.
-
-## Solution (JavaScript)
-
-```js
-/**
- * Flatten exactly one level of nesting.
- * @param {Array} arr
- * @returns {Array}
- */
-function flatten(arr) {
-  const out = [];
-  for (let i = 0; i < arr.length; i++) {
-    if (!(i in arr)) continue;        // skip holes (native flat skips them)
-    const item = arr[i];
-    if (Array.isArray(item)) {
-      for (let j = 0; j < item.length; j++) {
-        if (j in item) out.push(item[j]);
-      }
-    } else {
-      out.push(item);
+      out.push(item);                                                       // step 2: leaf
     }
   }
   return out;
 }
 
-// One-liner alternatives (mention but explain costs)
-const flattenSpread = (arr) => [].concat(...arr);
-const flattenReduce = (arr) => arr.reduce((a, b) => a.concat(b), []);
+// Spread one-liner
+const flatten2 = (arr) => [].concat(...arr);
+
+// Native
+const flatten3 = (arr) => arr.flat();                                       // default depth 1
 ```
 
-`[].concat(...arr)` is the cleanest. It spreads `arr` as concat arguments — and `concat` flattens its array arguments exactly one level. Works because `concat` was designed for this. Caveat: if `arr` has 100k+ elements, the spread can hit the argument-count limit (V8 ~65k); fall back to the loop.
+**Try it yourself**
 
-## Step-by-step dry run
-
-Input:
 ```js
-flatten([1, [2, 3], [4, [5, 6]], 7]);
+flatten([1, [2, 3], 4]);                                      // [1, 2, 3, 4]
+flatten([[1], [2, 3], 4]);                                    // [1, 2, 3, 4]
+flatten([[1, [2]], 3]);                                       // [1, [2], 3]  ← inner [2] preserved
+flatten([]);                                                   // []
+flatten([[], [], []]);                                         // []
+
+// Performance comparison on huge inputs
+const huge = Array.from({length: 10_000}, (_, i) => [i, i+1]);
+// O(n) — for-loop or push(...item)
+flatten(huge);
+// O(n²) — reduce+concat
+huge.reduce((a, b) => a.concat(b), []);    // slow for n=10k
 ```
 
-Trace:
-- `i=0`, item=`1` → not array → `out=[1]`
-- `i=1`, item=`[2, 3]` → array → push `2`, `3` → `out=[1, 2, 3]`
-- `i=2`, item=`[4, [5, 6]]` → array → push `4`, then push `[5, 6]` **as-is** (single level only) → `out=[1, 2, 3, 4, [5, 6]]`
-- `i=3`, item=`7` → not array → `out=[1, 2, 3, 4, [5, 6], 7]`
+---
 
-Return `[1, 2, 3, 4, [5, 6], 7]`. The `[5, 6]` stays nested. That's the whole point.
+## 9. Step-by-step dry run
 
-## Important takeaways
+```
+flatten([1, [2, 3], 4, [5]]):
+  out = [].
+  item=1: not array → out.push(1). out=[1].
+  item=[2, 3]: array → push 2, 3. out=[1, 2, 3].
+  item=4: not array → push 4. out=[1, 2, 3, 4].
+  item=[5]: array → push 5. out=[1, 2, 3, 4, 5].
+  return [1, 2, 3, 4, 5].
 
-**Syntax to memorize**
-- `[].concat(...arr)` — the one-line single-level flatten.
-- `for-of` + `Array.isArray` check + push/spread — the explicit version.
-- Native: `arr.flat()` with no argument defaults to depth 1.
+flatten([1, [2, [3]], 4]):
+  out=[1].
+  item=[2, [3]]: array → push each: out=[1, 2, [3]].
+  item=4 → out=[1, 2, [3], 4].
+  return [1, 2, [3], 4].   ← inner [3] preserved (one level peeled only).
+```
 
-**Patterns to reuse**
-- "Peel one level" is the same operation that `Array.prototype.concat` performs on its array arguments. Internalize this — it's why `[].concat(a, b, c)` works as a merge.
-- Single-level is a specialization of `flat(arr, 1)`. If you've memorized the depth-parameterized version, this is `flat(arr, 1)`.
+---
 
-**Common mistakes**
-- Going straight to recursion. The prompt said *one level*. Don't recurse.
-- Using `arr.flat(Infinity)` and calling it a day — defeats the polyfill exercise.
-- Using `arr.reduce((a, b) => [...a, ...b], [])` — O(n²) due to spread-copy on every step. Spread spreads `b`'s elements one by one through the args list; engine copies `a` into a fresh array each iteration. Acceptable for ≤100 items, awful at scale.
-- Forgetting non-array items at the top level — `flatten([1, 2, 3])` shouldn't throw.
+## 10. Common confusion + traps
 
-**Related questions**
-- `flat(arr, depth)` — generalized version (see `flatten-with-depth.md`).
-- `flattenDeep(arr)` — fully recursive (see `flatten-deeply-nested-array.md`).
-- `chunk(arr, size)` — the inverse: group flat array into sub-arrays of size N.
+1. **Recurse anyway** — wastes; over-engineered.
+2. **`reduce+concat`** — O(n²) for huge.
+3. **`typeof item === 'object'`** — matches null/{}/Date.
+4. **Mutate input** — non-mutating expected.
+5. **Spread into existing** vs new array — both fine.
+6. **`flat()` undefined in old envs** — polyfill.
+7. **Sparse arrays** — `for-of` skips holes; `flat()` removes holes.
 
-## Variants
+---
 
-1. **Flatten with a filter** — `flatten(arr, predicate)` only peels arrays where `predicate(item)` is true. Tests function-as-parameter and combining two operations cleanly.
+## 11. Senior follow-ups & variants
 
-2. **Flatten objects' values** — `Object.values(obj).flat()` style — given `{a: [1, 2], b: [3]}` return `[1, 2, 3]`. Same shape, different traversal entry.
+### Variant 1 — Depth N
+See `flatten-with-depth.md`.
 
-3. **Don't allocate output** — yield items via a generator: `function* flatten(arr) { for (const x of arr) Array.isArray(x) ? yield* x : yield x; }`. Zero intermediate allocation; consumer pulls lazily.
+### Variant 2 — Infinity
+See `flatten-deeply-nested-array.md`.
 
-## Revision notes
+### Variant 3 — `flatMap`
+Map then flat(1) — fused.
 
-> **flatten(arr) single-level — 60 second recap**
-> - Peel **exactly one level**. Don't recurse.
-> - Cleanest: `[].concat(...arr)`. Watch the 65k-arg spread limit.
-> - Explicit: `for-of` + `Array.isArray` + push/spread.
-> - `arr.reduce((a, b) => a.concat(b), [])` is O(n²) — works but slow.
-> - Skip holes with `if (i in arr)` to match native `flat`.
-> - O(n) time, O(n) space. No call stack growth.
-> - **Trap:** going recursive when only one level was asked for.
+### Variant 4 — Stream
+Generator yielding leaves.
+
+### Variant 5 — In-place
+Mutate original; uncommon.
+
+---
+
+## 12. How to think aloud
+
+> "Single-level flatten: for-of loop, check `Array.isArray(item)`, expand one level via inner loop or `push(...item)`. Do NOT recurse — the prompt is one level only. Avoid `reduce((a, b) => a.concat(b), [])` — it's O(n²) on huge inputs because each `concat` copies the accumulator. One-liner: `[].concat(...arr)` or native `arr.flat()` (default depth 1). `Array.isArray` over `typeof item === 'object'` (which matches null/Date/{}). Variants: depth N (see flatten-with-depth.md), Infinity (see flatten-deeply-nested-array.md), `flatMap` for map+flat(1). Trap: recursing when not asked; reduce+concat O(n²); typeof object."
+
+---
+
+## 13. 60-second revision
+
+> - **One level only** — no recursion.
+> - **`for-of` + `Array.isArray` + push.**
+> - **Native `arr.flat()`** — default depth 1.
+> - **`[].concat(...arr)`** one-liner.
+> - **Avoid `reduce+concat`** O(n²).
+> - **Variants:** depth N, Infinity, flatMap.
+> - **Trap:** recurse; reduce+concat; typeof object.
+
+---
+
+**Related:** [flatten-with-depth.md](./flatten-with-depth.md) · [flatten-deeply-nested-array.md](./flatten-deeply-nested-array.md) · [`07-arrays/polyfill-flat.md`](../07-arrays/polyfill-flat.md)
+
+**Concept primer:** [`concepts/recursion-and-the-call-stack.md`](../../concepts/recursion-and-the-call-stack.md), [`concepts/arrays.md`](../../concepts/arrays.md)

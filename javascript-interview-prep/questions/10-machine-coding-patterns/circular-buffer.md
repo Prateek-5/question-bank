@@ -1,98 +1,134 @@
-# Implement a Circular Buffer (Fixed-size Ring Queue)
+# Implement a Circular Buffer (fixed-size ring queue)
 
-## Source
-- Classic data-structures interview problem (LeetCode #622 "Design Circular Queue").
-- Used everywhere: audio/video frame buffers, network packet ring buffers (DPDK, io_uring), rolling-window metrics, ring loggers, V8's GC write barriers.
+> **Difficulty:** Medium   |   **Time:** ~20 min   |   **Prereqs:** [`02-closures/ring-buffer-via-closure.md`](../02-closures/ring-buffer-via-closure.md), [`concepts/arrays.md`](../../concepts/arrays.md)
+>
+> **Source:** [LeetCode 622 — Design Circular Queue](https://leetcode.com/problems/design-circular-queue/). Used in audio/video frame buffers, packet rings (DPDK, io_uring), rolling-window metrics, ring loggers.
 
-## Why this question matters in interviews
-Circular buffer is the **fixed-memory FIFO** every systems-leaning engineer should know. The naive approach (`Array.prototype.shift`) is O(n) per dequeue and reallocates as it grows; the ring buffer is O(1) for both push and shift with **zero allocations after construction**. Implementing one tests **head/tail index arithmetic**, **modulo arithmetic for wrap-around**, **the full vs empty disambiguation**, and **the policy choice** (overwrite oldest vs reject new). Backend interviewers ask this when probing whether you understand bounded-memory data structures — critical for log aggregation, time-series sliding windows, websocket message buffers, retry queues with size limits.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
-```js
-class CircularBuffer {
-  constructor(capacity, { overwrite = true } = {}) {
-    this.buf = new Array(capacity);
-    this.capacity = capacity;
-    this.head = 0;          // index of oldest item
-    this.tail = 0;          // index where next push lands
-    this.size = 0;
-    this.overwrite = overwrite;
-  }
-
-  push(item) {
-    if (this.size === this.capacity) {
-      if (!this.overwrite) return false;
-      this.head = (this.head + 1) % this.capacity;   // drop oldest
-    } else {
-      this.size++;
-    }
-    this.buf[this.tail] = item;
-    this.tail = (this.tail + 1) % this.capacity;
-    return true;
-  }
-
-  shift() {
-    if (this.size === 0) return undefined;
-    const v = this.buf[this.head];
-    this.buf[this.head] = undefined;            // release reference
-    this.head = (this.head + 1) % this.capacity;
-    this.size--;
-    return v;
-  }
-
-  peek() { return this.size === 0 ? undefined : this.buf[this.head]; }
-  isFull()  { return this.size === this.capacity; }
-  isEmpty() { return this.size === 0; }
+**Signature**
+```ts
+class CircularBuffer<T> {
+  constructor(capacity: number, options?: { overwrite?: boolean });
+  push(item: T): boolean;       // false if full and overwrite=false
+  shift(): T | undefined;
+  peek(): T | undefined;
+  isFull(): boolean;
+  isEmpty(): boolean;
+  size: number;
+  [Symbol.iterator](): Iterator<T>;
 }
 ```
 
-### Runtime / engine behavior
-- The buffer is a **fixed-length array**; head/tail indices walk around it modulo capacity. After capacity allocations, no further allocations happen — this is the key property.
-- **Full vs empty disambiguation** — when `head === tail`, the buffer could be empty OR full. Two solutions: (a) track an explicit `size` field (what we do above), (b) waste one slot so full is `(tail + 1) % cap === head`. The size-field approach is cleaner and lets you query length in O(1).
-- Modulo arithmetic: `(i + 1) % capacity` wraps the index back to 0 when it reaches `capacity`. Cheap on modern CPUs; if `capacity` is a power of 2, you can replace with `(i + 1) & (capacity - 1)` for a tiny speedup.
-- `overwrite` policy: when full, do we drop the oldest (advance head) or reject the new write? Both are valid; the policy depends on use case. Logs typically overwrite (keep most recent). Backpressure queues typically reject (signal the producer to slow down).
-- Setting `buf[head] = undefined` on shift is important — without it, the array still holds a reference to the dequeued item, preventing GC.
+**Input / Output examples**
 
-### Edge cases (these are the interview traps)
-1. **Capacity 0** — degenerate. Reject `push` always, `shift` always returns undefined. Either throw at construction or handle silently.
-2. **Capacity 1** — single slot. Every push overwrites if `overwrite=true`. Easy to write a wrong implementation that breaks here; test it.
-3. **Full-vs-empty ambiguity** — without an explicit `size` field, `head === tail` is ambiguous. Most interview candidates wing it and produce a buffer that thinks it's empty when full or vice versa.
-4. **Overwrite + size update** — when overwriting, you don't increment size (still at capacity). Easy off-by-one bug.
-5. **Releasing references** — failing to null out `buf[head]` on shift is a memory leak. Items live forever even after "dequeue."
-6. **Iteration** — implementing `[Symbol.iterator]` should yield from head to tail in insertion order, not the underlying array order. Walk via `(head + i) % capacity`.
-7. **Concurrent push/shift** — JS is single-threaded so this isn't an issue in user code. In Worker + SharedArrayBuffer scenarios, you need atomics; out of scope unless asked.
-8. **Resize / dynamic capacity** — not part of "fixed-size." If interviewer asks, mention that growing a ring buffer requires allocating a new array and copying head→tail-region in order. O(n) operation.
+| Setup (cap=3, overwrite=true)       | Buffer state          | Result |
+|-------------------------------------|-----------------------|--------|
+| `push(1); push(2); push(3)`         | `[1, 2, 3]` full      |        |
+| `push(4)` (overwrite)               | `[4, 2, 3]` head=1    | true   |
+| `shift()`                           | `[4, _, 3]` head=2    | `2`    |
+| `push(5)`                           | `[4, 5, 3]` head=2    | true   |
+| `toArray()`                          | head-to-tail order    | `[3, 4, 5]` |
 
-## Brute force approach
-"I'll use a regular array and `.push()` / `.shift()`." `push` is amortized O(1), but `shift` is O(n) because it re-indexes the entire array. For a high-throughput buffer (millions of ops/sec) this is fatal. Mention as the baseline; the whole point of circular buffer is replacing O(n) shift with O(1) wrap-around.
+With `overwrite=false`: `push` when full returns `false` (backpressure signal).
 
-Another non-starter: a doubly-linked list. O(1) push and shift, but every node allocates; with 1 million ops/sec you'll spend more time in GC than doing work. Ring buffer's zero-allocation property is what makes it suitable for hot paths.
+**Constraints**
+- Fixed-length array; zero allocations after construction.
+- O(1) push, shift, peek.
+- Track `head`, `tail`, `size` (size disambiguates full vs empty).
+- Choose overwrite (drop oldest) or reject (return false) policy upfront.
 
-## Optimal approach
-Array of fixed capacity + head/tail indices + size counter. Push at tail, shift from head, wrap modulo capacity. O(1) push, O(1) shift, O(1) peek, O(1) size. Zero allocations after construction.
+---
 
-## Solution (JavaScript)
+## 2. Plain-English restatement
+
+A queue with a fixed maximum size. Insertions go in at the tail; removals come out at the head. When the buffer wraps around the end of the underlying array, indices use modulo arithmetic. Two policies when full: **overwrite** the oldest (logs, ring loggers) or **reject** the new write (backpressure queues).
+
+---
+
+## 3. Why this matters in interviews
+
+The **fixed-memory FIFO** every systems-leaning engineer should know. Naive `Array.prototype.shift` is O(n) per dequeue and reallocates. The ring buffer is O(1) for both push and shift with **zero allocations after construction**. Probes: head/tail arithmetic, wrap-around modulo, full-vs-empty disambiguation, and the policy choice. Backend uses: log aggregation, sliding-window metrics, websocket message buffers, retry queues with size limits.
+
+---
+
+## 4. Mental model
+
+```
+   capacity = 5, head=0, tail=0, size=0
+   [ _, _, _, _, _ ]
+
+   push(A): tail=1, size=1
+   [ A, _, _, _, _ ]
+     ↑head ↑tail
+
+   push(B), push(C), push(D), push(E):  full
+   [ A, B, C, D, E ]
+     ↑head           ↑tail (wrapped to 0)
+   size=5
+
+   push(F) with overwrite=true:
+   advance head: head=1; write at tail=0; tail=1
+   [ F, B, C, D, E ]
+        ↑head ↑tail
+   size=5 (still)
+
+   shift():
+   read buf[head=1]=B; buf[1]=undefined; head=2; size=4
+   [ F, _, C, D, E ]
+            ↑head ↑tail (=0... not shown)
+```
+
+**Why `size` field:** without it, `head === tail` is ambiguous (could be empty OR full). Explicit `size` field disambiguates in O(1).
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. With capacity=3 and three pushes, what are `head`, `tail`, and `size`?
+> 2. Why is `[].shift()` on a 1-million-element array O(n)?
+> 3. If `head === tail`, is the buffer empty or full? How do you tell?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: array + `push`/`shift`
+`.shift()` is O(n) — re-indexes the entire array. Fine at small N, fatal at scale.
+
+### Wrong attempt 2: doubly-linked list
+O(1) push/shift but every node allocates. GC churn at 1M ops/sec. Ring buffer's zero-allocation property is its edge.
+
+### Wrong attempt 3: rely on `head === tail` for full/empty
+Ambiguous. Either waste one slot (full = `(tail+1) % cap === head`) or track explicit `size`. Size is cleaner.
+
+---
+
+## 7. The unlocking insight
+
+> **Fixed array + `head` + `tail` + `size`. Push at tail, shift from head. Wrap with `(i + 1) % capacity`. Size disambiguates full from empty. Null out shifted slot for GC.**
+
+Three properties:
+
+1. **Modulo wrap** — `(i + 1) % capacity` keeps indices in range.
+2. **`size` field** — full/empty disambiguation in O(1).
+3. **Null shifted slot** — release reference for GC.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
-/**
- * Fixed-capacity ring queue. O(1) push / shift / peek.
- * @template T
- */
 class CircularBuffer {
-  /**
-   * @param {number} capacity
-   * @param {{ overwrite?: boolean }} [options]
-   *   overwrite=true (default): full push drops the oldest item.
-   *   overwrite=false: full push returns false (caller must apply backpressure).
-   */
   constructor(capacity, { overwrite = true } = {}) {
     if (!Number.isInteger(capacity) || capacity < 1) {
       throw new RangeError('capacity must be a positive integer');
     }
     this.capacity = capacity;
-    this.buf = new Array(capacity);
+    this.buf = new Array(capacity);                                 // step 1: fixed alloc
     this.head = 0;
     this.tail = 0;
     this.size = 0;
@@ -100,14 +136,13 @@ class CircularBuffer {
   }
 
   push(item) {
-    if (this.size === this.capacity) {
+    if (this.size === this.capacity) {                              // step 2: full path
       if (!this.overwrite) return false;
-      // Drop oldest: advance head; size stays at capacity.
-      this.head = (this.head + 1) % this.capacity;
+      this.head = (this.head + 1) % this.capacity;                  // drop oldest
     } else {
       this.size++;
     }
-    this.buf[this.tail] = item;
+    this.buf[this.tail] = item;                                      // step 3: write at tail
     this.tail = (this.tail + 1) % this.capacity;
     return true;
   }
@@ -115,114 +150,122 @@ class CircularBuffer {
   shift() {
     if (this.size === 0) return undefined;
     const value = this.buf[this.head];
-    this.buf[this.head] = undefined;              // release ref for GC
+    this.buf[this.head] = undefined;                                 // step 4: release ref
     this.head = (this.head + 1) % this.capacity;
     this.size--;
     return value;
   }
 
-  peek() { return this.size === 0 ? undefined : this.buf[this.head]; }
+  peek()    { return this.size === 0 ? undefined : this.buf[this.head]; }
   isFull()  { return this.size === this.capacity; }
   isEmpty() { return this.size === 0; }
   clear()   { this.head = 0; this.tail = 0; this.size = 0; this.buf.fill(undefined); }
 
-  /** Iterate from oldest to newest. */
-  *[Symbol.iterator]() {
+  *[Symbol.iterator]() {                                              // step 5: head→tail walk
     for (let i = 0; i < this.size; i++) {
       yield this.buf[(this.head + i) % this.capacity];
     }
   }
-
   toArray() { return [...this]; }
 }
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
-Input (overwrite=true, capacity=3):
 ```js
 const buf = new CircularBuffer(3);
-buf.push(1);            // [1, _, _] head=0 tail=1 size=1
-buf.push(2);            // [1, 2, _] head=0 tail=2 size=2
-buf.push(3);            // [1, 2, 3] head=0 tail=0 size=3 (FULL)
-buf.push(4);            // overwrite: drop head=1, store 4 at tail=0 → [4, 2, 3] head=1 tail=1 size=3
-buf.shift();            // returns 2. head=2 size=2. buf=[4, undef, 3]
-buf.push(5);            // size<cap so size++. tail=1 → buf=[4, 5, 3] head=2 tail=2 size=3
-buf.toArray();          // [3, 4, 5] (insertion order: head walk)
+buf.push(1); buf.push(2); buf.push(3);     // [1,2,3] full
+buf.push(4);                                // overwrite → [4,2,3], head=1
+buf.shift();                                // returns 2; [4,_,3], head=2
+buf.push(5);                                // [4,5,3], head=2, tail=2
+buf.toArray();                              // [3,4,5]
+
+// Rejection mode
+const q = new CircularBuffer(2, { overwrite: false });
+q.push(1); q.push(2);
+q.push(3);                                  // false (backpressure signal)
 ```
 
-Trace push(4) (overwrite case):
-- size===capacity (3). overwrite=true. head=(0+1)%3=1. (size stays 3.)
-- buf[tail=0]=4. tail=(0+1)%3=1.
-- Result: buf=[4,2,3], head=1, tail=1, size=3.
+---
 
-Trace shift():
-- size!=0. value=buf[head=1]=2. buf[1]=undefined. head=2. size=2.
-- Returns 2.
+## 9. Step-by-step dry run
 
-Trace push(5):
-- size!=cap. size++=3. buf[tail=1]=5. tail=(1+1)%3=2.
-- Result: buf=[4,5,3], head=2, tail=2, size=3.
+```
+capacity=3, overwrite=true
 
-Trace toArray():
-- Yield buf[(2+0)%3=2]=3. Yield buf[(2+1)%3=0]=4. Yield buf[(2+2)%3=1]=5. → [3,4,5].
+push(1):  size 0→1, buf[tail=0]=1, tail=1. state: [1,_,_] h=0 t=1 size=1
+push(2):  size 1→2, buf[1]=2, tail=2. state: [1,2,_] h=0 t=2 size=2
+push(3):  size 2→3, buf[2]=3, tail=0. state: [1,2,3] h=0 t=0 size=3 (FULL)
+push(4):  size===cap. overwrite. head=(0+1)%3=1. buf[tail=0]=4. tail=1.
+          state: [4,2,3] h=1 t=1 size=3
+shift():  v=buf[head=1]=2. buf[1]=undefined. head=2. size=2.
+          state: [4,_,3] h=2 t=1 size=2. returns 2.
+push(5):  size<cap. size 2→3. buf[tail=1]=5. tail=2.
+          state: [4,5,3] h=2 t=2 size=3
 
-Rejection mode (overwrite=false):
-```js
-const buf = new CircularBuffer(2, { overwrite: false });
-buf.push(1); buf.push(2);
-buf.push(3);   // returns false. buf still [1,2].
-buf.shift();   // returns 1. now [2, _].
-buf.push(3);   // returns true. buf=[3,2] head=1 tail=1 size=2.
+toArray():
+  walk i=0..2:
+    i=0: buf[(2+0)%3=2] = 3
+    i=1: buf[(2+1)%3=0] = 4
+    i=2: buf[(2+2)%3=1] = 5
+  → [3, 4, 5]
 ```
 
-## Important takeaways
+---
 
-**Syntax to memorize**
-- `head`, `tail`, `size`, fixed `capacity`. Index advance: `(i + 1) % capacity`.
-- Three index fields disambiguate full vs empty (don't rely on `head === tail`).
-- Push at tail, shift from head. Bookkeeping is the only state.
-- Null out `buf[head]` after shift to release the reference.
+## 10. Common confusion + traps
 
-**Patterns to reuse**
-- Modulo wrap-around is the same trick used in hash tables (probing), Bloom filter bit arrays, frame buffers, audio sample queues.
-- Power-of-two capacities + bit-and instead of modulo is a micro-optimization used in real-time audio code.
-- "Overwrite vs reject" policy choice generalizes to any bounded queue (logs, retry queues, websocket buffers).
+1. **`head === tail` for full/empty** — ambiguous. Use explicit `size`.
+2. **Forget size update in overwrite path** — `size` stays at capacity; don't increment.
+3. **Not nulling shifted slot** — memory leak.
+4. **Off-by-one in iteration** — walk via `(head + i) % capacity`, don't go directly head→tail.
+5. **`splice` for "remove from middle"** — destroys ring property. Ring buffers don't support arbitrary deletion.
+6. **Capacity 0 or 1** — degenerate; handle or reject in constructor.
+7. **Confusing with `Array.shift`** — array shift is O(n); ring buffer shift is O(1).
 
-**Common mistakes**
-- Using `head === tail` as the full/empty check without a size field — ambiguous.
-- Forgetting to update `size` correctly in the overwrite case (don't increment).
-- Not nulling out shifted slots — memory leak.
-- Off-by-one in iteration: walking from `head` to `tail` directly without wrapping.
-- Using `Array.prototype.splice` for "remove from middle" — destroys the ring property. Ring buffers don't support arbitrary deletion.
+---
 
-**Related questions**
-- Sliding window (rate limiter, moving average) — circular buffer over timestamps.
-- Bounded async queue with backpressure.
-- ETL log batcher with max-size cap.
-- Reservoir sampling (similar bounded random selection).
-- Lock-free SPSC queue (extends to Worker + SharedArrayBuffer).
+## 11. Senior follow-ups & variants
 
-## Variants
+### Variant 1 — Rolling-window stats
+Circular buffer of `(timestamp, value)` pairs. On read, sum/avg/max only items within the window. Constant memory regardless of input rate.
 
-1. **Rolling-window statistics** — circular buffer of (timestamp, value) pairs. On read, sum/avg/max only items within the window. Constant memory regardless of input rate.
+### Variant 2 — Bounded async queue with backpressure
+`push` returns a Promise that resolves when slot is available (instead of rejecting). Used by p-queue, bull.
 
-2. **Bounded async queue** — push returns a Promise that resolves when slot is available (instead of rejecting). Implements backpressure. Used by p-queue, bull, etc.
+### Variant 3 — Typed-array backing
+`Int32Array` / `Float32Array` for numeric workloads. Eliminates per-element heap allocation. Audio/DSP.
 
-3. **Multi-producer single-consumer (MPSC)** — multiple writers, one reader. In JS user-land single-threaded code this is a non-issue. With SharedArrayBuffer + Atomics, it's a real thing (lock-free SPSC/MPSC queues are a research topic).
+### Variant 4 — Power-of-2 capacity
+Replace `% capacity` with `& (capacity - 1)`. Tiny speedup, common in real-time code.
 
-4. **Typed array backing** — use `Int32Array` / `Float32Array` for numeric workloads. Eliminates per-element heap allocation entirely. Used in audio/DSP code.
+### Variant 5 — Resizable
+Allocate new array of 2× capacity, copy head→tail in order. Amortized O(1).
 
-5. **Resizable** — track high-water mark; if push hits capacity AND overwrite=false, allocate a new array of 2x capacity and copy in head-to-tail order. Amortized O(1).
+### Variant 6 — SPSC/MPSC lock-free (`SharedArrayBuffer` + `Atomics`)
+Multi-thread (Worker) variant. Research topic.
 
-## Revision notes
+---
 
-> **Circular buffer — 60 second recap**
-> - Fixed-cap array + `head`, `tail`, `size`. Advance with `(i + 1) % capacity`.
-> - Push at tail, shift from head. O(1) both.
-> - `size` field disambiguates full from empty (head==tail is ambiguous otherwise).
-> - Policy: overwrite (drop oldest) vs reject (return false). Logs overwrite; backpressure queues reject.
-> - Always null out shifted slot for GC.
-> - Iterator walks `(head + i) % cap` for i in 0..size.
-> - Trap: head==tail ambiguity, missing size update in overwrite path, leaked references on shift, off-by-one in iteration.
-> - Use: rolling metrics, packet buffers, audio frames, log ring, retry queue cap.
+## 12. How to think aloud
+
+> "Fixed array + `head`, `tail`, `size`. Push at tail, shift from head, wrap with `(i+1) % capacity`. Size disambiguates full from empty (head==tail alone is ambiguous). Null shifted slot for GC. Policy: overwrite (drop oldest — logs) vs reject (return false — backpressure queues). Iterator walks `(head + i) % capacity` for i in 0..size, so consumers see head-to-tail insertion order. Trap: ambiguous full/empty without size field. Trap: leaked references on shift. Variants: rolling-window stats, bounded async queue with backpressure, power-of-2 + bit-and, typed-array backing."
+
+---
+
+## 13. 60-second revision
+
+> - **Fixed array** + `head` + `tail` + `size`.
+> - **Advance** with `(i + 1) % capacity`.
+> - **Size disambiguates** full from empty.
+> - **Policy:** overwrite (drop oldest) vs reject (return false).
+> - **Null shifted slot** for GC.
+> - **Iterator:** `(head + i) % cap` for `i in [0, size)`.
+> - **Family:** rolling-window stats, bounded async queue, audio frame buffer, log ring.
+> - **Trap:** head==tail ambiguity; missed size update in overwrite; leaked refs; off-by-one iteration.
+
+---
+
+**Related:** [`02-closures/ring-buffer-via-closure.md`](../02-closures/ring-buffer-via-closure.md) · [lru-cache.md](./lru-cache.md) · [rate-limiter-token-bucket.md](./rate-limiter-token-bucket.md) · [`06-streams/backpressure-and-highwater.md`](../06-streams/backpressure-and-highwater.md)
+
+**Concept primer:** [`concepts/arrays.md`](../../concepts/arrays.md)

@@ -1,137 +1,284 @@
-# Implement `sleep(ms)`
+# Implement `sleep(ms)` — the simplest promise wrapper
 
-## Source
-- LeetCode #2621 "Sleep": https://leetcode.com/problems/sleep/
-- Canonical async-utility warm-up; appears as a pre-question on almost every promise round.
+> **Difficulty:** Easy   |   **Time:** ~5 min   |   **Prereqs:** [`concepts/promises.md`](../../concepts/promises.md)
+>
+> **Source:** [LeetCode 2621 — Sleep](https://leetcode.com/problems/sleep/). Canonical async-utility warm-up.
 
-## Why this question matters in interviews
-`sleep` looks trivial — "wrap `setTimeout` in a promise" — but it's the entry point the interviewer uses to assess your **promise mental model**. In 30 seconds they learn whether you know that (a) the `Promise` constructor executor runs **synchronously**, (b) `setTimeout` schedules a **macrotask** while `.then` schedules a **microtask**, (c) `resolve` can be called with any value (including another thenable), and (d) `await sleep(ms)` returns control to the event loop without blocking it. As a backend engineer you will use `sleep` in every retry-with-backoff, every poll loop, every test fixture that simulates latency. Botching it telegraphs "I haven't written async JS in a while" — exactly the impression you don't want.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
-```js
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-await sleep(100); // pauses the calling async function for ~100ms
+**Signature**
+```ts
+function sleep(ms: number, opts?: { signal?: AbortSignal }): Promise<void>;
 ```
 
-### Runtime / engine behavior
-- `new Promise(executor)` calls `executor` **synchronously and exactly once**. Anything you write outside the `setTimeout` callback runs before the function returns.
-- `setTimeout(resolve, ms)` enqueues a macrotask. When it fires, `resolve()` is called, which schedules the `.then` continuation as a **microtask** drained at the end of the current task.
-- `ms` of `0` does **not** mean "synchronous" — it means "next macrotask tick" (clamped to ~4ms in browsers for nested timers).
-- `await` desugars to `.then` — so `await sleep(0)` defers the rest of the function to a microtask after the timer fires.
+**Input / Output examples**
 
-### Edge cases (interview traps)
-1. **Negative or `NaN` ms** — `setTimeout` clamps negatives to `0`; `NaN` is treated as `0` in V8. Guard if you care: `Math.max(0, ms | 0)`.
-2. **`ms` huge (> 2^31-1)** — Node treats anything > 24.8 days as `1` ms (signed-32-bit overflow). Cite this if asked about long-lived timers.
-3. **Cancellation** — vanilla `sleep` is **uncancellable**. The timer fires regardless. For real backend use, support an `AbortSignal` (see Variants).
-4. **Unhandled rejection** — `sleep` never rejects, so no risk here. But if you add `AbortSignal` support, rejecting on abort with a non-`Error` (like `'aborted'`) trips lint rules — always reject with an `Error` subclass.
-5. **Drift** — `setTimeout(fn, 100)` does **not** guarantee firing at exactly 100ms. It guarantees *no earlier than* 100ms. Under event-loop pressure it can be much later.
-6. **Top-level await** — `await sleep(100)` at module top-level works in ESM but not in CJS without an IIFE.
+| Code                                                            | Behaviour                                       |
+|-----------------------------------------------------------------|--------------------------------------------------|
+| `await sleep(100)`                                              | Pauses for ~100ms (not less, may be more)        |
+| `await sleep(0)`                                                | Yields to the next macrotask + microtask drain   |
+| `await sleep(-5)`                                               | Same as `sleep(0)` — clamped                    |
+| `await sleep(100, { signal })` after `signal.abort()`           | Rejects with `AbortError`                       |
+| `console.log('a'); sleep(100).then(() => log('b')); log('c');` | Logs `a`, `c`, `b` (sync first, then timer)     |
 
-## Brute force approach
-Block the thread with a `while (Date.now() - start < ms)` busy-loop. **Never do this.** It freezes the event loop, blocks every other timer, every I/O completion, every microtask. JavaScript is single-threaded; the entire point of `sleep` is to *yield* control. Mention this only to dismiss it — interviewers test whether you know not to do it.
+**Constraints**
+- Return a Promise that fulfills after at least `ms` milliseconds.
+- Must NOT block the event loop (no busy-wait).
+- Should support `AbortSignal` for cancellation in production.
+- `ms <= 0` clamps to 0 (next-tick), not synchronous.
 
-## Optimal approach
-Return a new `Promise` whose `resolve` is wired to `setTimeout`. One line. The work happens in the event loop, not on the call stack.
+---
 
-## Solution (JavaScript)
+## 2. Plain-English restatement
+
+Make a function that returns a Promise. Inside the executor, schedule a `setTimeout` whose callback calls `resolve`. That's it. Wrapping `setTimeout` in a Promise gives you `await sleep(100)` — pause this async function for 100ms without blocking the event loop.
+
+In one line: `const sleep = (ms) => new Promise((r) => setTimeout(r, ms));`. The interviewer is checking whether you can write that one line and explain the runtime semantics around it.
+
+---
+
+## 3. Why this matters in interviews
+
+`sleep` looks trivial but it's the entry point the interviewer uses to assess your **promise mental model**. In 30 seconds they learn whether you know that (a) the `Promise` constructor executor runs **synchronously**, (b) `setTimeout` schedules a **macrotask** while `.then` schedules a **microtask**, (c) `resolve` can be called with any value, and (d) `await sleep(ms)` returns control to the event loop without blocking it. You'll use `sleep` in every retry-with-backoff, every poll loop, every test fixture. Botching it telegraphs "I haven't written async JS in a while."
+
+---
+
+## 4. Mental model
+
+A `Promise` is a state machine. Its executor runs synchronously *inside* `new Promise(...)`. We use the executor to schedule a `setTimeout` and capture `resolve`. When the timer fires, `resolve()` settles the promise, which schedules `.then` callbacks as microtasks.
+
+```
+   new Promise((resolve) => setTimeout(resolve, ms))
+        │
+        │  sync: executor runs, schedules timer (macrotask)
+        │  sync: Promise returned (PENDING)
+        │
+        ▼
+   ... event loop runs other work ...
+        │
+        │  t = ms: timer fires → resolve() → state = FULFILLED
+        │           → schedule .then callbacks as microtasks
+        ▼
+   .then(cb) runs in next microtask drain
+```
+
+`ms = 0` is **not** synchronous — it's "next macrotask tick" (browsers clamp nested timers to ~4ms). `await sleep(0)` always defers at least one task + microtask hop.
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. `console.log('a'); sleep(0).then(() => log('b')); log('c');` — what's the output order?
+> 2. Will `while (Date.now() - start < ms) {}` produce the same behavior as `sleep(ms)`? Why or why not?
+> 3. How would you make `sleep` cancellable with `AbortController`?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: busy-wait
 
 ```js
-/**
- * Pauses for at least `ms` milliseconds.
- * @param {number} ms
- * @param {{ signal?: AbortSignal }} [opts]
- * @returns {Promise<void>}
- */
+function sleep(ms) {
+  const start = Date.now();
+  while (Date.now() - start < ms) { /* spin */ }
+}
+```
+
+**Never do this.** JS is single-threaded — the busy loop blocks the event loop. Every timer, every I/O callback, every microtask sits behind it. Mention only to dismiss; the interviewer is checking you know not to.
+
+### Wrong attempt 2: forget to wrap in a Promise
+
+```js
+function sleep(ms) {
+  setTimeout(() => {}, ms);
+}
+await sleep(100);   // BUG: returns undefined, await is a no-op
+```
+
+`setTimeout` returns a Timeout handle, not a Promise. `await undefined` is `Promise.resolve(undefined)` — completes on the next microtask, ignoring the timer.
+
+### Wrong attempt 3: return the setTimeout return value
+
+```js
+const sleep = (ms) => setTimeout(() => {}, ms);
+```
+
+Same problem — returns the handle, not a Promise.
+
+---
+
+## 7. The unlocking insight
+
+> **`new Promise((resolve) => setTimeout(resolve, ms))` — the executor runs synchronously, schedules the timer, returns a pending Promise. The timer's callback calls `resolve`, settling the promise; `await` resumes the calling async function.**
+
+Four properties:
+
+1. **Executor is synchronous.** Inside `new Promise((res) => { ... })`, the arrow function runs **immediately**. We use it to schedule the timer and let the constructor return a pending Promise.
+
+2. **`setTimeout` is a macrotask.** When it fires (no earlier than `ms`), it runs as a task. `resolve()` then schedules the `.then` continuation as a **microtask**, drained at the end of the current task.
+
+3. **`ms <= 0` is "next tick," not synchronous.** Browsers and Node clamp negative or fractional `ms` to 0; nested timers in browsers are further clamped to ~4ms after 4 levels of nesting.
+
+4. **`AbortSignal` integration** adds production-grade cancellation. Three pieces: (a) fast-path on already-aborted; (b) abort listener that clears the timer and rejects; (c) cleanup the listener on resolve to avoid leaks.
+
+---
+
+## 8. Solution (annotated)
+
+```js
 function sleep(ms, { signal } = {}) {
   return new Promise((resolve, reject) => {
-    // Fast-path: already aborted.
-    if (signal?.aborted) {
+    if (signal?.aborted) {                                       // step 1: fast-path
       return reject(signal.reason ?? new DOMException('Aborted', 'AbortError'));
     }
-
-    const timerId = setTimeout(() => {
-      signal?.removeEventListener('abort', onAbort);
+    const timerId = setTimeout(() => {                            // step 2: schedule timer
+      signal?.removeEventListener('abort', onAbort);              //         cleanup listener on resolve
       resolve();
-    }, Math.max(0, ms));
-
+    }, Math.max(0, ms));                                          //         clamp negatives
     function onAbort() {
-      clearTimeout(timerId);
+      clearTimeout(timerId);                                       // step 3: cancel timer on abort
       reject(signal.reason ?? new DOMException('Aborted', 'AbortError'));
     }
-
-    signal?.addEventListener('abort', onAbort, { once: true });
+    signal?.addEventListener('abort', onAbort, { once: true });   // step 4: listen for abort
   });
 }
 
-// Minimal one-liner (no cancellation):
-// const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// Minimal one-liner (no cancellation)
+const sleepMin = (ms) => new Promise((r) => setTimeout(r, ms));
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
-Input:
+```js
+console.log('a');
+sleep(100).then(() => console.log('b'));
+console.log('c');
+// a, c, b
+
+// Cancellation
+const ctrl = new AbortController();
+const p = sleep(1000, { signal: ctrl.signal });
+ctrl.abort();
+try { await p; } catch (e) { console.log(e.name); }  // 'AbortError'
+
+// Node 18+ has node:timers/promises with native AbortSignal support:
+// import { setTimeout as sleep } from 'node:timers/promises';
+// await sleep(100, undefined, { signal });
+```
+
+---
+
+## 9. Step-by-step dry run
+
 ```js
 console.log('a');
 sleep(100).then(() => console.log('b'));
 console.log('c');
 ```
 
-Trace:
-- **Sync phase:** `console.log('a')` prints `a`. Then `sleep(100)` runs — its executor runs synchronously: `setTimeout(resolve, 100)` schedules a timer; the `Promise` is returned in pending state. `.then(cb)` registers `cb` on the promise's fulfillment reactions. `console.log('c')` prints `c`.
-- **Event loop:** call stack empties. Microtask queue empty. Wait ~100ms.
-- **t≈100ms:** timers phase fires the callback → `resolve()` → promise becomes fulfilled → `.then` callback enqueued as a **microtask**.
-- Microtask drains: `cb()` → `console.log('b')` prints `b`.
+Values-first trace:
 
-Output: `a`, `c`, `b`. The `c` printing before `b` is the whole point — the function did not block.
+| Phase     | Event                                            | Output  |
+|-----------|---------------------------------------------------|---------|
+| sync      | `console.log('a')`                                | `a`     |
+| sync      | `sleep(100)`: executor runs, schedules setTimeout | —       |
+| sync      | `.then(cb)`: registers cb on pending promise      | —       |
+| sync      | `console.log('c')`                                | `c`     |
+| event loop| stack empties; wait                              | —       |
+| t≈100ms   | timer fires → resolve() → schedules cb microtask | —       |
+| microtask | cb runs → `console.log('b')`                      | `b`     |
 
-Now with abort:
+`c` prints before `b` — the function did not block.
+
+---
+
+## 10. Common confusion + traps
+
+1. **Busy-wait blocks the event loop.** Single-threaded JS — `while (...)` freezes everything until it ends. Never use.
+2. **`Promise` executor is synchronous.** It runs immediately during `new Promise(...)`. Don't think it's deferred.
+3. **`sleep(0)` is not synchronous.** It's "next macrotask + microtask drain." Browsers clamp nested timers to ~4ms.
+4. **`ms > 2^31 - 1`** overflows in Node (treated as `1ms`). Don't use for very long timers; use `setInterval` or schedule chained shorter timers.
+5. **`setTimeout` doesn't fire at exactly `ms`.** It fires *no earlier than* `ms`. Under event-loop pressure it can be much later.
+6. **`AbortSignal` listener leak.** If you forget `removeEventListener` in the success path, long-lived signals retain stale listeners.
+7. **Top-level await in CJS.** `await sleep(...)` at module top-level works in ESM but not in CJS without an IIFE.
+8. **Reject with a real Error.** Don't `reject('aborted')` (string) — lint rules and stack traces want `Error` subclasses. `DOMException('Aborted', 'AbortError')` or a custom AbortError.
+
+---
+
+## 11. Senior follow-ups & variants
+
+### Variant 1 — `sleep(ms, value)`
+
+Resolve with a value (useful in test fixtures):
+
 ```js
-const ctrl = new AbortController();
-const p = sleep(1000, { signal: ctrl.signal });
-ctrl.abort();
-// p rejects synchronously-from-microtask with AbortError.
+const sleep = (ms, value) => new Promise((r) => setTimeout(() => r(value), ms));
+await sleep(100, 'done');   // 'done'
 ```
 
-## Important takeaways
+### Variant 2 — Native Node 18+
 
-**Syntax to memorize**
-- `new Promise((resolve) => setTimeout(resolve, ms))` — burn this into muscle memory.
-- `Math.max(0, ms)` guard for negatives.
-- `signal?.aborted` short-circuit before scheduling.
+```js
+import { setTimeout as sleep } from 'node:timers/promises';
+await sleep(100, undefined, { signal });
+```
 
-**Patterns to reuse**
-- The Promise-wrapping-timer pattern is reused in: `timeout(promise, ms)` (race vs sleep-then-reject), `retryWithBackoff` (sleep between attempts), `pollUntil(predicate, interval)`.
-- AbortSignal integration is the same shape for `fetch`, `setTimeout`-promise wrappers, and async iterators.
+Built-in cancellation, no manual wrapper needed.
 
-**Common mistakes**
-- Forgetting that the `Promise` executor is synchronous — candidates sometimes write `await new Promise(...)` thinking the executor is deferred.
-- Using `Promise.resolve().then(() => setTimeout(...))` — adds a needless microtask without changing behavior.
-- Returning `setTimeout(...)`'s return value (a Timeout object) instead of a Promise.
-- Not removing the `abort` listener on success — small memory leak in long-lived signals.
+### Variant 3 — `sleepUntil(timestamp)`
 
-**Related questions**
-- `delay(ms, value)` — resolves with `value` after `ms`.
-- `timeout(promise, ms)` — see `promise-time-limit.md`.
-- `retry(fn, { retries, base })` — see `retry-with-backoff.md`.
+```js
+const sleepUntil = (ts) => sleep(Math.max(0, ts - Date.now()));
+```
 
-## Variants
+Wait until wall-clock time. Beware clock skew / DST changes.
 
-1. **`sleep(ms, value)`** — resolve with a value: `new Promise(r => setTimeout(() => r(value), ms))`. Useful for promise-pipeline tests.
+### Variant 4 — Composes with retry, timeout, poll
 
-2. **`sleepAbortable(ms, signal)`** — the version above. Production code in Node 18+ should prefer `setTimeout` from `node:timers/promises` which supports `{ signal }` natively: `import { setTimeout as sleep } from 'node:timers/promises'; await sleep(100, undefined, { signal });`.
+```js
+// retry: see retry-with-backoff.md
+async function retry(fn, n) {
+  for (let i = 0; i < n; i++) {
+    try { return await fn(); } catch (e) { await sleep(100 * 2 ** i); }
+  }
+}
 
-3. **`sleepUntil(timestamp)`** — `sleep(timestamp - Date.now())`. Watch for negative diffs and clock skew if you care about wall-clock accuracy.
+// timeout via race
+const timeout = (p, ms) => Promise.race([p, sleep(ms).then(() => { throw new Error('timeout'); })]);
 
-## Revision notes
+// poll
+async function pollUntil(pred, intervalMs) {
+  while (!await pred()) await sleep(intervalMs);
+}
+```
 
-> **sleep — 60 second recap**
-> - `(ms) => new Promise(r => setTimeout(r, ms))` is the canonical one-liner.
-> - Promise executor runs **synchronously**; timer callback runs as a macrotask, `.then` continuation as a microtask.
-> - Vanilla `sleep` is **uncancellable** — use `AbortSignal` for production.
-> - `ms <= 0` clamps to 0 (next-tick), not synchronous. `ms > 2^31-1` overflows in Node.
-> - Never busy-wait (`while (Date.now()-s < ms)`) — blocks the entire single-threaded loop.
-> - Node 18+ ships `node:timers/promises` `setTimeout(ms, value, { signal })` — use it.
-> - **Trap:** thinking `await sleep(0)` is synchronous. It defers to the next macrotask + microtask drain.
-> - Family: same skeleton powers `timeout`, `retry`, `pollUntil`.
+`sleep` is the substrate for almost every time-aware async utility.
+
+---
+
+## 12. How to think aloud in the interview
+
+> "One line: `(ms) => new Promise(r => setTimeout(r, ms))`. The executor runs synchronously, schedules the timer, returns a pending Promise. When the timer fires, `resolve()` settles it; `.then` callbacks run as microtasks. Never busy-wait — single-threaded JS, the loop freezes. `ms = 0` is not synchronous, it's next-tick. For production, add AbortSignal: fast-path on already-aborted, abort listener that clears the timer and rejects, cleanup the listener on resolve. Node 18+ has it built-in via `node:timers/promises`."
+
+---
+
+## 13. 60-second revision
+
+> - **One line:** `(ms) => new Promise(r => setTimeout(r, ms))`.
+> - **Executor runs synchronously**; timer callback is a macrotask; `.then` continuation is a microtask.
+> - **Never busy-wait** — single-threaded JS, the loop blocks.
+> - **`ms <= 0`** clamps to 0 (next-tick). **`ms > 2^31`** overflows in Node.
+> - **Cancellation:** AbortSignal — fast-path on already-aborted, abort listener clears timer and rejects, cleanup on resolve.
+> - **Node 18+:** `import { setTimeout as sleep } from 'node:timers/promises'`.
+> - **Family:** substrate for `timeout`, `retry`, `poll`, `delay`.
+> - **Trap:** thinking `sleep(0)` is synchronous; forgetting AbortSignal cleanup; rejecting with a string instead of Error.
+
+---
+
+**Related:** [retry-with-backoff.md](./retry-with-backoff.md) · [promise-time-limit.md](./promise-time-limit.md) · [abortcontroller-fanout.md](./abortcontroller-fanout.md) · [promise-race-polyfill.md](./promise-race-polyfill.md)
+
+**Concept primer:** [`concepts/promises.md`](../../concepts/promises.md), [`05-event-loop/microtask-macrotask-order.md`](../05-event-loop/microtask-macrotask-order.md)

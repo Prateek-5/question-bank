@@ -1,130 +1,150 @@
-# Saga (Orchestration) — Toy Implementation
+# Saga (Orchestration) — distributed transaction via compensations
 
-## Source / Origin
-- Hector Garcia-Molina & Kenneth Salem, "Sagas" (1987).
-- Modern revival: microservices distributed transactions without 2PC.
-- Asked at: Razorpay, Stripe, Atlassian, Booking, Uber.
-- Concept reference: `backend-data-prep/questions/messaging/saga-orchestration-vs-choreography.md`.
+> **Difficulty:** Senior   |   **Time:** ~25 min   |   **Prereqs:** [mini-state-machine.md](./mini-state-machine.md), [idempotency-wrapper.md](./idempotency-wrapper.md)
+>
+> **Source:** Garcia-Molina & Salem (1987). Microservices answer to 2PC. Razorpay, Stripe, Atlassian, Booking, Uber.
 
-## Why this question matters in interviews
-When a single business transaction spans multiple services (reserve inventory → charge payment → create shipment), 2PC is too slow and too coupled. A saga is the alternative: each step runs in its own local transaction, and if a later step fails, you run *compensating* actions to undo the earlier steps. Senior bar: you can articulate (1) forward step + compensation must each be idempotent, (2) the orchestrator vs choreography choice, (3) what happens if a *compensation* itself fails (retry forever until human).
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
-```js
+**Signature**
+```ts
 class Saga {
-  constructor() { this.steps = []; }
-  step(name, doFn, undoFn) { this.steps.push({ name, doFn, undoFn }); return this; }
-  async execute(ctx) {
-    const done = [];
-    try {
-      for (const s of this.steps) {
-        const out = await s.doFn(ctx);
-        done.push({ ...s, out });
-      }
-      return ctx;
-    } catch (err) {
-      for (const s of done.reverse()) {
-        try { await s.undoFn(ctx, s.out); }
-        catch (compErr) { /* log + alert; compensation failures escalate */ }
-      }
-      throw err;
-    }
-  }
+  constructor(opts: { name: string; persist?(state): Promise<void> });
+  step(name: string, doFn: (ctx) => Promise<any>, undoFn: (ctx, out?) => Promise<void>): this;
+  execute(ctx: any): Promise<any>;
 }
 ```
 
-### Edge cases / interview traps
-1. **Forward step must be idempotent.** Otherwise a retry mid-saga double-applies.
-2. **Compensation must be idempotent too.** Crash mid-rollback → retry rollback → must converge.
-3. **Compensation can fail.** Don't silently swallow; emit "stuck saga" alert; humans intervene. Some sagas use a durable workflow engine (Temporal, AWS Step Functions) for retries.
-4. **Order matters.** Compensations run in *reverse* order of forward steps.
-5. **Persistent state.** A toy saga lives in memory and dies if the process restarts mid-flight. Production: persist `{saga_id, completed_steps, status}` after every step.
-6. **No isolation.** Other transactions see the partial state. Some sagas use "semantic locks" (e.g., reservation state) to mask it.
-7. **Choreography vs orchestration.** Choreography = each service listens to events and decides next step (no central coordinator). Orchestration = one engine drives the sequence. Each has a place.
+**Input / Output examples**
 
-## Mental Model
+| Setup                                                  | Behaviour                                              |
+|--------------------------------------------------------|---------------------------------------------------------|
+| All steps succeed                                      | returns ctx; status SUCCEEDED                          |
+| Step 3 throws (after step 1, 2 succeeded)              | compensate step 2, then step 1, in reverse; rethrow    |
+| Compensation throws                                    | status STUCK + alert; manual intervention              |
+| Server crashes mid-saga                                | persisted trace → resume after restart                 |
+| Forward step or undo not idempotent                     | retry may double-apply — broken contract               |
 
-A **booking checklist** with a "undo" pen next to every item:
+**Constraints**
+- Forward step **AND** compensation BOTH idempotent.
+- Compensations run in **reverse order** of completed forward steps.
+- Persist trace after every step.
+- Compensation failure → STUCK status, escalate.
+
+---
+
+## 2. Plain-English restatement
+
+A multi-step business transaction across services (reserve flight → reserve hotel → charge card → confirm). No 2PC: each step is a local transaction. On failure of step N, run "compensating" actions for steps N-1, N-2, ... 1, in reverse, to semantically undo. Saga isn't rollback — it's executing **new** operations that undo prior ones.
+
+---
+
+## 3. Why this matters in interviews
+
+Distributed-transaction question — senior territory. Why not 2PC? Too slow, too coupled. Saga is the practical answer. Tests: idempotency at every step, orchestration vs choreography choice, what happens when compensation itself fails.
+
+---
+
+## 4. Mental model
 
 ```
-   ┌──────────────────────────────────────────────────────────┐
-   │ saga: book_trip                                          │
-   │   step1: reserve_flight       undo: cancel_flight_hold   │
-   │   step2: reserve_hotel        undo: cancel_hotel_hold    │
-   │   step3: charge_card          undo: refund_card          │
-   │   step4: send_confirmation    undo: send_apology_email   │
-   └──────────────────────────────────────────────────────────┘
+   Booking checklist with an "undo" pen next to each:
 
-   Failure scenario: step3 fails (card declined)
-        done = [step1, step2]
-        run step2.undo → cancel hotel hold
-        run step1.undo → cancel flight hold
-        throw original error to caller
+   saga: book_trip
+     step1: reserve_flight       undo: cancel_flight_hold
+     step2: reserve_hotel        undo: cancel_hotel_hold
+     step3: charge_card          undo: refund_card
+     step4: send_confirmation    undo: send_apology_email
+
+   Forward (charge fails at step 3):
+     ✓ reserve_flight        → completed=[step1]
+     ✓ reserve_hotel         → completed=[step1, step2]
+     ✗ charge_card           → THROWS
+
+   Compensate (reverse):
+     undo step2: cancel_hotel_hold     ✓
+     undo step1: cancel_flight_hold    ✓
+     status: COMPENSATED; rethrow original error.
+
+   If compensation step fails (e.g., hotel API also down):
+     status: STUCK; alert ops; humans intervene.
 ```
 
-## Why interviewers care
+---
 
-- **Distributed transactions** are senior territory — you must know why 2PC isn't the answer.
-- **Idempotency reasoning** at every step.
-- **Failure recovery** — what if compensation also fails?
+## 5. Try it yourself first
 
-## Common beginner confusion
+> **Predict before reading on:**
+> 1. Why must BOTH forward step and compensation be idempotent?
+> 2. What's the difference between a saga rollback and a SQL `ROLLBACK`?
+> 3. If compensation itself fails, what should the saga do?
 
-- **"Saga = rollback."** Not really — there's no transactional rollback. You execute *new* operations that semantically undo prior ones.
-- **"Compensation is automatic."** It's hand-written code, one per step.
-- **"Saga = 2PC."** No — saga uses local transactions only; 2PC blocks across services with a coordinator.
-- **"In-memory saga is enough."** Crash mid-flight loses state. Persist after every step.
-- **"Both orchestration and choreography are the same."** They have very different failure modes and observability stories.
+---
 
-## Brute force approach
+## 6. Brute force — walked through
 
-```js
-// no compensation — partial failure leaves the system in a broken state forever
-await reserveFlight();
-await reserveHotel();
-await chargeCard();   // throws → flight + hotel held forever
-```
+### Wrong attempt 1: no compensation
+Partial failure leaves system in inconsistent state (flight held, hotel held, card not charged — forever).
 
-## Optimal approach
+### Wrong attempt 2: 2PC across services
+Distributed lock with coordinator. Slow, hard to scale, single point of failure. Practical microservices use saga instead.
 
-Orchestrator with `step(name, do, undo)` definitions. Execute forward, push completed steps onto a stack. On failure, pop and compensate in reverse. Persist after every transition.
+### Wrong attempt 3: in-memory saga
+Crash mid-flight loses state. Always persist trace after every transition.
 
-## Solution (JavaScript) — orchestration
+---
+
+## 7. The unlocking insight
+
+> **Two function references per step (`do`, `undo`). Execute forward, push each completed step. On any failure, run `undo` for completed steps in reverse. Persist trace after every step. Idempotent forward + idempotent undo. Compensation failure → STUCK.**
+
+Three properties:
+
+1. **`(do, undo)` pair** per step — semantic inverse, not transactional rollback.
+2. **Persist trace** — crash recovery requires durable state.
+3. **Compensation failure → STUCK** — alert humans; don't silently swallow.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
 class Saga {
   constructor({ name, persist }) {
     this.name = name;
     this.steps = [];
-    this.persist = persist || (async () => {});       // (state) => void  — optional checkpoint
+    this.persist = persist || (async () => {});                      // step 1: trace persistence hook
   }
+
   step(name, doFn, undoFn) {
     this.steps.push({ name, doFn, undoFn });
-    return this;
+    return this;                                                       // chainable
   }
+
   async execute(ctx) {
     const trace = { saga: this.name, completed: [], status: 'RUNNING' };
     await this.persist(trace);
     try {
-      for (const s of this.steps) {
+      for (const s of this.steps) {                                    // step 2: forward
         const out = await s.doFn(ctx);
         trace.completed.push({ name: s.name, out });
-        await this.persist(trace);
+        await this.persist(trace);                                      // checkpoint after each step
       }
       trace.status = 'SUCCEEDED';
       await this.persist(trace);
       return ctx;
-    } catch (err) {
+    } catch (err) {                                                    // step 3: forward failed
       trace.status = 'COMPENSATING';
       await this.persist(trace);
-      for (let i = trace.completed.length - 1; i >= 0; i--) {
-        const s = this.steps.find(x => x.name === trace.completed[i].name);
+      for (let i = trace.completed.length - 1; i >= 0; i--) {           // step 4: REVERSE
+        const completed = trace.completed[i];
+        const s = this.steps.find((x) => x.name === completed.name);
         try {
-          await s.undoFn(ctx, trace.completed[i].out);
+          await s.undoFn(ctx, completed.out);
         } catch (cErr) {
-          trace.status = 'STUCK';
+          trace.status = 'STUCK';                                        // step 5: stuck
           trace.stuckOn = s.name;
           await this.persist(trace);
           throw new Error(`Saga ${this.name} stuck compensating ${s.name}: ${cErr.message}`);
@@ -136,67 +156,109 @@ class Saga {
     }
   }
 }
-
-// Usage
-const saga = new Saga({ name: 'book_trip' })
-  .step('reserve_flight', (ctx) => flightApi.hold(ctx.tripId, ctx.flight), (ctx) => flightApi.release(ctx.tripId))
-  .step('reserve_hotel',  (ctx) => hotelApi.hold(ctx.tripId, ctx.hotel),  (ctx) => hotelApi.release(ctx.tripId))
-  .step('charge_card',    (ctx) => payApi.charge(ctx.tripId, ctx.amount), (ctx) => payApi.refund(ctx.tripId));
-
-await saga.execute({ tripId: 't_42', flight: 'AI101', hotel: 'taj', amount: 50000 });
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
-Scenario: charge fails after both holds succeed.
+```js
+const saga = new Saga({ name: 'book_trip', persist: async (s) => db.upsert('sagas', s) })
+  .step('reserve_flight',
+        (ctx) => flightApi.hold(ctx.tripId, ctx.flight),
+        (ctx) => flightApi.release(ctx.tripId))
+  .step('reserve_hotel',
+        (ctx) => hotelApi.hold(ctx.tripId, ctx.hotel),
+        (ctx) => hotelApi.release(ctx.tripId))
+  .step('charge_card',
+        (ctx) => payApi.charge(ctx.tripId, ctx.amount),
+        (ctx) => payApi.refund(ctx.tripId));
+
+try {
+  await saga.execute({ tripId: 't_42', flight: 'AI101', hotel: 'taj', amount: 50000 });
+} catch (e) {
+  // saga compensated; ctx state semantically rolled back
+}
+```
+
+---
+
+## 9. Step-by-step dry run
 
 ```
-forward
-  step1 reserve_flight  → success  trace.completed=[{flight}]
-  step2 reserve_hotel   → success  trace.completed=[{flight},{hotel}]
-  step3 charge_card     → throws "card declined"
+Scenario: charge_card fails after both holds succeed.
 
-compensation (reverse)
-  undo step2 cancel hotel hold  → success
-  undo step1 cancel flight hold → success
+trace = {saga:'book_trip', completed:[], status:'RUNNING'}
+persist(trace)
 
-state: COMPENSATED; throw original error to caller
+step reserve_flight → do(ctx) ✓ → trace.completed=[{flight}]; persist
+step reserve_hotel  → do(ctx) ✓ → trace.completed=[{flight},{hotel}]; persist
+step charge_card    → do(ctx) THROWS 'card declined'
+  trace.status='COMPENSATING'; persist
+  reverse iteration:
+    i=1: undo reserve_hotel → cancel hotel hold ✓
+    i=0: undo reserve_flight → cancel flight hold ✓
+  trace.status='COMPENSATED'; persist
+  rethrow 'card declined'
+
+STUCK scenario (hotel API also down):
+  undo reserve_hotel → THROWS 'hotel API down'
+  trace.status='STUCK', stuckOn='reserve_hotel'; persist
+  throw "Saga book_trip stuck compensating reserve_hotel: hotel API down"
+  → alert ops; human re-runs resumeCompensation(saga_id) after fix
 ```
 
-If during compensation the hotel API is also down → status=STUCK; alert; human re-runs `saga.resumeCompensation(saga_id)`.
+---
 
-## How to think aloud in the interview
+## 10. Common confusion + traps
 
-> "Saga: each forward step has a compensation that semantically undoes it. Run forward; on failure, run completed compensations in reverse. Forward and undo are both idempotent. Persist trace after every step so a crash can resume. Compensation failure → STUCK status + alert. For my system I'd lean orchestration over choreography because debugging a saga across 6 event topics is operational pain. For real production I'd use Temporal or AWS Step Functions, not roll my own."
+1. **Forward step not idempotent** — retry mid-saga double-applies.
+2. **Compensation not idempotent** — crash mid-rollback → retry → must converge.
+3. **Compensation failure swallowed** — saga thinks compensated; system actually inconsistent.
+4. **Order wrong** — must reverse, last-completed first.
+5. **In-memory trace** — crash loses state.
+6. **Saga = SQL rollback** — no. Saga uses local txns + semantic undo.
+7. **No isolation** — other transactions see partial state. Mitigate with semantic locks.
 
-## Important takeaways
+---
 
-- **Idempotent forward + idempotent undo.** Mandatory.
-- **Compensate in reverse order.**
-- **Persist after each transition.**
-- **Compensation can fail** → STUCK → human escalation.
-- **Orchestration vs choreography** is a real decision; pick orchestration when you have >3 steps or need observability.
+## 11. Senior follow-ups & variants
 
-## Variants
+### Variant 1 — Pivot transaction
+One "point of no return" step; no compensation after it (e.g., legal/audit submit). Retry-forever instead.
 
-- **Pivot transaction** — one "point of no return" step after which there's no compensation, only retry-forever. Useful for legal/auditing actions.
-- **Choreography** — each service listens to events and triggers its own step + emits next event. No central coordinator; harder to debug.
-- **Semantic locks** — temporary state (e.g., `flight: HELD`) prevents other transactions from interfering during the saga.
-- **Durable workflows** (Temporal, Cadence) — saga primitives backed by a persistent state machine with auto-retry.
+### Variant 2 — Choreography
+Each service listens to events and triggers its own step + emits next event. No central coordinator. Harder to debug; less observable.
 
-## Revision notes
+### Variant 3 — Semantic locks
+Temporary state (e.g., `flight.status='HELD'`) prevents other transactions from interfering during the saga.
 
-```
-Saga (orchestration):
-  step(name, do, undo)
-  execute(ctx):
-    forward: for each step: do(ctx); persist trace
-    on failure: for each completed step in reverse: undo(ctx, out); persist
-    compensation failure → STUCK; alert
-  
-  forward + undo are BOTH idempotent
-  compensate in reverse order
-  persist after every step
-  variants: pivot, choreography, semantic locks, Temporal/Cadence
-  not 2PC — local txns only, semantic undo not rollback
-```
+### Variant 4 — Durable workflow engine
+Temporal, AWS Step Functions, Cadence. Saga primitives backed by persistent state machine with auto-retry. Production answer.
+
+### Variant 5 — Resumable on restart
+On startup, load incomplete sagas from store, continue forward or compensation from last checkpoint.
+
+---
+
+## 12. How to think aloud
+
+> "Saga: each forward step has a compensation that semantically undoes it. Run forward; on failure, run completed compensations in reverse. Forward AND undo both idempotent. Persist trace after each step so crash can resume. Compensation failure → STUCK status + alert; humans intervene. Orchestration vs choreography: I'd lean orchestration for >3 steps because debugging a saga across 6 event topics is operational pain. Production: Temporal or AWS Step Functions, not roll my own. Saga is NOT 2PC and NOT SQL rollback — it's local transactions + semantic undo. Trap: non-idempotent steps; swallowing compensation failure; in-memory state."
+
+---
+
+## 13. 60-second revision
+
+> - **`(do, undo)` pair** per step.
+> - **Forward + undo BOTH idempotent.**
+> - **Compensate in REVERSE order** of completed steps.
+> - **Persist trace** after every step.
+> - **Compensation failure → STUCK** + alert.
+> - **NOT 2PC; NOT SQL rollback** — local txns + semantic undo.
+> - **Orchestration** > choreography for observability (>3 steps).
+> - **Production:** Temporal, AWS Step Functions, Cadence.
+> - **Trap:** non-idempotent; swallowing comp failure; in-memory; wrong order.
+
+---
+
+**Related:** [mini-state-machine.md](./mini-state-machine.md) · [idempotency-wrapper.md](./idempotency-wrapper.md) · [circuit-breaker.md](./circuit-breaker.md) · [`backend-data-prep/questions/messaging/saga-orchestration-vs-choreography.md`](../../../backend-data-prep/questions/messaging/saga-orchestration-vs-choreography.md)
+
+**Concept primer:** [`concepts/promises.md`](../../concepts/promises.md)

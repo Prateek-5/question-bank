@@ -1,210 +1,273 @@
-# Hoisting and scope inside try/catch blocks
+# Hoisting and scope inside `try`/`catch`
 
-## Source
-- Canonical senior-JS interview problem (BFE.dev, "You Don't Know JS: Scope & Closures" Ch. 3, Node error-handling deep dives).
-- MDN reference: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/try...catch
+> **Difficulty:** Medium   |   **Time:** ~10 min   |   **Prereqs:** [hoisting-in-javascript.md](./hoisting-in-javascript.md), [let-vs-var-differences.md](./let-vs-var-differences.md)
+>
+> **Source:** BFE.dev, "You Don't Know JS". Node error-handling deep dives.
 
-## Why this question matters in interviews
-The `try`/`catch` block has **three** scoping rules layered on top of each other, and senior interviewers will probe all of them:
-1. The `try` block is a regular block — `let`/`const` are block-scoped; `var` escapes to the function.
-2. The `catch (err)` parameter has its **own scope** — it's not a `var` in the function. (Pre-ES2019: this was always true. ES2019 added optional catch binding `catch {}`.)
-3. The `catch` body is *another* block on top of the catch-param scope — `let` here doesn't collide with the `err` param.
+---
 
-Backend code is full of `try`/`catch` (every async route handler in Express, every DB call). Misunderstanding catch-scoping causes real bugs: declaring `var result` inside `try` and accessing it outside the block "works" by accident; declaring `let result` in the same spot throws. Knowing the rules lets you write production-correct error handling without guessing.
+## 1. Problem statement
 
-## Concepts involved
+`try { ... } catch (err) { ... }` has THREE layered scopes: the try block, the catch parameter's own scope, and the catch body.
 
-### Syntax to lock in
+**Verification examples**
+
 ```js
 function f() {
   try {
-    var a = 1;    // var → escapes try, lives in f's scope
-    let b = 2;    // let → block-scoped to try
-  } catch (err) { // err is a binding in its OWN scope, not f's
-    var c = 3;    // var → escapes both catch-body and catch-param scope to f
-    let d = 4;    // let → block-scoped to catch body
+    var a = 1;                                                          // var → escapes try, lives in f's VE
+    let b = 2;                                                          // let → block-scoped to try
+  } catch (err) {                                                        // err has its OWN scope
+    var c = 3;                                                           // var → escapes catch-body, into f's VE
+    let d = 4;                                                           // let → block-scoped to catch body
   }
-
-  console.log(a); // 1
-  console.log(c); // 3 (if catch ran) or undefined (if try succeeded — c never assigned)
+  console.log(a);                                                        // 1 (or undefined if try threw)
+  console.log(c);                                                        // 3 (only if catch ran) else undefined
   // console.log(b);   // ReferenceError — block-scoped to try
   // console.log(d);   // ReferenceError — block-scoped to catch
-  // console.log(err); // ReferenceError — bound in catch's param scope only
+  // console.log(err); // ReferenceError — bound in catch param scope only
 }
 ```
 
-### Runtime / engine behavior — three layered scopes
-For a single `try { ... } catch (err) { ... }`:
+| Scope                            | Holds                                                |
+|----------------------------------|-------------------------------------------------------|
+| Function VE                      | `var a, var c` (escaped from blocks)                 |
+| `try` block LE                   | `let b`                                               |
+| `catch` param scope (its own LE) | `err`                                                 |
+| `catch` body LE                  | `let d`                                               |
+
+**Constraints**
+- `var` ignores `try`/`catch` block boundaries.
+- `let`/`const` are block-scoped to their respective block.
+- `catch (err)` parameter has its OWN scope; not in function VE.
+- Optional catch binding `catch {}` (ES2019) — no `err` param.
+
+---
+
+## 2. Plain-English restatement
+
+`try`/`catch` looks like one block but has three scope layers. `var` leaks across all three to the function scope. `let`/`const` stay in their own block. The `catch (err)` parameter has its own scope between the catch body and the function — `err` is invisible outside the catch.
+
+---
+
+## 3. Why this matters in interviews
+
+Tests scope-chain precision. Subtle bug source — `var result` inside `try` survives the block on purpose; `let result` doesn't.
+
+---
+
+## 4. Mental model
 
 ```
-function-scope (VE)
-└── try-block scope (LE for let/const inside try)
-└── catch-param scope (LE containing only err)
-    └── catch-body scope (LE for let/const inside catch body)
+   function f() {                              ← function-scope (VE)
+     try {                                     ← try block LE
+       var a;                                  ← LIFTED to f's VE
+       let b;                                  ← stays in try LE
+     } catch (err) {                           ← catch PARAM scope (LE)
+       var c;                                  ← LIFTED to f's VE
+       let d;                                  ← stays in catch BODY LE
+     }                                            (yes, catch body is yet another LE
+                                                   inside the param scope)
+   }
+   
+   Three scopes for try/catch:
+     1. try block LE          → let b
+     2. catch param scope LE  → err
+        catch body LE         → let d (block inside param scope)
+   
+   var ignores ALL three; lives in f's VE.
+
+   Optional catch binding (ES2019):
+     try { ... } catch { /* no err */ }
+     - no parameter scope needed.
 ```
 
-- `var` declarations anywhere inside try OR catch are hoisted to the **nearest function/module/script** — they live in the function VE, regardless of which block they appear in.
-- The `err` parameter is in a scope *between* the function and the catch body. You cannot redeclare `err` with `let` in the catch body (TDZ-collision-style `SyntaxError`), but you *can* redeclare it with `var` — and the `var` shadows the param **only inside the body**, not outside (since the param is in its own scope).
-- ES2019's **optional catch binding** lets you write `catch { ... }` (no param) when you don't need the error.
-- The error you catch is **always** bound to `err` lazily — engines don't pre-populate it on the creation phase; it's assigned when an exception is thrown into the catch.
+---
 
-### Edge cases (the traps)
-1. **`var err` inside catch body** — legal in non-strict; in strict mode it's a `SyntaxError` in some specs (and engines vary). Avoid it.
-2. **`let err` inside catch body** — `SyntaxError: Identifier 'err' has already been declared`. The catch param is in an outer scope but `let` in the body sees it as a duplicate.
-3. **`var x` inside `try`, accessed *after* the try block** — works and gives the assigned value (if the try ran past the `var x = ...` line) OR `undefined` if the assignment never executed. Common bug source.
-4. **Reassigning the catch param** — `catch (err) { err = wrap(err); throw err; }` is fine; the param is mutable.
-5. **Async + try/catch** — `try { await p; } catch (err) { ... }` works only for promises *awaited* in that try; sync `.then` chains escape.
-6. **Re-throwing from finally** — `finally` is yet another block, with its own `let`/`const` scope. A `return` or `throw` in `finally` overrides the try/catch result.
-7. **`var` in finally** — escapes to function scope just like `var` in try/catch.
-8. **Optional catch binding (`catch {}`)** — no err scope is created. Useful for "swallow and continue" patterns. ES2019+.
+## 5. Try it yourself first
 
-## Brute force approach
-"Treat try/catch like one big block." Wrong on two counts: (a) `var` doesn't respect block boundaries, so things "leak" upward in ways that surprise you, and (b) the catch param has its own micro-scope that no other construct has. Treating it as one block leads to "why does `let err` in the catch body throw a `SyntaxError`?" confusion.
+> **Predict before reading on:**
+> 1. After `try { var a = 1; } catch {}`, is `a` accessible outside?
+> 2. After `try { } catch (err) { var b = err.message; }`, is `b` accessible outside?
+> 3. Is `err` accessible outside the catch block?
 
-## Optimal approach
-**Always draw the three-layer diagram.** On the whiteboard:
+---
 
-```
-[ function VE: { var hoists from try AND catch }
-  [ try LE: { let/const inside try }
-  ]
-  [ catch-param LE: { err }
-    [ catch-body LE: { let/const inside catch body }
-    ]
-  ]
-]
-```
+## 6. Brute force — walked through
 
-For every variable, ask: which layer owns it? Then the output is mechanical.
+### Wrong attempt 1: "try/catch is one block"
+Three layered scopes.
 
-## Solution (JavaScript)
+### Wrong attempt 2: "var in catch is scoped to catch"
+Function-scoped — leaks out.
+
+### Wrong attempt 3: "err is in function scope"
+Has its own param scope.
+
+---
+
+## 7. The unlocking insight
+
+> **Three layered scopes: try LE, catch param LE, catch body LE. `var` ignores all three (escapes to function VE). `let`/`const` stay in their immediate block. `err` is in catch param LE — invisible outside.**
+
+Three properties:
+
+1. **Three layered scopes** — try, catch param, catch body.
+2. **`var` leaks** through all three.
+3. **`err` lives in param scope** — distinct from body.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
-function trickyCatch() {
+function processData(input) {
+  let result;                                                          // step 1: function-scope let
+
+  try {
+    var x = parseInt(input);                                            // step 2: var leaks to function scope
+    let y = x * 2;                                                      // step 3: try-block let, dies at } 
+    result = y;
+  } catch (err) {                                                       // step 4: err in param scope
+    var fallback = 0;                                                   // step 5: var leaks to function scope
+    let logged = err.message;                                           // step 6: catch-body let, dies at }
+    result = fallback;
+    console.log(logged);
+  }
+
+  console.log(x, fallback);                                              // accessible (var leaked)
+  // console.log(y, logged, err);   // ReferenceError each
+  return result;
+}
+```
+
+**Try it yourself**
+
+```js
+// var captures error info beyond block
+function safeParse(s) {
+  try {
+    return { ok: true, value: JSON.parse(s) };
+  } catch (err) {
+    var msg = err.message;                                              // var captured to function scope
+    return { ok: false, error: msg };
+  }
+}
+
+// Optional catch binding (ES2019)
+try {
+  doRiskyThing();
+} catch {                                                                // no err param
+  console.log('failed');
+}
+
+// Catch param vs body scope
+function demo() {
+  try { throw new Error('x'); }
+  catch (e) {
+    let e2 = 'shadow';                                                   // e is in PARAM scope; let e2 in BODY scope
+    console.log(e, e2);                                                   // Error: x, shadow
+  }
+  // console.log(e);   // ReferenceError
+}
+```
+
+---
+
+## 9. Step-by-step dry run
+
+```
+function f() {
   try {
     var a = 1;
     let b = 2;
-    throw new Error('boom');
   } catch (err) {
-    var c = 3;            // hoisted to function VE
-    let d = 4;            // block-scoped to catch body
-    console.log(err.message); // 'boom'
-    // let err = ...;     // SyntaxError — err already in outer (param) scope
-    var err = 'overwrite'; // legal in sloppy mode! shadows param ONLY inside catch body
-    console.log(err);     // 'overwrite'
+    var c = 3;
+    let d = 4;
   }
-
-  console.log(a);  // 1   — var a leaked from try
-  console.log(c);  // 3   — var c leaked from catch
-  console.log(typeof err); // 'undefined' — err is bound to the catch param scope, not function scope
-  // console.log(b);  // ReferenceError
-  // console.log(d);  // ReferenceError
+  console.log(a, c);
 }
 
-trickyCatch();
+CREATION phase (function f):
+  VE: { a: undefined, c: undefined }            (var hoisted past blocks)
+  LE: {}
+
+EXECUTION phase:
+  try {
+    enter try block (LE_try: { b: <uninitialized> })
+    var a = 1   → f.VE.a = 1
+    let b = 2   → LE_try.b = 2
+  } exit try block (LE_try popped; b gone)
+  
+  (no exception, so catch never runs)
+  
+  console.log(a, c)   → f.VE.a = 1, f.VE.c = undefined (catch never ran)
+
+Now imagine try threw:
+  try { throw new Error('boom'); }
+  catch { enter catch param LE (LE_cparm: { err: <error obj> })
+          enter catch body LE (LE_cbody: { d: <uninit> })
+          var c = 3 → f.VE.c = 3
+          let d = 4 → LE_cbody.d = 4
+          exit body (LE_cbody popped)
+          exit param scope (LE_cparm popped; err gone)
+  }
+  
+  console.log(a, c) → undefined (var a was hoisted but never assigned because throw happened), 3
 ```
 
-The `var err` inside catch is the subtle one. In sloppy mode it's legal and creates a `var err` in the function VE *as well as* shadowing the param inside the body. In strict mode some engines still allow this; others reject it. Either way, **don't write it.**
+---
 
-## Step-by-step dry run
+## 10. Common confusion + traps
 
-```js
-// === Creation phase for trickyCatch() ===
-// Scan body for var decls anywhere (including inside try/catch/finally):
-// VE: { a: undefined, c: undefined, err: undefined }   (yes, var err from the catch body too)
-// Function declarations: none.
+1. **One block** — three scopes.
+2. **`var` block-scoped here** — function-scoped (leaks).
+3. **`err` in function scope** — param scope only.
+4. **`var` and `let` of same name in try and catch** — `let` in one block doesn't collide with var in function.
+5. **Optional catch binding** — ES2019; no param needed.
+6. **`finally` is its own block too** — fourth scope layer.
+7. **Re-declaring `err` in catch body** — separate scope; allowed.
 
-// === Execution phase ===
+---
 
-// enter try-block
-//   LE(try): { b: <TDZ> }
-//   var a = 1   → VE: { a: 1, c: undefined, err: undefined }
-//   let b = 2   → LE(try): { b: 2 }
-//   throw new Error('boom')
+## 11. Senior follow-ups & variants
 
-// throw → unwind to catch
-//   exit try LE. b is gone.
+### Variant 1 — `finally` scope
+Yet another block LE.
 
-// create catch-param LE: { err: <Error 'boom'> }
-//   create catch-body LE: { d: <TDZ> }
+### Variant 2 — Optional catch binding
+`try {} catch {}` — no err param scope.
 
-//   var c = 3      → VE: { a:1, c:3, err: undefined }
-//   let d = 4      → catch-body LE: { d: 4 }
-//   console.log(err.message)   → reads err from param LE → 'boom'
+### Variant 3 — Re-throw pattern
+`catch (err) { throw err }` — re-uses param.
 
-//   var err = 'overwrite'
-//     Tricky: the `var err` hoist went to VE (so VE.err: undefined was created at creation).
-//     The assignment runs HERE. But there's ALSO a binding `err` in the param LE.
-//     In sloppy mode, assignment to `err` writes to the NEAREST `err` in scope chain → the param LE.
-//     (Some engines instead annex-B this to VE.err. V8 follows: assignment hits param.)
-//     Result: param LE.err = 'overwrite'. VE.err stays undefined.
+### Variant 4 — Error subclassing
+Custom errors propagate through catch like any object.
 
-//   console.log(err) → 'overwrite' (reads from param LE — same binding just assigned)
+### Variant 5 — Async / await + try/catch
+Wrap awaits in try/catch; same scope rules apply.
 
-// exit catch-body LE, exit catch-param LE.
+---
 
-// console.log(a)        → VE.a = 1
-// console.log(c)        → VE.c = 3
-// console.log(typeof err)
-//   Now param LE is gone. Lookup walks to VE.err → undefined.
-//   typeof undefined = 'undefined'.
-```
+## 12. How to think aloud
 
-Output:
-```
-boom
-overwrite
-1
-3
-undefined
-```
+> "try/catch has THREE layered scopes — the try block LE, the catch parameter scope LE (where `err` lives), and the catch body LE (a separate block inside param scope). `var` ignores ALL three and leaks to the function VE — that's why `var x = 1` inside `try` is accessible outside. `let`/`const` are block-scoped to their immediate block — `let b` inside try dies at `}`. The catch parameter `err` is in its own param scope, distinct from both function and catch body — invisible outside the catch. Optional catch binding (ES2019) `catch {}` removes the param. `finally` is yet another block. Trap: thinking try/catch is one block; assuming var is block-scoped; thinking err is function-scoped."
 
-The last line is the senior trap: `err` *appears* visible because of the `var err` hoist, but it's `undefined` because the assignment hit the catch param, not the VE binding.
+---
 
-## Important takeaways
+## 13. 60-second revision
 
-**Syntax to memorize**
-- `try`, `catch`-param, and `catch`-body are **three separate scopes** for `let`/`const`. `var` ignores all three and escapes to the function.
-- The catch param `err` is **not** a function-scoped binding. It disappears once you leave the catch.
-- ES2019 optional catch: `try { ... } catch { ... }` if you don't need the error object.
+> - **Three layered scopes:** try LE, catch param LE, catch body LE.
+> - **`var` leaks** through all three to function VE.
+> - **`let`/`const`** stay in their immediate block.
+> - **`err` in catch param scope** — invisible outside.
+> - **Optional catch binding** (ES2019): `catch {}` — no param.
+> - **`finally`** is fourth block layer.
+> - **Use `var` deliberately** to capture error info beyond block.
+> - **Trap:** "try/catch is one block"; var block-scoped; err in function scope.
 
-**Patterns to reuse**
-- For "did this try succeed and what's the value?" pattern, declare `let result` **before** the try block:
-  ```js
-  let result;
-  try { result = compute(); } catch (e) { result = fallback; }
-  ```
-  Avoids the `var`-escapes-and-might-be-undefined trap.
-- Always `console.error(err)` (or log structured) **inside** catch. Outside the catch, `err` is gone.
+---
 
-**Common mistakes**
-- Declaring `let result` inside try and reading it after — `ReferenceError`.
-- Using `var` and assuming the assignment ran when it might not have (because the throw happened first).
-- Thinking `catch (err) { let err = ... }` is legal — it's a `SyntaxError`.
-- Trying to "rename" the catch param via `var err = ...` inside the body — works in sloppy mode but writes to the param, not the function scope. Subtle bug.
+**Related:** [hoisting-in-javascript.md](./hoisting-in-javascript.md) · [var-in-block.md](./var-in-block.md) · [let-vs-var-differences.md](./let-vs-var-differences.md)
 
-**Backend relevance**
-- Express handlers: `try { const data = await db.query(...) } catch (err) { res.status(500).send(...) }`. The `data` is block-scoped — that's correct. Don't lift it out with `var`.
-- AsyncLocalStorage / async-hooks context propagation: the `err` arg in catch is the same instance you can attach context to before re-throwing.
-- Re-throwing wrapped errors: `catch (err) { throw new HttpError(500, err.message, { cause: err }) }` — uses ES2022 `cause`.
-
-## Variants
-
-1. **`finally` block scope** — add `finally { var f = 1; let g = 2; }`. Show that `f` escapes to function, `g` doesn't. Show that `return` inside `finally` overrides try/catch return.
-2. **Optional catch binding** — refactor to `try { ... } catch { logSwallow() }`. When is this acceptable (telemetry/swallow patterns) vs forbidden (silent failure)?
-3. **Async try/catch** — `try { await promise } catch (err)` works; `try { promise.then(...) } catch (err)` does not (the promise rejection escapes the try). Common bug.
-
-## Revision notes
-
-> **try/catch hoisting — 60 second recap**
-> - **Three scopes** stack: function VE > try LE > catch-param LE > catch-body LE.
-> - `var` anywhere inside try/catch/finally → hoisted to the **function VE**.
-> - `let`/`const` → block-scoped to whichever of the three blocks contains them.
-> - `catch (err)` — `err` is in its **own param scope**, not the function. Gone after the catch.
-> - `let err` inside catch body → `SyntaxError` (duplicate binding with param).
-> - `var err` inside catch body → legal sloppy, writes to the **param**, not the VE. Subtle.
-> - ES2019: `catch { }` — optional binding, no err scope.
-> - **Pattern:** declare result variables with `let` *before* the try block, assign inside.
-> - **Async trap:** sync try/catch around `.then(...)` chains catches *nothing* — only `await`-ed rejections.
-> - `finally` can override try/catch via `return`/`throw`. `var` in finally also escapes.
-> - ES2022 `Error({ cause })` — preserve causal chain when re-throwing wrapped errors.
+**Concept primer:** [`concepts/hoisting.md`](../../concepts/hoisting.md)

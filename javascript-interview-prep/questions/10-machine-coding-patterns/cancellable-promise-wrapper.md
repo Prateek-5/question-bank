@@ -1,102 +1,139 @@
-# Make a Promise Cancellable (token / signal pattern)
+# Cancellable Promise — wrapper + `AbortController`
 
-## Source
-- Famous in the JS community since 2014 (Domenic Denicola's TC39 cancellation proposals; bluebird's `Promise.cancel`).
-- Modern answer: `AbortController` (Node 15+, all evergreen browsers).
-- Common at senior frontend / backend interviews to probe understanding of why native Promise doesn't have cancel.
+> **Difficulty:** Medium-Senior   |   **Time:** ~20 min   |   **Prereqs:** [`04-promises/fetch-with-abort.md`](../04-promises/fetch-with-abort.md), [`04-promises/abortcontroller-fanout.md`](../04-promises/abortcontroller-fanout.md)
+>
+> **Source:** Domenic Denicola's withdrawn TC39 cancellation proposals, bluebird's `Promise.cancel`. Modern answer: `AbortController` (Node 15+).
 
-## Why this question matters in interviews
-This is a **conceptual trap question**. Many candidates start writing `promise.cancel()` and get derailed. The correct first answer is "native Promises are intentionally not cancellable — once started, a Promise's settlement is determined by its executor. You can build a wrapper that **ignores** the result, or use **AbortController** to cancel the underlying operation." That distinction — between cancelling **the work** vs cancelling **the awaiter** — is the senior insight. Then you implement the wrapper. It tests **closures over a flag**, **Promise constructor**, **understanding of microtask scheduling**, and the discipline to say "this is a wrapper, the underlying fetch/timer is still running."
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
-```js
-// "Cancel" by ignoring future settlement
-function makeCancellable(promise) {
-  let cancelled = false;
-  const wrapped = new Promise((resolve, reject) => {
-    promise.then(
-      (v) => cancelled ? reject({ cancelled: true }) : resolve(v),
-      (e) => cancelled ? reject({ cancelled: true }) : reject(e),
-    );
-  });
-  return { promise: wrapped, cancel: () => { cancelled = true; } };
-}
-
-// Native cancel — cancels the actual underlying work (fetch, timer)
-const controller = new AbortController();
-const res = await fetch(url, { signal: controller.signal });
-controller.abort();   // request actually stops
+**Signature**
+```ts
+function makeCancellable<T>(p: Promise<T>): {
+  promise: Promise<T>;
+  cancel(): void;
+  isCancelled(): boolean;
+};
 ```
 
-### Runtime / engine behavior
-- A Promise's settlement is decided by its **executor function**, which runs synchronously inside `new Promise(...)`. Once the executor calls `resolve` or `reject`, the Promise is locked. **There is no API to undo this from outside.** That's why "cancel a Promise" isn't a real thing.
-- What you can cancel: the **consumer's interest** in the result. The wrapper ignores the eventual settlement and rejects with a `cancelled` flag instead. The underlying work still runs to completion — it just publishes to a black hole.
-- `AbortController` is different: it's a **signal** the underlying operation listens to. `fetch(url, {signal})` polls `signal.aborted` and tears down the HTTP request. `setTimeout` has a wrapper version that does the same. This is **real** cancellation because the work itself stops.
-- Microtask scheduling: the wrapper's `.then` callbacks run on the microtask queue, so the cancellation check sits inside the microtask. Calling `cancel()` synchronously before the original settles guarantees the wrapper rejects.
-- Why TC39 declined cancellable Promises: it would break the **invariant** that a Promise's settlement state is monotonic. Plus, chaining (`p.then(a).then(b)`) would need to define cancellation propagation, which gets ugly fast (does cancelling `b` cancel `a`?). The community settled on `AbortController` as the right separation: signal the work, not the Promise.
+**Input / Output examples**
 
-### Edge cases (these are the interview traps)
-1. **Already-settled promise** — calling `cancel()` after the promise has resolved is a no-op (the wrapper already settled). State this; don't pretend cancel always works.
-2. **Multiple cancels** — second call should be a no-op, not a double-reject. The wrapper's outer Promise can only settle once anyway, so it's safe; but flip a flag to avoid extra work.
-3. **Cleanup side effects** — if you opened a socket, started a timer, or held a lock, cancelling the wrapper doesn't release them. Need a separate `cleanup` callback or use AbortSignal.
-4. **Error in original** — should a rejected original after cancel still reject the wrapper? With the cancellation flag, no — wrapper rejects with `{cancelled:true}`. Some implementations preserve the original error.
-5. **Chaining cancelled Promises** — `.then(handler)` on the cancelled wrapper still runs `handler` if you return a fulfilled value. The "cancelled" status doesn't propagate through `.then` unless `handler` is explicitly checking.
-6. **AbortController is the modern answer** — for fetch, fs streams (Node 16+), and any opt-in API, `signal` is the right cancellation mechanism. Most interviewers will accept "use AbortController" as a full answer if you explain why native Promise.cancel doesn't exist.
-7. **Combining AbortController with the wrapper** — sometimes you have a Promise that doesn't accept a signal (third-party lib). Wrap it AND wire the signal: `signal.addEventListener('abort', () => cancel())`. Two-layer pattern.
-8. **`Promise.withResolvers`** (ES2024) — externalizes resolve/reject without the constructor callback dance. Cleaner for advanced cancellation control. Mention if asked.
+| Setup                                                | Behaviour                                              |
+|------------------------------------------------------|---------------------------------------------------------|
+| `{promise, cancel} = makeCancellable(slow); cancel()`| wrapper rejects with CancelError; original still runs  |
+| `fetch(url, {signal})` then `controller.abort()`     | actual HTTP request torn down                          |
+| Cancel after promise has settled                     | no-op (wrapper already settled)                        |
+| Cancel twice                                         | safe (idempotent flag)                                 |
+| `signal.aborted` already true when wrapping          | wrapper rejects immediately                            |
 
-## Brute force approach
-"Just have the consumer not call `.then`." Doesn't work — the underlying work still runs and any side effects in `then` chains down the line will still fire if reachable. You need to break the chain explicitly.
+**Constraints**
+- Native Promises are intentionally **not** cancellable — settlement is monotonic.
+- The wrapper **ignores** the original's settlement; it doesn't stop work.
+- For real cancellation: `AbortController` — underlying API listens to `signal.aborted`.
 
-Another non-starter: "I'll mutate the Promise's internal state." There's no API. Promise state is private to the engine.
+---
 
-A subtle wrong answer: "I'll use `Promise.race` against a `cancel()`-rejected promise." This works for the consumer (`.race` settles first), but the original is still running and its `.then` handlers (if any) will still fire when it settles. Use only if you don't care about side effects in the original chain.
+## 2. Plain-English restatement
 
-## Optimal approach
-- For **real cancellation** (stopping the work): use `AbortController`. The work itself listens and tears down.
-- For **wrapper cancellation** (ignoring the result): closure over a `cancelled` flag, override settlement in the wrapper.
-- For **both**: combine — the wrapper listens to a signal and flips the flag.
+You can't cancel a Promise's settlement — once the executor calls `resolve` or `reject`, the state is locked. What you CAN cancel: the **consumer's interest** in the result. Either via a wrapper that flips a flag and rejects when the original settles (work still runs), or via `AbortController` if the underlying API supports it (work actually stops).
 
-## Solution (JavaScript)
+---
+
+## 3. Why this matters in interviews
+
+A **conceptual trap question.** Many candidates start writing `promise.cancel()` and get derailed. The senior answer leads with the distinction: cancelling the **work** (AbortController) vs cancelling the **awaiter** (wrapper). Tests: closures over a flag, Promise constructor mechanics, microtask scheduling, the discipline to say "this is a wrapper, the underlying fetch is still running."
+
+---
+
+## 4. Mental model
+
+```
+   Wrapper approach (work still runs):
+   ┌─────────────────────────────────────────────────────────────┐
+   │ original Promise                                            │
+   │  ┌────────────────────────────────────┐                     │
+   │  │ executor: setTimeout(1000ms)        │ → still runs       │
+   │  └────────────────────────────────────┘                     │
+   │           ↓ settles at t=1000                                │
+   │   wrapper's .then(v => cancelled ? reject(Cancel) : resolve(v))│
+   └─────────────────────────────────────────────────────────────┘
+
+   cancel() at t=100:  flips flag.
+   At t=1000: original resolves → wrapper sees flag → rejects.
+   The 1000ms timer DID fire. Only the wrapper ignored.
+
+   AbortController approach (real cancellation):
+   ┌─────────────────────────────────────────────────────────────┐
+   │ const ctrl = new AbortController()                          │
+   │ fetch(url, { signal: ctrl.signal })                          │
+   │   └─ fetch listens to signal; closes socket on abort         │
+   │ ctrl.abort()                                                 │
+   │   └─ underlying request torn down; no bytes received         │
+   └─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. After `cancel()`, does the original Promise's timer/fetch actually stop?
+> 2. Why did TC39 drop the cancellable-Promise proposal?
+> 3. What's the right tool to actually stop an in-flight `fetch`?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: "don't call `.then`"
+The original still runs and any chained side effects fire. Doesn't help.
+
+### Wrong attempt 2: mutate the Promise's internal state
+No API. Promise state is engine-private.
+
+### Wrong attempt 3: `Promise.race` against a cancel-rejected promise
+Works for the consumer (race settles first), but original is still running and its `.then` handlers (if any) still fire. Use only if you don't care about side effects.
+
+---
+
+## 7. The unlocking insight
+
+> **Two distinct tools for two distinct goals: (1) wrapper that flips a flag and overrides settlement — the original still runs. (2) `AbortController` + `signal` — the underlying API listens and tears down the work. Modern code uses AbortController; the wrapper is for APIs that don't accept signals.**
+
+Three properties:
+
+1. **Native Promises** are intentionally non-cancellable (monotonic settlement).
+2. **Wrapper cancels the awaiter** — flag + override in the wrapper's executor.
+3. **AbortController cancels the work** — signal listened to by the underlying API.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
 class CancelError extends Error {
   constructor() { super('Cancelled'); this.name = 'CancelError'; }
 }
 
-/**
- * Wrap a Promise so the caller can "cancel" — meaning, the wrapper will
- * reject with CancelError and never resolve/reject from the original.
- *
- * NOTE: this does NOT stop the underlying work. For that, use AbortController.
- *
- * @param {Promise<T>} promise
- * @returns {{ promise: Promise<T>, cancel: () => void, isCancelled: () => boolean }}
- * @template T
- */
 function makeCancellable(promise) {
-  let cancelled = false;
+  let cancelled = false;                                            // step 1: closure flag
 
-  const wrapped = new Promise((resolve, reject) => {
+  const wrapped = new Promise((resolve, reject) => {                 // step 2: outer wrapper
     promise.then(
-      (value) => cancelled ? reject(new CancelError()) : resolve(value),
-      (error) => cancelled ? reject(new CancelError()) : reject(error),
+      (v) => cancelled ? reject(new CancelError()) : resolve(v),     // step 3: gate settlement
+      (e) => cancelled ? reject(new CancelError()) : reject(e),
     );
   });
 
   return {
     promise: wrapped,
-    cancel: () => { cancelled = true; },
+    cancel: () => { cancelled = true; },                              // step 4: flip flag
     isCancelled: () => cancelled,
   };
 }
 
-/**
- * Modern version: bridge an AbortSignal to a cancel-on-abort wrapper.
- * Use this when wrapping APIs that don't natively accept a signal.
- */
+// Bridge AbortSignal → wrapper for libs that don't accept signals
 function fromSignal(promise, signal) {
   const c = makeCancellable(promise);
   if (signal.aborted) c.cancel();
@@ -104,7 +141,7 @@ function fromSignal(promise, signal) {
   return c.promise;
 }
 
-/** Cancellable setTimeout via AbortController — real cancellation. */
+// Cancellable setTimeout — REAL cancellation, not a wrapper
 function delay(ms, { signal } = {}) {
   return new Promise((resolve, reject) => {
     const onAbort = () => { clearTimeout(t); reject(new CancelError()); };
@@ -118,85 +155,119 @@ function delay(ms, { signal } = {}) {
 }
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
-Input (wrapper approach):
 ```js
-const slow = new Promise((resolve) => setTimeout(() => resolve('done'), 1000));
+// Wrapper approach
+const slow = new Promise((r) => setTimeout(() => r('done'), 1000));
 const { promise, cancel } = makeCancellable(slow);
+promise.then((v) => console.log('got', v), (e) => console.log('rej', e.name));
+setTimeout(cancel, 100);
+// At t=100: cancelled=true.
+// At t=1000: slow resolves 'done'; wrapper sees flag → rejects 'CancelError'.
 
-promise.then(v => console.log('got', v), e => console.log('rej', e.name));
-
-setTimeout(cancel, 100);   // cancel before slow resolves
-```
-
-Trace:
-- `slow` is created; its 1000ms timer is started immediately.
-- `makeCancellable(slow)`: creates `wrapped`. Inside `wrapped`'s executor, attaches `.then` to `slow`. Returns `{promise: wrapped, cancel}`.
-- `promise.then(...)` attaches the user's handlers to `wrapped`.
-- At t=100ms: `cancel()` runs. Sets `cancelled=true`.
-- At t=1000ms: `slow` resolves with 'done'. The `.then` handler in `wrapped`'s executor fires: `cancelled` is true → reject(new CancelError()).
-- `wrapped` rejects. User's `.then`'s rejection handler runs: prints `rej CancelError`.
-
-The 1000ms timer **still fired**. The Promise resolved. Only the wrapper ignored it.
-
-Input (AbortController approach — real cancellation):
-```js
+// AbortController approach (real cancellation)
 const ctrl = new AbortController();
-delay(1000, { signal: ctrl.signal }).then(() => console.log('done'), e => console.log('rej', e.name));
+delay(1000, { signal: ctrl.signal }).then(() => 'done', (e) => e.name);
 setTimeout(() => ctrl.abort(), 100);
+// At t=100: timer cleared; rejects immediately. Timer never fires at t=1000.
 ```
 
-Trace:
-- `delay(1000, {signal})` schedules a timer for 1000ms, attaches an abort listener.
-- At t=100ms: `ctrl.abort()` fires the abort event. Listener calls `clearTimeout(t)` (actually cancels the timer) and rejects.
-- The 1000ms timer **never fires**. The reject happens at t=100ms. Real cancellation.
+---
 
-## Important takeaways
+## 9. Step-by-step dry run
 
-**Syntax to memorize**
-- Wrapper: closure over `cancelled` flag + override settlement in the wrapper's executor.
-- Real cancellation: `AbortController` + `signal` + the underlying API listening.
-- `signal.addEventListener('abort', fn, { once: true })` for one-shot listeners.
-- `Promise.withResolvers()` (ES2024) gives you `{promise, resolve, reject}` without the constructor — cleaner for some cancellation patterns.
+```
+Wrapper approach:
+  t=0    new Promise(executor): setTimeout(1000ms) started
+         makeCancellable(slow):
+           cancelled=false
+           wrapped = new Promise(executor2)
+             executor2 attaches .then to slow:
+               slow.then(v => cancelled ? reject(Cancel) : resolve(v), ...)
+           return {promise: wrapped, cancel}
 
-**Patterns to reuse**
-- "Wrap and ignore" is the same pattern as: race-against-timeout, debounce-of-async (the abandoned call still settles but the wrapper ignores).
-- AbortSignal is the canonical async-cancellation primitive — `fetch`, `fs.readFile`, `stream.pipeline`, `EventEmitter.once` all accept it. Reuse everywhere instead of inventing new cancellation APIs.
+  t=100  cancel() runs → cancelled=true
+         (no immediate effect on wrapper or slow)
 
-**Common mistakes**
-- Claiming you've "cancelled the Promise" when really the work is still running.
-- Not handling the "cancelled after settled" case — second-cancel should be no-op.
-- Using `Promise.race` with a manually-rejected promise as a "cancel" — works for the consumer but doesn't reflect that the original is still doing work.
-- Forgetting to remove the abort listener after settlement — memory leak in long-lived signals.
-- Re-using a single `AbortController` for multiple operations and then can't cancel one without cancelling all.
+  t=1000 slow's setTimeout fires → slow resolves with 'done'
+         microtask: slow's .then handler runs:
+           cancelled === true → reject(new CancelError())
+         wrapped rejects.
 
-**Related questions**
-- `fetch` with timeout + abort (combine AbortController with setTimeout).
-- `Promise.withResolvers` / Deferred pattern (ES2024).
-- `Promise.race` for timeout enforcement.
-- Cancellation in async generators (`return()` cleanup).
-- Why TC39 dropped cancellable Promises (worth a 30-second narrative).
+  Output: rej CancelError. Timer DID run; original DID resolve.
 
-## Variants
+AbortController approach:
+  t=0    delay(1000, {signal}):
+           setTimeout(1000ms) → t handle
+           signal.addEventListener('abort', onAbort, {once:true})
 
-1. **Promise + AbortSignal combination** — accept a signal in the API; on abort, both the wrapper rejects AND the underlying work is signalled to stop. Composes naturally with fetch / streams.
+  t=100  ctrl.abort():
+           signal.aborted = true; dispatch 'abort' event
+           onAbort runs:
+             clearTimeout(t)   ← TIMER ACTUALLY CANCELLED
+             reject(new CancelError())
 
-2. **Cancel with cleanup** — accept a `cleanup` function: `makeCancellable(promise, { onCancel: () => closeSocket() })`. On cancel, run cleanup before rejecting. Bridges to resource management.
+  t=1000 (nothing happens — timer was cleared)
 
-3. **Hierarchical cancellation** — parent signal cancels all child signals. Built on `AbortSignal.any([...signals])` (ES2024). Useful for "cancel all in-flight requests for this user logout."
+  Output: rej CancelError. Underlying work stopped.
+```
 
-4. **Race with timeout** — `Promise.race([promise, delay(ms).then(() => { throw new TimeoutError(); })])`. Combine with cancellation so a timeout also cancels the underlying work.
+---
 
-5. **Async iterator cancellation** — `for await (const x of iter)` supports `iter.return()` to clean up. The async iterator protocol has explicit cancellation built in, unlike single Promises.
+## 10. Common confusion + traps
 
-## Revision notes
+1. **"I cancelled the Promise"** — no, you cancelled the wrapper; original work still ran.
+2. **Cancel twice** — flag should be idempotent; wrapper Promise settles once.
+3. **Cancel after settlement** — no-op; wrapper already settled.
+4. **`Promise.race` as cancel** — original still running; doesn't stop side effects.
+5. **Forgetting to remove abort listener** — memory leak in long-lived signals.
+6. **Reusing one AbortController for many ops** — can't cancel one without cancelling all. Use `AbortSignal.any([...])`.
+7. **TC39 dropped Promise.cancel** — chaining cancellation propagation is unsolvable cleanly; AbortController is the agreed answer.
 
-> **Cancellable Promise — 75 second recap**
-> - Native Promises are intentionally NOT cancellable — settlement is monotonic, executor is in charge.
-> - Two flavors: (1) wrapper that **ignores** settlement (work still runs, consumer rejects). (2) AbortController — work itself listens and stops.
-> - Wrapper: closure over `cancelled` flag; in the wrapper's executor, attach `.then` to original and override settlement based on flag.
-> - Real answer in 2026: AbortController + signal. Pass signal into fetch / setTimeout (wrapped) / streams / etc.
-> - `AbortSignal.any([...signals])` (ES2024) for hierarchical cancellation.
-> - Trap: claiming you cancelled when work is still running. Not removing abort listeners (leak). Reusing one controller for multiple ops.
-> - Mention: TC39 dropped Promise.cancel because chaining cancellation propagation is unsolvable cleanly. AbortController is the agreed answer.
+---
+
+## 11. Senior follow-ups & variants
+
+### Variant 1 — Promise + AbortSignal combination
+Accept a signal in the API; on abort, wrapper rejects AND underlying work signaled to stop. Composes with `fetch`, streams.
+
+### Variant 2 — Cancel with cleanup
+`makeCancellable(promise, { onCancel: () => closeSocket() })`. Runs cleanup before rejecting. Bridges to resource management.
+
+### Variant 3 — Hierarchical cancellation (`AbortSignal.any` ES2024)
+Parent signal cancels all child signals. Used for "cancel all in-flight requests for this user logout."
+
+### Variant 4 — Race-with-timeout
+`Promise.race([promise, delay(ms).then(() => { throw new TimeoutError(); })])`. Combine with cancellation so timeout also stops underlying work.
+
+### Variant 5 — `Promise.withResolvers` (ES2024)
+Externalizes resolve/reject without the constructor callback dance. Cleaner for advanced cancellation control.
+
+### Variant 6 — Async iterator cancellation
+`for await (const x of iter)` supports `iter.return()` for explicit cleanup — built-in, unlike single Promises.
+
+---
+
+## 12. How to think aloud
+
+> "Native Promises are intentionally not cancellable — settlement is monotonic, executor is in charge. Two flavors of 'cancel': (1) wrapper that ignores the original's settlement (flag + override) — work still runs. (2) AbortController + signal — the work itself listens and tears down. Modern answer in 2026: AbortController. Pass signal into fetch, setTimeout (wrapper), streams. `AbortSignal.any([...signals])` for hierarchical cancellation. Trap: claiming you cancelled when work is still running. Trap: forgetting to remove abort listeners (leak). Trap: reusing one controller for multiple ops. Why TC39 dropped Promise.cancel: chaining cancellation propagation is unsolvable cleanly."
+
+---
+
+## 13. 60-second revision
+
+> - **Native Promises NOT cancellable** — settlement is monotonic.
+> - **Wrapper:** closure over `cancelled` flag; wrapper's executor overrides settlement.
+> - **AbortController:** the WORK listens to signal and tears down.
+> - **Use wrapper** for APIs without signal support; **use AbortController** when supported.
+> - **`AbortSignal.any([...signals])`** for hierarchical cancellation (ES2024).
+> - **`Promise.withResolvers()`** (ES2024) for cleaner externalized resolve/reject.
+> - **Trap:** "I cancelled the Promise" (no — wrapper ignored result; work still ran).
+> - **Trap:** abort listener not removed (leak); shared controller cancelling unrelated ops.
+
+---
+
+**Related:** [`04-promises/fetch-with-abort.md`](../04-promises/fetch-with-abort.md) · [`04-promises/abortcontroller-fanout.md`](../04-promises/abortcontroller-fanout.md) · [`04-promises/promise-time-limit.md`](../04-promises/promise-time-limit.md) · [`04-promises/deferred-with-resolvers.md`](../04-promises/deferred-with-resolvers.md)
+
+**Concept primer:** [`concepts/promises.md`](../../concepts/promises.md)

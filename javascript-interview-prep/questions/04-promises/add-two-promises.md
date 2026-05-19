@@ -1,38 +1,84 @@
-# Implement `addTwoPromises(p1, p2)`
+# Implement `addTwoPromises(p1, p2)` — parallel-await-add
 
-## Source
-- LeetCode #2723 "Add Two Promises": https://leetcode.com/problems/add-two-promises/
-- A 5-minute warm-up to verify you can compose two promises without re-implementing `Promise.all`.
+> **Difficulty:** Easy   |   **Time:** ~10 min   |   **Prereqs:** [`concepts/promises.md`](../../concepts/promises.md), [sleep.md](./sleep.md)
+>
+> **Source:** [LeetCode 2723 — Add Two Promises](https://leetcode.com/problems/add-two-promises/).
 
-## Why this question matters in interviews
-This problem is the canonical "do you actually understand `async`/`await`?" check. There are three valid solutions — `await` + add, `Promise.all` + destructure, manual `.then` chaining — and a senior candidate should know which is idiomatic and **why the parallel one is strictly better than sequential `await`s**. The interviewer is watching for the same mistake juniors make daily in production: `const a = await fetchA(); const b = await fetchB();` instead of `const [a, b] = await Promise.all([fetchA(), fetchB()])`. Sequential awaits double the wall-clock latency for no reason — it is one of the single most common backend perf bugs.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
-```js
-async function addTwoPromises(p1, p2) {
-  const [a, b] = await Promise.all([p1, p2]);
-  return a + b;
-}
+**Signature**
+```ts
+function addTwoPromises(p1: Promise<number>, p2: Promise<number>): Promise<number>;
 ```
 
-### Runtime / engine behavior
-- An `async` function **always** returns a Promise. `return x` inside an async function is equivalent to `return Promise.resolve(x)`.
-- `await p` suspends the async function until `p` settles. The remainder of the function is scheduled as a microtask on `p`'s resolution.
-- `Promise.all([p1, p2])` does **not** start the promises — they're already running. It only waits for both to settle.
-- If `p1` rejects, `Promise.all` rejects immediately with `p1`'s reason. `p2` keeps running but its result is ignored (and its rejection, if any, becomes an unhandled rejection unless attached elsewhere).
+**Input / Output examples**
 
-### Edge cases (interview traps)
-1. **Sequential vs parallel** — `const a = await p1; const b = await p2;` adds nothing if `p1` and `p2` are already-running promises (they resolve in parallel anyway), but the *moment* you replace them with **factories** (`await fetchA(); await fetchB();`), you've serialized them. The LeetCode signature takes already-running promises, so both styles produce the same timing here — but you must articulate the difference.
-2. **One rejects** — `Promise.all` rejects fast. If you use sequential awaits, you must `try/catch` each one or the second never runs.
-3. **Non-numeric resolution** — if `p1` resolves to `"5"` and `p2` to `3`, `a + b` becomes `"53"`. Cast or validate if the contract requires numbers.
-4. **`p1 === p2`** — passing the same promise twice works fine; it resolves once and both destructure positions get the same value.
-5. **Returning a promise from an async function** — `return Promise.resolve(5)` and `return 5` are equivalent inside `async`; the engine flattens it. Don't write `return Promise.resolve(...)` — redundant.
-6. **Awaiting non-thenables** — `await 5` is legal: it wraps the value in `Promise.resolve` and resolves on the next microtask. Costs one microtask hop.
+| Inputs                                                          | Output                                |
+|------------------------------------------------------------------|---------------------------------------|
+| `Promise.resolve(2), Promise.resolve(3)`                        | resolves with `5`                     |
+| `sleep(20, 2), sleep(60, 5)`                                    | resolves with `7` at t≈60 (parallel)  |
+| `Promise.reject('boom'), Promise.resolve(5)`                   | rejects with `'boom'`                 |
+| `Promise.resolve('5'), Promise.resolve(3)`                     | resolves with `'53'` (string concat)  |
 
-## Brute force approach
-Two sequential awaits:
+**Constraints**
+- Both promises run in **parallel**, not sequentially.
+- Reject as soon as either input rejects.
+- The async function's return is auto-wrapped in `Promise.resolve`.
+
+---
+
+## 2. Plain-English restatement
+
+You're given two promises that each resolve to a number. Return a new promise that resolves to their sum. The two should be **awaited in parallel** — `Promise.all` + destructure — not chained sequentially.
+
+Looks like a 5-minute warmup, but the interviewer is checking whether you instinctively write `await Promise.all([p1, p2])` vs `await p1; await p2`. The first is what production code should look like.
+
+---
+
+## 3. Why this matters in interviews
+
+The canonical "do you actually understand async/await?" check. Three valid solutions: `await` + add, `Promise.all` + destructure, manual `.then` chaining. A senior candidate knows which is idiomatic and *why* the parallel one is strictly better than sequential awaits. The interviewer is watching for the same mistake juniors make daily in production: `const a = await fetchA(); const b = await fetchB();` instead of `const [a, b] = await Promise.all([fetchA(), fetchB()])`. Sequential awaits **double the wall-clock latency** for no reason — one of the single most common backend perf bugs.
+
+---
+
+## 4. Mental model
+
+The two promises are already running when you receive them. Your job is to wait for both — not to *start* them sequentially. `Promise.all([p1, p2])` is the right primitive: it returns a single promise that fulfills with an array when both fulfill, or rejects on first rejection.
+
+```
+   addTwoPromises(p1, p2):
+   
+   p1 ─running ─────────┐
+                        │ both must settle
+   p2 ─running ─────────┤
+                        ▼
+                  Promise.all([p1, p2])
+                  resolves with [v1, v2]
+                  
+                  return v1 + v2
+   
+   Wall time = max(t1, t2), NOT t1 + t2.
+```
+
+**Sequential `await` gives the same timing when inputs are already-running promises** (they run in parallel regardless). But the moment you reach for *factory functions* — `await fetchA(); await fetchB();` — sequential awaits serialize them. Mental discipline is "Promise.all by default."
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. If `p1` takes 20ms and `p2` takes 60ms, when does `addTwoPromises(p1, p2)` resolve?
+> 2. If `p1` rejects at t=10 and `p2` would resolve at t=100, when does the function reject, and does `p2`'s work continue?
+> 3. If `p1` resolves with `"5"` (string) and `p2` resolves with `3` (number), what's the output? Is that desirable?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: sequential awaits
+
 ```js
 async function addTwoPromises(p1, p2) {
   const a = await p1;
@@ -40,96 +86,238 @@ async function addTwoPromises(p1, p2) {
   return a + b;
 }
 ```
-This **works** and produces identical timing here because both promises are already in-flight when the function is called. But it's bad muscle memory — switch to factories and you've doubled the latency. Mention this distinction explicitly.
 
-## Optimal approach
-`Promise.all` + destructure. One microtask hop, parallel by construction, fails fast.
-
-## Solution (JavaScript)
+**Same timing** as the parallel version *when both inputs are already-running promises* — but the moment you replace either input with a factory call, you've doubled the latency. This is the muscle-memory trap. State the distinction:
 
 ```js
-/**
- * Returns a Promise that resolves to the sum of two resolved promises.
- * @param {Promise<number>} p1
- * @param {Promise<number>} p2
- * @returns {Promise<number>}
- */
+// SAFE — promises already running
+await addTwoPromises(p1, p2);
+
+// DANGEROUS — refactoring into sequential awaits with factory calls would double latency:
+async function addAB() {
+  const a = await fetchA();   // 200ms
+  const b = await fetchB();   // 200ms — starts AFTER a resolves
+  return a + b;                // total: 400ms
+}
+// vs.
+async function addABParallel() {
+  const [a, b] = await Promise.all([fetchA(), fetchB()]);
+  return a + b;                // total: 200ms
+}
+```
+
+### Wrong attempt 2: wrap return in `Promise.resolve`
+
+```js
 async function addTwoPromises(p1, p2) {
   const [a, b] = await Promise.all([p1, p2]);
-  return a + b;
+  return Promise.resolve(a + b);   // BUG: redundant double-wrap
+}
+```
+
+An `async` function's return value is **auto-wrapped** in `Promise.resolve`. Returning a Promise from `async` is fine — the engine flattens it — but `Promise.resolve(a + b)` is noise.
+
+### Wrong attempt 3: manual `.then` chaining
+
+```js
+function addTwoPromises(p1, p2) {
+  return p1.then((a) => p2.then((b) => a + b));   // nested
+}
+```
+
+Works but nested. The outer `.then` returns the inner promise; chaining waits for it. Less readable than `Promise.all` + destructure.
+
+---
+
+## 7. The unlocking insight
+
+> **`Promise.all([p1, p2])` is the right primitive for "wait for both, in parallel." Async functions auto-wrap returns in `Promise.resolve`; don't double-wrap.**
+
+Three properties:
+
+1. **`Promise.all` does not start promises** — they're already running. It just waits for both to settle.
+2. **Fail-fast.** If `p1` rejects, `Promise.all` rejects immediately with that reason. `p2` continues running but its result is discarded.
+3. **Auto-wrap.** `async function f() { return 5; }` returns `Promise.resolve(5)`. `return new Promise(...)` works too — the engine flattens.
+
+The interview check: do you write `await Promise.all([p1, p2])` instinctively, or fall into the sequential-await habit?
+
+---
+
+## 8. Solution (annotated)
+
+```js
+async function addTwoPromises(p1, p2) {
+  const [a, b] = await Promise.all([p1, p2]);   // step 1: wait for both in parallel
+  return a + b;                                   // step 2: auto-wrapped in Promise.resolve
 }
 
-// Equivalent without async/await (interviewer may ask):
+// Equivalent without async/await
 function addTwoPromisesThen(p1, p2) {
   return Promise.all([p1, p2]).then(([a, b]) => a + b);
 }
 ```
 
-## Step-by-step dry run
+**Try it yourself**
+
+```js
+const sleep = (ms, v) => new Promise((r) => setTimeout(() => r(v), ms));
+
+const sum = await addTwoPromises(sleep(20, 2), sleep(60, 5));
+console.log(sum);   // 7 at t≈60ms (NOT t=80ms — parallel)
+
+// Fail-fast
+try {
+  await addTwoPromises(Promise.reject(new Error('boom')), sleep(1000, 5));
+} catch (e) {
+  console.log(e.message);   // 'boom' — p2 still runs but its 5 is discarded
+}
+
+// String coercion
+await addTwoPromises(Promise.resolve('5'), Promise.resolve(3));   // '53'
+```
+
+---
+
+## 9. Step-by-step dry run
 
 Input:
+
 ```js
 const p1 = new Promise((r) => setTimeout(() => r(2), 20));
 const p2 = new Promise((r) => setTimeout(() => r(5), 60));
 addTwoPromises(p1, p2).then(console.log);
 ```
 
-Trace:
-- `t=0`: `p1` and `p2` constructed; both `setTimeout`s scheduled. `addTwoPromises(p1, p2)` invoked — async function starts, hits `await Promise.all([p1, p2])`, suspends. The async function's outer promise is pending.
-- `t=20`: `p1`'s timer fires → resolve(2). Internal `Promise.all` aggregator notes p1 settled, count = 1/2; not done yet.
-- `t=60`: `p2`'s timer fires → resolve(5). Aggregator notes p2 settled, count = 2/2; resolves the all-promise with `[2, 5]`.
-- Microtask drain: `addTwoPromises` resumes, destructures `[a=2, b=5]`, returns `7`. The async function's outer promise resolves with `7`.
-- Microtask drain: `.then(console.log)` runs → prints `7`.
+Values-first trace:
 
-Total wall time: ~60ms (the slower of the two), not 80ms. That's the parallelism win.
+| Time (ms) | Event                                                | State                    |
+|-----------|-------------------------------------------------------|---------------------------|
+| 0         | `p1`, `p2` constructed; both timers scheduled         | both pending             |
+| 0         | `addTwoPromises(p1, p2)` invoked; hits `await Promise.all`; suspends | pending           |
+| 20        | `p1` resolves with `2`; Promise.all internal counter 1/2 | partial                |
+| 60        | `p2` resolves with `5`; counter 2/2; Promise.all resolves `[2, 5]` | settled         |
+| 60+µ      | async fn resumes; destructures; returns `7`           | function's promise resolves |
+| 60+2µ     | `.then(console.log)` fires → prints `7`              |                          |
+
+**Total wall time: ~60ms** (max of the two), not ~80ms (sum). That's the parallelism win.
 
 Rejection trace:
+
 ```js
-const p1 = Promise.reject(new Error('boom'));
-const p2 = sleep(1000).then(() => 5);
-addTwoPromises(p1, p2).catch(e => console.log(e.message));
+addTwoPromises(Promise.reject(new Error('boom')), sleep(1000, 5))
+  .catch((e) => console.log(e.message));
 ```
-- `Promise.all` rejects immediately with `Error('boom')`. The async function's `await` throws, the function's returned promise rejects with the same error. `p2` keeps running for ~1s, its eventual `5` is discarded. No unhandled rejection because we have `.catch`.
 
-## Important takeaways
+| Time | Event                                          | State        |
+|------|------------------------------------------------|---------------|
+| 0    | `Promise.all` sees `p1` already rejected       | rejecting    |
+| 0+µ  | `Promise.all` rejects with `Error('boom')`     | rejected     |
+| 0+µ  | async fn's `await` throws; function rejects    | rejected     |
+| 0+2µ | `.catch` fires → prints `'boom'`              | done         |
+| 1000 | `p2`'s timer fires, resolves with `5`; ignored | (discarded)  |
 
-**Syntax to memorize**
-- `const [a, b] = await Promise.all([p1, p2]);` — the destructure makes the parallel intent obvious.
-- `async` function's return value is **auto-wrapped** in `Promise.resolve` — don't double-wrap.
+`p2` keeps running — `Promise.all` doesn't cancel siblings. For true cancellation, wrap with AbortController.
 
-**Patterns to reuse**
-- "Parallel-fan-out, await-once" is the bread-and-butter pattern for any I/O-heavy backend handler: `await Promise.all([db.user(id), db.orders(id), cache.permissions(id)])`.
-- For independent calls that can tolerate partial failure, use `Promise.allSettled` instead. For "first one wins," `Promise.race`. Pick the right tool — see polyfill questions in this bucket.
+---
 
-**Common mistakes**
-- Sequential `await` when the calls are independent. Doubles latency.
-- Wrapping returns in `Promise.resolve` inside async functions.
-- Forgetting that `Promise.all` is fail-fast — if you need all results regardless, use `Promise.allSettled`.
-- Mutating shared state inside the awaited expressions and relying on order — order of resolution is unpredictable.
+## 10. Common confusion + traps
 
-**Related questions**
-- `Promise.all` polyfill (next file).
-- `addNPromises(arr)` — generalize to N promises with `arr.reduce((s, x) => s + x, 0)` after the `all`.
-
-## Variants
-
-1. **N-promise sum** — `async function sumPromises(arr) { return (await Promise.all(arr)).reduce((s, x) => s + x, 0); }`. Same idea; tests if you can scale the pattern.
-
-2. **Partial failure tolerance** — "sum the resolved values, treat rejections as 0." Use `Promise.allSettled` and filter.
+1. **Sequential awaits with factory functions.**
    ```js
-   const settled = await Promise.allSettled(arr);
-   return settled.reduce((s, r) => s + (r.status === 'fulfilled' ? r.value : 0), 0);
+   const a = await fetchA();   // 200ms
+   const b = await fetchB();   // another 200ms — sequential!
    ```
+   Doubles latency. Switch to `Promise.all`.
 
-3. **Strict-number variant** — reject if either value is not a finite number. Tests defensive coding posture.
+2. **Wrapping return in `Promise.resolve`.**
+   `async` auto-wraps. `return Promise.resolve(x)` is noise.
 
-## Revision notes
+3. **Forgetting `Promise.all` is fail-fast.**
+   If you need all results regardless of rejections, use `Promise.allSettled`. If you need the first success, use `Promise.any`.
 
-> **addTwoPromises — 60 second recap**
-> - `const [a, b] = await Promise.all([p1, p2]); return a + b;` — one line.
-> - `async` returns a Promise; `return x` ≡ `return Promise.resolve(x)`.
-> - **Parallel** by construction; sequential `await`s would serialize *factory calls*, not pre-existing promises.
-> - `Promise.all` is **fail-fast** — first reject wins; other promises keep running but their results are discarded.
-> - Family: `Promise.all` for "all or nothing", `allSettled` for "tell me about each", `race` for "first wins", `any` for "first success."
-> - **Trap:** writing `const a = await p1; const b = await p2;` and forgetting that with *factory functions* this serializes them.
-> - String coercion bites: `"5" + 3 === "53"`. Validate types if the contract is numeric.
+4. **Mutating shared state inside the awaited promises.**
+   Order of resolution is unpredictable. Don't rely on which finishes first.
+
+5. **String coercion bites.**
+   `"5" + 3 === "53"`. If the contract is numeric, validate types or coerce explicitly with `Number()`.
+
+6. **`p1 === p2` works.**
+   Same promise passed twice — Promise.all destructures both positions with the same value.
+
+7. **Awaiting non-thenables.**
+   `await 5` is legal — wraps in `Promise.resolve(5)`, costs one microtask hop.
+
+---
+
+## 11. Senior follow-ups & variants
+
+### Variant 1 — Sum N promises
+
+```js
+async function sumPromises(arr) {
+  return (await Promise.all(arr)).reduce((s, x) => s + x, 0);
+}
+```
+
+Scales the pattern. Same parallelism guarantee.
+
+### Variant 2 — Partial failure tolerance
+
+```js
+async function sumWithFailureTolerance(arr) {
+  const settled = await Promise.allSettled(arr);
+  return settled.reduce((s, r) => s + (r.status === 'fulfilled' ? r.value : 0), 0);
+}
+```
+
+Treat rejections as zero. Use case: aggregate scores across services where some may be down.
+
+### Variant 3 — Type-strict variant
+
+```js
+async function addTwoPromisesStrict(p1, p2) {
+  const [a, b] = await Promise.all([p1, p2]);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) {
+    throw new TypeError('both inputs must resolve to finite numbers');
+  }
+  return a + b;
+}
+```
+
+Defensive coding posture; prevents string-coercion surprises.
+
+### Variant 4 — Concurrent with timeout
+
+```js
+async function addTwoPromisesWithTimeout(p1, p2, ms) {
+  return Promise.race([
+    addTwoPromises(p1, p2),
+    new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms)),
+  ]);
+}
+```
+
+Compose with race for deadline enforcement.
+
+---
+
+## 12. How to think aloud in the interview
+
+> "`const [a, b] = await Promise.all([p1, p2]); return a + b;`. One line, parallel by construction. Promise.all is fail-fast — first reject wins; siblings keep running but results discarded. Async function auto-wraps the return in `Promise.resolve` — no need for explicit wrapping. The mental discipline is `Promise.all` by default for independent waits — sequential awaits serialize *factory calls*, which doubles latency. For partial-failure tolerance, swap to `allSettled` + filter. For first-success-wins, `any`. For deadline, race with a setTimeout-rejecter."
+
+---
+
+## 13. 60-second revision
+
+> - **`const [a, b] = await Promise.all([p1, p2]); return a + b;`** — one line.
+> - `Promise.all` is **fail-fast**; siblings keep running but results discarded.
+> - `async` return is **auto-wrapped** in `Promise.resolve`. Don't double-wrap.
+> - **Parallel by construction.** Sequential awaits would serialize factory calls (doubles latency).
+> - **Family:** `Promise.all` (all-or-first-reject), `allSettled` (wait-all), `race` (first-either), `any` (first-fulfill).
+> - **Trap:** sequential awaits with factory functions; wrapping return in `Promise.resolve`.
+
+---
+
+**Related:** [promise-all-polyfill.md](./promise-all-polyfill.md) · [sequential-vs-parallel-async-map.md](./sequential-vs-parallel-async-map.md) · [sleep.md](./sleep.md) · [promise-allsettled-polyfill.md](./promise-allsettled-polyfill.md)
+
+**Concept primer:** [`concepts/promises.md`](../../concepts/promises.md)

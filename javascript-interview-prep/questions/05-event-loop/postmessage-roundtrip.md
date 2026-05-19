@@ -1,234 +1,271 @@
-# postMessage Round-Trip (Worker / iframe Bidirectional)
+# `postMessage` round-trip — RPC over one-way messaging
 
-## Source / Origin
-- DOM/Node MessageChannel + `worker.postMessage`; `window.postMessage` for iframes.
-- Asked at: Cloudflare, Stripe, Razorpay, Atlassian (browser-heavy roles).
-- Concept reference: `concepts/event-loop.md`, sibling `messagechannel-microtask.md`, `worker-threads-vs-event-loop.md`.
+> **Difficulty:** Senior   |   **Time:** ~20 min   |   **Prereqs:** [worker-threads-vs-event-loop.md](./worker-threads-vs-event-loop.md), [structured-clone-cost.md](./structured-clone-cost.md)
+>
+> **Source:** DOM/Node `worker.postMessage`, `window.postMessage`. Cloudflare, Stripe, Razorpay browser-heavy roles.
 
-## Why this question matters in interviews
-`worker.postMessage(x)` is fire-and-forget. To get a *reply*, you need a correlation ID and a pending-promise map — request/response semantics on top of one-way messaging. This question filters candidates who only know `worker.postMessage('go')` from those who can build an RPC abstraction over it. Senior bar: you handle (1) message-ID correlation, (2) error replies, (3) transferables for zero-copy, (4) timeout + cancel.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+Build an RPC client over `worker.postMessage` — request/response with correlation IDs, error handling, timeout, transferables.
+
+**Verification examples**
+
+| Setup                                            | Behaviour                                              |
+|--------------------------------------------------|---------------------------------------------------------|
+| `rpc.call('hash', 'pw')`                          | Promise resolves to worker's result                    |
+| Concurrent `rpc.call(...)` × 100                  | each routes to right caller via id                     |
+| Worker throws                                      | Promise rejects with worker's error                    |
+| Worker timeout                                     | reject after `timeoutMs`; pending entry cleaned       |
+| `transfer` list for ArrayBuffer                   | zero-copy send                                          |
+| Worker crashes                                     | reject all pending                                      |
+
+**Constraints**
+- `postMessage` is fire-and-forget — need correlation ID for replies.
+- Map `id → {resolve, reject, timer}`.
+- Errors marshalled (Error → {message, stack}).
+- Timeout cleans pending entry to avoid leak.
+
+---
+
+## 2. Plain-English restatement
+
+`worker.postMessage(x)` is fire-and-forget. To get a reply, add a `requestId` to each message; worker echoes it with the result. Maintain a `Map<id, {resolve, reject, timer}>` on the main thread to route the reply back to the correct Promise.
+
+---
+
+## 3. Why this matters in interviews
+
+Tests whether you can build RPC abstractions over one-way messaging — same shape as WebSocket protocols, WebWorker RPC libs (Comlink), service worker postMessage.
+
+---
+
+## 4. Mental model
+
+```
+   Main thread:                          Worker thread:
+   nextId = 1
+   pending: Map<id, callbacks>
+
+   rpc.call('hash', 'pw'):
+     id = nextId++
+     pending.set(id, {resolve, reject, timer})
+     timer = setTimeout(timeoutReject, 30s)
+     postMessage({id, method, args, ...})  ─────┐
+                                                ▼
+                                       parentPort.on('message', ({id, method, args}) => {
+                                         try {
+                                           result = handlers[method](args);
+                                           postMessage({id, result});  ◀──┐
+                                         } catch (e) {                       │
+                                           postMessage({id, error: e.message}); ◀──
+                                         }
+                                       });
+                                                ▼
+   onMessage(({id, result, error})):  ◀────────┘
+     pending.get(id) → {resolve, reject, timer}
+     clearTimeout(timer); pending.delete(id)
+     error ? reject(error) : resolve(result)
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. Why need a correlation ID?
+> 2. What happens to `pending` if a request times out — leak?
+> 3. How to send a 10MB `ArrayBuffer` without copying?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: no correlation ID
+Reply routes to wrong caller under concurrency.
+
+### Wrong attempt 2: no timeout
+Hanging worker leaks pending entries forever.
+
+### Wrong attempt 3: postMessage huge data
+Structured clone copies; use transferList.
+
+### Wrong attempt 4: send Error directly
+Error objects don't fully clone (lose stack); marshal to `{message, name, stack}`.
+
+---
+
+## 7. The unlocking insight
+
+> **Each call: `id = nextId++; pending.set(id, callbacks); postMessage({id, method, args})`. Worker echoes id with result/error. `onMessage` looks up pending by id, clears timer, resolves. Cleanup on timeout to avoid leak.**
+
+Three properties:
+
+1. **Correlation ID** — routes reply to right caller.
+2. **Timer per call** — bound waiting; clean pending on timeout.
+3. **Transferables** — zero-copy for large binaries.
+
+---
+
+## 8. Solution (annotated)
+
 ```js
-// main.js — RPC client
 class WorkerRpc {
   constructor(worker) {
     this.worker = worker;
-    this.pending = new Map();           // id → {resolve, reject, timer}
+    this.pending = new Map();                                          // step 1: id → callbacks
     this.nextId = 1;
     worker.addEventListener('message', (e) => this._onMessage(e.data));
+    worker.addEventListener('error', (err) => this._onCrash(err));
   }
+
   call(method, args, { timeoutMs = 30_000, transfer = [] } = {}) {
     const id = this.nextId++;
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
+      const timer = setTimeout(() => {                                  // step 2: timeout cleanup
         this.pending.delete(id);
         reject(new Error(`RPC ${method} timed out after ${timeoutMs}ms`));
       }, timeoutMs);
       this.pending.set(id, { resolve, reject, timer });
-      this.worker.postMessage({ id, method, args }, transfer);
+      this.worker.postMessage({ id, method, args }, transfer);          // step 3: send with transferList
     });
   }
-  _onMessage(msg) {
-    const slot = this.pending.get(msg.id);
-    if (!slot) return;                  // unsolicited or after-timeout
-    clearTimeout(slot.timer);
-    this.pending.delete(msg.id);
-    if (msg.error) slot.reject(Object.assign(new Error(msg.error.message), msg.error));
-    else slot.resolve(msg.result);
+
+  _onMessage({ id, result, error }) {
+    const entry = this.pending.get(id);
+    if (!entry) return;
+    clearTimeout(entry.timer);
+    this.pending.delete(id);
+    if (error) entry.reject(new Error(error));                          // step 4: route reply
+    else entry.resolve(result);
+  }
+
+  _onCrash(err) {
+    for (const [id, entry] of this.pending) {                           // step 5: reject all pending
+      clearTimeout(entry.timer);
+      entry.reject(err);
+    }
+    this.pending.clear();
   }
 }
+```
 
-// worker.js — RPC server
+**Worker side:**
+
+```js
+// worker.js
+const { parentPort } = require('node:worker_threads');
 const handlers = {
-  square: ({ x }) => x * x,
-  fetchJson: async ({ url }) => (await fetch(url)).json(),
+  hash: async (pw) => crypto.pbkdf2Sync(pw, 'salt', 100_000, 64, 'sha512').toString('hex'),
 };
-self.onmessage = async (e) => {
-  const { id, method, args } = e.data;
+parentPort.on('message', async ({ id, method, args }) => {
   try {
     const result = await handlers[method](args);
-    self.postMessage({ id, result });
-  } catch (err) {
-    self.postMessage({ id, error: { message: err.message, code: err.code } });
+    parentPort.postMessage({ id, result });
+  } catch (e) {
+    parentPort.postMessage({ id, error: e.message });
   }
-};
+});
 ```
 
-### Edge cases / interview traps
-1. **No correlation = no replies.** Without an `id`, you can't tell which postMessage reply belongs to which call.
-2. **Unsolicited messages** — handler should ignore unknown IDs (worker might broadcast events without a corresponding call).
-3. **Transferable objects** — `ArrayBuffer`, `MessagePort`, `ImageBitmap` can be *transferred* (zero-copy) instead of cloned. Caller loses access after transfer.
-4. **Structured clone cost** — sending a 10MB object incurs serialization on send + deserialization on receive. Use transferables.
-5. **Timeout cleanup** — clear timer and remove pending entry on either resolution or reject.
-6. **Worker crash** — pending calls hang forever unless you listen to `error`/`messageerror` and reject all pending.
-7. **Bidirectional RPC** — both sides have client and server roles. Useful for "main asks worker to render; worker asks main to log."
-8. **Cross-origin iframes** — `event.origin` check is mandatory; never trust senders.
-
-## Mental Model
-
-A **letter-and-reply protocol** with envelopes labeled by ID:
-
-```
-   main ─────────postMessage({id:1, method:'square', args:{x:5}})────────▶ worker
-                                                                              │ runs handler
-   main ◀────────postMessage({id:1, result:25}) ─────────────────────────────┘
-
-   main keeps a "pending" map: { 1: { resolve, reject, timer } }
-   on reply with id=1, resolve/reject and clear the slot
-```
-
-For iframes the picture is the same, except `event.origin` adds an authentication step:
-
-```
-   parent ─── postMessage({id:1, ...}, 'https://child.example') ───▶ child iframe
-   parent ◀── postMessage({id:1, ...}, 'https://parent.example') ─── child
-                  ^ child must specify parent origin
-```
-
-## Why interviewers care
-
-- **API design** — building request/response over fire-and-forget.
-- **Lifecycle hygiene** — timeouts, cleanup, worker-crash recovery.
-- **Performance awareness** — transferables vs cloning.
-
-## Common beginner confusion
-
-- **"postMessage is synchronous."** It's async (microtask boundary on same realm; macrotask across realms).
-- **"I can send a function."** No — structured clone won't pass functions, DOM nodes, classes with methods (unless serialized).
-- **"Transferable means copy."** No — *zero-copy transfer*. The sender loses access. Different semantics.
-- **"Workers can't access main memory."** They can via `SharedArrayBuffer` (with `Atomics`).
-- **"`event.origin` is always trustworthy."** It is set by the browser, but checking it is on you. Skipping the check = XSS-style cross-window attack vector.
-
-## Brute force approach
+**Try it yourself**
 
 ```js
-// Fire-and-forget — no result
-worker.postMessage({ method: 'square', x: 5 });
-worker.onmessage = (e) => console.log(e.data);   // global handler; how to map to request?
-```
-
-## Optimal approach
-
-A client-side `WorkerRpc` class with a `call(method, args)` method returning a Promise. Each call gets a unique ID; worker echoes it back. Server-side `worker.js` dispatches by method name and replies. Transferables for big payloads. Timeout + error wiring.
-
-## Solution (JavaScript)
-
-```js
-// main.js
-const worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
+const worker = new Worker('./worker.js');
 const rpc = new WorkerRpc(worker);
 
-// Easy calls
-const sq = await rpc.call('square', { x: 5 });            // 25
-const json = await rpc.call('fetchJson', { url: '/api/users' });
-
-// Transferable: send a 10MB buffer zero-copy
-const buf = new ArrayBuffer(10 * 1024 * 1024);
-await rpc.call('processBuffer', { buf }, { transfer: [buf] });
-// buf is now neutered in main; cannot be read.
-
-// Crash recovery
-worker.addEventListener('error', (e) => {
-  for (const slot of rpc.pending.values()) slot.reject(new Error('Worker crashed: ' + e.message));
-  rpc.pending.clear();
-});
-
-// worker.js
-const handlers = {
-  square: ({ x }) => x * x,
-  fetchJson: async ({ url }) => (await fetch(url)).json(),
-  processBuffer: ({ buf }) => {
-    const view = new Uint8Array(buf);
-    // ... process in place ...
-    return { processedBytes: view.length };
-  },
-};
-self.onmessage = async (e) => {
-  const { id, method, args } = e.data;
-  try {
-    if (!handlers[method]) throw new Error(`Unknown method ${method}`);
-    const result = await handlers[method](args);
-    self.postMessage({ id, result });
-  } catch (err) {
-    self.postMessage({ id, error: { message: err.message, code: err.code } });
-  }
-};
+const hash = await rpc.call('hash', 'pa$$w0rd');                       // RPC
+const buf = new ArrayBuffer(10_000_000);
+const result = await rpc.call('process', { buf }, { transfer: [buf] }); // zero-copy
+buf.byteLength;                                                         // 0 — detached
 ```
 
-For iframe cross-origin:
+---
 
-```js
-// parent
-const iframe = document.querySelector('iframe');
-const childOrigin = 'https://child.example.com';
-iframe.contentWindow.postMessage({ id: 1, method: 'ping' }, childOrigin);
-
-window.addEventListener('message', (e) => {
-  if (e.origin !== childOrigin) return;        // SECURITY
-  // ... handle reply with e.data.id ...
-});
-```
-
-## Step-by-step dry run
+## 9. Step-by-step dry run
 
 ```
-t=0   main: rpc.call('square', {x:5})
-       → id=1, pending.set(1, {resolve, reject, timer=30s})
-       → worker.postMessage({id:1, method:'square', args:{x:5}})
+Concurrent calls:
+t=0    rpc.call('hash', 'a') → id=1; pending={1: cbA}; postMessage({id:1, ...})
+       rpc.call('hash', 'b') → id=2; pending={1:cbA, 2:cbB}; postMessage({id:2, ...})
 
-t=1ms worker: onmessage runs
-       → handlers.square({x:5}) → 25
-       → self.postMessage({id:1, result:25})
+Worker processes both (async, concurrent):
+t=200  worker returns result for id=2 → postMessage({id:2, result: 'hashB'})
+       main: onMessage → pending.get(2) → resolve cbB('hashB'); pending.delete(2)
+t=250  worker returns result for id=1 → postMessage({id:1, result: 'hashA'})
+       main: onMessage → pending.get(1) → resolve cbA('hashA'); pending.delete(1)
 
-t=2ms main: worker.onmessage with {id:1, result:25}
-       → pending.get(1) → resolve(25); clearTimeout
-       → Promise resolves with 25
+Note: replies came back OUT OF ORDER. Correlation ID routes correctly.
+
+Timeout case:
+t=0    rpc.call('hash', 'c', {timeoutMs: 100}) → id=3; setTimeout(reject, 100)
+       pending={3: cbC}
+t=100  timer fires → pending.delete(3); reject('timeout')
+t=200  worker finally returns id=3 → main onMessage → pending.get(3) → undefined → ignored
+
+Crash case:
+t=0    rpc.call(...) × 5 → pending={1..5}
+t=50   worker crashes → onCrash
+       for each pending: clearTimeout, reject(crashErr)
+       pending.clear()
 ```
 
-Error path:
+---
 
-```
-t=0   rpc.call('boom', ...) → handler throws "kaboom"
-t=1ms worker: self.postMessage({id:2, error:{message:'kaboom'}})
-t=2ms main: rejects with Error('kaboom')
-```
+## 10. Common confusion + traps
 
-## How to think aloud in the interview
+1. **No correlation ID** — concurrent calls route incorrectly.
+2. **No timeout cleanup** — hanging worker leaks Map entries.
+3. **Send Error directly** — stack lost; marshal to `{message, name, stack}`.
+4. **Forget transferList** — copies large binaries.
+5. **No crash handler** — pending leaks indefinitely.
+6. **postMessage from worker echoes** — `worker.postMessage` is one-way; worker uses `parentPort.postMessage`.
+7. **Method registry on worker side** — switch on `method` to dispatch.
 
-> "I'll build RPC on top of postMessage. Client side: monotonic ID, pending Map of `id → {resolve, reject, timer}`. `call(method, args)` posts `{id, method, args}` and stores the slot. Worker side: switch on method, reply with `{id, result}` or `{id, error}`. Big payloads via transferables (ArrayBuffer, MessagePort) — zero-copy, sender loses access. Crash handler rejects all pending. Cross-origin iframe — always check `event.origin`. Timeouts clean up the slot."
+---
 
-## Important takeaways
+## 11. Senior follow-ups & variants
 
-- **Correlation ID** — without it, no replies.
-- **Pending Map** — `id → {resolve, reject, timer}`.
-- **Transferables** for big payloads (zero-copy).
-- **`event.origin` check** for cross-origin.
-- **Worker-crash handler** — reject all pending.
-- **Bidirectional RPC** = both sides have client+server roles.
+### Variant 1 — Comlink library
+Wraps worker objects as Proxies; calls feel like normal function invocations.
 
-## Variants
+### Variant 2 — Stream large results
+Worker chunks; main reassembles. Used for streaming JSON parse.
 
-- **Comlink** (Google's library) — wraps this RPC in a Proxy so you write `await worker.square(5)`.
-- **MessageChannel direct pipe** — pass a `MessagePort` as transferable so two sub-components communicate without going through main.
-- **Streaming RPC** — server emits multiple `{id, chunk, done}` messages; client assembles.
-- **AbortSignal across worker boundary** — send `{id, type:'abort'}`; server checks a cancellation table.
-- **Service worker as RPC** — same pattern; service worker is the worker.
+### Variant 3 — `MessageChannel` for cross-worker RPC
+Dedicated lane between workers (not main).
 
-## Revision notes
+### Variant 4 — Cancellation
+Post `{type: 'cancel', id}`; worker checks periodically; rejects with AbortError.
 
-```
-postMessage RPC:
-  client: id-keyed pending Map; call() → postMessage({id, method, args}) + add slot + timer
-  server: dispatch by method; reply { id, result } or { id, error }
-  
-  transferable (ArrayBuffer, MessagePort) — zero-copy; sender loses access
-  structured clone (default) — deep copy; no functions
-  
-  cross-origin iframe: ALWAYS check event.origin
-  worker.onerror: reject all pending
-  
-  Comlink: Proxy wrapper for ergonomic RPC
-```
+### Variant 5 — `SharedArrayBuffer` for hot loops
+Skip RPC overhead; both threads read/write shared memory directly.
+
+### Variant 6 — `window.postMessage` for iframes
+Same RPC pattern; check `event.origin` for security.
+
+---
+
+## 12. How to think aloud
+
+> "`postMessage` is fire-and-forget; build RPC on top via correlation ID. Main: `nextId++` per call; `pending: Map<id, {resolve, reject, timer}>`. Send `{id, method, args}`; worker echoes `{id, result, error}`. Main `onMessage` looks up id, clears timer, resolves/rejects. Timeout: setTimeout per call, cleans pending entry on fire. Worker crash: reject all pending. For zero-copy on big binaries: `postMessage(data, [transferList])`. For continuous sharing: `SharedArrayBuffer + Atomics`. Trap: no correlation ID (mis-routed replies); no timeout cleanup (leak); raw Error (stack lost); postMessage huge data (copy)."
+
+---
+
+## 13. 60-second revision
+
+> - **Correlation ID per call** — `pending: Map<id, {resolve, reject, timer}>`.
+> - **Send `{id, method, args}`; worker echoes `{id, result, error}`.**
+> - **Per-call timer** with cleanup on settle/timeout.
+> - **Crash handler** rejects all pending.
+> - **Marshal errors** to `{message, name, stack}` — don't send Error directly.
+> - **Transferables** for large binaries: `postMessage(data, [transferList])`.
+> - **Family:** Comlink, BroadcastChannel, `window.postMessage` for iframes.
+> - **Trap:** no id; no timeout; raw Error; huge-data copy.
+
+---
+
+**Related:** [worker-threads-vs-event-loop.md](./worker-threads-vs-event-loop.md) · [worker-pool-implementation.md](./worker-pool-implementation.md) · [structured-clone-cost.md](./structured-clone-cost.md) · [messagechannel-microtask.md](./messagechannel-microtask.md)
+
+**Concept primer:** [`concepts/event-loop.md`](../../concepts/event-loop.md)

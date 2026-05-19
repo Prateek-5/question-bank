@@ -1,234 +1,244 @@
-# `AsyncLocalStorage` / `async_hooks` for request-scoped context
+# `AsyncLocalStorage` — request-scoped context
 
-## Source
-- Node.js docs: https://nodejs.org/api/async_context.html#class-asynclocalstorage
-- async_hooks docs: https://nodejs.org/api/async_hooks.html
-- Real-world usage: pino logger, OpenTelemetry, NestJS request-scoped providers, Fastify request context.
-- Original RFC for AsyncLocalStorage: nodejs/node#36436.
+> **Difficulty:** Senior   |   **Time:** ~20 min   |   **Prereqs:** [event-loop-concurrency.md](./event-loop-concurrency.md), [microtask-macrotask-order.md](./microtask-macrotask-order.md)
+>
+> **Source:** Node `node:async_hooks`. pino, OpenTelemetry, NestJS, Fastify use it. Datadog, Stripe, payment companies.
 
-## Why this question matters in interviews
-Backend interviewers (especially at infra-heavy shops — Datadog, Stripe, payment companies) ask this because the alternative (passing `ctx` through every function signature) is a known anti-pattern and `AsyncLocalStorage` is the canonical solution. If you can explain that it's built on `async_hooks`, that it survives `await`/`Promise.then` boundaries, and that it gives you a **trace id / request id / user id** without polluting every signature — you've shown senior judgment. The follow-up is usually a memory-safety question (does it leak? can it grow unbounded?).
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### The problem it solves
-Without `AsyncLocalStorage`, you have two bad options:
-1. **Thread the `ctx` through every function** — pollutes every signature, leaks abstractions, doesn't work across library boundaries.
-2. **Stash on a module global** — broken under concurrency. Two requests in flight overwrite each other's globals.
+How do you propagate request-scoped state (request ID, user ID, trace ID) through async call chains without threading `ctx` through every function signature?
 
-`AsyncLocalStorage` gives you a **per-async-context store**. The store automatically follows the async call chain — across `await`, `setTimeout`, `Promise.then`, callback APIs. Two concurrent requests have two separate stores.
+**Verification examples**
 
-### Syntax to lock in
+| Setup                                                | Behaviour                                              |
+|------------------------------------------------------|---------------------------------------------------------|
+| `als.run({reqId: 'abc'}, () => handler())`           | inside handler + nested awaits, `als.getStore()` returns `{reqId:'abc'}` |
+| Two concurrent requests                              | each sees own store (per-async-context)                |
+| Survives `await`, `Promise.then`, `setTimeout`        | context propagates through callback chain              |
+| `worker_threads`                                     | NOT propagated to worker (separate isolate)           |
+| Store mutated                                         | sees same store object across chain                    |
+
+**Constraints**
+- Per-async-context store; survives async boundaries.
+- Built on `async_hooks` (Node internal API).
+- Doesn't propagate to worker threads.
+- Some overhead (~5-10% on hot paths).
+
+---
+
+## 2. Plain-English restatement
+
+A "thread-local-like" store that follows the async call chain. Set up in a middleware (`als.run(store, callback)`); inside `callback` and any awaits/Promises spawned by it, `als.getStore()` returns the same store. Two concurrent requests have two separate stores. No more threading `ctx` through every function.
+
+---
+
+## 3. Why this matters in interviews
+
+Backend infra question. Alternatives are anti-patterns: thread ctx everywhere (pollutes signatures) or stash on global (broken under concurrency). Tests `async_hooks` literacy + production observability awareness.
+
+---
+
+## 4. Mental model
+
+```
+   Without ALS:
+   handler(req, ctx) → db.query(sql, ctx) → log.info('done', ctx) → ...
+   ctx threads through EVERY signature; library boundaries leak ctx.
+
+   With ALS:
+   middleware: als.run({reqId, userId}, () => handler(req))
+                ↓ async chain
+   handler() — calls als.getStore() to read context
+     ↓ await db.query(sql)
+   db.query() — calls als.getStore() — same context!
+     ↓ await pool.connect()
+   logger — calls als.getStore() — same context!
+
+   Two concurrent requests:
+   req1: als.run({reqId: 1}, handler) ──▶ all awaits see {reqId: 1}
+   req2: als.run({reqId: 2}, handler) ──▶ all awaits see {reqId: 2}
+
+   Built on async_hooks: every async resource (Promise, Timeout, ...) tracks
+   parent context. Store follows.
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. Does the store survive `await`?
+> 2. Does the store propagate to a `worker_threads.Worker`?
+> 3. What's the cost — free or measurable?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: thread ctx through every function
+Pollutes signatures; library boundaries leak ctx; refactor pain.
+
+### Wrong attempt 2: module-level global
+Race: two concurrent requests overwrite each other's globals.
+
+### Wrong attempt 3: store on `Request` object
+Have to pass `req` everywhere → same as threading ctx.
+
+---
+
+## 7. The unlocking insight
+
+> **`als.run(store, callback)` sets store for the entire async chain spawned from callback. `als.getStore()` reads from within. Built on `async_hooks` so it survives `await`, `Promise.then`, `setTimeout`, callback APIs. Two concurrent requests have two separate stores.**
+
+Three properties:
+
+1. **Per-async-context store** — survives async boundaries.
+2. **`async_hooks` plumbing** — tracks parent context across resources.
+3. **Doesn't cross workers** — separate V8 isolate.
+
+---
+
+## 8. Solution (annotated)
+
 ```js
 const { AsyncLocalStorage } = require('node:async_hooks');
 const als = new AsyncLocalStorage();
 
-// Per-request setup (HTTP middleware)
+// Express middleware
 app.use((req, res, next) => {
-  als.run({ requestId: crypto.randomUUID(), userId: req.user?.id }, () => {
+  const store = { requestId: crypto.randomUUID(), userId: req.user?.id };
+  als.run(store, () => {                                              // step 1: scope creation
     next();
   });
 });
 
-// Deep in your code, anywhere — no parameter passing needed
-function log(message) {
+// In any deep function — pino logger reads context automatically
+const logger = pino({
+  mixin() {
+    return als.getStore() ?? {};                                       // step 2: read context
+  },
+});
+
+// Or manually
+async function deepFunction() {
   const ctx = als.getStore();
-  console.log(`[${ctx.requestId}]`, message);
+  logger.info({ ...ctx, event: 'something' });
+  await db.query('...');
+  // ctx still accessible after await
+  console.log(als.getStore().requestId);                              // same store
 }
 ```
 
-### How it works (the senior-level explanation)
-- Built on `async_hooks` — Node's low-level lifecycle hooks for async resources.
-- Every async resource (Promise, Timer, FSReqCallback, etc.) is tracked. When you `await` or pass a callback, Node propagates the **execution context** automatically.
-- `als.run(store, fn)` sets `store` as the active context. Any async work spawned inside `fn` inherits it.
-- `als.getStore()` reads the currently-active store. Returns `undefined` if none.
-
-### Edge cases
-1. **`als.getStore()` returns undefined outside `als.run`** — always guard or default.
-2. **Doesn't cross worker_threads** — workers have their own async contexts. Pass via `workerData`.
-3. **Old C++ libraries that don't use async_hooks-aware APIs** can break propagation — extremely rare, but native addons (some old DB drivers) may not propagate context across their callbacks.
-4. **Performance** — async_hooks has overhead (~5-10% in worst case). `AsyncLocalStorage` specifically was optimized in Node 16+ to be near-zero overhead when not used. Enabling it across the board is fine.
-5. **Memory** — the store is held as long as the async call chain is reachable. If you stash a huge object, it stays in memory until the request finishes. Be deliberate about what you store.
-6. **Detached promises** — if you `setInterval(fn)` from inside `als.run`, the interval inherits the context **forever** until cleared. Long-lived intervals + ALS = leak.
-7. **Nested `als.run`** — replaces the store for the inner scope. Outer scope resumes after. Like a dynamic scope.
-8. **Reading is sync, fast** — `als.getStore()` is a single TLS-like lookup. Cheap enough to call thousands of times per request.
-
-## Brute force approach
-"Pass `ctx` as the first arg to every function." Works for small codebases. Breaks at scale (typescript signatures balloon, library boundaries leak). Use only if you can't run Node 14+.
-
-## Optimal approach
-Wrap each request in `als.run(context, () => next())`. Anywhere downstream, read with `als.getStore()`. Build a tiny accessor:
+**Try it yourself**
 
 ```js
-const als = new AsyncLocalStorage();
-const getContext = () => als.getStore() ?? {};
-const getRequestId = () => getContext().requestId;
-```
-
-For logging: hook into your logger to auto-inject `requestId` from ALS into every log line. For tracing: most OpenTelemetry SDKs use ALS under the hood.
-
-## Solution (JavaScript)
-
-### A minimal request-scoped context
-
-```js
-const http = require('node:http');
-const crypto = require('node:crypto');
-const { AsyncLocalStorage } = require('node:async_hooks');
-
-const als = new AsyncLocalStorage();
-
-// Logger that auto-tags every line with requestId
-function log(level, msg, meta = {}) {
-  const ctx = als.getStore() ?? {};
-  console.log(JSON.stringify({
-    level,
-    msg,
-    requestId: ctx.requestId ?? null,
-    userId: ctx.userId ?? null,
-    ...meta,
-  }));
+// Concurrent requests don't pollute each other
+async function handler(reqId) {
+  await new Promise((r) => setTimeout(r, Math.random() * 100));
+  console.log('req', reqId, 'sees', als.getStore().requestId);
 }
 
-// Simulated DB layer (would normally need ctx for transaction)
-async function dbFetchUser(id) {
-  log('info', 'querying user', { id });    // logs with requestId automatically
-  await new Promise(r => setTimeout(r, 50));
-  return { id, name: 'Alice' };
-}
+als.run({ requestId: 1 }, () => handler(1));
+als.run({ requestId: 2 }, () => handler(2));
+// Output:
+// req 1 sees 1
+// req 2 sees 2
+// (separate stores even though setTimeout interleaves)
 
-// Simulated handler
-async function handler(req, res) {
-  log('info', 'request started');
-  const user = await dbFetchUser(42);
-  log('info', 'request done', { user });
-  res.end(JSON.stringify(user));
-}
-
-// Server: wrap every request in a per-request store
-http.createServer((req, res) => {
-  const store = {
-    requestId: crypto.randomUUID(),
-    userId: req.headers['x-user-id'] ?? null,
-    startedAt: Date.now(),
-  };
-  als.run(store, () => handler(req, res));
-}).listen(3000);
+// Worker_threads — does NOT propagate
+const worker = new Worker('./worker.js');
+worker.postMessage({});
+// Inside worker: als.getStore() → undefined (separate V8 isolate)
 ```
 
-Now hit the server with two concurrent requests:
+---
+
+## 9. Step-by-step dry run
+
 ```
-$ curl localhost:3000 & curl localhost:3000 &
-```
+Request 1 arrives:
+  middleware: als.run({reqId: 'a'}, () => next())
+  → enters async context A
+  
+  handler runs in context A:
+    als.getStore() → {reqId: 'a'} ✓
+    await db.query(...)        ← async_hooks tracks parent context A
+    (microtask continuation also in context A)
+    als.getStore() → {reqId: 'a'} ✓
+    
+  Request 2 arrives during request 1's await:
+    als.run({reqId: 'b'}, () => next())
+    → enters async context B
+    handler runs in context B:
+      als.getStore() → {reqId: 'b'} ✓
+    
+  Both run concurrently with separate stores.
 
-Logs are interleaved but each line carries the correct `requestId`. No ctx parameter was passed anywhere.
-
-### Demonstrating cross-await propagation
-
-```js
-const als = new AsyncLocalStorage();
-
-als.run({ id: 'A' }, async () => {
-  console.log('start A:', als.getStore()?.id);    // A
-  await new Promise(r => setTimeout(r, 100));
-  console.log('after await A:', als.getStore()?.id);  // A — preserved!
-
-  als.run({ id: 'B' }, () => {
-    console.log('inside B:', als.getStore()?.id);     // B
+Test: worker thread
+  als.run({reqId: 'c'}, () => {
+    const worker = new Worker('./worker.js');
+    // inside worker.js: als is a different instance; getStore() → undefined
   });
-
-  console.log('after inner B, outer:', als.getStore()?.id);  // A
-});
-
-als.run({ id: 'C' }, async () => {
-  await new Promise(r => setTimeout(r, 50));
-  console.log('parallel C:', als.getStore()?.id);  // C — separate!
-});
 ```
 
-Output:
-```
-start A: A
-parallel C: C
-after await A: A
-inside B: B
-after inner B, outer: A
-```
+---
 
-Two parallel "requests" (A and C) maintain isolated contexts. Inner `als.run(B)` shadows for its scope.
+## 10. Common confusion + traps
 
-## Step-by-step dry run
+1. **`getStore` outside `run`** — returns `undefined`.
+2. **Propagates to workers** — no, separate isolate.
+3. **Free runtime cost** — measurable ~5-10% on hot paths.
+4. **Mutating the store** — visible to all in chain.
+5. **`als.exit(callback)`** — runs callback OUTSIDE the current context.
+6. **Multiple `als` instances** — independent; each tracks own store.
+7. **Old `domain` API** — deprecated; ALS is the modern replacement.
 
-```js
-const als = new AsyncLocalStorage();
+---
 
-console.log('1:', als.getStore());              // undefined
+## 11. Senior follow-ups & variants
 
-als.run({ tag: 'X' }, async () => {
-  console.log('2:', als.getStore().tag);        // X
-  await Promise.resolve();
-  console.log('3:', als.getStore().tag);        // X (preserved across await)
-  setImmediate(() => {
-    console.log('5:', als.getStore().tag);      // X (preserved into setImmediate)
-  });
-});
+### Variant 1 — OpenTelemetry integration
+Span context propagated automatically via ALS; trace ID survives async boundaries.
 
-console.log('4:', als.getStore());              // undefined
-```
+### Variant 2 — pino logger mixin
+`mixin: () => als.getStore()` injects requestId into every log line.
 
-Output order: `1 undefined`, `2 X`, `4 undefined`, `3 X`, `5 X`.
+### Variant 3 — NestJS request-scoped providers
+Backed by ALS under the hood.
 
-Trace:
-- Line 1: not inside any `als.run` → `undefined`.
-- `als.run` activates store `{tag:'X'}`. Async function runs sync portion: log `2 X`.
-- `await Promise.resolve()` → continuation enqueued as microtask. Store context **captured**.
-- After the async function suspends, line 4 runs — outside `als.run`, store is `undefined`.
-- Microtask drains: continuation runs with store `{tag:'X'}` restored → log `3 X`.
-- `setImmediate` queued with store captured.
-- `setImmediate` fires → log `5 X`.
+### Variant 4 — Manual `async_hooks`
+Lower-level API; track every async resource (`init`, `before`, `after`, `destroy`). ALS sits on top.
 
-## Important takeaways
+### Variant 5 — Browser equivalent
+None standard; React's Context API for component tree; AsyncContext proposal at TC39.
 
-**Syntax to memorize**
-- `new AsyncLocalStorage()` once at module top.
-- `als.run(store, fn)` to set context for a scope.
-- `als.getStore()` to read (returns undefined outside any run).
-- `als.enterWith(store)` (rarely used) — set without callback; use only in well-defined hook points.
-- `als.disable()` to fully turn off (rare).
+### Variant 6 — Memory leaks
+Stores held until async chain completes; long-lived chains (open WebSockets) hold stores forever.
 
-**Patterns to reuse**
-- **Request ID propagation** — set in HTTP middleware, read in logger.
-- **User / tenant context** — read deep in business logic without parameter pollution.
-- **Distributed tracing** — current span carried via ALS; OTel SDK does this for you.
-- **Transaction context** — the DB connection / transaction handle stored in ALS, picked up by repository methods. (Care: this can leak connections if you don't clean up.)
+---
 
-**Common mistakes**
-- Forgetting to `als.run(...)` at the top — `getStore()` returns undefined. Always default-handle.
-- Storing huge objects in the store — they live until the chain completes.
-- Using a global `setInterval` that captures ALS context indefinitely — leak.
-- Assuming context propagates to worker_threads — it does not.
-- Believing ALS is "free" — it has overhead, just small (~5%). Don't enable for trivial values when you can pass as args.
+## 12. How to think aloud
 
-**Related questions**
-- `async_hooks` low-level API
-- `unhandledRejection` and request correlation
-- Promise context loss in old codebases
+> "`AsyncLocalStorage` gives you a per-async-context store that follows the async call chain — across `await`, `Promise.then`, `setTimeout`, callback APIs. Set in HTTP middleware via `als.run(store, callback)`; read anywhere via `als.getStore()`. Two concurrent requests have two separate stores. Built on `async_hooks` — Node tracks parent context for every async resource. Doesn't propagate to `worker_threads` (separate V8 isolate). ~5-10% overhead on hot paths. Modern replacement for the deprecated `domain` API. Used by pino, OpenTelemetry, NestJS, Fastify. Trap: getStore outside run; assumption of worker propagation; memory leaks via long-lived chains."
 
-## Variants
+---
 
-1. **"How would you implement ALS from scratch?"** — use `async_hooks.createHook` with `init`, `before`, `after`, `destroy` callbacks. Maintain a Map<asyncId, store>. In `init`, copy parent's store to the new resource. In `before`, set as current. In `after`/`destroy`, clean up. (~50 LOC for a basic version.)
-2. **"Why doesn't ALS work across worker_threads?"** — workers are separate V8 isolates with their own async_hooks scheduler. Context is process-local.
-3. **"How does OpenTelemetry use ALS?"** — every active span is stored in ALS. `tracer.startActiveSpan(name, fn)` wraps `fn` in `als.run(span, fn)`. Nested spans inherit and override.
-4. **"Performance impact?"** — Node 16+ benchmarks show <2% on typical HTTP servers. Pre-16, it could hit 10%+. Always benchmark before sweeping changes.
+## 13. 60-second revision
 
-## Revision notes
+> - **`als.run(store, callback)`** sets store for async chain spawned from callback.
+> - **`als.getStore()`** reads current context — survives `await`, `Promise.then`, timers, callbacks.
+> - **Concurrent requests** have separate stores (per-async-context).
+> - **`async_hooks`** tracks parent context for every async resource.
+> - **Does NOT propagate to workers** (separate V8 isolate).
+> - **~5-10% overhead** on hot paths.
+> - **Used by:** pino, OpenTelemetry, NestJS, Fastify.
+> - **Replaces** deprecated `domain` API.
+> - **Trap:** getStore outside run; worker propagation; long-lived chain leaks.
 
-> **AsyncLocalStorage — 60 second recap**
-> - Solves: "I need request-scoped context (requestId, userId, txn) without threading it through every function."
-> - Built on async_hooks; survives `await`, `Promise.then`, `setTimeout`, callbacks.
-> - `als.run(store, fn)` to enter; `als.getStore()` to read.
-> - Per-request isolation: two concurrent requests have two separate stores.
-> - **Used by**: pino logger, OpenTelemetry, NestJS scopes, Fastify request context.
-> - **Trap**: stashing huge objects → memory bloat. Long-lived intervals inside `als.run` → leak.
-> - **Trap**: doesn't cross worker_threads. Pass via `workerData`.
-> - Replaces explicit ctx threading and global-state hacks.
+---
+
+**Related:** [event-loop-concurrency.md](./event-loop-concurrency.md) · [microtask-macrotask-order.md](./microtask-macrotask-order.md) · [worker-threads-vs-event-loop.md](./worker-threads-vs-event-loop.md) · [`10-machine-coding-patterns/dependency-injection-container.md`](../10-machine-coding-patterns/dependency-injection-container.md)
+
+**Concept primer:** [`concepts/event-loop.md`](../../concepts/event-loop.md), [`concepts/promises.md`](../../concepts/promises.md)

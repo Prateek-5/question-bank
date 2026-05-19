@@ -1,175 +1,307 @@
-# WeakRef + FinalizationRegistry
+# `WeakRef` + `FinalizationRegistry`
 
-## Source / Origin
-- ES2021.
-- Asked at: Razorpay, Cloudflare, Atlassian — modern-JS depth questions.
-- Concept reference: `concepts/maps-sets.md`.
+> **Difficulty:** Senior   |   **Time:** ~10 min   |   **Prereqs:** [weakmap-memoize.md](./weakmap-memoize.md)
+>
+> **Source:** ES2021. Razorpay, Cloudflare, Atlassian — depth questions.
 
-## Why this question matters in interviews
-`WeakRef` lets you hold a reference that *doesn't* prevent GC. `FinalizationRegistry` lets you run cleanup when an object is collected. Both are advanced and rarely needed — but knowing them signals depth. Senior bar: you know they're discouraged for normal code, can describe valid use cases (caches that don't pin objects, resource cleanup), and the non-determinism caveat.
+---
 
-## Concepts involved
+## 1. Problem statement
+
+`WeakRef` holds a ref that doesn't prevent GC. `FinalizationRegistry` runs a cleanup when object is collected. Both are advanced and discouraged for normal code.
+
+**Verification examples**
 
 ```js
 let target = { big: new Array(1e6) };
 const ref = new WeakRef(target);
 
-ref.deref();         // returns target (still alive)
+ref.deref();                             // → target (alive)
 target = null;
-// some time later, GC collects target
-ref.deref();         // returns undefined
+// some time later, GC...
+ref.deref();                             // → undefined
 
-const reg = new FinalizationRegistry(heldValue => {
+const reg = new FinalizationRegistry((heldValue) => {
   console.log('collected:', heldValue);
 });
 let obj = {};
-reg.register(obj, 'obj-key');
+reg.register(obj, 'token-1');
 obj = null;
-// eventually: console.log fires with 'obj-key'
+// eventually: console.log fires with 'token-1'
 ```
 
-### Edge cases / traps
-1. **GC timing is unspecified.** You can't rely on *when* a finalizer runs; only that it *may*.
-2. **Don't use for critical cleanup.** Use try/finally for that.
-3. **`WeakRef` can re-promote.** If you `deref()` and assign somewhere, the object stays alive.
-4. **`registry.unregister(token)`** to deregister a watch.
-5. **`heldValue` mustn't reference the target** — would prevent collection.
-6. **Closures inside finalizers** that capture the target also prevent collection.
-7. **Iteration**: WeakRef/Registry are not iterable.
-8. **Best practice (TC39 note)**: "avoid these unless you have a clear use case."
+**Constraints**
+- GC timing UNSPECIFIED — never rely on when.
+- `heldValue` mustn't reference the target.
+- Best practice (TC39): avoid unless clear need.
 
-## Mental Model
+---
+
+## 2. Plain-English restatement
+
+`WeakRef` is a non-pinning reference. `FinalizationRegistry` runs a callback when an object is GC'd. Use sparingly; not deterministic.
+
+---
+
+## 3. Why this matters in interviews
+
+Advanced/rarely needed; knowing them = depth signal. Senior bar: know they're discouraged, valid use cases, non-determinism caveat.
+
+---
+
+## 4. Mental model
 
 ```
-   Normal reference:   strong; prevents GC
-   WeakRef:            weak; doesn't prevent GC; deref() returns obj or undefined
-   FinalizationRegistry: register(obj, heldValue); when obj is GC'd, call cleanup(heldValue)
+   WeakRef:
+     new WeakRef(target) holds a weak reference.
+     ref.deref() returns target OR undefined (if collected).
+     If you deref() and store the result, that's a strong ref again — "re-promotes."
+   
+   FinalizationRegistry:
+     reg = new FinalizationRegistry(cb)
+     reg.register(target, heldValue, [unregisterToken])
+     When target is GC'd, cb(heldValue) MAY fire.
+     "MAY" — implementations can defer or skip.
+     reg.unregister(token) cancels.
+   
+   Critical caveats:
+     - Timing is unspecified — milliseconds or never.
+     - DON'T use for required cleanup (use try/finally or close).
+     - DON'T capture target in heldValue/callback — pins it alive.
+     - DON'T rely on order; multiple finalizers fire arbitrary order.
+     - Microtasks scheduled by finalizer run on host task queue.
+   
+   Use cases (rare):
+     - Caches that don't pin objects (combine WeakMap + WeakRef).
+     - Resource cleanup logging (best-effort).
+     - Detecting reference-leaks in tests (development only).
 ```
 
-## Why interviewers care
+---
 
-- **Modern-JS literacy.**
-- **GC understanding.**
-- **Non-determinism awareness.**
+## 5. Try it yourself first
 
-## Common confusion
+> **Predict before reading on:**
+> 1. Can you rely on a finalizer firing?
+> 2. What does `deref()` do?
+> 3. What's the "re-promotion" risk?
 
-- **"WeakRef is like WeakMap value."** Conceptually related; WeakRef is per-object reference, WeakMap is key→value with weak keys.
-- **"Finalizer always runs."** Not guaranteed; engine may skip on shutdown.
-- **"Use for resource cleanup like file handles."** No — use try/finally or explicit close. Finalizer is best-effort.
-- **"WeakRef prevents memory leaks."** Doesn't help unless the rest of the graph also weakens.
+---
 
-## Solution
+## 6. Brute force — walked through
 
 ```js
-// 1. GC-friendly memoize — cached values can be collected if memory tight
-class WeakRefMemo {
-  cache = new Map();
-  get(key, compute) {
-    const ref = this.cache.get(key);
-    const cached = ref?.deref();
-    if (cached) return cached;
-    const fresh = compute();
-    this.cache.set(key, new WeakRef(fresh));
-    return fresh;
+// Wrong: relying on finalizer for cleanup
+class FileHandle {
+  constructor(path) {
+    this.fd = open(path);
+    reg.register(this, this.fd);
+  }
+}
+// "fd will be closed when GC reclaims" — NO. May never run.
+// Use try/finally + explicit close().
+```
+
+---
+
+## 7. The unlocking insight
+
+> **WeakRef = non-pinning ref. FinalizationRegistry = best-effort cleanup callback. Both non-deterministic. Don't rely on either for required cleanup.**
+
+Three properties:
+
+1. **`WeakRef.deref()`** returns target or undefined.
+2. **FinalizationRegistry callback** is best-effort.
+3. **Both discouraged** for normal flow.
+
+---
+
+## 8. Solution (annotated)
+
+```js
+// Cache that doesn't pin values
+class WeakValueCache {
+  #refs = new Map();                                                      // key → WeakRef
+  set(key, obj) {
+    this.#refs.set(key, new WeakRef(obj));                                // step 1: weak ref
+  }
+  get(key) {
+    const r = this.#refs.get(key);
+    if (!r) return undefined;
+    const val = r.deref();                                                 // step 2: maybe alive
+    if (val === undefined) {
+      this.#refs.delete(key);                                              // step 3: clean stale
+      return undefined;
+    }
+    return val;
   }
 }
 
-// 2. Resource cleanup notification
-const fileHandles = new FinalizationRegistry((fd) => {
-  console.warn(`File ${fd} was not closed before GC — bug!`);
+// FinalizationRegistry for connection cleanup (best-effort logging)
+const connReg = new FinalizationRegistry((heldId) => {
+  console.warn('Connection leaked:', heldId);
 });
 
-class File {
-  constructor(path) {
-    this.fd = openSync(path);
-    fileHandles.register(this, this.fd, this);
+class Connection {
+  constructor(id) {
+    this.id = id;
+    this.fd = openSocket();
+    connReg.register(this, this.id, this);                                 // step 4: register
   }
   close() {
-    if (this.fd != null) { closeSync(this.fd); fileHandles.unregister(this); this.fd = null; }
+    closeSocket(this.fd);
+    connReg.unregister(this);                                              // step 5: deregister
   }
 }
+// If Connection is GC'd without close(), finalizer logs.
+// MUST still call close() in normal flow — finalizer is just a safety net.
 
-// 3. Subscriber pattern that doesn't pin subscribers
-class Topic {
-  subs = new Set();
-  subscribe(fn) { this.subs.add(new WeakRef(fn)); }
-  emit(value) {
-    for (const ref of this.subs) {
-      const fn = ref.deref();
-      if (fn) fn(value);
-      else this.subs.delete(ref);
-    }
-  }
-}
-
-// 4. Cleanup with held value avoiding target capture
-const reg = new FinalizationRegistry(({ id }) => {
-  // do NOT reference the target here
-  console.log('release lease', id);
+// Multi-resource cleanup with token
+const reg = new FinalizationRegistry((heldValue) => {
+  if (heldValue.type === 'buffer') releaseBuffer(heldValue.id);
 });
-function lease(target, leaseId) {
-  reg.register(target, { id: leaseId });
+function trackedBuffer() {
+  const buf = createBuffer();
+  reg.register(buf, { type: 'buffer', id: buf.id });
+  return buf;
 }
 ```
 
-## Dry run
+**Try it yourself**
 
-```
-let obj = { data: ... };
-const ref = new WeakRef(obj);
-ref.deref();   // → obj
+```js
+// Demonstrating non-determinism
+let target = { data: 'test' };
+const ref = new WeakRef(target);
 
-obj = null;     // sole strong ref dropped
-// GC may run; obj becomes unreachable
-// ref.deref() now → undefined (after collection)
-
-// FinalizationRegistry:
-const r = new FinalizationRegistry(v => console.log('gone:', v));
-let target = {}; r.register(target, 'mykey');
+console.log(ref.deref());                                     // {data:'test'}
 target = null;
-// eventually: "gone: mykey" (when GC happens)
+// In Node: --expose-gc + global.gc() forces GC
+if (global.gc) global.gc();
+setTimeout(() => {
+  console.log(ref.deref());                                   // undefined (after GC)
+}, 100);
+
+// Re-promotion risk
+let r = null;
+{
+  let local = { a: 1 };
+  const w = new WeakRef(local);
+  r = w.deref();    // r is now a STRONG ref to local
+  local = null;     // local dropped, but r holds it
+}
+// local survives because r holds it. Defeats WeakRef's purpose.
+
+// FinalizationRegistry — typical use
+const cleanup = new FinalizationRegistry((heldValue) => {
+  console.log('GC reclaimed:', heldValue);
+});
+
+(function () {
+  let obj = { name: 'temp' };
+  cleanup.register(obj, 'temp-1');
+})();   // obj out of scope
+// Eventually (maybe seconds, maybe never): logs 'GC reclaimed: temp-1'
+
+// Don't capture target in heldValue
+const wrongReg = new FinalizationRegistry((held) => {
+  console.log(held.target.name);   // held.target prevents target from GC!
+});
+const target2 = { name: 'foo' };
+wrongReg.register(target2, { target: target2 });   // ← BAD: cycle
+// target2 never GC'd.
 ```
 
-## How to think aloud
+---
 
-> "WeakRef holds a weak pointer — deref returns the object or undefined if collected. FinalizationRegistry runs a callback when the registered object is collected; the held value must not reference the target. Both are non-deterministic — don't use for critical cleanup. Valid uses: GC-friendly caches, leak-detection in dev (warn when a resource wasn't explicitly closed), unbinding observer patterns. For real cleanup, use try/finally or explicit dispose."
-
-## Important takeaways
-
-- **`WeakRef.deref()`** returns target or undefined.
-- **`FinalizationRegistry.register(target, heldValue, token?)`** runs callback on GC.
-- **Don't reference target in heldValue** — would prevent GC.
-- **GC timing not guaranteed.** Best-effort.
-- **Use cases**: GC-friendly cache, leak warnings, weak observers.
-- **Not for critical cleanup** — use try/finally or `Symbol.dispose`.
-
-## Variants
-
-- **`Symbol.dispose` / `using` declaration** (ES2023+) — deterministic resource cleanup; *preferred* for files/locks.
-- **WeakMap/WeakSet** — weak keys; related but different.
-- **Per-realm registries** — each realm has its own.
-
-## Revision notes
+## 9. Step-by-step dry run
 
 ```
-WeakRef(target):
-  .deref() → target or undefined (after GC)
-  doesn't prevent collection
+let t = { big: 1 };
+const ref = new WeakRef(t);
+ref.deref();    // {big:1} (alive).
 
-FinalizationRegistry(callback):
-  .register(target, heldValue, unregisterToken?)
-  callback(heldValue) — eventually, when target collected
-  .unregister(token)
+t = null;       // last user-side strong ref dropped.
+
+GC: t now only weakly referenced by ref. Eligible for collection.
+GC timing: unspecified — could be next major collection, could be never.
+
+Eventually GC runs:
+  t reclaimed.
+  ref.deref() now returns undefined.
+
+Re-promotion:
+  let saved = ref.deref();   // if not yet collected, saved holds strong ref.
+  saved keeps target alive even though `ref` is weak.
+
+FinalizationRegistry:
+  let obj = {};
+  reg.register(obj, 'token').
+  obj = null;
+  GC eventually:
+    Registry callback queued.
+    Runs on host task: cb('token').
+    Note: NOT a microtask; on a task (setTimeout-like).
   
-RULES:
-  - GC timing NOT guaranteed
-  - heldValue must NOT reference target
-  - don't rely on for critical cleanup
-  - prefer try/finally or Symbol.dispose
-
-USES:
-  - GC-friendly caches (cache.set(key, new WeakRef(value)))
-  - leak warnings (dev: register fd; if finalizer fires before close → bug)
-  - weak observers
+  Capture risk:
+    reg.register(target, target) → cb(target).
+    cb closure captures target → if cb is held, target held → no GC.
+    Always: don't pass target as heldValue.
 ```
+
+---
+
+## 10. Common confusion + traps
+
+1. **Rely on finalizer for required cleanup** — wrong; not guaranteed.
+2. **`deref()` and store** — re-promotes.
+3. **Capture target in heldValue** — pins alive.
+4. **Closure in finalizer captures target** — same.
+5. **Iterate / size** — not iterable.
+6. **GC observable** — non-deterministic, test-unfriendly.
+7. **Cross-realm refs** — undefined behavior.
+
+---
+
+## 11. Senior follow-ups & variants
+
+### Variant 1 — WeakValueCache
+Cache with weak values; auto-clean on stale.
+
+### Variant 2 — Leak detector (test only)
+Register objects; log if collected.
+
+### Variant 3 — Generational cache
+Promote hot entries; weak refs for cold.
+
+### Variant 4 — WeakMap vs WeakRef
+WeakMap key weakly held; WeakRef explicit weak ref.
+
+### Variant 5 — Node `v8.setFlagsFromString('--expose-gc')`
+Force GC for testing.
+
+---
+
+## 12. How to think aloud
+
+> "`WeakRef` and `FinalizationRegistry` are ES2021 advanced GC primitives. WeakRef is a non-pinning reference: `new WeakRef(obj)`, `ref.deref()` returns obj or undefined if collected. FinalizationRegistry: callback runs when an object is GC'd — `reg.register(target, heldValue)`; later `cb(heldValue)` MAY fire. Both are discouraged for normal use: GC timing is unspecified — finalizer may run milliseconds later, may never run. Don't rely on either for required cleanup (use try/finally or explicit close()). Pitfalls: 'Re-promotion' — `deref()` returns a strong reference; if you store it, you've pinned the object alive. 'heldValue capturing target' — if your `heldValue` or callback closure holds target, target can't be GC'd → finalizer never fires. Valid use cases (rare): WeakValueCache (cache with weak values; clean stale on access); best-effort resource leak logging (still call close() in normal flow); test-only leak detection. Node testing: `--expose-gc` + `global.gc()` forces collection. TC39 explicit advice: avoid unless clear need. Trap: rely on finalizer; deref re-promote; capture target; assume order."
+
+---
+
+## 13. 60-second revision
+
+> - **`WeakRef.deref()`** → target or undefined.
+> - **FinalizationRegistry callback** — best-effort.
+> - **GC timing unspecified.**
+> - **Don't rely on for required cleanup** — use try/finally.
+> - **Re-promotion** — storing deref() pins.
+> - **Capture target in heldValue** → pins alive.
+> - **WeakValueCache** — valid use case.
+> - **`--expose-gc` + `global.gc()`** for tests.
+> - **Trap:** rely on finalizer; capture target; re-promote.
+
+---
+
+**Related:** [weakmap-memoize.md](./weakmap-memoize.md) · [object-vs-map-vs-set.md](./object-vs-map-vs-set.md) · [ttl-map.md](./ttl-map.md)
+
+**Concept primer:** [`concepts/maps-sets.md`](../../concepts/maps-sets.md)

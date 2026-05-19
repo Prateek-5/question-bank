@@ -1,163 +1,274 @@
-# Async Semaphore
+# Async Semaphore — bound concurrent async work
 
-## Source / Origin
-- Classic concurrency primitive (Dijkstra, 1965); ported to async JS for limiting concurrent IO.
-- Variants asked at: Stripe, Atlassian, Cloudflare, Razorpay, ThoughtSpot.
-- Concept reference: `concepts/promises.md`, `concepts/event-loop.md`.
+> **Difficulty:** Medium   |   **Time:** ~20 min   |   **Prereqs:** [`04-promises/promise-pool.md`](../04-promises/promise-pool.md), [`concepts/promises.md`](../../concepts/promises.md)
+>
+> **Source:** Dijkstra's 1965 semaphore concept ported to async JS. Underlies connection pools (pg, mysql2, ioredis), promise pools, rate limiters.
 
-## Why this question matters in interviews
-Semaphore is the *primitive* behind every "limit N concurrent X" question — promise pools, async pools, connection pools, rate limiters at the egress edge. If you build it once cleanly you've already solved promise-pool, async-pool, mutex (semaphore with permits=1), and bounded request coalescing. Interviewers ask it to test that you can reason about async resource lifecycles: who's waiting, who's running, who gets woken up next, what happens on rejection.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
-```js
+**Signature**
+```ts
 class Semaphore {
-  constructor(permits) {
-    this.permits = permits;            // free slots
-    this.queue = [];                   // FIFO of resolve fns waiting for a permit
-  }
-  async acquire() {
-    if (this.permits > 0) { this.permits--; return; }
-    await new Promise(res => this.queue.push(res));
-    this.permits--;                     // we were granted; consume the slot we were given
-  }
-  release() {
-    this.permits++;
-    const next = this.queue.shift();
-    if (next) next();                   // wake exactly one waiter (FIFO)
-  }
-  async run(task) {
-    await this.acquire();
-    try { return await task(); }
-    finally { this.release(); }
-  }
+  constructor(permits: number);
+  acquire(): Promise<void>;
+  release(): void;
+  run<T>(task: () => Promise<T>): Promise<T>;
 }
 ```
 
-### Edge cases / interview traps
-1. **Forgetting `finally` to release.** If `task()` throws and you `release()` only on success, the slot is leaked forever. Must use `try/finally`.
-2. **Rejection inside `acquire()`.** If we ever reject the queued promise (e.g., on close), `permits` may double-count. Track explicit `cancelled` flag per waiter.
-3. **FIFO vs LIFO fairness.** Default to FIFO — surprises candidates who shift then `unshift`. LIFO is fine only for opportunistic, non-starvation-prone workloads.
-4. **Permits = 0 deadlock.** `new Semaphore(0)` means no one can acquire until somebody calls `release()`. Common with "wait for signal" patterns.
-5. **`acquire` race with `release`.** After `await new Promise(res => queue.push(res))` resolves, the `permits--` adjusts the counter we *just* received. Don't accidentally double-decrement by also subtracting at queue-grant time.
-6. **Memory leak via `queue`.** Long-lived semaphore with abandoned callers → callbacks stuck forever. Provide `tryAcquire()` and timeout variants for production.
+**Input / Output examples**
 
-## Mental Model
+| Setup (permits=2)                              | Behaviour                                              |
+|------------------------------------------------|---------------------------------------------------------|
+| 4 tasks each taking 100ms via `run`             | concurrent ≤ 2; total time ~200ms; FIFO fairness      |
+| Task throws inside `run`                        | permit still released via `finally`                    |
+| `new Semaphore(0)`                              | acquirers block until external `release()`             |
+| `new Semaphore(1)`                              | mutex                                                   |
+| Direct `acquire`/`release` without try/finally  | leak risk if caller throws                             |
 
-A semaphore is a **bouncer at a nightclub with N stamps**. The bouncer hands a stamp to anyone who walks up *if* a stamp is free. If all N stamps are out, the patron stands in line. When someone leaves and returns their stamp, the bouncer hands it to the next person in line. The count of stamps in circulation never exceeds N.
+**Constraints**
+- FIFO fairness by default.
+- `run(task)` ties acquire + task + release in `try/finally`.
+- Mutex = `new Semaphore(1)`.
+- Counting semaphore generalizes to weighted/timeout/abort variants.
+
+---
+
+## 2. Plain-English restatement
+
+A bouncer with N stamps. Anyone who walks up gets a stamp if one's free; otherwise queues. Stamps return when patrons leave. The count of stamps in circulation never exceeds N. In async JS: `acquire` resolves immediately if a permit is free, else parks in a FIFO queue. `release` returns one permit, waking the next waiter.
+
+---
+
+## 3. Why this matters in interviews
+
+The **primitive** behind every "limit N concurrent X" question — promise pools, async pools, connection pools, mutex (`Semaphore(1)`), rate limiters at the egress edge. Tests async resource-lifecycle reasoning: who's waiting, who's running, who gets woken next, what happens on rejection. Pool exhaustion = forgot to release = real production outage.
+
+---
+
+## 4. Mental model
 
 ```
-   permits=2, queue=[]                  semaphore.acquire()  → permits=1
-   permits=1, queue=[]                  semaphore.acquire()  → permits=0
-   permits=0, queue=[res3, res4]        semaphore.acquire() x2 → both wait
-   permits=0, queue=[res4]              release() → wakes res3, permits stays 0
-                                                    (res3 will do permits-- itself)
+   Semaphore(2):  permits=2, queue=[]
+
+   t=0   T1.acquire() → permits=1 → T1 runs
+   t=0   T2.acquire() → permits=0 → T2 runs
+   t=0   T3.acquire() → queue=[grant3] → T3 waits
+   t=0   T4.acquire() → queue=[grant3, grant4] → T4 waits
+
+   t=100 T1 done → release()
+                   permits=1 → queue.shift() → grant3()
+                                                ↑ runs T3's resolve
+                                                permits-- → permits=0
+                   T3 starts running
+
+   t=100 T2 done → release() → permits=1 → grant4() → permits=0 → T4 runs
+
+   t=200 T3, T4 done → release × 2 → permits=2 (back to initial)
 ```
 
-## Why interviewers care
+**`run(task)`** ties acquire + task + release in try/finally so callers can't leak.
 
-- **Async lifecycle reasoning.** Who holds resources, who releases them, what happens on failure.
-- **Foundation pattern.** Mutex = Semaphore(1). Promise pool = Semaphore + task queue. Rate limiter (concurrency-based) = Semaphore.
-- **Production literacy.** Connection pools (pg, mysql2, ioredis) all use semaphores internally; failure to release = pool exhaustion = 500s.
+---
 
-## Common beginner confusion
+## 5. Try it yourself first
 
-- **"Just use Promise.all with a limit."** No — `Promise.all` doesn't limit concurrency; it just awaits all. You need an explicit semaphore to bound active count.
-- **"Counter increment is enough."** Without a queue, late-arriving acquirers don't get woken when releases happen.
-- **"Use a global counter."** Module-level state is fragile across tests and worker boundaries. Always instantiate.
-- **"Releasing twice doesn't hurt."** It does — you've leaked a permit (capacity > N), violating the bound.
+> **Predict before reading on:**
+> 1. Why does `run(task)` use try/finally?
+> 2. What's the difference between `Semaphore(1)` and a mutex?
+> 3. If a `task` throws, what happens to the permit?
 
-## Brute force approach
-"I'll await each task one at a time" — sequential, ignores concurrency. Wrong: you wanted N parallel.
+---
 
-"I'll use `Promise.all(tasks)` with no bound" — explodes if `tasks.length > N`, e.g., 10k DB connections.
+## 6. Brute force — walked through
 
-## Optimal approach
-A FIFO-fair semaphore with `acquire`/`release`/`run`. `run(task)` is the safe public API — it ties acquire+task+release in a single try/finally so callers can't leak permits.
+### Wrong attempt 1: `await Promise.all(tasks)`
+No concurrency bound — fires all M in parallel. Memory/load explodes for M=10k.
 
-## Solution (JavaScript)
+### Wrong attempt 2: counter without queue
+Decrement on acquire; if 0, busy-wait or reject. Doesn't wake parked callers when permits return.
+
+### Wrong attempt 3: direct acquire/release without try/finally
+```js
+await sem.acquire();
+const r = await task();    // throws → permit never released
+sem.release();             // never reached
+```
+Leaks permit. Always wrap.
+
+---
+
+## 7. The unlocking insight
+
+> **Counter + FIFO queue of "grant" resolvers. `acquire` either grants immediately or pushes resolver into queue. `release` increments and shifts the next grant. `run(task)` is the only safe public API: try/finally wraps acquire + task + release.**
+
+Three properties:
+
+1. **Counter + queue** — counter for fast path, queue for parked waiters.
+2. **FIFO fairness** — `queue.shift()` (head), not `queue.pop()`.
+3. **`run(task)`** ties lifecycle with `try/finally` so leaks are impossible.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
 class Semaphore {
   constructor(permits) {
-    if (!Number.isInteger(permits) || permits < 0) throw new TypeError('permits must be a non-negative integer');
+    if (!Number.isInteger(permits) || permits < 0) {
+      throw new TypeError('permits must be a non-negative integer');
+    }
     this.permits = permits;
-    this.queue = [];
+    this.queue = [];                                                  // step 1: FIFO grant functions
   }
 
   acquire() {
     return new Promise((resolve) => {
-      const grant = () => { this.permits--; resolve(); };
+      const grant = () => {                                            // step 2: granted = consume permit
+        this.permits--;
+        resolve();
+      };
       if (this.permits > 0) grant();
-      else this.queue.push(grant);
+      else this.queue.push(grant);                                     // step 3: park
     });
   }
 
   release() {
-    this.permits++;
-    const next = this.queue.shift();
+    this.permits++;                                                    // step 4: return permit
+    const next = this.queue.shift();                                   // step 5: wake head (FIFO)
     if (next) next();
   }
 
-  async run(task) {
+  async run(task) {                                                    // step 6: safe public API
     await this.acquire();
-    try { return await task(); }
-    finally { this.release(); }
+    try {
+      return await task();
+    } finally {
+      this.release();                                                   // step 7: ALWAYS release
+    }
   }
 }
+```
 
-// Usage: limit 3 concurrent HTTP calls
+**Try it yourself**
+
+```js
 const sem = new Semaphore(3);
 const urls = [/* 1000 URLs */];
-const results = await Promise.all(urls.map(u => sem.run(() => fetch(u).then(r => r.json()))));
+
+// All 1000 launched but only 3 in-flight at a time
+const results = await Promise.all(
+  urls.map((u) => sem.run(() => fetch(u).then((r) => r.json())))
+);
+
+// Mutex
+const mutex = new Semaphore(1);
+async function criticalSection() {
+  await mutex.run(async () => {
+    // only one caller at a time
+  });
+}
 ```
 
-## Step-by-step dry run
+---
 
-Start with `permits=2`, four tasks `T1..T4` that each take 100ms.
-
-```
-t=0:  T1.acquire() → permits=1 → T1 runs
-t=0:  T2.acquire() → permits=0 → T2 runs
-t=0:  T3.acquire() → queue=[res3] → T3 waits
-t=0:  T4.acquire() → queue=[res3,res4] → T4 waits
-t=100: T1 done → release() → permits=1; queue.shift() → grant res3
-                grant: permits-- → permits=0 → T3 runs
-t=100: T2 done → release() → permits=1; queue.shift() → grant res4
-                grant: permits-- → permits=0 → T4 runs
-t=200: T3 done → release() → permits=1
-t=200: T4 done → release() → permits=2 (back to initial)
-```
-
-Concurrency capped at 2; FIFO order honored.
-
-## How to think aloud in the interview
-
-> "Semaphore is N permits with a FIFO queue. acquire takes one if free, else parks. release returns one and wakes the head of the queue. I'll provide `run` so callers can't leak — acquire + task + release in try/finally. Mutex is just `new Semaphore(1)`. For a production version I'd add `acquireWith(timeoutMs)` and an abort signal, but I'll keep this clean for now."
-
-## Important takeaways
-
-- **Mutex = Semaphore(1).** Don't write two implementations.
-- **`run(task)` is the only safe public API.** Direct `acquire()`/`release()` is for advanced callers who promise to pair them.
-- **FIFO is the default contract.** Anything else needs justification.
-- **Pool exhaustion = bug.** If permits never come back to N, someone forgot `finally`.
-
-## Variants
-
-- **Weighted semaphore** — each task requests `k` permits (e.g., big batch = 4 permits, tiny = 1). Replace `permits--` with `permits -= k`; on release, loop the wake-up while the head request fits.
-- **Timeout variant** — `acquire(timeoutMs)` returns a token or `null`; on timeout, remove your `grant` from the queue.
-- **AbortSignal-aware** — accept an `AbortSignal`; if aborted while queued, splice out and reject.
-- **Reentrant mutex** — track owner; same owner can re-enter without blocking; release decrements depth.
-
-## Revision notes
+## 9. Step-by-step dry run
 
 ```
-Semaphore(N):
-  acquire(): permits>0 ? grant : queue.push(grant)
-  release(): permits++; queue.shift()?.()
-  run(t):    try { await acquire(); return await t(); } finally { release(); }
-  mutex = Semaphore(1)
-  pool exhaustion = forgot finally
-  FIFO fairness; weighted/timeout/abort are senior variants
+permits=2, queue=[]
+
+T1.acquire():  permits=2>0 → grant() → permits--=1; resolve(). T1 runs.
+T2.acquire():  permits=1>0 → grant() → permits--=0; resolve(). T2 runs.
+T3.acquire():  permits=0  → queue.push(grant3). T3 awaits.
+T4.acquire():  permits=0  → queue.push(grant4). T4 awaits.
+
+State: permits=0, queue=[grant3, grant4], running={T1, T2}.
+
+t=100: T1 done → release():
+  permits++=1
+  queue.shift() = grant3 → grant3():
+    permits--=0; resolve T3's awaited promise.
+  T3 runs.
+
+t=100: T2 done → release():
+  permits++=1
+  queue.shift() = grant4 → grant4():
+    permits--=0; resolve T4.
+  T4 runs.
+
+t=200: T3 done → release(): permits=1, queue empty → no wake.
+t=200: T4 done → release(): permits=2, queue empty.
+
+Final: permits=2 (initial state). Concurrent count never exceeded 2. FIFO honored.
 ```
+
+Failure case:
+
+```
+await sem.run(async () => { throw new Error('oops'); }):
+  acquire() → permits--=N-1
+  try { await task() } → throws
+  finally { release() → permits=N, wake next waiter }
+  rethrown to caller
+```
+
+---
+
+## 10. Common confusion + traps
+
+1. **No try/finally** — `task` throws and permit leaks → pool exhaustion.
+2. **`unshift` instead of `shift`** — LIFO; risks starvation under sustained load.
+3. **Counter without queue** — late acquirers never wake up.
+4. **Releasing twice** — leaks a permit (capacity > N), violates the bound.
+5. **`Semaphore(0)` deadlock** — no permits, no acquire can proceed unless external `release()` is called.
+6. **Race between acquire-grant-resolve and release** — careful with double-decrement (grant fn decrements; resolved promise doesn't decrement again).
+7. **Memory leak via queue** — abandoned callers stuck forever. Add `acquireWith(timeoutMs)` for production.
+
+---
+
+## 11. Senior follow-ups & variants
+
+### Variant 1 — Weighted semaphore
+Each task requests `k` permits. Replace `permits--` with `permits -= k`; on release, loop wake-up while head request fits.
+
+### Variant 2 — Timeout / `acquireWith(ms)`
+Returns token or `null`; on timeout, splice the grant out of the queue.
+
+### Variant 3 — AbortSignal-aware
+Accept `AbortSignal`; if aborted while queued, splice and reject.
+
+### Variant 4 — Reentrant mutex
+Track owner; same owner can re-enter without blocking; release decrements depth.
+
+### Variant 5 — Fair vs unfair (LIFO) variants
+LIFO is fine only for non-starvation-prone workloads (small/bursty queue).
+
+### Variant 6 — Distributed semaphore
+Redis Lua script + token; bounds concurrency across processes.
+
+---
+
+## 12. How to think aloud
+
+> "Counter + FIFO queue. `acquire`: if `permits > 0`, decrement and resolve immediately; else push a grant function into queue. `release`: increment, shift the head of queue (FIFO) and invoke it. The grant function does the `permits--` so we never double-decrement. `run(task)`: try/finally — `acquire`, then `task`, then `release` ALWAYS. Mutex = `Semaphore(1)`. Connection pools = larger semaphore. Trap: skip try/finally → permit leaks → pool exhaustion → 500s in prod. Trap: LIFO under sustained load → starvation. Production: add `acquireWith(timeoutMs)` and AbortSignal support."
+
+---
+
+## 13. 60-second revision
+
+> - **Counter + FIFO queue of grant functions.**
+> - **`acquire`:** permits>0 → grant; else `queue.push(grant)`.
+> - **`release`:** permits++, `queue.shift()?.()` (FIFO wake).
+> - **`run(task)`:** `try { acquire; return await task() } finally { release() }`.
+> - **Mutex = `Semaphore(1)`.**
+> - **Family:** connection pools, promise-pool, rate limiter (concurrency-based).
+> - **Variants:** weighted, timeout, AbortSignal, reentrant, distributed.
+> - **Trap:** no try/finally → permit leak; LIFO starvation; counter without queue.
+
+---
+
+**Related:** [`04-promises/promise-pool.md`](../04-promises/promise-pool.md) · [`04-promises/async-mutex.md`](../04-promises/async-mutex.md) · [async-pool.md](./async-pool.md) · [rate-limiter-token-bucket.md](./rate-limiter-token-bucket.md)
+
+**Concept primer:** [`concepts/promises.md`](../../concepts/promises.md)

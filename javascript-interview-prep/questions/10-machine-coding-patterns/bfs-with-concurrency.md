@@ -1,141 +1,140 @@
-# BFS with Bounded Concurrency (Web Crawl / Graph Walk)
+# BFS with Bounded Concurrency — async graph walk
 
-## Source / Origin
-- Classic web-crawler interview question.
-- Asked at: Google, Cloudflare, Atlassian, Razorpay, Booking.
-- Concept reference: `concepts/recursion.md`, sibling `async-pool.md`, `async-semaphore.md`.
+> **Difficulty:** Senior   |   **Time:** ~25 min   |   **Prereqs:** [async-pool.md](./async-pool.md), [`09-recursion/bfs-dfs-iterative.md`](../09-recursion/bfs-dfs-iterative.md)
+>
+> **Source:** Web crawler classic. Google, Cloudflare, Atlassian, Razorpay, Booking.
 
-## Why this question matters in interviews
-"Crawl this site, but don't fire more than 10 fetches at once" is the canonical async-graph problem. Pure BFS uses a queue and processes one node at a time — too slow. Pure `Promise.all` on all neighbors — explodes when fanout is wide. The right answer combines a queue + visited set + semaphore. Senior bar: you reason about visited-state races, depth limit, cycle handling, error per node vs error per crawl.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
-```js
-async function bfsConcurrent(startUrl, { concurrency = 10, maxDepth = 5, fetcher, getNeighbors }) {
-  const visited = new Set([startUrl]);
-  const queue = [{ url: startUrl, depth: 0 }];
-  let active = 0;
-
-  return new Promise((resolve, reject) => {
-    const results = new Map();
-    const errors = new Map();
-
-    const tryDrain = () => {
-      while (active < concurrency && queue.length > 0) {
-        const { url, depth } = queue.shift();
-        active++;
-        process(url, depth);
-      }
-      if (active === 0 && queue.length === 0) resolve({ results, errors });
-    };
-
-    const process = async (url, depth) => {
-      try {
-        const data = await fetcher(url);
-        results.set(url, data);
-        if (depth < maxDepth) {
-          for (const nb of getNeighbors(data)) {
-            if (!visited.has(nb)) {
-              visited.add(nb);             // mark BEFORE enqueue — prevents duplicate enqueue
-              queue.push({ url: nb, depth: depth + 1 });
-            }
-          }
-        }
-      } catch (err) {
-        errors.set(url, err);
-      } finally {
-        active--;
-        tryDrain();
-      }
-    };
-
-    tryDrain();
-  });
-}
+**Signature**
+```ts
+function bfsConcurrent(startUrl: string, opts: {
+  concurrency?: number;
+  maxDepth?: number;
+  fetcher: (url) => Promise<any>;
+  getNeighbors: (data) => string[];
+  canonicalize?: (url) => string;
+  signal?: AbortSignal;
+}): Promise<{ results: Map<string, any>; errors: Map<string, Error> }>;
 ```
 
-### Edge cases / interview traps
-1. **Mark visited BEFORE enqueue, not after fetch.** If you mark after, two parallel fetches discover the same neighbor and both enqueue it.
-2. **Cycles** — the visited set handles them; without it, BFS loops forever.
-3. **Depth limit** — must check at the enqueue site, not the fetch site (otherwise you fetch a depth-N+1 node only to discard).
-4. **Error policy.** One bad URL shouldn't kill the crawl. Capture per-URL errors.
-5. **"Same canonical URL"** — `http://x.com/foo` vs `http://x.com/foo/` vs `http://x.com/foo?utm=...`. Canonicalize before adding to visited.
-6. **Robots.txt + rate limit per-host** — production crawlers need a per-host semaphore on top of global concurrency.
-7. **Memory** — visited set can be huge; for billion-page crawls use Bloom filter (false positives ok = "we might miss a page").
-8. **Backpressure** — if `queue.length` grows unboundedly, you OOM. Bound the queue with a watermark.
+**Input / Output examples**
 
-## Mental Model
+| Setup (concurrency=10, maxDepth=3)                    | Behaviour                                              |
+|--------------------------------------------------------|---------------------------------------------------------|
+| Graph: A→{B,C,D}; B→{E,F}; C→{E,G}; D→{H}              | each visited once; E not fetched twice                 |
+| One URL throws                                          | error recorded; crawl continues                        |
+| Cycle A→B→A                                             | visited set prevents infinite loop                     |
+| Depth limit reached                                      | leaf URLs fetched; their neighbors skipped             |
+| `signal.abort()`                                        | running tasks drain; resolves with `aborted: true`     |
 
-**BFS = a wave that expands one ring at a time**. With concurrency, the wave's "front" is the queue; the semaphore (`active < concurrency`) decides how many we process from the front simultaneously.
+**Constraints**
+- Visited set + queue + bounded concurrency.
+- **Mark visited BEFORE enqueue** (race fix).
+- Depth check at enqueue site (not fetch site).
+- Errors per node, not per crawl.
+- Canonicalize URLs (deduplicate `?utm=...` variants).
+
+---
+
+## 2. Plain-English restatement
+
+Crawl a graph (web pages, social network, dependency tree) breadth-first but with at most N concurrent fetches. Pure BFS one-at-a-time is too slow; `Promise.all` on all neighbors explodes on wide fanout. The right answer: queue + visited set + concurrency gate that drains as workers complete.
+
+---
+
+## 3. Why this matters in interviews
+
+The canonical async-graph problem. Probes async + graph algorithm + race-condition awareness (mark-before-enqueue is the classic trap) + production realism (depth limit, error policy, canonicalization).
+
+---
+
+## 4. Mental model
 
 ```
-   start: A → enqueue
-   tick 1: dequeue A, fetch A (active=1)
-            A's neighbors: B, C, D  → mark visited; enqueue
-   tick 2: drain queue while active<concurrency
-            dequeue B (active=2); dequeue C (active=3); dequeue D (active=4)
-            fetch B, C, D in parallel
-   tick 3: B's neighbors: E, F  → enqueue
-            C's neighbors: E (visited; skip), G
-            D's neighbors: H
-            queue = [E, F, G, H]
-            ... continue draining as active<concurrency
+   concurrency=2, maxDepth=3, graph A→{B,C,D}; B→{E,F}; C→{E,G}; D→{H}
+
+   t=0   queue=[A]; drain → process A (active=1); queue empty → stop draining
+   t=0   A done → neighbors=B,C,D → mark visited; queue=[B,C,D]
+         active=0; drain → process B, process C (active=2). queue=[D]
+   ...  B done → neighbors=E,F → mark; queue=[D,E,F]
+         drain → process D (active=2); queue=[E,F]
+   ...  C done → neighbors=E (visited, skip), G → mark G; queue=[E,F,G]
+         drain → process E (active=2); queue=[F,G]
+   ...  process F, then G, then H. Each fetch ≤ depth limit.
+
+   Two key tricks:
+   1. mark visited BEFORE enqueue (or two parallel fetches dup-enqueue same neighbor)
+   2. drain on every completion (keeps active near `concurrency`)
 ```
 
-## Why interviewers care
+---
 
-- **Async + graph algorithm** — twin signals in one question.
-- **Race condition awareness** — mark-before-enqueue is the classic trap.
-- **Production realism** — depth limit, error per node, canonicalization.
+## 5. Try it yourself first
 
-## Common beginner confusion
+> **Predict before reading on:**
+> 1. Why mark visited BEFORE enqueue, not after fetch?
+> 2. What's wrong with `Promise.all` on each BFS level?
+> 3. Why canonicalize URLs?
 
-- **"Use `Promise.all` on each level."** Levels with one slow node stall the whole level. With semaphore-based draining, fast neighbors keep flowing.
-- **"Recurse instead of queue."** Stack overflow on deep graphs; harder to bound concurrency.
-- **"Use plain `for...of` with await."** That's sequential — concurrency = 1.
-- **"Visited set is enough."** Not without canonicalization; same logical URL with different query strings causes loops.
-- **"Mark visited after fetch."** Race — two fetches enqueue the same neighbor.
+---
 
-## Brute force approach
+## 6. Brute force — walked through
 
-```js
-async function crawl(url, depth, visited = new Set()) {
-  if (visited.has(url) || depth > maxDepth) return;
-  visited.add(url);
-  const data = await fetch(url);
-  for (const nb of neighbors(data)) await crawl(nb, depth + 1, visited);
-}
-```
+### Wrong attempt 1: sequential BFS
+`for...of` with `await`. Concurrency = 1. Slow.
 
-DFS, sequential, slow. Hammers a single host (no concurrency control).
+### Wrong attempt 2: `Promise.all` on each level
+Levels with one slow node stall whole level. Semaphore-style drain keeps fast nodes flowing.
 
-## Optimal approach
+### Wrong attempt 3: mark visited AFTER fetch
+Two parallel fetches discover same neighbor → both enqueue → duplicate work. Mark BEFORE enqueue.
 
-Queue + visited set + semaphore-style concurrency gate. Mark visited before enqueue. Process in parallel up to `concurrency`. Collect results and errors as maps keyed by URL.
+### Wrong attempt 4: no canonicalization
+`http://x.com/page` and `http://x.com/page?utm=campaign` look distinct → infinite loop on tracking params.
 
-## Solution (JavaScript)
+---
+
+## 7. The unlocking insight
+
+> **Queue + visited Set + concurrency gate. On each `process` completion: decrement active, call `drain` again — keeps active count near `concurrency`. Mark visited BEFORE enqueue to prevent race-duplicates. Errors per-URL in a Map; crawl continues.**
+
+Three properties:
+
+1. **Mark-before-enqueue** — race fix.
+2. **Drain-on-completion** — keeps the conveyor full.
+3. **Per-URL errors** — one bad node doesn't kill the crawl.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
 async function bfsConcurrent(startUrl, {
   concurrency = 10,
   maxDepth = 5,
-  fetcher,                      // async (url) => data
-  getNeighbors,                 // (data) => string[]
+  fetcher,
+  getNeighbors,
   canonicalize = (u) => u,
   signal,
 } = {}) {
   const start = canonicalize(startUrl);
-  const visited = new Set([start]);
+  const visited = new Set([start]);                                  // step 1: race-protected
   const queue = [{ url: start, depth: 0 }];
   let active = 0;
   const results = new Map();
   const errors = new Map();
-  return new Promise((resolve, reject) => {
-    let cancelled = false;
-    if (signal) signal.addEventListener('abort', () => { cancelled = true; resolve({ results, errors, aborted: true }); }, { once: true });
 
-    const drain = () => {
+  return new Promise((resolve) => {
+    let cancelled = false;
+    if (signal) signal.addEventListener('abort', () => {
+      cancelled = true;
+      resolve({ results, errors, aborted: true });
+    }, { once: true });
+
+    const drain = () => {                                             // step 2: keep conveyor full
       if (cancelled) return;
       while (active < concurrency && queue.length > 0) {
         const { url, depth } = queue.shift();
@@ -149,91 +148,129 @@ async function bfsConcurrent(startUrl, {
       try {
         const data = await fetcher(url);
         results.set(url, data);
-        if (depth < maxDepth) {
+        if (depth < maxDepth) {                                        // step 3: depth check at enqueue
           for (const raw of getNeighbors(data)) {
-            const nb = canonicalize(raw);
+            const nb = canonicalize(raw);                              // step 4: canonicalize
             if (!visited.has(nb)) {
-              visited.add(nb);
+              visited.add(nb);                                          // step 5: MARK BEFORE enqueue
               queue.push({ url: nb, depth: depth + 1 });
             }
           }
         }
       } catch (err) {
-        errors.set(url, err);
+        errors.set(url, err);                                           // step 6: per-URL error
       } finally {
         active--;
-        drain();
+        drain();                                                         // step 7: re-drain
       }
     };
+
     drain();
   });
 }
+```
 
-// Usage
+**Try it yourself**
+
+```js
+const ac = new AbortController();
+
 const { results, errors } = await bfsConcurrent('https://example.com', {
   concurrency: 10,
   maxDepth: 3,
-  fetcher: (u) => fetch(u).then(r => r.text()),
-  getNeighbors: (html) => Array.from(html.matchAll(/href="([^"]+)"/g)).map(m => m[1]),
-  canonicalize: (u) => new URL(u).origin + new URL(u).pathname,
+  fetcher: (u) => fetch(u).then((r) => r.text()),
+  getNeighbors: (html) => Array.from(html.matchAll(/href="([^"]+)"/g)).map((m) => m[1]),
+  canonicalize: (u) => {
+    const x = new URL(u);
+    return x.origin + x.pathname;                                     // strip query for dedup
+  },
+  signal: ac.signal,
 });
+
+setTimeout(() => ac.abort(), 30_000);                                  // 30s budget
 ```
 
-## Step-by-step dry run
+---
 
-Graph: A → {B, C, D}; B → {E, F}; C → {E, G}; D → {H}. `concurrency=2, maxDepth=3`.
-
-```
-t=0   queue=[A]; drain → process A (active=1)
-                  drain: active<2 but queue empty → stop
-t=0+f A done → results[A]=...; neighbors B,C,D → mark visited; queue=[B,C,D]
-      active--; drain → process B (active=1), process C (active=2)
-                       queue=[D]
-t=...  B done → neighbors E,F → mark; queue=[D,E,F]
-       active--; drain → process D (active=2); queue=[E,F]
-t=...  C done → neighbors E (visited, skip), G → mark G; queue=[E,F,G]
-       active--; drain → process E (active=2); queue=[F,G]
-t=...  ...continues until queue empty AND active=0 → resolve
-```
-
-Concurrency capped at 2. No duplicate fetches even with shared neighbor E.
-
-## How to think aloud in the interview
-
-> "BFS with a queue and visited set. Mark visited BEFORE enqueue — that's the race trap. A gate function drains the queue up to `concurrency` parallel. Each task in `finally` decrements active and calls drain again, so as soon as one finishes a new one starts. Errors go into a per-URL map; the crawl continues. For production: per-host rate limit on top, robots.txt respect, canonicalize URLs, bloom filter visited for billion-scale. AbortSignal threading for graceful stop."
-
-## Important takeaways
-
-- **Visited.add BEFORE queue.push.** Non-negotiable.
-- **Drain on every completion.** Keeps active count near `concurrency`.
-- **Canonicalize URLs.** Else infinite-loop on `?utm=...` variants.
-- **Per-host semaphore** layered on global concurrency for production.
-- **Errors per-node, not per-crawl.**
-
-## Variants
-
-- **Per-host concurrency** — a Map<host, Semaphore>; each fetch acquires from both global and per-host.
-- **DFS variant** — depth-first walks; same shape, queue → stack.
-- **Async-iterator emitter** — yield results as they arrive instead of collecting into a Map.
-- **Bloom filter visited** — for billion-page crawls; tolerate ~0.01% missed pages.
-- **Frontier persistence** — for crawls that span hours, persist queue/visited to disk so a crash resumes.
-
-## Revision notes
+## 9. Step-by-step dry run
 
 ```
-bfsConcurrent(start, concurrency, maxDepth, fetcher, neighbors):
-  visited = Set([start]); queue = [{start, 0}]; active = 0
-  drain():
-    while active < concurrency and queue.length:
-      task = queue.shift(); active++; process(task)
-    if active==0 and queue.empty → resolve
-  process(url, depth):
-    try fetch; for each nb: if !visited: visited.add(nb); queue.push
-    catch errors[url] = err
-    finally active--; drain()
-  
-  mark visited BEFORE enqueue (race fix)
-  canonicalize URLs
-  per-host semaphore in production
-  Bloom filter visited at billion scale
+Graph A→{B,C,D}; B→{E,F}; C→{E,G}; D→{H}. concurrency=2.
+
+t=0    queue=[A]; drain → process A (active=1). queue empty.
+       drain: 2nd iteration → active<2 but queue empty → no spawn.
+
+t=0+ε  A done → neighbors B,C,D → mark visited; queue=[B,C,D].
+       active=0. drain → process B (active=1), process C (active=2). queue=[D].
+
+t=80   B done → neighbors E,F → mark; queue=[D,E,F].
+       active=1. drain → process D (active=2). queue=[E,F].
+
+t=100  C done → neighbors E (visited! skip), G → mark G; queue=[D-still-active waiting, E, F, G]
+       wait, D is still active. Let me redo: D was started so queue=[E,F,G].
+       active=1 (D still running). drain → process E (active=2). queue=[F,G].
+
+...continues until queue empty and active=0 → resolve.
+
+Concurrency cap respected; E fetched ONCE despite being a neighbor of both B and C.
 ```
+
+---
+
+## 10. Common confusion + traps
+
+1. **Mark visited AFTER fetch** — race; duplicates enqueued.
+2. **`Promise.all` per level** — stragglers stall.
+3. **No canonicalization** — infinite-loop on tracking params.
+4. **Plain `for await`** — sequential; concurrency=1.
+5. **Recursive crawl** — stack overflow on deep graphs; can't bound concurrency.
+6. **Depth check at fetch site** — wastes a fetch for depth N+1.
+7. **No per-host limit** — hammers a single host. Add per-host semaphore in production.
+
+---
+
+## 11. Senior follow-ups & variants
+
+### Variant 1 — Per-host concurrency
+`Map<host, Semaphore>`; each fetch acquires from BOTH global and per-host.
+
+### Variant 2 — DFS variant
+Same shape; queue → stack. (But careful — async DFS doesn't have BFS's "shortest path" property.)
+
+### Variant 3 — Async-iterator emitter
+Yield results as they arrive instead of collecting into Map. Streams huge crawls.
+
+### Variant 4 — Bloom filter visited
+For billion-page crawls; tolerate ~0.01% missed pages.
+
+### Variant 5 — Frontier persistence
+For crawls that span hours, persist queue/visited to disk so a crash resumes.
+
+### Variant 6 — Robots.txt + rate limit per-host
+Production crawlers respect robots.txt and add per-host token bucket.
+
+---
+
+## 12. How to think aloud
+
+> "BFS with a queue and visited set, bounded by concurrency. `process(url, depth)`: fetch, record result, mark neighbors visited BEFORE enqueue (race fix), enqueue with depth+1 if under limit. In `finally`: decrement active, call `drain()` again — keeps conveyor full. Errors per-URL in a Map; crawl continues. For production: per-host semaphore on top of global, robots.txt, canonicalize URLs (strip tracking params), Bloom filter visited at billion-scale, AbortSignal for budget cap. Trap: mark visited after fetch (race); no canonicalization (infinite loop on `?utm=`); `Promise.all` per level (stragglers); plain `for await` (concurrency=1)."
+
+---
+
+## 13. 60-second revision
+
+> - **Queue + visited Set + concurrency gate.**
+> - **Mark visited BEFORE enqueue** (race fix).
+> - **Drain on every `finally`** — keeps active count near concurrency.
+> - **Canonicalize URLs** — strip tracking params.
+> - **Depth check at enqueue site** (not fetch).
+> - **Errors per-URL** in Map; crawl continues.
+> - **Production:** per-host semaphore, robots.txt, Bloom filter visited, AbortSignal budget.
+> - **Variants:** DFS, async-iterator emitter, frontier persistence.
+> - **Trap:** mark-after-fetch race; no canonicalization; `Promise.all` per level; sequential await.
+
+---
+
+**Related:** [async-pool.md](./async-pool.md) · [async-semaphore.md](./async-semaphore.md) · [`09-recursion/bfs-dfs-iterative.md`](../09-recursion/bfs-dfs-iterative.md) · [rate-limiter-token-bucket.md](./rate-limiter-token-bucket.md)
+
+**Concept primer:** [`concepts/recursion.md`](../../concepts/recursion.md)

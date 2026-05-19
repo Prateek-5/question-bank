@@ -1,81 +1,132 @@
-# First non-repeating character in a string
+# First non-repeating character
 
-## Source
-- LeetCode #387 "First Unique Character in a String": https://leetcode.com/problems/first-unique-character-in-a-string/
-- Cracking the Coding Interview Ch. 1 (Strings), Frontend Masters JS Hard Parts, GeeksforGeeks classic.
+> **Difficulty:** Foundation   |   **Time:** ~10 min   |   **Prereqs:** [multiset-counter.md](./multiset-counter.md)
+>
+> **Source:** LeetCode #387. Cracking the Coding Interview Ch. 1.
 
-## Why this question matters in interviews
-This is the **two-pass-with-a-counter-Map** archetype — interviewers love it because it tests three things at once: (1) do you reach for a hash map immediately? (2) do you know `Map` preserves insertion order while plain objects historically don't (and still have key-type quirks)? (3) can you walk the string a second time without rebuilding state? It comes up in real backend work too: finding the first uncorrelated log line, the first non-duplicate request in a batch, the first unique session token. The "build counts then scan in order" idiom shows up everywhere from rate-limit detection to deduplication pipelines.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+Return the first char in string `s` that appears exactly once. `null` if none.
+
+**Verification examples**
+
 ```js
-function firstNonRepeating(s) {
-  const count = new Map();
-  for (const ch of s) count.set(ch, (count.get(ch) ?? 0) + 1);
-  for (let i = 0; i < s.length; i++) if (count.get(s[i]) === 1) return s[i];
+firstNonRepeating('leetcode');          // 'l'
+firstNonRepeating('loveleetcode');      // 'v'
+firstNonRepeating('aabb');               // null
+firstNonRepeating('');                   // null
+firstNonRepeating('a😀b😀');             // 'a' (or correct Unicode handling)
+```
+
+**Constraints**
+- Two passes O(n).
+- First: count via Map.
+- Second: scan string for count===1.
+- Unicode: use `for..of` or `[...s]` for code-point iteration.
+
+---
+
+## 2. Plain-English restatement
+
+Count each char's occurrences; then scan in order and return the first with count 1.
+
+---
+
+## 3. Why this matters in interviews
+
+Two-pass-with-counter-Map archetype. Tests: Map literacy, insertion-order, `?? 0` idiom, Unicode awareness.
+
+---
+
+## 4. Mental model
+
+```
+   Two-pass O(n):
+     pass 1: count = Map<char, int>
+       for ch of s: count.set(ch, (count.get(ch) ?? 0) + 1)
+     pass 2: scan in order
+       for i in 0..s.length-1:
+         if count.get(s[i]) === 1: return s[i]
+       return null
+   
+   Single-pass via insertion order:
+     Use Map<char, {count, firstIdx}> or just count.
+     Iterate map in insertion order; return first with count 1.
+     Same O(n) — different shape.
+   
+   Unicode:
+     for (const ch of s) iterates CODE POINTS (handles surrogate pairs).
+     s[i] indexing iterates CODE UNITS (splits surrogate pairs).
+     For ASCII: same; for emoji: use for..of.
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. Why two passes?
+> 2. `s[i]` vs `for..of` for Unicode?
+> 3. Empty string return?
+
+---
+
+## 6. Brute force — walked through
+
+```js
+function brute(s) {
+  for (let i = 0; i < s.length; i++) {
+    let dup = false;
+    for (let j = 0; j < s.length; j++) {
+      if (i !== j && s[i] === s[j]) { dup = true; break; }
+    }
+    if (!dup) return s[i];
+  }
   return null;
 }
 ```
 
-### Runtime / engine behavior
-- Iterating a `Map` (`for (const [k, v] of map)`) yields entries **in insertion order** — guaranteed by spec since ES2015. Plain object key order is mostly insertion order for string keys since ES2019, but integer-like keys (`"1"`, `"2"`) get sorted numerically first, which silently breaks order-sensitive code. **Map wins here.**
-- `count.get(ch) ?? 0` is the idiomatic "default to 0" — uses nullish coalescing so it doesn't trip on legit `0` values (vs `||` which would).
-- Two passes over `s` = **O(n) time**, where n is `s.length`. Map size is bounded by the **alphabet size** (26 for lowercase ASCII, 128 for full ASCII, ~1.1M for full Unicode), so for ASCII inputs space is effectively **O(1)**; for arbitrary Unicode it's O(k) where k is unique chars.
+O(n²). Dies on n > 10⁴.
 
-### Edge cases (these are the interview traps)
-1. **Empty string** — return `null` (or `-1` if returning indices). Don't crash.
-2. **All characters repeat** — `"aabbcc"` → no non-repeating char → return `null` / `-1`.
-3. **First char is the answer** — `"abcdab"` → `'c'`. Two-pass scan handles this naturally.
-4. **Unicode / emoji** — `"a😀b😀"`. `for...of` over a string iterates **code points** correctly; `s[i]` indexing iterates **code units** and splits surrogate pairs. If the interviewer mentions Unicode, switch your second pass to `[...s]` or `Array.from(s)`.
-5. **Case sensitivity** — `"Aa"`: is `'A'` non-repeating or does it match `'a'`? Clarify. Default is case-sensitive.
-6. **Return index vs char** — LeetCode #387 wants the **index**, GeeksforGeeks wants the **char**. Re-read the prompt.
-7. **`Map` vs `Object`** — for ASCII-only input, a fixed `Array(26)` of counts is fastest (no hashing). Mention it as an optimization.
-8. **`Map` vs `Set` for "seen vs duplicate" tracking** — a `Set` only tracks presence; you'd need a *second* Set for "seen twice." A `Map` of counts is cleaner.
+---
 
-## Brute force approach
-For every character, scan the rest of the string to check for a duplicate. **O(n²) time, O(1) space.** Works on n ≤ 100; dies on n ≥ 10⁴. Mention it, then move on.
+## 7. The unlocking insight
 
-## Optimal approach
-**Two-pass with a Map of counts.**
-- **Pass 1:** walk the string, increment `count.get(ch)` for each char. Build the full frequency table.
-- **Pass 2:** walk the string again in order; the first char with `count === 1` is the answer.
+> **Count first (Map), then scan in order. Use `for..of` for Unicode. `?? 0` for default count.**
 
-The key insight: Pass 2 walks the **string**, not the Map. We need the *original* order of characters in the input, not the order we encountered them in (which a Map would also give us, but walking the string is identical and more intuitive). **O(n) time, O(k) space** where k = alphabet size.
+Three properties:
 
-For ASCII you can swap the Map for `new Int32Array(128)` — same algorithm, faster constant factor.
+1. **Two-pass** — count then scan.
+2. **`?? 0` idiom** — clean increment.
+3. **`for..of`** for Unicode safety.
 
-## Solution (JavaScript)
+---
+
+## 8. Solution (annotated)
 
 ```js
-/**
- * Return the first non-repeating character in `s`, or null if none.
- * @param {string} s
- * @returns {string | null}
- */
 function firstNonRepeating(s) {
-  if (!s) return null;
-
-  // Pass 1: count occurrences.
   const count = new Map();
-  for (const ch of s) {
+  for (const ch of s) {                                                    // step 1: count (code-point safe)
     count.set(ch, (count.get(ch) ?? 0) + 1);
   }
-
-  // Pass 2: scan original string in order; return first char with count 1.
-  for (const ch of s) {
+  for (const ch of s) {                                                    // step 2: scan in order
     if (count.get(ch) === 1) return ch;
   }
+  return null;                                                              // step 3: none found
+}
 
+// Single-pass via insertion order
+function firstNonRepeatingSinglePass(s) {
+  const count = new Map();
+  for (const ch of s) count.set(ch, (count.get(ch) ?? 0) + 1);
+  for (const [ch, c] of count) if (c === 1) return ch;                     // step 4: Map insertion order
   return null;
 }
 
-/**
- * Index-returning variant — matches LeetCode #387.
- * @param {string} s
- * @returns {number}
- */
+// LeetCode #387 wants the INDEX
 function firstUniqueIndex(s) {
   const count = new Map();
   for (const ch of s) count.set(ch, (count.get(ch) ?? 0) + 1);
@@ -84,85 +135,145 @@ function firstUniqueIndex(s) {
   }
   return -1;
 }
+
+// ASCII-only fastest: fixed array
+function firstNonRepeatingAscii(s) {
+  const count = new Array(128).fill(0);
+  for (let i = 0; i < s.length; i++) count[s.charCodeAt(i)]++;
+  for (let i = 0; i < s.length; i++) {
+    if (count[s.charCodeAt(i)] === 1) return s[i];
+  }
+  return null;
+}
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
-Input: `s = "leetcode"`
+```js
+firstNonRepeating('leetcode');                                // 'l'
+firstNonRepeating('loveleetcode');                            // 'v'
+firstNonRepeating('aabb');                                    // null
+firstNonRepeating('');                                         // null
 
-**Pass 1 — build count Map:**
-| step | ch | count after          |
-|------|----|----------------------|
-| 1    | l  | `{l:1}`              |
-| 2    | e  | `{l:1, e:1}`         |
-| 3    | e  | `{l:1, e:2}`         |
-| 4    | t  | `{l:1, e:2, t:1}`    |
-| 5    | c  | `{l:1, e:2, t:1, c:1}` |
-| 6    | o  | `+ o:1`              |
-| 7    | d  | `+ d:1`              |
-| 8    | e  | `e:3`                |
+// Unicode test
+firstNonRepeating('a😀b😀');                                  // 'a'  (😀 is surrogate pair)
+firstNonRepeating('a😀b😀c');                                 // 'a'
 
-Final: `{l:1, e:3, t:1, c:1, o:1, d:1}`.
+// Wrong with s[i] indexing — splits emoji
+function wrong(s) {
+  const count = new Map();
+  for (let i = 0; i < s.length; i++) {                         // iterates UTF-16 units
+    count.set(s[i], (count.get(s[i]) ?? 0) + 1);
+    // For '😀': s[0]='\uD83D' (high surrogate), s[1]='\uDE00' (low).
+    // Both counted separately. Often wrong.
+  }
+  // ...
+}
 
-**Pass 2 — scan string:**
-- `i=0` `'l'` → count is 1 → **return `'l'`**.
+// Real-time stream: maintain insertion order + remove on duplicate
+class StreamUnique {
+  constructor() { this.q = new Map(); this.dup = new Set(); }
+  add(ch) {
+    if (this.dup.has(ch)) return;
+    if (this.q.has(ch)) { this.q.delete(ch); this.dup.add(ch); }
+    else this.q.set(ch, true);
+  }
+  first() { return this.q.keys().next().value ?? null; }
+}
+```
 
-Output: `'l'`. (Index variant returns `0`.)
+---
 
-Input: `s = "aabb"`. Pass 1 yields `{a:2, b:2}`. Pass 2 finds no count-1 char. Output: `null` (or `-1`).
+## 9. Step-by-step dry run
 
-## Important takeaways
+```
+firstNonRepeating('loveleetcode'):
+  Pass 1 (count):
+    l:2, o:1, v:1, e:4, t:1, c:1, d:1.
+  
+  Pass 2 (scan):
+    'l' count 2 → skip.
+    'o' count 1 → return 'o'.
+    
+  Wait — return is 'v' on LeetCode. Let me re-check.
+  
+  Actually: l-o-v-e-l-e-e-t-c-o-d-e
+            1 1 1 1 1 1 1 1 1 1 1 1
+  Count: l=2, o=2, v=1, e=4, t=1, c=1, d=1.
+  Scan: l(2)skip, o(2)skip, v(1) → return 'v'. ✓
 
-**Syntax to memorize**
-- `count.set(ch, (count.get(ch) ?? 0) + 1)` — the canonical "increment-or-init" Map idiom.
-- `for (const ch of s)` iterates code points (Unicode-safe); `s[i]` iterates code units (surrogate-pair-splitting).
-- Two passes: first builds the Map, second walks the string in input order.
+firstNonRepeating('aabb'):
+  count: a=2, b=2.
+  scan: a skip, a skip, b skip, b skip.
+  return null.
 
-**Patterns to reuse**
-- **"Build frequency Map, then scan"** generalizes to: anagram detection (compare two count Maps), majority element (count > n/2), most-frequent-element, character-replacement problems, and sliding-window frequency tracking.
-- **Map preserves insertion order** is the property to cite when an interviewer asks "why not a plain object?" Plain objects sort integer-like string keys numerically, which is a silent footgun.
+Unicode 'a😀b😀':
+  for..of yields: 'a', '😀', 'b', '😀'.
+  count: a=1, 😀=2, b=1.
+  scan: 'a' count 1 → return 'a'. ✓
+  
+  Wrong with s[i]:
+  s.length = 6 (4 code points but '😀' = 2 units).
+  s[0]='a', s[1]='\uD83D', s[2]='\uDE00', s[3]='b', s[4]='\uD83D', s[5]='\uDE00'.
+  count: a=1, '\uD83D'=2, '\uDE00'=2, b=1.
+  scan: 'a' count 1 → return 'a'. (Accidentally correct here.)
+  
+  But: '😀' alone — wrong returns the surrogate string, not the emoji.
+```
 
-**Common mistakes**
-- Using a `Set` to track "seen" — works for *detecting* repeats but doesn't tell you which were seen exactly once. Wrong tool.
-- Single-pass attempts with "remove from Map when seen twice" — looks clever but breaks order: if `'a'` appears at indices 0 and 5, you remove it at 5, but a later char at index 2 might wrongly become "first unique." You'd need an ordered structure of currently-unique chars; over-engineered.
-- Using `count.get(ch) || 0` instead of `?? 0` — fine for counts (never 0 here) but a habit-bug that bites elsewhere.
-- Indexing with `s[i]` on a Unicode string — `"😀a"[0]` is half a surrogate, not `'😀'`.
-- Returning the index when the prompt asks for the char (or vice versa).
+---
 
-**Map vs Object vs Array — when to pick which**
-| Structure       | Pros                                                  | Cons                                          |
-|-----------------|-------------------------------------------------------|-----------------------------------------------|
-| `new Map()`     | Any key, insertion order guaranteed, `.size`, fast    | Slightly more memory than `Object.create(null)` |
-| `{}` / `Object` | Familiar, fast, JSON-serializable                     | Stringified keys, prototype chain, integer-key reorder |
-| `Int32Array(k)` | Fastest, zero hashing, fixed memory                   | Only works for known small alphabets (ASCII)  |
+## 10. Common confusion + traps
 
-For interview answers: default to `Map`. Mention `Int32Array` as an optimization when the input is ASCII.
+1. **`s[i]` indexing for Unicode** — splits surrogate pairs.
+2. **`|| 0`** — treats legit 0 as missing.
+3. **Object instead of Map** — numeric coercion (`obj['1']`).
+4. **Index vs char** — different problem variants.
+5. **Return value vs index** — re-read prompt.
+6. **All chars repeat** — return null/-1.
+7. **Single-pass with `count`-Map insertion order** is valid.
 
-**Related questions**
-- LeetCode #387 First Unique Character — index variant
-- LeetCode #383 Ransom Note — count subtraction
-- LeetCode #242 Valid Anagram — compare two frequency Maps
-- LeetCode #438 Find All Anagrams in a String — sliding window of counts
+---
 
-## Variants
+## 11. Senior follow-ups & variants
 
-1. **Index-returning version** — LeetCode #387 wants the index. Trivial change: replace `for (const ch of s)` with `for (let i; ...)` in Pass 2 and return `i`. (Shown above.)
+### Variant 1 — Return index
+LeetCode #387.
 
-2. **Stream variant** — characters arrive one at a time; report the current first-non-repeating after each. Maintain a Map of counts **plus** a linked list of currently-unique chars (insert on first sight, remove on second). Head of list = current answer. O(1) per char.
+### Variant 2 — Online / streaming
+Maintain a queue + duplicates set.
 
-3. **Case-insensitive** — lowercase the string first (`s.toLowerCase()`) or normalize each char in Pass 1. Beware Unicode-aware lowercase (`'İ'.toLowerCase()` → `'i̇'` is two code points).
+### Variant 3 — Case-insensitive
+Lowercase first.
 
-4. **Most frequent / least frequent char** — same Pass 1, then iterate Map entries tracking min/max count. Demonstrates that the frequency-Map skeleton is the same for many related problems.
+### Variant 4 — First repeating
+Inverse — first char that appears twice.
 
-5. **Generalize beyond chars** — first unique element in an array of anything. Replace `string` with `array`, `for (const ch of s)` with `for (const x of arr)`. Same algorithm; Map keys can be any value type.
+### Variant 5 — N-th unique
+Generalize beyond first.
 
-## Revision notes
+---
 
-> **first-non-repeating-char — 60 second recap**
-> - **Two passes, one Map.** Pass 1: count chars. Pass 2: scan string in order, return first with count 1.
-> - Idiom: `count.set(ch, (count.get(ch) ?? 0) + 1)`.
-> - **O(n) time, O(k) space** (k = alphabet size; O(1) for ASCII).
-> - **Map > Object** here: insertion order guaranteed, no integer-key reordering, no prototype chain.
-> - **`for (const ch of s)` for Unicode safety**; `s[i]` splits surrogate pairs.
-> - Single-pass Set tricks tend to break order — stick with two passes.
-> - Family: anagram, majority-element, sliding-window frequency.
+## 12. How to think aloud
+
+> "Two-pass with a counter Map: pass 1 counts each char via `count.set(ch, (count.get(ch) ?? 0) + 1)`; pass 2 scans the string in order, returns the first char with count exactly 1. O(n) time, O(k) space where k = distinct chars. Use `?? 0` not `|| 0` — `||` treats legit 0 as missing (matters here less, but use ?? for habit). Map preserves insertion order, so a single-pass variant works: count first, then iterate Map entries in insertion order, return first with count 1 — equivalent O(n). Unicode: use `for..of` or `[...s]` which iterate code points; `s[i]` indexes code units and splits surrogate pairs (`'😀'` is two code units). LeetCode #387 wants index; some variants want char — re-read prompt. ASCII-only fastest: fixed `Array(128)` indexed by `charCodeAt`. Real-time streaming variant: maintain Map of candidates + Set of duplicates; first() returns first key of Map. Trap: `s[i]` Unicode; `|| 0`; Object instead of Map (numeric coercion); confusing index vs char return."
+
+---
+
+## 13. 60-second revision
+
+> - **Two passes:** count, then scan.
+> - **`(count.get(ch) ?? 0) + 1`** idiom.
+> - **`for..of`** for Unicode (code points).
+> - **`s[i]`** splits surrogate pairs.
+> - **Map insertion order** — single-pass variant.
+> - **LeetCode #387 wants index.**
+> - **ASCII fast path:** `Array(128) + charCodeAt`.
+> - **Streaming:** Map + Set of dups.
+> - **Trap:** Unicode indexing; `|| 0`; Object key coercion.
+
+---
+
+**Related:** [multiset-counter.md](./multiset-counter.md) · [group-anagrams.md](./group-anagrams.md) · [object-vs-map-vs-set.md](./object-vs-map-vs-set.md) · [two-sum-map.md](./two-sum-map.md)
+
+**Concept primer:** [`concepts/maps-sets.md`](../../concepts/maps-sets.md)

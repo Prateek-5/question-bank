@@ -1,211 +1,259 @@
-# Deduplicate an array — Set vs Map vs filter+indexOf
+# Deduplicate an array — Set, Map, or filter+indexOf
 
-## Source
-- Canonical interview warm-up across all levels (BFE.dev, LeetCode #26 variant, codedamn).
-- MDN: [Set](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Set), [Map](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map).
+> **Difficulty:** Foundation   |   **Time:** ~10 min   |   **Prereqs:** [`08-maps-sets/two-sum-map.md`](../08-maps-sets/two-sum-map.md), [`08-maps-sets/object-vs-map-vs-set.md`](../08-maps-sets/object-vs-map-vs-set.md)
+>
+> **Source:** BFE.dev, LeetCode #26 variant. Universal warm-up.
 
-## Why this question matters in interviews
-Dedup looks like a one-liner (`[...new Set(arr)]`), and that's why it's diagnostic. Interviewers ask follow-ups: "now dedup an array of objects by `id`", "what's the time complexity of `filter + indexOf`?", "what happens with NaN?", "what about reference equality?". The candidate who blurts the one-liner and stops gets a polite "thanks." The candidate who sketches **three approaches with their Big-O** and chooses between them based on input type gets the senior nod. Backend engineers also need this for deduping DB results, idempotency keys, batch-processing events, etc.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+Remove duplicates from an array. Pick approach based on element type (primitive / object).
+
+**Verification examples**
+
 ```js
-// Primitives — Set is canonical
-[...new Set([1, 2, 2, 3, 3, 3])];        // [1, 2, 3]
+// Primitives
+[...new Set([1, 2, 2, 3, 3, 3])];                            // [1, 2, 3]
 
-// Objects by key — Map with first-write-wins
-const dedupByKey = (arr, keyFn) =>
-  [...new Map(arr.map(x => [keyFn(x), x])).values()];
+// Objects by key
+const dedupByKey = (arr, key) =>
+  [...new Map(arr.map(x => [key(x), x])).values()];
 
-dedupByKey(users, u => u.id);
+dedupByKey([{id:1, name:'a'}, {id:2}, {id:1, name:'b'}], u => u.id);
+// [{id:1, name:'a'}, {id:2}]   ← keeps FIRST occurrence
+
+// NaN handling — only Set handles it
+new Set([NaN, NaN]).size;                                     // 1
+[NaN, NaN].filter((v, i, a) => a.indexOf(v) === i);          // [] (indexOf misses NaN!)
 ```
 
-### Runtime / engine behavior
-- **Set** uses **SameValueZero** equality (same as `Map.prototype.has`). This means: `NaN` is equal to `NaN` (unlike `===`), but `+0` and `-0` are equal (unlike `Object.is`).
-- Sets and Maps maintain **insertion order** — iteration order is deterministic and matches insertion. Critical for dedup-by-key where you want "first occurrence wins."
-- Set/Map use hash tables internally (V8 uses a chained hash table called `OrderedHashSet`/`OrderedHashTable`). `add`, `has`, `delete` are amortized O(1).
-- Spreading `[...new Set(arr)]` is O(n) — single pass into the set, single pass out.
-- `Array.prototype.indexOf` uses **strict equality (`===`)** — so `NaN` won't dedup with indexOf-based approaches.
-- `Array.prototype.includes` uses **SameValueZero** — finds NaN, unlike indexOf.
+**Constraints**
+- O(n) time using Set/Map; O(n²) using indexOf.
+- Set uses SameValueZero (NaN === NaN; +0 === -0).
+- indexOf uses `===` (NaN never found).
+- Preserve insertion order.
 
-### Edge cases (the interview traps)
-1. **NaN** — `new Set([NaN, NaN]).size` is `1`. `[NaN, NaN].filter((v, i, a) => a.indexOf(v) === i)` returns `[]` (indexOf can't find NaN). Massive footgun.
-2. **Reference equality** — `new Set([{}, {}]).size` is `2` — two distinct objects. To dedup by content, use a key function.
-3. **-0 vs +0** — `new Set([0, -0]).size` is `1` (SameValueZero treats them equal). Rarely matters but interviewers love it.
-4. **Order preservation** — when deduping, do you keep the first occurrence or the last? `Set` keeps first; `Map.set` overwrites, so dedup-by-key with `Map` ALSO keeps first if you use `if (!map.has(k))` — but `new Map(arr.map(...))` actually keeps the **last** because Map constructor overwrites. Worth knowing.
-5. **Type coercion** — `'1'` and `1` are distinct in a Set (no coercion).
-6. **Deep dedup** — `{a: 1}` and `{a: 1}` are distinct references. Use `JSON.stringify` as key (with caveats — key order, undefined values, circular refs).
+---
 
-### Time / space complexity
-| Method | Time | Space | Handles NaN | Handles objects |
-|---|---|---|---|---|
-| `[...new Set(arr)]` | O(n) | O(n) | Yes | Reference-only |
-| `arr.filter((v, i, a) => a.indexOf(v) === i)` | O(n²) | O(n) | **No** | Reference-only |
-| `Map`-based dedup-by-key | O(n) | O(n) | Yes (in key) | Yes (by key) |
-| `reduce` + `seen` object | O(n) | O(n) | Yes if `seen` is `Set` | Depends |
+## 2. Plain-English restatement
 
-## Brute force approach
-Two nested loops, push if not seen:
+Return a new array with each unique value appearing once. For primitives, use Set; for objects by some key, use Map. Watch for NaN, -0, reference equality, and order preservation.
+
+---
+
+## 3. Why this matters in interviews
+
+Looks like a one-liner — that's why it's diagnostic. Senior signal: pick approach by input type, know NaN/reference traps, discuss complexity. Backend uses: dedup DB rows, idempotency keys, event batches.
+
+---
+
+## 4. Mental model
+
+```
+   Primitives:
+     [...new Set(arr)]                  ← O(n), SameValueZero, keeps first.
+   
+   Objects by key:
+     [...new Map(arr.map(x => [keyFn(x), x])).values()]
+                                         ← Map constructor: last-write-wins!
+                                         ← To keep FIRST: manual loop with !has check.
+   
+   Functional dedup (small arrays only):
+     arr.filter((v, i, a) => a.indexOf(v) === i)   ← O(n²); misses NaN.
+   
+   Equality semantics:
+     Set/Map use SameValueZero:
+       NaN === NaN (special; unlike ===).
+       +0 === -0 (special; unlike Object.is).
+       Otherwise === semantics.
+     
+     indexOf uses ===.
+     includes uses SameValueZero (handles NaN).
+   
+   Reference equality:
+     {a:1} !== {a:1}  ← two distinct refs.
+     Dedup by content: JSON.stringify key (caveat: key order, undefined, cycles).
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. Why does `[NaN, NaN].filter((v,i,a)=>a.indexOf(v)===i)` return `[]`?
+> 2. Does `new Map(arr.map(x => [k(x), x]))` keep first or last?
+> 3. How to dedup `[{a:1}, {a:1}]` by content?
+
+---
+
+## 6. Brute force — walked through
+
 ```js
-function dedupBrute(arr) {
-  const result = [];
-  for (const x of arr) {
-    let seen = false;
-    for (const y of result) if (x === y) { seen = true; break; }
-    if (!seen) result.push(x);
-  }
-  return result;
+// O(n²) via indexOf
+arr.filter((v, i, a) => a.indexOf(v) === i);
+```
+
+Issues: O(n²); doesn't dedup NaN.
+
+```js
+// O(n²) via includes
+const out = [];
+for (const v of arr) if (!out.includes(v)) out.push(v);
+```
+
+includes uses SameValueZero (handles NaN) — still O(n²).
+
+---
+
+## 7. The unlocking insight
+
+> **Set for primitives (O(n), SameValueZero, first-wins). Map keyed by key fn for objects. For first-wins by key, use manual loop with `if (!seen.has(k))`.**
+
+Three properties:
+
+1. **Set/Map = hash table O(1)** lookups.
+2. **SameValueZero** — handles NaN.
+3. **First-wins vs last-wins** — depends on Map constructor vs manual loop.
+
+---
+
+## 8. Solution (annotated)
+
+```js
+// Primitives
+function dedup(arr) {
+  return [...new Set(arr)];                                              // step 1: O(n), first-wins
 }
-```
-O(n²) time. Also fails on NaN (`===`). Mention as a strawman, then immediately move to Set.
 
-The slightly-better-but-still-bad version is `filter + indexOf`:
-```js
-arr.filter((v, i) => arr.indexOf(v) === i);
-```
-Still O(n²), still NaN-broken. Looks clever, isn't.
-
-## Optimal approach
-- **Primitives**: `[...new Set(arr)]`. O(n) time, O(n) space. Done.
-- **Objects by key**: `[...new Map(arr.map(o => [keyFn(o), o])).values()]`. O(n) time.
-- **Deep dedup of plain objects**: serialize to a stable key (sorted-keys JSON), use Set/Map on the serialized form. O(n × k) where k is object size.
-
-The choice depends on element type. Always state your assumption first.
-
-## Solution (JavaScript)
-
-```js
-// 1. Primitives — canonical
-const dedup = (arr) => [...new Set(arr)];
-
-// 2. Objects by single key (first-occurrence-wins variant)
-function dedupByKey(arr, keyFn) {
-  const seen = new Set();
-  const result = [];
-  for (const item of arr) {
+// Objects by key, FIRST-wins
+function dedupByKeyFirst(arr, keyFn) {
+  const seen = new Map();
+  for (const item of arr) {                                              // step 2: manual loop
     const k = keyFn(item);
-    if (!seen.has(k)) {
-      seen.add(k);
-      result.push(item);
-    }
+    if (!seen.has(k)) seen.set(k, item);                                  // step 3: only set if absent
   }
-  return result;
+  return [...seen.values()];
 }
 
-// 2b. Map-based one-liner (last-occurrence-wins because Map.set overwrites)
-const dedupByKeyLastWins = (arr, keyFn) =>
-  [...new Map(arr.map(o => [keyFn(o), o])).values()];
+// Objects by key, LAST-wins (Map constructor idiom)
+function dedupByKeyLast(arr, keyFn) {
+  return [...new Map(arr.map((x) => [keyFn(x), x])).values()];           // step 4: constructor overwrites
+}
 
-// 3. Deep dedup using stable JSON key
+// Deep dedup via stringify (caveat: key order, cycles)
 function dedupDeep(arr) {
-  const stableStringify = (v) => {
-    if (v === null || typeof v !== 'object') return JSON.stringify(v);
-    if (Array.isArray(v)) return '[' + v.map(stableStringify).join(',') + ']';
-    return '{' + Object.keys(v).sort()
-      .map(k => JSON.stringify(k) + ':' + stableStringify(v[k]))
-      .join(',') + '}';
-  };
   const seen = new Set();
-  return arr.filter(item => {
-    const k = stableStringify(item);
-    if (seen.has(k)) return false;
-    seen.add(k);
-    return true;
-  });
+  const out = [];
+  for (const item of arr) {
+    const k = JSON.stringify(item);                                       // step 5: serialize as key
+    if (!seen.has(k)) { seen.add(k); out.push(item); }
+  }
+  return out;
 }
-
-// 4. Slow but historical — filter + indexOf
-const dedupSlow = (arr) => arr.filter((v, i) => arr.indexOf(v) === i);
-// O(n²), broken on NaN
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
-Input 1 — primitives:
 ```js
-[...new Set([1, 2, 2, NaN, NaN, 3])];
-// Set internals (insertion order):
-//   add(1) → {1}
-//   add(2) → {1, 2}
-//   add(2) → no-op (SameValueZero hit)
-//   add(NaN) → {1, 2, NaN}
-//   add(NaN) → no-op (NaN === NaN under SameValueZero)
-//   add(3) → {1, 2, NaN, 3}
-// Spread → [1, 2, NaN, 3]
+dedup([1, 2, 2, 3, 3, 3]);                                    // [1, 2, 3]
+dedup([NaN, NaN, NaN]);                                       // [NaN] (Set handles NaN)
+dedup([0, -0]);                                                // [0] (SameValueZero)
+dedup(['1', 1]);                                               // ['1', 1] (no coercion)
+
+const users = [{id:1, name:'a'}, {id:2}, {id:1, name:'b'}];
+dedupByKeyFirst(users, u => u.id);                            // [{id:1, name:'a'}, {id:2}]
+dedupByKeyLast(users, u => u.id);                             // [{id:1, name:'b'}, {id:2}]
+
+dedupDeep([{a:1}, {a:1}, {b:2}]);                             // [{a:1}, {b:2}]
+
+// Compose with other ops
+const uniqueIds = new Set(orders.map(o => o.userId));         // dedup + project
+const byCategory = new Map(products.map(p => [p.category, p])); // last-wins by category
 ```
 
-Input 2 — objects by id (first wins):
-```js
-const users = [
-  { id: 1, name: 'Alice' },
-  { id: 2, name: 'Bob' },
-  { id: 1, name: 'Alice-dup' },
-];
-dedupByKey(users, u => u.id);
-// seen = {}
-// item={id:1,...Alice} → k=1, !seen → push, seen={1}
-// item={id:2,...Bob}   → k=2, !seen → push, seen={1,2}
-// item={id:1,...Alice-dup} → k=1, seen has it → skip
-// → [{id:1,Alice}, {id:2,Bob}]
+---
+
+## 9. Step-by-step dry run
+
+```
+dedup([1, 2, 2, NaN, NaN]):
+  Set construction: add 1 (size 1). add 2 (size 2). add 2 (already; size 2). add NaN (size 3). add NaN (SVZ: already; size 3).
+  Result: [1, 2, NaN].
+
+vs filter+indexOf:
+  [1, 2, 2, NaN, NaN].filter((v, i, a) => a.indexOf(v) === i):
+    i=0, v=1: indexOf(1)=0 → keep.
+    i=1, v=2: indexOf(2)=1 → keep.
+    i=2, v=2: indexOf(2)=1, but i=2 → drop.
+    i=3, v=NaN: indexOf(NaN)=-1, but i=3 → drop. WRONG: NaN never found.
+    i=4, v=NaN: indexOf(NaN)=-1, but i=4 → drop.
+  Result: [1, 2] — NaN entirely lost!
+
+dedupByKeyFirst(users, u => u.id) where users = [{id:1,n:'a'}, {id:1,n:'b'}]:
+  seen={}. 
+  item={id:1,n:'a'}: k=1. !has → seen.set(1, {id:1,n:'a'}).
+  item={id:1,n:'b'}: k=1. has → skip.
+  values: [{id:1,n:'a'}].
+
+dedupByKeyLast same input:
+  Map constructor: [[1, {n:'a'}], [1, {n:'b'}]].
+  Map sets 1→{n:'a'}, then 1→{n:'b'} (overwrites).
+  values: [{id:1, n:'b'}].
 ```
 
-Input 3 — last-wins via Map constructor:
-```js
-dedupByKeyLastWins(users, u => u.id);
-// Map entries built:
-//   [1, Alice] → Map{1→Alice}
-//   [2, Bob]   → Map{1→Alice, 2→Bob}
-//   [1, Alice-dup] → Map{1→Alice-dup, 2→Bob}  // overwrite
-// values() → [Alice-dup, Bob]
-```
+---
 
-This is the "trap": `new Map(entries)` is **last-wins**, not first-wins. Many candidates write the one-liner expecting first-wins. Use the explicit loop if you need first-wins guarantee.
+## 10. Common confusion + traps
 
-## Important takeaways
+1. **`filter+indexOf` misses NaN** — indexOf uses ===.
+2. **`new Map(arr.map(...))` is last-wins** — manual loop for first-wins.
+3. **`{}` ≠ `{}`** — reference equality; dedup-by-content needs keyFn.
+4. **JSON.stringify** — key order varies; circular refs throw; undefined dropped.
+5. **+0 vs -0 conflated** — usually fine; Object.is for strict.
+6. **`'1'` vs `1`** — distinct in Set (no coercion).
+7. **O(n²) on huge arrays** — Set is O(n).
 
-**Syntax to memorize**
-- `[...new Set(arr)]` — primitives, first-wins, O(n).
-- `[...new Map(arr.map(o => [keyFn(o), o])).values()]` — objects by key, **last-wins**.
-- For first-wins on objects, use an explicit loop with `seen.has(k)`.
-- `Set` uses **SameValueZero** — NaN-friendly.
-- `Array.prototype.includes` uses SameValueZero too; `indexOf` uses `===`.
+---
 
-**Patterns to reuse**
-- **Set as a seen-cache** — single-pass dedup is the same pattern as cycle detection, visited-nodes in graph traversal, request idempotency.
-- **Map for keyed collections** — `Map<key, value>` is the canonical "I want a JS object but with order + non-string keys" pattern.
-- **Stable JSON key** — sorted-keys serialization is the dedup-by-content idiom; same trick used in cache keys, content-addressed storage.
+## 11. Senior follow-ups & variants
 
-**Common mistakes**
-- Using `filter + indexOf` and not noticing it's O(n²). Junior tell.
-- Using `JSON.stringify` for deep dedup without sorting keys — `{a:1,b:2}` and `{b:2,a:1}` produce different strings.
-- Expecting `new Map(arr.map(...))` to keep the **first** occurrence (it keeps the last).
-- Using `===` for NaN dedup — NaN never equals NaN under `===`.
-- Forgetting Set's reference equality on objects — `new Set([{}, {}]).size` is `2`.
+### Variant 1 — Dedup with merge
+Last entry wins per key but combine fields: `{...a, ...b}`.
 
-**Related questions**
-- `array-set-ops` — intersection / union / difference via Set.
-- `polyfill-includes` vs `polyfill-indexOf` (SameValueZero vs `===`).
-- `two-sum-map` — Map as complement-cache.
-- LRU cache (uses Map's insertion-order property).
+### Variant 2 — Dedup preserving frequency
+`Map<key, count>` for histogram.
 
-## Variants
+### Variant 3 — Dedup with `includes`
+SameValueZero (handles NaN) but still O(n²).
 
-1. **Dedup keeping last occurrence** — easy with the `new Map(arr.map(...))` trick, or explicit "iterate reverse, dedup, reverse back."
+### Variant 4 — Streaming dedup
+For very large streams: bloom filter (approximate) or Set with eviction.
 
-2. **Dedup with merge** — "When duplicates exist, merge their fields." Use `Map.set` with `{...existing, ...incoming}`. Common in event-source replay.
+### Variant 5 — `Map.groupBy` (ES2024)
+Groups by key — different from dedup.
 
-3. **Dedup streaming / cardinality estimation** — "The array is too big to fit in memory." Pivot to HyperLogLog or Count-Min Sketch — sublinear space, approximate counts. Senior follow-up.
+---
 
-4. **Dedup with a custom equality function** — "Two items are equal if their lowercased names match." General-purpose: O(n²) with the predicate, OR O(n) by deriving a canonical key.
+## 12. How to think aloud
 
-## Revision notes
+> "Three approaches by tradeoff: (1) `[...new Set(arr)]` for primitives — O(n), SameValueZero (handles NaN), first-occurrence-wins. (2) For objects by key, Map: `new Map(arr.map(x => [keyFn(x), x]))` — but this is LAST-wins because Map constructor overwrites; for FIRST-wins write a manual loop with `if (!seen.has(k))`. (3) `filter+indexOf` — O(n²); misses NaN entirely because indexOf uses ===. Set/Map use SameValueZero: NaN===NaN; +0===-0. Reference equality for objects: `{a:1} !== {a:1}` — two distinct refs. Deep dedup via `JSON.stringify` as key — caveat: key order, circular refs throw, undefined dropped. Order preservation: Set maintains insertion order; reflects first occurrence. Time: O(n) hash, O(n²) filter+indexOf. Trap: filter+indexOf with NaN; Map constructor last-wins surprise; JSON.stringify with cycles."
 
-> **array dedup — 60 second recap**
-> - Primitives: `[...new Set(arr)]`. O(n). NaN-safe.
-> - Objects by key: `[...new Map(arr.map(o => [keyFn(o), o])).values()]` — **last-wins**.
-> - First-wins: explicit loop with `seen.has(k)`.
-> - `Set` uses SameValueZero — `NaN === NaN` here (unlike `===`).
-> - `filter + indexOf` is O(n²) AND fails on NaN. Never ship it.
-> - **Trap:** `new Map(entries)` keeps the last value on duplicate keys.
-> - **Family:** dedup, intersection, union, difference — all Set-based, O(n+m).
+---
+
+## 13. 60-second revision
+
+> - **Primitives:** `[...new Set(arr)]`.
+> - **By key (first-wins):** manual loop with `!seen.has(k)`.
+> - **By key (last-wins):** `new Map(arr.map(...))`.
+> - **Set/Map use SameValueZero** — handles NaN.
+> - **`indexOf` uses ===** — misses NaN.
+> - **Reference equality** for objects (need keyFn).
+> - **Deep dedup:** JSON.stringify (cycles, undefined caveats).
+> - **Trap:** filter+indexOf and NaN; Map constructor wins surprise.
+
+---
+
+**Related:** [`08-maps-sets/object-vs-map-vs-set.md`](../08-maps-sets/object-vs-map-vs-set.md) · [`08-maps-sets/group-by.md`](../08-maps-sets/group-by.md) · [`08-maps-sets/multiset-counter.md`](../08-maps-sets/multiset-counter.md) · [array-set-ops.md](./array-set-ops.md)
+
+**Concept primer:** [`concepts/arrays.md`](../../concepts/arrays.md), [`concepts/maps-sets.md`](../../concepts/maps-sets.md)

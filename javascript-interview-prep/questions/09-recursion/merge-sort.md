@@ -1,201 +1,298 @@
 # Merge sort — divide and conquer
 
-## Source
-- Canonical divide-and-conquer interview problem.
-- LeetCode #912 "Sort an Array": https://leetcode.com/problems/sort-an-array/
-- Topic-page reference: https://www.geeksforgeeks.org/merge-sort/
+> **Difficulty:** Medium   |   **Time:** ~12 min   |   **Prereqs:** [quick-sort.md](./quick-sort.md), [`07-arrays/stable-sort-discussion.md`](../07-arrays/stable-sort-discussion.md)
+>
+> **Source:** LeetCode #912. V8's TimSort = merge-sort variant.
 
-## Why this question matters in interviews
-Merge sort is the **canonical "explain recursion in production" question** at senior interviews. It's the algorithm V8 used as its baseline `Array.prototype.sort` from 2018 (TimSort, which is a merge-sort variant, was adopted in V8 7.0 per the spec stability requirement). Interviewers want three signals: (1) you can write **clean recursive divide**, (2) you understand **stability** and why it matters (sorting users by lastName then firstName, multi-key sorts), and (3) you can explain the `O(n log n)` recurrence `T(n) = 2T(n/2) + O(n)` from first principles. Bonus: merge-sort is the only `O(n log n)` comparison sort that's also stable, which is why it (and TimSort) won the language-spec war over quicksort.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+Implement merge sort. O(n log n) worst-case; stable.
+
+**Verification examples**
 
 ```js
-function mergeSort(arr) {
-  if (arr.length <= 1) return arr;           // base case
-  const mid = arr.length >> 1;               // integer divide
-  const left  = mergeSort(arr.slice(0, mid));
-  const right = mergeSort(arr.slice(mid));
-  return merge(left, right);
-}
+mergeSort([3, 1, 4, 1, 5, 9, 2, 6]);     // [1, 1, 2, 3, 4, 5, 6, 9]
+mergeSort([]);                            // []
+mergeSort([1]);                           // [1]
 
-function merge(left, right) {
-  const result = [];
-  let i = 0, j = 0;
-  while (i < left.length && j < right.length) {
-    // <= keeps the LEFT element first on ties → stability
-    if (left[i] <= right[j]) result.push(left[i++]);
-    else                     result.push(right[j++]);
+// Stability check
+const arr = [{k: 1, v: 'a'}, {k: 1, v: 'b'}, {k: 0, v: 'c'}];
+mergeSort(arr, (a, b) => a.k - b.k);
+// [{k:0,v:'c'}, {k:1,v:'a'}, {k:1,v:'b'}]   ← stable
+```
+
+**Constraints**
+- O(n log n) all cases (no worst-case explosion like quicksort).
+- O(n) extra space.
+- Stable.
+- Recursion depth ~log n (safe).
+
+---
+
+## 2. Plain-English restatement
+
+Recursively split into halves until size ≤ 1; merge two sorted halves into one. Stability from `<=` choosing left first.
+
+---
+
+## 3. Why this matters in interviews
+
+Canonical D&C. V8 baseline (TimSort). Tests: clean recursive divide, stability awareness, recurrence reasoning.
+
+---
+
+## 4. Mental model
+
+```
+   mergeSort(arr):
+     if arr.length <= 1: return arr
+     mid = arr.length / 2
+     left = mergeSort(arr.slice(0, mid))
+     right = mergeSort(arr.slice(mid))
+     return merge(left, right)
+   
+   merge(left, right):
+     i, j = 0, 0
+     result = []
+     while i < left.len && j < right.len:
+       if left[i] <= right[j]:           ← <= for stability
+         result.push(left[i++])
+       else: result.push(right[j++])
+     append remainders.
+     return result
+   
+   Recurrence: T(n) = 2T(n/2) + O(n) → O(n log n).
+   Stack depth: log n (safe).
+   Space: O(n) extra for merged arrays.
+   
+   Stability:
+     Equal-key elements: left wins (because we check <=).
+     Multi-key sort possible: sort by minor key first, major key second.
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. Why is `<=` the stability invariant?
+> 2. Recursion depth?
+> 3. In-place merge sort — possible?
+
+---
+
+## 6. Brute force — walked through
+
+```js
+// O(n²) — bubble/insertion
+function bubble(arr) {
+  for (let i = 0; i < arr.length; i++) {
+    for (let j = 0; j < arr.length - 1 - i; j++) {
+      if (arr[j] > arr[j+1]) [arr[j], arr[j+1]] = [arr[j+1], arr[j]];
+    }
   }
-  // drain whichever side has leftovers
-  while (i < left.length)  result.push(left[i++]);
-  while (j < right.length) result.push(right[j++]);
-  return result;
+  return arr;
 }
 ```
 
-### Runtime / engine behavior
-- **Time complexity:** `T(n) = 2T(n/2) + O(n)` → `O(n log n)` by the Master Theorem. Holds for worst, average, and best case. There is no "bad input" for merge sort, unlike quicksort.
-- **Space:** `O(n)` auxiliary for the `result` buffer at each merge level, plus `O(log n)` recursion stack. Total `O(n)`. **Not in-place.** This is merge-sort's only real weakness vs heap-sort or in-place quicksort.
-- **Stability:** preserved by the `<=` comparison in the merge step. If two elements are equal, the one from the left half (lower original index) is emitted first. Flip to `<` and you lose stability.
-- **Cache behavior:** sequential reads on both halves, sequential writes to output — very cache-friendly. This is why TimSort (merge-sort variant) outperforms quicksort on real hardware despite quicksort's lower constant factor in pure operation count.
-- **V8 specifics:** before V8 7.0 (Oct 2018), `Array.prototype.sort` was QuickSort for arrays > 10 — **unstable**. Lots of legacy code accidentally relied on unstable order. ES2019 mandates stability; V8 now uses TimSort. Knowing this is a senior-tier detail.
+O(n²); useless past n=10k.
 
-### Edge cases
-1. **Empty array** — `mergeSort([])` returns `[]`. Base case `length <= 1` covers it.
-2. **Single element** — already sorted; base case returns the array as-is. **Returning the same reference** is fine here because the algorithm never mutates the input (we `slice` before recursing).
-3. **Already-sorted input** — still `O(n log n)`. Not adaptive. TimSort *is* adaptive (runs detection), which is why it wins on partially-sorted data.
-4. **Duplicates** — fine; stability ensures duplicates retain original relative order.
-5. **Stability matters in multi-key sorts** — sort by `lastName`, then by `firstName`; on the second pass, equal `firstName` rows must keep `lastName` order. Requires a stable sort. Merge sort is stable; naive quicksort isn't.
-6. **`arr.slice(0, mid)`** allocates — this is what makes merge-sort `O(n)` space. An "in-place" merge sort exists (Kronrod's algorithm) but the merge step becomes `O(n²)` time in the worst case; rarely worth the trouble.
-7. **Comparator function** — if interviewer passes a `(a, b) => -1|0|1` comparator, use `cmp(left[i], right[j]) <= 0` instead of `<=`. Don't hard-code numeric comparison.
+---
 
-## Brute force approach
-Selection sort or bubble sort — `O(n²)` swaps. Mention only to anchor the `O(n log n)` improvement. Insertion sort is worth a real shout-out because TimSort uses it for runs ≤ 32 (small-array constant factor beats merge-sort's allocation overhead).
+## 7. The unlocking insight
 
-## Optimal approach
-Recursive divide-and-conquer: split the array in half, recursively sort each half, then merge them in linear time. The merge step is the algorithmic core — it's two pointers sweeping in tandem. Always `O(n log n)`, always stable. Two practical concerns: it allocates `O(n)` extra memory (use in-place quicksort if memory-constrained) and the recursion depth is `log₂(n)` (~20 frames for n=1M; stack-safe in V8).
+> **Divide log n times, merge O(n) per level. `<=` makes it stable. log n recursion depth (safe).**
 
-## Solution (JavaScript)
+Three properties:
+
+1. **Divide log n times**.
+2. **Merge O(n) per level**.
+3. **`<=` for stability**.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
-/**
- * Stable merge sort. Returns a new sorted array; does not mutate input.
- * Time: O(n log n) — worst, average, best.
- * Space: O(n) auxiliary + O(log n) call stack.
- *
- * @param {number[]} arr
- * @param {(a: any, b: any) => number} [cmp]  comparator: negative → a first
- * @returns {Array}
- */
-function mergeSort(arr, cmp = (a, b) => a < b ? -1 : a > b ? 1 : 0) {
-  if (arr.length <= 1) return arr.slice();   // copy for caller safety
+function mergeSort(arr, cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0)) {
+  if (arr.length <= 1) return arr;                                          // step 1: base
   const mid = arr.length >> 1;
-  const left  = mergeSort(arr.slice(0, mid), cmp);
-  const right = mergeSort(arr.slice(mid),    cmp);
+  const left = mergeSort(arr.slice(0, mid), cmp);                           // step 2: divide
+  const right = mergeSort(arr.slice(mid), cmp);
   return merge(left, right, cmp);
 }
 
 function merge(left, right, cmp) {
-  const out = new Array(left.length + right.length);
+  const result = new Array(left.length + right.length);
   let i = 0, j = 0, k = 0;
   while (i < left.length && j < right.length) {
-    // <= 0 keeps left-first on ties → stability
-    if (cmp(left[i], right[j]) <= 0) out[k++] = left[i++];
-    else                              out[k++] = right[j++];
-  }
-  while (i < left.length)  out[k++] = left[i++];
-  while (j < right.length) out[k++] = right[j++];
-  return out;
-}
-
-/**
- * Bottom-up iterative merge sort — no recursion, useful when you
- * want to avoid stack frames or you're in a TCO-less engine.
- * Same O(n log n) / O(n).
- */
-function mergeSortIterative(arr, cmp = (a, b) => a - b) {
-  const n = arr.length;
-  let buf = arr.slice();
-  let tmp = new Array(n);
-  for (let width = 1; width < n; width *= 2) {
-    for (let lo = 0; lo < n; lo += 2 * width) {
-      const mid = Math.min(lo + width, n);
-      const hi  = Math.min(lo + 2 * width, n);
-      let i = lo, j = mid, k = lo;
-      while (i < mid && j < hi) {
-        if (cmp(buf[i], buf[j]) <= 0) tmp[k++] = buf[i++];
-        else                          tmp[k++] = buf[j++];
-      }
-      while (i < mid) tmp[k++] = buf[i++];
-      while (j < hi)  tmp[k++] = buf[j++];
+    if (cmp(left[i], right[j]) <= 0) {                                      // step 3: <= for stable
+      result[k++] = left[i++];
+    } else {
+      result[k++] = right[j++];
     }
-    [buf, tmp] = [tmp, buf];                 // swap buffers — no copy
   }
-  return buf;
+  while (i < left.length) result[k++] = left[i++];                          // step 4: drain
+  while (j < right.length) result[k++] = right[j++];
+  return result;
+}
+
+// In-place (kind of — uses index ranges)
+function mergeSortInPlace(arr, cmp = (a, b) => a - b, lo = 0, hi = arr.length - 1) {
+  if (lo >= hi) return;
+  const mid = (lo + hi) >> 1;
+  mergeSortInPlace(arr, cmp, lo, mid);
+  mergeSortInPlace(arr, cmp, mid + 1, hi);
+  mergeInPlace(arr, cmp, lo, mid, hi);
+}
+
+function mergeInPlace(arr, cmp, lo, mid, hi) {
+  const buf = new Array(hi - lo + 1);
+  let i = lo, j = mid + 1, k = 0;
+  while (i <= mid && j <= hi) {
+    buf[k++] = cmp(arr[i], arr[j]) <= 0 ? arr[i++] : arr[j++];
+  }
+  while (i <= mid) buf[k++] = arr[i++];
+  while (j <= hi) buf[k++] = arr[j++];
+  for (let m = 0; m < buf.length; m++) arr[lo + m] = buf[m];
 }
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
-Input: `mergeSort([5, 2, 4, 6, 1, 3])`.
+```js
+mergeSort([3, 1, 4, 1, 5, 9, 2, 6]);                         // [1, 1, 2, 3, 4, 5, 6, 9]
 
-Divide tree (only structure shown):
+// Stable multi-key
+const users = [
+  {name: 'A', age: 25}, {name: 'B', age: 25}, {name: 'C', age: 20}
+];
+// Sort by age then name (relies on stability)
+const byAge = mergeSort([...users].sort((a, b) => a.name.localeCompare(b.name)),
+                        (a, b) => a.age - b.age);
+// All age-25 retain name order.
+
+// External merge sort (for files too big for memory)
+async function externalMergeSort(filename) {
+  const chunks = await splitIntoChunks(filename);   // sorted chunks on disk
+  return mergeChunks(chunks);   // k-way merge
+}
+
+// Bottom-up iterative — no recursion
+function mergeSortIter(arr) {
+  let result = arr.slice();
+  for (let size = 1; size < result.length; size *= 2) {
+    for (let lo = 0; lo < result.length; lo += 2 * size) {
+      const mid = Math.min(lo + size - 1, result.length - 1);
+      const hi = Math.min(lo + 2 * size - 1, result.length - 1);
+      if (mid < hi) {
+        const merged = merge(result.slice(lo, mid + 1), result.slice(mid + 1, hi + 1), (a, b) => a - b);
+        for (let i = 0; i < merged.length; i++) result[lo + i] = merged[i];
+      }
+    }
+  }
+  return result;
+}
 ```
-              [5, 2, 4, 6, 1, 3]
-              /                 \
-        [5, 2, 4]              [6, 1, 3]
-        /      \                /      \
-      [5]    [2, 4]           [6]    [1, 3]
-              /  \                    /  \
-            [2]  [4]                [1]  [3]
+
+---
+
+## 9. Step-by-step dry run
+
+```
+mergeSort([3, 1, 4, 1]):
+  mid = 2.
+  left = mergeSort([3, 1]):
+    mid = 1.
+    left = mergeSort([3]) = [3].
+    right = mergeSort([1]) = [1].
+    merge([3], [1], cmp):
+      3 <= 1? No → push 1. j=1.
+      Drain left: push 3.
+      Return [1, 3].
+  right = mergeSort([4, 1]):
+    Similar → [1, 4].
+  merge([1, 3], [1, 4]):
+    1 <= 1? Yes (stable, left first) → push 1 (from left). i=1.
+    3 <= 1? No → push 1 (from right). j=1.
+    3 <= 4? Yes → push 3. i=2.
+    Drain right: push 4.
+    Return [1, 1, 3, 4].
+
+Recursion tree depth log2(4) = 2.
+
+Stability:
+  Two equal-key elements: cmp returns 0.
+  We use cmp(left, right) <= 0 — equal (== 0) takes LEFT first.
+  Left half came first in input → relative order preserved.
+
+If we used < (strict):
+  cmp(left, right) < 0 → strict less.
+  Equal case: takes right first → flips input order.
+  Not stable.
+
+Iterative mergeSortIter:
+  size=1: merge pairs (1,2)(3,4)... — sort pairs.
+  size=2: merge groups of 4.
+  size=4: merge groups of 8.
+  ...
 ```
 
-Merge phase (bottom-up):
-- `merge([2], [4])` → compare 2 ≤ 4 → take 2; drain → `[2, 4]`.
-- `merge([5], [2, 4])` → 5 ≤ 2? no → take 2. 5 ≤ 4? no → take 4. Drain → `[2, 4, 5]`.
-- `merge([1], [3])` → `[1, 3]`.
-- `merge([6], [1, 3])` → 6 ≤ 1? no → take 1. 6 ≤ 3? no → take 3. Drain → `[1, 3, 6]`.
-- `merge([2, 4, 5], [1, 3, 6])` →
-  - 2 ≤ 1? no → take 1. Out: `[1]`.
-  - 2 ≤ 3? yes → take 2. Out: `[1, 2]`.
-  - 4 ≤ 3? no → take 3. Out: `[1, 2, 3]`.
-  - 4 ≤ 6? yes → take 4. Out: `[1, 2, 3, 4]`.
-  - 5 ≤ 6? yes → take 5. Out: `[1, 2, 3, 4, 5]`.
-  - Drain right → `[1, 2, 3, 4, 5, 6]`.
+---
 
-Total comparisons: 11 for n=6. The bound `n log n` gives ~15 — actual is within a small constant.
+## 10. Common confusion + traps
 
-## Important takeaways
+1. **`<` instead of `<=`** — unstable.
+2. **In-place** — JS makes it awkward (no efficient in-place merge).
+3. **`arr.slice` O(n) per level** — total O(n log n) extra space.
+4. **Stack overflow** — log n depth; safe.
+5. **TimSort vs plain mergesort** — TimSort adapts to existing runs.
+6. **Empty / single element** — already sorted; base case.
+7. **Comparator returns bool** — coerces; broken.
 
-**Syntax to memorize**
-- Base case `arr.length <= 1` — not `=== 0`.
-- `const mid = arr.length >> 1` — integer divide via bit shift (also fine: `Math.floor(arr.length / 2)`).
-- Merge step is **two pointers** sweeping; never `splice` or `shift` from the inputs (both are `O(n)` — would push merge to `O(n²)`).
-- `<=` in merge for **stability**. Flipping to `<` quietly breaks it.
+---
 
-**Patterns to reuse**
-- **Divide-and-conquer skeleton** — split / recurse / combine. Same shape as quicksort, FFT, Strassen matrix multiply, closest-pair-of-points, count-inversions, parallel reduce.
-- The merge step is the same code as **merge k sorted lists** (LC #23) — just use a min-heap when k > 2.
-- Counting inversions (LC #493) is a one-line tweak of merge: add `result += mid - i` whenever you take from the right half.
-- External merge sort (sorting data larger than RAM) is the same algorithm with chunks read from disk — backend essentials.
+## 11. Senior follow-ups & variants
 
-**Common mistakes**
-- Using `arr.shift()` instead of an index — turns each merge from `O(n)` to `O(n²)`.
-- Forgetting the second `while` drain loop — leaves the longer half's tail unwritten.
-- Using `<` instead of `<=` in merge → unstable sort (matters for multi-key).
-- Claiming `O(1)` space — it's `O(n)` because of the merge buffer. In-place merge sort exists but is impractical (O(n²) merge or huge constants).
-- Saying "merge sort is faster than quicksort." It isn't on random data — quicksort has lower constants. Merge sort wins on **stability**, **worst-case guarantee**, and **external/parallel scenarios**.
+### Variant 1 — Bottom-up iterative
+No recursion; same O(n log n).
 
-**Related questions**
-- Quick sort (`09-recursion/quick-sort.md`) — sister algorithm; trade-offs go the other way.
-- Merge k sorted lists / files (external sort).
-- Count inversions (Kendall tau distance).
-- Stability discussion in `07-arrays/stable-sort-discussion.md`.
+### Variant 2 — In-place (advanced)
+Galloping merge with rotation; complex.
 
-## Variants
+### Variant 3 — External merge sort
+For files > memory.
 
-1. **In-place merge sort** — Kronrod's algorithm achieves `O(1)` extra space but the merge becomes `O(n²)` worst-case or requires complex block-rotation. Mention as a curiosity; never write in interview.
+### Variant 4 — K-way merge
+Merge k sorted lists (LeetCode #23).
 
-2. **Bottom-up iterative merge sort** — no recursion (provided in the solution). Useful in environments with shallow stacks or when you want predictable allocations.
+### Variant 5 — TimSort
+Detect runs + galloping; what V8 actually uses.
 
-3. **TimSort** — V8's actual sort. Detects existing "runs" of sorted data, switches to insertion sort for short runs (≤ 32), then merges runs with galloping. Adaptive: `O(n)` on already-sorted input, `O(n log n)` worst-case, stable.
+---
 
-4. **Parallel merge sort** — divide step is trivially parallel; spawn worker threads on the two halves, join at merge. Real win on multi-core; backend interview gold for "how would you sort 100 GB?"
+## 12. How to think aloud
 
-5. **External merge sort** — split input into RAM-sized chunks, sort each, write to temp files, then k-way merge with a heap. The way databases sort.
+> "Merge sort: classic divide-and-conquer. Recursively split until size ≤ 1; merge two sorted halves into one. Recurrence `T(n) = 2T(n/2) + O(n)` → `O(n log n)` by Master Theorem. O(n) extra space for merged arrays. Recursion depth log n — safe in V8. STABLE: in `merge`, when equal-key elements meet, take LEFT first (use `cmp(left, right) <= 0` not `<`); equal-keyed elements in left half were earlier in input, so their order is preserved. This is what V8 chose as the spec stability mandate (ES2019); V8's TimSort is a merge-sort variant with adaptive run detection. Multi-key sort via stability: sort by minor key first, then major key — minor order preserved within major ties. Variants: bottom-up iterative (no recursion, same O(n log n)); external merge sort for files larger than memory (sort chunks to disk, k-way merge); k-way merge with min-heap (LeetCode #23 'Merge K sorted lists'). TimSort: detect already-sorted runs (linear early-out); galloping mode for runs; what V8 ships. Trap: `<` instead of `<=` (unstable); expecting in-place (no efficient in-place merge in JS); `slice` O(n) per level (total O(n log n) extra space — acceptable but worth mentioning); comparator returning boolean (coerces to 1/0, breaks sort)."
 
-## Revision notes
+---
 
-> **merge sort — 60 second recap**
-> - Divide-and-conquer: split, recurse, **merge**.
-> - Time: **`O(n log n)`** worst / avg / best. Recurrence `T(n) = 2T(n/2) + O(n)`.
-> - Space: **`O(n)`** auxiliary, **`O(log n)`** stack.
-> - **Stable** — `<=` in merge keeps left-first on ties.
-> - V8's `Array.prototype.sort` uses **TimSort** (merge-sort variant) since v7.0, Oct 2018. ES2019 mandates stability.
-> - **Trap 1:** `<` in merge → unstable.
-> - **Trap 2:** `shift()` in merge → `O(n²)`. Use index pointers.
-> - Family: quicksort (sister), merge-k-sorted-lists, count-inversions, external/parallel sort.
-> - Beats quicksort on **stability**, **worst-case guarantee**, and **external/parallel** scenarios. Loses on constant factor for random in-RAM data.
+## 13. 60-second revision
+
+> - **Divide log n times; merge O(n) per level.**
+> - **`O(n log n)` all cases.**
+> - **Stable via `<=`** in merge.
+> - **O(n) extra space.**
+> - **Recursion depth log n** — safe.
+> - **Bottom-up iterative** variant.
+> - **External merge sort** for files.
+> - **TimSort = adaptive mergesort** (V8).
+> - **Trap:** `<` unstable; in-place complex; comparator bool.
+
+---
+
+**Related:** [quick-sort.md](./quick-sort.md) · [`07-arrays/stable-sort-discussion.md`](../07-arrays/stable-sort-discussion.md) · [`07-arrays/sort-by-multiple-keys.md`](../07-arrays/sort-by-multiple-keys.md) · [iterative-from-recursive.md](./iterative-from-recursive.md)
+
+**Concept primer:** [`concepts/recursion-and-the-call-stack.md`](../../concepts/recursion-and-the-call-stack.md)

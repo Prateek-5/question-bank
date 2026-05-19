@@ -1,165 +1,232 @@
-# Implement `memoize(fn)`
+# Implement `memoize(fn)` — cache function results
 
-## Source
-- Canonical machine-coding interview problem (LeetCode #2623 "Memoize", BFE.dev, Frontend Masters).
-- LeetCode reference: https://leetcode.com/problems/memoize/
+> **Difficulty:** Easy-Medium   |   **Time:** ~15 min   |   **Prereqs:** [`concepts/closures.md`](../../concepts/closures.md), [`concepts/maps-sets.md`](../../concepts/maps-sets.md)
+>
+> **Source:** [LeetCode 2623 — Memoize](https://leetcode.com/problems/memoize/). The classic closure + Map exercise.
 
-## Why this question matters in interviews
-Memoize is the classic 10-minute warm-up that tests **closures + Map + cache-key design** in one shot. Interviewers love it because the naive solution looks fine but breaks the moment the args contain objects — which leads naturally into the follow-up "Memoize II" (object-keyed memoize). As a backend engineer you've already memoized things — Redis-backed function results, in-process LRUs for hot paths, batched DataLoader-style joins. This question forces you to articulate **what makes a good cache key** and **when memoization is safe** (pure functions only). A senior answer pre-empts the "what about objects?" question by saying "this version assumes primitive args; for object-identity keys, you'd use a Map trie — happy to extend if useful."
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
-```js
-const memo = memoize(fn);
-memo(1, 2);   // computes fn(1,2), caches result
-memo(1, 2);   // returns from cache
-
-function memoize(fn) {
-  const cache = new Map();
-  return function (...args) {
-    const key = JSON.stringify(args);
-    if (cache.has(key)) return cache.get(key);
-    const result = fn.apply(this, args);
-    cache.set(key, result);
-    return result;
-  };
-}
+**Signature**
+```ts
+function memoize<F extends (...args: any[]) => any>(fn: F): F & { cache: Map<string, any>; clear(): void };
 ```
 
-### Runtime / engine behavior
-- `Map` is preferred over a plain object because:
-  - Keys are not stringified (well, we stringify ourselves, but `Map` keeps the original type if we wanted to use object refs).
-  - `Map.has` / `Map.get` are O(1), with no `Object.prototype` collision risk (`"constructor"`, `"__proto__"`).
-  - Iteration order is guaranteed insertion order — useful for LRU-style eviction (see lru-cache.md).
-- `JSON.stringify(args)` is the cheap-and-cheerful key strategy. It works for primitives, primitive arrays, and plain-old-data objects. It's **wrong** for:
-  - Objects with circular refs (throws).
-  - Objects where you want **identity** equality (two `{a:1}` literals stringify the same but are distinct refs).
-  - `undefined` (becomes `null` in arrays, vanishes in object props).
-  - Functions, Symbols, BigInt, Date, RegExp, Map, Set.
-- Closure mechanics: the `cache` lives in the outer scope and is shared across all calls to the returned wrapper. Each call to `memoize(fn)` gets its own private cache.
+**Input / Output examples**
 
-### Edge cases (these are the interview traps)
-1. **Primitive vs object args** — `JSON.stringify` is fine for `memoize((a, b) => a + b)`. It's catastrophically wrong for `memoize((user) => user.id)` where two users with identical shape but different identities should be cached separately (or, depending on semantics, **together** — that's the design question).
-2. **Argument order** — `memo(1, 2)` and `memo(2, 1)` get different keys. Don't sort args unless the function is symmetric.
-3. **`this` binding** — `fn.apply(this, args)` preserves method-style usage. Skipping this breaks `obj.compute = memoize(obj.compute)`.
-4. **Cache growth unbounded** — memoize has no eviction. For long-running processes this leaks memory. Mention bounded variants (LRU memoize) for senior cred.
-5. **Side effects** — memoizing a function with side effects is a bug. The interviewer may bait you with `memoize(console.log)` — flag it.
-6. **`fn.length` test cases** — LeetCode's test rig calls memoize with specific functions (sum / fib / factorial) and counts call counts. The wrapper must **not** invoke `fn` more than once per unique arg set.
-7. **Recursive memoization** — for `fib`, you only get the benefit if `fib` itself calls the memoized version. The test rig usually arranges this; mention it for bonus.
-8. **`NaN` keys** — `JSON.stringify([NaN])` becomes `[null]`. Edge case worth flagging.
+| Setup                                                          | Behaviour                                              |
+|----------------------------------------------------------------|---------------------------------------------------------|
+| `memo(1, 2); memo(1, 2);`                                     | `fn` called once; second call returns cached result   |
+| `memo(1, 2); memo(2, 1);`                                     | different keys → `fn` called twice                    |
+| `memo({a:1}); memo({a:1});`                                   | same JSON-key collide → cached (may be wrong if you wanted identity) |
+| Returns `undefined`                                            | cached correctly via `cache.has`, not `?? compute`    |
+| Same `memo()` used recursively (e.g., fib)                     | exponential speedup if `fn` calls memoized version    |
 
-## Brute force approach
-Use a plain object: `if (key in cache) return cache[key]`. Works, but has the `Object.prototype` collision risk (`memo("toString")` returns the inherited method). And you still need to stringify the args. Skip the plain object; go straight to `Map`.
+**Constraints**
+- Cache key: `JSON.stringify(args)` for primitives + plain-object args.
+- Use `Map` (not plain object) — O(1) ops, no `Object.prototype` collisions.
+- Pure functions only — memoizing side effects is a bug.
+- For object-identity-keyed caching → Memoize II (nested Map trie).
 
-## Optimal approach
-`Map` keyed by `JSON.stringify(args)`. O(1) average lookup, O(K) for the stringify itself where K is the arg payload size. State: one `Map` per memoized function. Per-call: one stringify + one map lookup.
+---
 
-For object-identity-keyed memoization (where two refs with the same shape should NOT collide), see **memoize-ii.md** — that's a different data structure (nested Map trie).
+## 2. Plain-English restatement
 
-## Solution (JavaScript)
+Wrap a pure function so each unique input is computed once and cached. Subsequent calls with the same inputs return the cached result without re-running `fn`. Classic uses: expensive computations (fib, factorial), API response caches, derived-state computations. The key trick: use a `Map`, not a plain object (to avoid `__proto__` collisions); use `JSON.stringify(args)` as a cache key; use `cache.has(key)` (not `cache.get(key) ?? compute`) to handle cached `undefined` values.
+
+---
+
+## 3. Why this matters in interviews
+
+Memoize is the classic 10-minute warm-up that tests **closures + Map + cache-key design** in one shot. Interviewers love it because the naive solution looks fine but breaks the moment the args contain objects — leading naturally into "Memoize II" (object-keyed). A senior answer pre-empts the "what about objects?" question by saying "this version assumes primitive args; for object-identity keys, you'd use a Map trie — happy to extend if useful."
+
+---
+
+## 4. Mental model
+
+A **closure-scoped phone book**: every unique combination of args gets a phone number (the cached result). Lookup is O(1); first time you ring up an args set, the operator goes and fetches the answer (calls `fn`) and writes it down.
+
+```
+   memoize(fn)
+     │
+     └── closure-scoped Map
+            │
+            ├── "[1,2]" → 3       (cache.set after first fn(1,2))
+            ├── "[2,1]" → 3       (different key, different entry)
+            └── "[1,2,3]" → 6
+   
+   memo(1, 2) → cache.has("[1,2]")? yes → return 3 (skip fn)
+   memo(3, 4) → cache.has("[3,4]")? no  → fn(3,4)=7, cache.set, return 7
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. Why use `Map` instead of `{}` for the cache?
+> 2. What's wrong with `cache.get(key) ?? compute()` if `fn` can return `undefined`?
+> 3. Will `memo({a:1, b:2})` and `memo({b:2, a:1})` share a cache entry?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: plain object
+```js
+const cache = {};
+if (cache[key]) ...   // BUG: prototype pollution, cached falsy values
+```
+`cache["toString"]` returns the inherited method. `cache.hasOwnProperty(key)` works but verbose. Use `Map` for O(1) ops, non-string keys, no proto pollution.
+
+### Wrong attempt 2: `cache.get(key) ?? compute()`
+If `fn` legitimately returns `undefined`, the next call re-invokes `fn` every time. Use `cache.has(key)` as the sentinel.
+
+### Wrong attempt 3: cache inside the wrapper
+```js
+return function (...args) {
+  const cache = new Map();   // BUG: fresh per call
+  ...
+};
+```
+Cache must live in factory scope.
+
+### Wrong attempt 4: object-key shape collisions
+`memo({a:1, b:2})` and `memo({b:2, a:1})` stringify identically → same cache entry. For shape-equality that's fine; for object-identity it's wrong. Use Memoize II (nested Map trie) if you need identity-keyed.
+
+---
+
+## 7. The unlocking insight
+
+> **Closure-scoped `Map` keyed by `JSON.stringify(args)`. `cache.has(key)` then `cache.get(key)` (don't conflate with `??`). Forward `this` via `fn.apply(this, args)`.**
+
+Three properties:
+
+1. **`Map` not `{}`** — O(1), no `__proto__` collision, any key type (though we stringify here).
+2. **`cache.has(key)`** as the sentinel — covers cached `undefined`.
+3. **Closure-scoped cache** in factory function, not inside the wrapper.
+
+Cache grows unbounded — for production, pair with LRU eviction or TTL.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
-/**
- * Returns a memoized version of `fn`. Keys args via JSON.stringify.
- * Suitable for fn taking primitive args (numbers, strings, booleans, null).
- * @param {Function} fn  must be pure for correctness
- * @returns {Function & { cache: Map, clear: () => void }}
- */
 function memoize(fn) {
-  const cache = new Map();
+  const cache = new Map();                                  // step 1: closure-scoped Map
 
   function memoized(...args) {
-    const key = JSON.stringify(args);
-    if (cache.has(key)) {
+    const key = JSON.stringify(args);                        // step 2: stringify for primitive args
+    if (cache.has(key)) {                                    // step 3: cache.has, not ?? compute
       return cache.get(key);
     }
-    const result = fn.apply(this, args);
+    const result = fn.apply(this, args);                     // step 4: forward this
     cache.set(key, result);
     return result;
   }
 
-  memoized.cache = cache;            // expose for tests / debugging
+  memoized.cache = cache;                                    // exposed for tests / debugging
   memoized.clear = () => cache.clear();
   return memoized;
 }
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
-Input:
 ```js
 let calls = 0;
 const slowSum = (a, b) => { calls++; return a + b; };
 const sum = memoize(slowSum);
 
-sum(1, 2);   // (1)
-sum(1, 2);   // (2)
-sum(2, 1);   // (3)
-sum(1, 2);   // (4)
+sum(1, 2);    // calls=1, returns 3
+sum(1, 2);    // calls=1 (cached), returns 3
+sum(2, 1);    // calls=2, returns 3 (different key)
+sum(1, 2);    // calls=1 (still cached), returns 3
+
+console.log(calls);   // 2
+
+// Fib with recursion via memoized self
+const fib = memoize((n) => n < 2 ? n : fib(n - 1) + fib(n - 2));
+fib(40);   // fast, even though naive fib(40) = ~1.6 billion ops
 ```
 
-Trace:
-- Call (1): `args = [1, 2]`. `key = "[1,2]"`. `cache.has(key)` → false. Invoke `slowSum(1,2)` → `3`, `calls=1`. `cache.set("[1,2]", 3)`. Return `3`.
-- Call (2): `args = [1, 2]`. `key = "[1,2]"`. Cache **hit**. Return `3`. `calls` unchanged.
-- Call (3): `args = [2, 1]`. `key = "[2,1]"`. Cache miss (different key). Invoke → `3`, `calls=2`. `cache.set("[2,1]", 3)`. Return `3`.
-- Call (4): `args = [1, 2]`. Cache hit. Return `3`. `calls` unchanged.
+---
 
-After all 4 calls: `calls === 2`. Memoization saved 2 invocations.
+## 9. Step-by-step dry run
 
-Cache state:
 ```
-{
-  "[1,2]": 3,
-  "[2,1]": 3
-}
+let calls = 0
+const slowSum = (a,b) => { calls++; return a + b }
+const sum = memoize(slowSum)
+
+sum(1,2):  key="[1,2]". cache.has? no. fn(1,2)=3. calls=1. cache.set("[1,2]",3). return 3.
+sum(1,2):  key="[1,2]". cache.has? yes. return cache.get("[1,2]")=3. calls unchanged.
+sum(2,1):  key="[2,1]". cache.has? no. fn(2,1)=3. calls=2. cache.set("[2,1]",3). return 3.
+sum(1,2):  cache hit. return 3.
+
+After 4 calls: calls === 2.
+
+Cache: { "[1,2]": 3, "[2,1]": 3 }
 ```
 
-If we tried `sum({id:1}, {id:1})` twice — both stringify to `"[{\"id\":1},{\"id\":1}]"`, so they'd share a cache entry. **That's a bug** if you wanted identity-based memoization. Flag it; this is what Memoize II solves.
+---
 
-## Important takeaways
+## 10. Common confusion + traps
 
-**Syntax to memorize**
-- `const cache = new Map()` in outer scope.
-- `JSON.stringify(args)` for primitive-keyed memoize.
-- `cache.has(key)` then `cache.get(key)` — avoid double-lookup if you care (`const v = cache.get(key); if (v !== undefined) ...` — but watch out for cached `undefined` results).
-- `fn.apply(this, args)` for `this` forwarding.
+1. **Plain object cache** → `__proto__` collision (e.g., `memo("toString")`).
+2. **`cache.get(key) ?? compute()`** → re-invokes when `fn` returns `undefined`.
+3. **Cache inside the wrapper** → fresh per call; memoize becomes a no-op.
+4. **Forget `this` forwarding** → breaks `obj.method = memoize(obj.method)`.
+5. **Object-key shape collisions** → `{a:1, b:2}` and `{b:2, a:1}` share entry.
+6. **Memoizing side-effectful fn** → silent bug; result deviates from "fresh" call.
+7. **Unbounded cache growth** → long-running process leaks memory. Use LRU.
 
-**Patterns to reuse**
-- "Wrap a pure function in a closure-scoped cache" is the same pattern as: TTL cache (add expiry), LRU memoize (add eviction), promise memoize (cache the in-flight promise, not the result — deduplicates concurrent requests).
-- Exposing `.cache` and `.clear()` on the returned function is the decorated-function pattern (see debounce's `.cancel` / `.flush`).
+---
 
-**Common mistakes**
-- Using a plain object instead of Map → prototype-pollution risk (`memo("hasOwnProperty")`).
-- Forgetting `this` forwarding → breaks method-style use.
-- Using `JSON.stringify` and being surprised when object-identity-keyed cases collide → that's literally the next question, Memoize II.
-- Caching the result of a function that returns `undefined` and then using `cache.get(key) ?? compute()` — re-invokes every time. Use `cache.has(key)`.
-- Caching the result of a function with side effects → invisible bug.
+## 11. Senior follow-ups & variants
 
-**Related questions**
-- **Memoize II** — object-identity-keyed memoize using nested Map / WeakMap trie.
-- `once(fn)` — memoize where only one cache slot exists.
-- `Promise` memoization — cache the in-flight promise to dedupe concurrent fetches.
-- LRU cache — bounded memoization.
+### Variant 1 — Custom key resolver
+```js
+memoize(fn, { keyFn: (...args) => args[0].id })
+```
+Lets caller hash by specific property. Lodash supports this.
 
-## Variants
+### Variant 2 — TTL memoize
+Cache entries expire after N ms. Combine `Map<key, {value, expiry}>` with lazy eviction on read.
 
-1. **Custom key resolver** — accept a second arg: `memoize(fn, resolver = (...args) => JSON.stringify(args))`. Lodash does this. Lets the caller hash by `args[0].id` only, for example.
+### Variant 3 — Async memoize (in-flight dedupe)
+Cache the **Promise** (not the resolved value) so concurrent calls reuse the in-flight request. On reject, evict so next call retries. See [`04-promises/async-memoize.md`](../04-promises/async-memoize.md).
 
-2. **TTL memoize** — cache entries expire after N ms. Combine a `Map<key, {value, expiry}>` with a lazy-eviction-on-read.
+### Variant 4 — Bounded LRU memoize
+Wrap cache in LRU container. Avoids unbounded memory in long-running processes.
 
-3. **Async / promise memoize** — `fn` returns a promise. Cache the **promise** (not the resolved value) so concurrent calls reuse the in-flight request. On rejection, evict the entry so the next caller can retry.
+### Variant 5 — Memoize II (object-identity keyed)
+Nested Map trie. Each arg is a key in a tree of Maps. Handles object identity correctly without stringification. See [memoize-ii.md](./memoize-ii.md).
 
-4. **Bounded memoize (LRU)** — wrap the cache in an LRU container so the memoized function doesn't leak unbounded memory. See lru-cache.md.
+---
 
-5. **Memoize II** — object-identity-keyed via nested Map trie. Separate file.
+## 12. How to think aloud
 
-## Revision notes
+> "Closure over a Map. Key = `JSON.stringify(args)`. `cache.has(key)` then `cache.get(key)` — avoid the `??` shortcut because `fn` might cache `undefined`. Forward `this` via `fn.apply`. Map over plain object for O(1) ops and no `__proto__` collision. For object-identity keys this version is wrong — two object literals with the same shape stringify identically; use a nested Map trie (Memoize II). For async, cache the Promise to dedupe in-flight calls. Cache grows unbounded; in production, wrap with LRU or TTL."
 
-> **memoize — 60 second recap**
-> - Closure over a `Map`. Key = `JSON.stringify(args)`.
-> - Hit → return cached. Miss → invoke `fn.apply(this, args)`, store, return.
+---
+
+## 13. 60-second revision
+
+> - **`new Map()`** in factory scope; key = `JSON.stringify(args)`.
+> - **`cache.has(key)`** as sentinel, not `?? compute`.
+> - **`fn.apply(this, args)`** for method-style use.
+> - **Map > plain object:** O(1), no proto pollution.
 > - **Pure functions only** — memoizing side effects is a bug.
-> - **Object args** → stringify-keyed memoize is wrong; use the trie variant (Memoize II).
-> - Cache grows unbounded; for production use LRU memoize.
-> - **Trap:** plain object cache → prototype pollution. **Trap 2:** `cache.get(key) ?? compute()` re-invokes when cached value is `undefined`.
+> - **Object args:** shape-equality collides; use Memoize II for identity-keyed.
+> - **Async:** cache the Promise (dedupe in-flight), evict on reject.
+> - **Family:** memoize-ii, async-memoize, LRU memoize, TTL memoize.
+> - **Trap:** plain object → proto collision; `??` → re-invokes on `undefined`; cache inside wrapper.
+
+---
+
+**Related:** [memoize-ii.md](./memoize-ii.md) · [`04-promises/async-memoize.md`](../04-promises/async-memoize.md) · [lru-cache.md](./lru-cache.md) · [`02-closures/memoize-with-ttl.md`](../02-closures/memoize-with-ttl.md) · [`02-closures/memoize-with-deep-equality.md`](../02-closures/memoize-with-deep-equality.md)
+
+**Concept primer:** [`concepts/closures.md`](../../concepts/closures.md), [`concepts/maps-sets.md`](../../concepts/maps-sets.md)

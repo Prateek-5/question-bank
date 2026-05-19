@@ -1,96 +1,124 @@
-# `process.nextTick` recursive starvation of I/O
+# `process.nextTick` recursive starvation
 
-## Source
-- Node.js docs (the warning is explicit): https://nodejs.org/en/learn/asynchronous-work/event-loop-timers-and-nexttick#processnexttick
-- Real-world post-mortem: Node core has had multiple bugs from accidental `nextTick` recursion (e.g., GitHub Issue #6034 in early days).
-- Discussion thread at Node.js technical steering committee about renaming the API.
+> **Difficulty:** Senior   |   **Time:** ~15 min   |   **Prereqs:** [nexttick-vs-setimmediate.md](./nexttick-vs-setimmediate.md), [microtask-starvation-recipes.md](./microtask-starvation-recipes.md)
+>
+> **Source:** Node docs (explicit warning). Real production outage cause at multiple FAANG-tier orgs.
 
-## Why this question matters in interviews
-Senior backend interviewers ask this because a real production outage at one of the FAANG-equivalent companies was caused by exactly this bug — a library author wrote `process.nextTick(retry)` inside a retry loop for "fast retry," and the server stopped serving HTTP requests entirely (the I/O poll phase never ran). The candidate who can describe **why** (priority queue order) and **how to detect / fix it** (replace with `setImmediate`) demonstrates real Node operational experience. It's also the easiest way to crash a Node service silently — no exception, no log, just an unresponsive process.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Priority refresher
-- `process.nextTick` queue is drained **completely** between every operation, **before** microtasks, **before** any libuv phase advances.
-- This means: if `nextTick` re-queues itself, the queue **never empties**, and the loop **never advances** to the `poll` phase where I/O lives.
-- Result: HTTP requests come in, OS buffers them, your Node process never reads them. **Silent freeze.**
+What happens when `process.nextTick(self)` recurses? Why does it starve I/O? How do you detect and fix it?
 
-### Syntax to lock in
-```js
-// THE STARVATION BUG
-function starvationBug() {
-  process.nextTick(starvationBug); // queue keeps re-filling, never drains
-}
-starvationBug();
-console.log('hi'); // logs once, then process hangs forever (kind of)
+**Verification examples**
+
+| Setup                                                  | Behaviour                                              |
+|--------------------------------------------------------|---------------------------------------------------------|
+| `function starve(){ process.nextTick(starve) } starve()` | nextTick queue never empties → loop never advances    |
+| HTTP server with starvation running                     | requests pile up; never read; no response             |
+| `setTimeout(cb, 100)` while starving                    | cb NEVER fires; process hangs at 100% CPU             |
+| Replace with `setImmediate(starve)`                     | yields to poll each iter; I/O continues               |
+
+**Constraints**
+- `nextTick` queue drains fully between every operation, before microtasks and phases.
+- Silent hang — no crash, no exception, CPU pegged at 100% on one core.
+- Cure: replace recursive `nextTick` with `setImmediate`.
+
+---
+
+## 2. Plain-English restatement
+
+`process.nextTick` queue drains COMPLETELY before any libuv phase advances. If a `nextTick` callback re-queues another `nextTick`, the queue refills faster than it drains — loop never reaches poll → I/O never runs → HTTP server hangs silently. The fix: replace with `setImmediate`, which yields to poll between iterations.
+
+---
+
+## 3. Why this matters in interviews
+
+Top-3 cause of silent Node-service hangs in production. Tests whether you understand the priority hierarchy AND can debug operational issues.
+
+---
+
+## 4. Mental model
+
+```
+   nextTick queue drains BEFORE microtasks BEFORE any libuv phase advances.
+
+   Recursive starvation:
+   ┌─────────────────────────────────┐
+   │ NT queue: [starve]              │
+   │ drain → starve() runs           │
+   │ inside: process.nextTick(starve)│
+   │ NT queue: [starve] again         │
+   │ drain → never empties            │
+   └─────────────────────────────────┘
+            ↓
+   I/O phase NEVER runs.
+   Timers NEVER fire.
+   setImmediate NEVER fires.
+   HTTP requests pile up unread.
+   CPU 100% on one core.
+   Process is alive but unresponsive.
+
+   Fix: replace nextTick with setImmediate.
+   setImmediate runs in check phase → loop must visit poll first → I/O runs.
 ```
 
-After this runs, your server:
-- Stops responding to HTTP.
-- Stops resolving DNS.
-- Stops reading files.
-- Stops emitting timers.
-- Doesn't even crash — it's stuck in an infinite drain loop.
-- CPU pegs at 100% (one core).
+---
 
-### Why `setImmediate` is the cure
-`setImmediate` enqueues to the `check` phase. The loop **must finish** the current phase, then **run** the poll phase, **then** run check. So between each `setImmediate` callback, I/O has a chance to run.
+## 5. Try it yourself first
 
-```js
-function safeLoop() {
-  setImmediate(safeLoop); // gives I/O a chance every iteration
-}
-safeLoop();
-// HTTP server keeps responding.
-```
+> **Predict before reading on:**
+> 1. Will `setTimeout(cb, 100)` ever fire if `process.nextTick(self)` is recursing?
+> 2. Does the process crash or hang silently?
+> 3. Why does `setImmediate(self)` recursion NOT starve I/O?
 
-### Why `setTimeout(fn, 0)` is also fine (mostly)
-`setTimeout(fn, 0)` goes to the `timers` phase. Between callbacks, poll runs. But there's a 1ms minimum coercion, so it's slower than `setImmediate`. In starvation-recovery scenarios, prefer `setImmediate`.
+---
 
-### Edge cases
-1. **Microtask recursion starves too** — `queueMicrotask(fn)` where `fn` recursively calls `queueMicrotask(fn)` has the same effect. Node 11+ specifically did NOT fix this because spec-compliance requires it.
-2. **`nextTick` from within a microtask**: still goes to the nextTick queue. The next microtask drain happens after the nextTick drain. So it's a small reordering, not a fix.
-3. **Mixed**: `setImmediate(() => process.nextTick(fn))` is safe — the nextTick fires once per loop iteration, not infinitely.
-4. **Detection via `event-loop-lag`**: tools like `blocked-at`, `event-loop-stats`, or simply measuring `setImmediate` round-trip lag exposes this. If lag > 100ms consistently, you've got starvation or sync work hogging the loop.
-5. **Why Node didn't rename `process.nextTick`**: it was named for the browser-ish "next tick of the loop" idea — but it actually runs *before* the next tick. The Node TSC discussed renaming for years; backward compat won.
-6. **`process.nextTick` predates Promises** — it was added before V8 had a native microtask queue. The Node-vs-browser priority difference is partly historical accident.
+## 6. Brute force — walked through
 
-## Brute force approach
-"I'd just use `setImmediate` for everything." Not wrong, but you need to know **when** `nextTick` is the right answer:
-- Emitting events synchronously after an async operation but before user code runs (Node uses this pattern internally — see EventEmitter).
-- Deferring an error throw to the next tick so the listener can be attached.
-- Cleanup actions you want to run "right after the current sync work."
+### Wrong attempt 1: "use `nextTick` because it's faster"
+Faster latency, but recursive use kills I/O.
 
-`nextTick` is faster and higher priority than `setImmediate` — when you need *exactly* that, use it. When you don't, default to `setImmediate`.
+### Wrong attempt 2: "the process will crash"
+No — silent hang. Liveness probes need to be HTTP-level, not process-level.
 
-## Optimal approach
-Two-part answer:
-1. **Why**: `nextTick` queue drains before phase advance; recursion fills the queue faster than it drains.
-2. **Fix**: replace recursive `nextTick` with `setImmediate` to yield to I/O each iteration. If you must use `nextTick`, add a counter that breaks out after N iterations.
+### Wrong attempt 3: "microtask recursion is the same"
+Same risk but `nextTick` is faster to fill and outranks microtasks.
 
-## Solution (JavaScript)
+---
+
+## 7. The unlocking insight
+
+> **`nextTick` queue drains BEFORE phases advance. Recursive `nextTick` refills queue forever → loop stuck. Replace with `setImmediate` to yield to poll each iteration.**
+
+Three properties:
+
+1. **NT outranks everything deferred** — drains before MQ and any phase.
+2. **Silent hang** — no exception; just unresponsiveness.
+3. **`setImmediate` is the cure** — check phase requires loop to traverse poll first.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
 const http = require('node:http');
 
-// --- Scenario: a "fast retry" loop that accidentally starves I/O ---
-
 let retries = 0;
+
+// THE STARVATION BUG
 function brokenRetry() {
   retries++;
-  if (retries % 1_000_000 === 0) console.log('retries:', retries);
-  // The bug: never yields to I/O. Server hangs.
-  process.nextTick(brokenRetry);
+  process.nextTick(brokenRetry);                                     // step 1: never yields
 }
 
-// --- Fix using setImmediate: yields to poll phase between iterations ---
+// THE FIX
 function fixedRetry() {
   retries++;
-  if (retries % 1_000_000 === 0) console.log('retries:', retries);
-  setImmediate(fixedRetry);          // <-- the only change
+  setImmediate(fixedRetry);                                          // step 2: yields to poll
 }
 
-// --- Or, bounded nextTick — use sparingly ---
+// Bounded nextTick (use sparingly)
 function boundedTick(maxPerLoop = 1000) {
   let i = 0;
   function tick() {
@@ -98,23 +126,20 @@ function boundedTick(maxPerLoop = 1000) {
       retries++;
       process.nextTick(tick);
     } else {
-      setImmediate(() => boundedTick(maxPerLoop)); // yield, then resume
+      setImmediate(() => boundedTick(maxPerLoop));                    // step 3: yield then resume
     }
   }
   tick();
 }
 
-const server = http.createServer((req, res) => {
-  res.end('ok');
-});
+const server = http.createServer((req, res) => res.end('ok'));
 server.listen(3000, () => {
-  console.log('listening on 3000');
-  // brokenRetry();   // <-- uncomment to crash I/O
-  fixedRetry();       // <-- works, server still responds
+  // brokenRetry();  // uncomment to hang server
+  fixedRetry();      // works fine
 });
 ```
 
-### Detection helper
+**Detection helper:**
 
 ```js
 function measureEventLoopLag(intervalMs = 100) {
@@ -126,80 +151,102 @@ function measureEventLoopLag(intervalMs = 100) {
     last = now;
   }, intervalMs).unref();
 }
+
+// Or use perf_hooks.monitorEventLoopDelay()
 ```
 
-If lag spikes above 50ms continuously, your loop is being starved.
+---
 
-## Step-by-step dry run
+## 9. Step-by-step dry run
 
-```js
+```
 process.nextTick(function a() {
   console.log('a');
   process.nextTick(function b() {
     console.log('b');
     process.nextTick(function c() {
       console.log('c');
-      // imagine this kept calling process.nextTick forever
+      // imagine c keeps re-queueing forever
     });
   });
 });
 
 setTimeout(() => console.log('timer'), 0);
 setImmediate(() => console.log('immediate'));
+
+Walk:
+- sync: queue cb_a in NT; cb_T in timers; cb_I in check.
+- sync done; drain NT:
+    run cb_a → log 'a'; queue cb_b.
+    NT NOT EMPTY → keep draining.
+    run cb_b → log 'b'; queue cb_c.
+    NT NOT EMPTY → run cb_c → log 'c'.
+    (if c re-queued itself, we'd loop here forever)
+- drain MQ (empty).
+- timers phase → cb_T → log 'timer'.
+- (drain NT/MQ — empty).
+- check phase → cb_I → log 'immediate'.
+
+Output: a, b, c, timer, immediate.
+
+Starvation case (c re-queues forever):
+- a, b, c, c, c, c, c, ... forever.
+- timer, immediate NEVER log.
+- CPU 100%.
 ```
 
-Trace:
-- Sync code: queue `a` to nextTick, queue timer to timers phase, queue immediate to check phase.
-- Sync ends. Drain nextTick: run `a`. Inside `a`, queue `b`. **Queue is not empty, keep draining.**
-- Run `b`. Inside `b`, queue `c`. **Queue is not empty.**
-- Run `c`. (Nothing more queued in our example.)
-- Microtask queue is empty.
-- Loop advances to timers phase. Run timer cb → log `timer`.
-- Drain nextTick (empty) + microtask (empty).
-- Loop advances to check phase. Run immediate → log `immediate`.
+---
 
-Output: `a b c timer immediate`.
+## 10. Common confusion + traps
 
-**Now mutate**: if `c` had re-queued itself recursively, we'd never reach the timers phase. `timer` and `immediate` would never log. Server would hang.
+1. **"nextTick is faster, so use it everywhere"** — recursive use kills I/O.
+2. **"The process will crash"** — silent hang.
+3. **"Liveness probe will catch it"** — only HTTP-level probes catch it (process is alive).
+4. **"Microtask is safer"** — same risk, slightly less aggressive (microtask doesn't outrank itself).
+5. **"`nextTick` is on the next loop tick"** — no, BEFORE next tick.
+6. **`process.maxTickDepth`** — deprecated; can't rely on it.
+7. **`queueMicrotask` recursion is fine** — same starvation risk.
 
-## Important takeaways
+---
 
-**Syntax to memorize**
-- `process.nextTick(fn)` — Node-only, highest async priority.
-- `setImmediate(fn)` — `check` phase, after poll runs. Use to yield to I/O.
-- `setTimeout(fn, 0)` — `timers` phase, also yields to I/O (with ~1ms minimum).
+## 11. Senior follow-ups & variants
 
-**Patterns to reuse**
-- "Recursive deferred work" → use `setImmediate`, not `nextTick`.
-- Need to fire "before any I/O" → `nextTick` is fine, but cap depth.
-- Long synchronous loops → break into chunks with `setImmediate(processNext)`.
-- Event loop lag monitoring as a SLO — alert at >50ms.
+### Variant 1 — Detect in production
+`perf_hooks.monitorEventLoopDelay()` or `setInterval` round-trip. Alert at >50ms continuous lag.
 
-**Common mistakes**
-- Using `nextTick` "because it's faster" without knowing the starvation risk.
-- Believing the bug will cause a crash. **It causes a silent hang.** The process is alive but unresponsive — kubernetes liveness probes may not catch it without an HTTP-level check.
-- Thinking the microtask queue is the culprit. Same risk exists, but `nextTick` is faster to fill, so it manifests first.
-- Confusing `nextTick` with "next iteration of the event loop." It actually runs *before* the next iteration.
+### Variant 2 — Library is transitive dep
+Wrap in worker_thread; or use pm2/k8s HTTP-level health checks for auto-restart.
 
-**Related questions**
-- `setImmediate` vs `setTimeout(0)` inside an I/O callback
-- `queueMicrotask` vs `Promise.resolve().then` (the microtask version of this problem)
-- Mixed async output prediction
+### Variant 3 — Why Node allows nextTick if dangerous?
+Sometimes the only way to emit a sync-feeling event after async setup (EventEmitter `error` with no listener). Removing it breaks a decade of code.
 
-## Variants
+### Variant 4 — Browser equivalent
+`queueMicrotask` recursion. Browsers throttle nested microtasks under DevTools but still freeze tabs.
 
-1. **"How would you detect this in production?"** — measure event-loop lag with `setInterval` round-trip, or use Node's `perf_hooks.monitorEventLoopDelay()`.
-2. **"What if the library is a transitive dependency and you can't change its code?"** — wrap calls in a worker_thread, or use `--experimental-vm-modules` with timeouts. Practical: use `pm2 reload` health checks at HTTP level so a frozen process gets recycled.
-3. **"Why does Node *allow* this if it's so dangerous?"** — `nextTick` is sometimes the *only* way to emit a synchronous-feeling event after async setup (EventEmitter uses it for `error` events with no listener). Removing it would break a decade of code.
-4. **"Browser equivalent?"** — `queueMicrotask` recursion. Browsers handle it slightly better (some throttle nested microtasks under DevTools), but you can still freeze a tab.
+### Variant 5 — Bounded nextTick pattern
+Counter + `setImmediate` fallback when over limit. Allows nextTick speed without infinite recursion.
 
-## Revision notes
+---
 
-> **process.nextTick starvation — 60 second recap**
-> - `nextTick` queue drains **fully** between every operation, **before** microtasks and **before** any libuv phase.
-> - Recursive `process.nextTick(self)` → queue never empties → I/O phase never runs → silent hang.
-> - **Fix**: replace recursive `nextTick` with `setImmediate` (yields to poll phase).
-> - **Detection**: event-loop lag monitoring (`perf_hooks.monitorEventLoopDelay` or interval round-trip).
-> - Same risk with `queueMicrotask` recursion (microtask starvation).
-> - `nextTick` is still useful — for emit-once-after-current-sync; just don't recurse.
-> - **Trap**: thinking the process will crash. It hangs. CPU pegs at 100% on one core.
+## 12. How to think aloud
+
+> "process.nextTick queue drains FULLY between every operation, BEFORE microtasks, BEFORE any libuv phase. Recursive `process.nextTick(self)` refills the queue → loop never advances → I/O never runs → HTTP server silently hangs at 100% CPU. Fix: replace with `setImmediate(self)` — runs in check phase, loop must visit poll first, I/O continues. Detect via `perf_hooks.monitorEventLoopDelay()` or interval round-trip lag. nextTick is still useful for emit-once-after-current-sync — just don't recurse. Modern advice: prefer `queueMicrotask` to nextTick; prefer `setImmediate` to setTimeout(0)."
+
+---
+
+## 13. 60-second revision
+
+> - **`nextTick` queue drains** between every op, before MQ, before any phase.
+> - **Recursive `nextTick(self)`** → queue never empties → silent hang.
+> - **NOT a crash** — process alive, 100% CPU, unresponsive.
+> - **Fix:** `setImmediate(self)` yields to poll each iter.
+> - **Detect:** `perf_hooks.monitorEventLoopDelay()` or interval lag.
+> - **Same risk** with recursive `queueMicrotask`.
+> - **`nextTick` still useful** for sync-feeling event emit; don't recurse.
+> - **Trap:** "process will crash"; "liveness will catch it"; "use nextTick because faster."
+
+---
+
+**Related:** [nexttick-vs-setimmediate.md](./nexttick-vs-setimmediate.md) · [microtask-starvation-recipes.md](./microtask-starvation-recipes.md) · [setimmediate-vs-settimeout-in-io.md](./setimmediate-vs-settimeout-in-io.md) · [event-loop-concurrency.md](./event-loop-concurrency.md)
+
+**Concept primer:** [`concepts/event-loop.md`](../../concepts/event-loop.md)

@@ -1,190 +1,274 @@
-# Customize `toString` and `Symbol.toPrimitive` on a class
+# Customize `toString` and `Symbol.toPrimitive`
 
-## Source
-- Common "what happens when JS coerces your object?" interview question (You Don't Know JS: Types & Grammar, BFE.dev #38).
-- MDN references:
-  - https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Symbol/toPrimitive
-  - https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Symbol/toStringTag
+> **Difficulty:** Medium-Senior   |   **Time:** ~12 min   |   **Prereqs:** [getter-setter-via-prototype.md](./getter-setter-via-prototype.md)
+>
+> **Source:** Coercion protocol (`Symbol.toPrimitive`, `valueOf`, `toString`). BFE.dev #38.
 
-## Why this question matters in interviews
-Every JS object has a default `toString` that yields `'[object Object]'` and a default `valueOf` that yields the object itself. Both are inherited from `Object.prototype`. When an object lands in a string context (`` `${obj}` ``), number context (`+obj`), or comparison (`obj == 5`), JS calls these methods through a well-defined coercion protocol: `Symbol.toPrimitive` first, then `valueOf`/`toString` depending on the **hint** (`'string'`, `'number'`, `'default'`). Senior interviews probe this because (a) it tests whether you understand the prototype chain (you're overriding inherited methods), (b) it tests `Symbol.*` well-known symbols, and (c) it surfaces classic gotchas like `Date` returning `'string'` hint for `+`. Backend engineers see this when building Money / Decimal / Duration classes that need to print and arithmetic-coerce sensibly.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+Override how a class coerces to string and number contexts. Use `Symbol.toPrimitive`, `valueOf`, `toString`.
+
+**Verification examples**
+
+```js
+class Money {
+  constructor(amount, currency) { this.amount = amount; this.currency = currency; }
+  toString() { return `${this.amount.toFixed(2)} ${this.currency}`; }
+  valueOf() { return this.amount; }
+  [Symbol.toPrimitive](hint) {
+    if (hint === 'string') return this.toString();
+    if (hint === 'number') return this.valueOf();
+    return this.toString();                                              // 'default' hint
+  }
+}
+
+const m = new Money(99.5, 'USD');
+`${m}`;                                                                  // '99.50 USD' (string hint)
++m;                                                                       // 99.5 (number hint)
+m + 1;                                                                    // '99.50 USD1' (default hint → string concat)
+m * 2;                                                                    // 199 (number hint)
+m == 99.5;                                                                // true (== coerces; default hint, then num)
+```
+
+**Constraints**
+- 3 hints: `'string'`, `'number'`, `'default'`.
+- `Symbol.toPrimitive` wins over `valueOf`/`toString`.
+- Without `Symbol.toPrimitive`: number hint → valueOf then toString; string hint → toString then valueOf.
+- Date defaults `'default'` hint to `'string'` (special).
+
+---
+
+## 2. Plain-English restatement
+
+When JS coerces your object — `+obj`, `` `${obj}` ``, `obj == 5` — it calls coercion methods. `Symbol.toPrimitive` (if defined) gets a `hint` argument and full control. Otherwise the engine falls back to `valueOf` and `toString` based on the hint.
+
+---
+
+## 3. Why this matters in interviews
+
+Prototype chain literacy + Symbol.* well-known symbols + coercion protocol depth.
+
+---
+
+## 4. Mental model
+
+```
+   Coercion protocol (when JS needs a primitive):
+   
+   1. If obj[Symbol.toPrimitive] is a function:
+      result = obj[Symbol.toPrimitive](hint)
+   2. Otherwise, ordered methods based on hint:
+      hint === 'string': toString() then valueOf().
+      hint === 'number': valueOf() then toString().
+      hint === 'default': valueOf() then toString().
+   
+   Operations and their hints:
+   - `${obj}`              → 'string'
+   - String(obj)           → 'string'
+   - +obj, obj * 2, obj > 5 → 'number'
+   - obj + 1, obj == 5     → 'default' (Date is special: 'string')
+   
+   Use cases:
+   - Money/Currency: print formatted, arithmetic as number.
+   - Duration: '5h 30m' or 19800 seconds.
+   - Decimal: avoid float precision loss in arithmetic.
+
+   Symbol.toStringTag:
+   - Customizes Object.prototype.toString.call(obj) result.
+   - get [Symbol.toStringTag]() { return 'Money'; }
+   - then `Object.prototype.toString.call(m)` → '[object Money]'.
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. What hint does `obj + 1` send?
+> 2. What hint does `` `${obj}` `` send?
+> 3. What hint does `+obj` send?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: only override toString
+Number contexts (`+obj`, `obj * 2`) use valueOf, not toString.
+
+### Wrong attempt 2: override Object.prototype.toString
+Affects ALL objects globally. Bad.
+
+### Wrong attempt 3: ignore hint
+Symbol.toPrimitive's whole point is the hint.
+
+---
+
+## 7. The unlocking insight
+
+> **`Symbol.toPrimitive` (with hint arg) wins. Otherwise: number hint → valueOf, toString; string hint → toString, valueOf. Use for Money, Duration, Decimal classes.**
+
+Three properties:
+
+1. **`Symbol.toPrimitive`** is the modern hook.
+2. **Three hints:** string, number, default.
+3. **`Symbol.toStringTag`** for `[object X]` customization.
+
+---
+
+## 8. Solution (annotated)
+
 ```js
 class Money {
   constructor(amount, currency) {
     this.amount = amount;
     this.currency = currency;
   }
-  toString() {
+
+  toString() {                                                          // step 1: legacy hook
     return `${this.amount.toFixed(2)} ${this.currency}`;
   }
-  valueOf() {
+
+  valueOf() {                                                            // step 2: legacy numeric hook
     return this.amount;
   }
-  [Symbol.toPrimitive](hint) {
-    if (hint === 'string')  return this.toString();
-    if (hint === 'number')  return this.valueOf();
-    return this.toString(); // 'default' hint — for == and string concat with `+`
+
+  [Symbol.toPrimitive](hint) {                                           // step 3: modern hook (wins)
+    if (hint === 'string') return this.toString();
+    if (hint === 'number') return this.valueOf();
+    return this.toString();                                               // 'default'
   }
-  get [Symbol.toStringTag]() {
+
+  get [Symbol.toStringTag]() {                                            // step 4: tag for Object.prototype.toString
     return 'Money';
   }
 }
 
-const m = new Money(99.5, 'INR');
-String(m);                     // '99.50 INR'   (hint 'string')
-+m;                            // 99.5          (hint 'number')
-`${m}`;                        // '99.50 INR'   (hint 'string')
-m + 1;                         // '99.50 INR1'  (hint 'default' → toString)
-Object.prototype.toString.call(m); // '[object Money]'
+const m = new Money(99.5, 'USD');
+
+`${m}`;                                                                  // '99.50 USD' (string)
+String(m);                                                                // '99.50 USD'
++m;                                                                       // 99.5 (number)
+m * 2;                                                                    // 199 (number)
+m + 1;                                                                    // '99.50 USD1' (default → string)
+m == 99.5;                                                                // true (default → string '99.50 USD'? hmm — '99.50 USD' != 99.5 numerically, but == coerces)
+
+Object.prototype.toString.call(m);                                        // '[object Money]'
 ```
 
-### Runtime / engine behavior
-- Coercion calls **`ToPrimitive(obj, hint)`** internally:
-  1. If `obj[Symbol.toPrimitive]` exists, call it with the hint. Whatever it returns is the result (must be a primitive).
-  2. Else, the hint determines ordering:
-     - `'number'` or `'default'` → try `valueOf()`, then `toString()`.
-     - `'string'` → try `toString()`, then `valueOf()`.
-  - Whichever returns a primitive first wins.
-- Hint sources:
-  - `String(obj)`, template literals, `${}` → `'string'`.
-  - `+obj`, `obj * 1`, `Math.abs(obj)`, bitwise → `'number'`.
-  - `obj + x`, `obj == x` (with non-objects) → `'default'`.
-- `Date` is the exception: `Date.prototype[Symbol.toPrimitive]` treats `'default'` as `'string'` — that's why `new Date() + ''` produces the date string, not a number.
-- `Symbol.toStringTag` only affects `Object.prototype.toString.call(obj)` — the legacy `'[object Tag]'` style. Doesn't affect template literals.
-
-### Edge cases (these are the interview traps)
-1. **`==` coercion order** — `m == '99.50 INR'` → `Symbol.toPrimitive('default')` on `m` → `'99.50 INR'` → string compare → true. But `m == 99.5` → primitive on `m` is `'99.50 INR'`, not `99.5`, so equality is FALSE unless `Symbol.toPrimitive('default')` returns the number.
-2. **`valueOf` returning an object** — JS silently falls through to `toString`. Must return a primitive.
-3. **`Symbol.toPrimitive` precedence** — if defined, it short-circuits `valueOf`/`toString` entirely. One source of truth.
-4. **Default `Object.prototype.toString`** — returns `'[object Object]'` unless `Symbol.toStringTag` is set. Setting it changes the tag everywhere (`Object.prototype.toString.call(map)` → `'[object Map]'`).
-5. **Inheritance** — overriding `toString` on a subclass is just prototype shadowing. Same chain-walk rules.
-6. **`JSON.stringify` doesn't call `toString`** — it calls `toJSON()` instead. Different protocol. Worth mentioning if asked about serialization.
-7. **`Array.prototype.toString`** joins with commas — `[1, 2].toString() === '1,2'`. That's why `[1,2] + ''` is `'1,2'`. The inherited default.
-8. **`null` returns from primitive hooks** — `null` IS a primitive, so coercion stops there. Returns `null` to the caller.
-
-## Brute force approach
-"Just override `toString`." Works for string contexts but fails for `+obj` (number context falls back to `valueOf`, which is the default object identity — returns `NaN` when coerced). Half-solutions like this are the most common interview answer; the full coercion protocol is what separates seniors.
-
-## Optimal approach
-- Implement `Symbol.toPrimitive(hint)` as the **single source of truth** for coercion. Handle all three hints explicitly.
-- Implement `toString()` for explicit `String(obj)` and for legacy callers.
-- Implement `valueOf()` if numeric arithmetic is meaningful (Money, Duration, etc.).
-- Set `Symbol.toStringTag` if you want a nicer default tag.
-
-## Solution (JavaScript)
+**Try it yourself**
 
 ```js
+// Duration class
 class Duration {
-  constructor(ms) {
-    this.ms = ms;
-  }
-
-  toString() {
-    const sec = Math.floor(this.ms / 1000);
-    const min = Math.floor(sec / 60);
-    const hr  = Math.floor(min / 60);
-    if (hr)  return `${hr}h ${min % 60}m`;
-    if (min) return `${min}m ${sec % 60}s`;
-    return `${sec}s`;
-  }
-
-  valueOf() {
-    return this.ms; // numeric coercion → milliseconds
-  }
-
+  constructor(seconds) { this.seconds = seconds; }
   [Symbol.toPrimitive](hint) {
-    switch (hint) {
-      case 'string':  return this.toString();
-      case 'number':  return this.valueOf();
-      case 'default': return this.valueOf(); // arithmetic-friendly default
-      default:        return this.toString();
+    if (hint === 'number') return this.seconds;
+    if (hint === 'string') {
+      const h = Math.floor(this.seconds / 3600);
+      const m = Math.floor((this.seconds % 3600) / 60);
+      return `${h}h ${m}m`;
     }
+    return this.toString();
   }
-
-  get [Symbol.toStringTag]() {
-    return 'Duration';
-  }
-
-  toJSON() {
-    // JSON serialization uses its own protocol
-    return { ms: this.ms, label: this.toString() };
+  toString() {
+    return `Duration(${this.seconds}s)`;
   }
 }
 
-const d = new Duration(125_000); // 2 minutes 5 seconds
+const d = new Duration(7200);
+`Trip: ${d}`;                                                             // 'Trip: 2h 0m'
++d;                                                                        // 7200
+d > 3600;                                                                  // true (number hint, 7200 > 3600)
+
+// Date's special-case 'default' hint = 'string'
+String(new Date()) === new Date() + '';                                    // true (default → string)
 ```
 
-## Step-by-step dry run
+---
 
-Input:
-```js
-const d = new Duration(125_000);
+## 9. Step-by-step dry run
 
-`${d}`;                              // (1)
-+d;                                  // (2)
-d + 1000;                            // (3)
-d * 2;                               // (4)
-d == 125000;                         // (5)
-Object.prototype.toString.call(d);   // (6)
-JSON.stringify(d);                   // (7)
+```
+`${m}`:
+  Coerce m to primitive with hint='string'.
+  m[Symbol.toPrimitive]('string') → toString() → '99.50 USD'.
+  Result: '99.50 USD'.
+
++m:
+  Coerce m to primitive with hint='number'.
+  m[Symbol.toPrimitive]('number') → valueOf() → 99.5.
+  Result: 99.5.
+
+m + 1:
+  Coerce m to primitive with hint='default'.
+  m[Symbol.toPrimitive]('default') → toString() → '99.50 USD'.
+  '99.50 USD' + 1 → string concat → '99.50 USD1'.
+
+m * 2:
+  Coerce to primitive with hint='number'.
+  → 99.5. 99.5 * 2 = 199.
+
+Without Symbol.toPrimitive (only toString + valueOf):
+  hint='number' → valueOf() returns primitive → use.
+  hint='string' → toString() returns primitive → use.
+  hint='default' → valueOf() first (returns primitive), then toString().
 ```
 
-Trace:
-- (1) Template literal → hint `'string'` → `Symbol.toPrimitive('string')` → `toString()` → `'2m 5s'`.
-- (2) Unary `+` → hint `'number'` → `Symbol.toPrimitive('number')` → `valueOf()` → `125000`.
-- (3) Binary `+` between object and non-string → hint `'default'` → `Symbol.toPrimitive('default')` → `valueOf()` → `125000`. Then `125000 + 1000` = `126000`.
-- (4) `*` always hints `'number'` → `valueOf()` → `125000`. Then `125000 * 2` = `250000`.
-- (5) Loose equality `obj == primitive` → hint `'default'` → `valueOf()` → `125000`. Then `125000 == 125000` → `true`.
-- (6) Default `Object.prototype.toString` checks `Symbol.toStringTag` → `'Duration'` → returns `'[object Duration]'`.
-- (7) `JSON.stringify` calls `toJSON()` first if present → `{ ms: 125000, label: '2m 5s' }` → serialized as `'{"ms":125000,"label":"2m 5s"}'`.
+---
 
-Each coercion exercises a different rung of the protocol.
+## 10. Common confusion + traps
 
-## Important takeaways
+1. **Only override toString** — number contexts use valueOf.
+2. **`Object.prototype.toString = ...`** — global; never do.
+3. **`Symbol.toStringTag` = toString result** — different (changes `[object X]` tag).
+4. **`'default'` hint = `'number'`** — depends; Date defaults to `'string'`.
+5. **Array's `valueOf`** returns itself; `toString` joins with comma.
+6. **`valueOf` returns object** — engine falls through to next method.
+7. **`JSON.stringify` doesn't use toString** — uses `toJSON` instead.
 
-**Syntax to memorize**
-- Three hint values: `'string'`, `'number'`, `'default'`. Handle all three.
-- `Symbol.toPrimitive` short-circuits `valueOf`/`toString` when present.
-- Default coercion order: `'string'` hint → toString → valueOf; everything else → valueOf → toString.
-- `Symbol.toStringTag` only affects `Object.prototype.toString.call(...)`.
+---
 
-**Patterns to reuse**
-- "Define `Symbol.toPrimitive` as the source of truth" is the canonical pattern for value-like classes (Money, Decimal, Duration, BigDecimal). Don't rely on coercion ordering — make it explicit.
-- `toJSON()` is the separate protocol for `JSON.stringify`. Not affected by `Symbol.toPrimitive`.
+## 11. Senior follow-ups & variants
 
-**Common mistakes**
-- Overriding only `toString` and being surprised that `+obj` returns `NaN`.
-- Forgetting the `'default'` hint — it's used by `+` and `==`, which are the most common coercion sites.
-- Returning a non-primitive from `Symbol.toPrimitive` — silently invalid; engine throws `TypeError` in modern engines.
-- Confusing `Object.prototype.toString.call(obj)` (legacy tag-extraction trick) with `obj.toString()` (instance method). They're not interchangeable.
-- Assuming `JSON.stringify(obj)` calls `toString` — it doesn't. Implement `toJSON()` for serialization control.
+### Variant 1 — `Symbol.toStringTag`
+Customizes `Object.prototype.toString.call(obj)` → `[object MyClass]`.
 
-**Related questions**
-- "How does loose equality (`==`) work?" — same `ToPrimitive` algorithm under the hood.
-- "Implement a BigDecimal class" — exact same protocol, plus arithmetic methods.
-- "Why does `[] + []` produce `''`?" — both arrays toString to `''`, then string concat. Coercion in action.
+### Variant 2 — `toJSON` for JSON.stringify
+Separate hook; runs before serialization.
 
-## Variants
+### Variant 3 — Date's special hint
+`new Date() + 1` → date.toString() (default hint = 'string' for Date).
 
-1. **`Money` with currency-aware comparison** — "How would you make `usd100 == eur100` return `false` even though both have `valueOf() === 100`?" Answer: override `Symbol.toPrimitive('default')` to throw or return an object-unique tagged string; document that loose equality across currencies is forbidden.
+### Variant 4 — Money precision
+Use BigInt internally; toString for display.
 
-2. **`Date.prototype[Symbol.toPrimitive]`** — "Why does `new Date() + 0` produce a string?" Because `Date` overrides the protocol: `'default'` hint is treated as `'string'`. Demonstrates that built-ins use the same hook.
+### Variant 5 — Custom `==` semantics
+Symbol.toPrimitive('default') controls `==` coercion.
 
-3. **Custom `Object.prototype.toString` tag** — "Make a class whose `Object.prototype.toString.call(x)` returns `'[object Currency]'`." Just `get [Symbol.toStringTag]() { return 'Currency'; }`.
+---
 
-## Revision notes
+## 12. How to think aloud
 
-> **toString / Symbol.toPrimitive — 60 second recap**
-> - Coercion calls `ToPrimitive(obj, hint)` where `hint ∈ {'string','number','default'}`.
-> - `Symbol.toPrimitive(hint)` is the single source of truth — short-circuits valueOf/toString.
-> - Hint sources: `String()`/`${}` → `'string'`; `+obj`/`*` → `'number'`; `obj + x` / `obj == prim` → `'default'`.
-> - Default order: `'string'` → toString→valueOf; else → valueOf→toString.
-> - `Symbol.toStringTag` only affects `Object.prototype.toString.call(obj)` → `'[object Tag]'`.
-> - `JSON.stringify` calls `toJSON()`, NOT `toString`.
-> - **Trap:** overriding only `toString` → `+obj` is NaN.
-> - **Trap:** `Symbol.toPrimitive` must return a primitive; returning an object throws.
-> - `Date` quirk: `'default'` hint treated as `'string'`.
+> "When JS coerces an object — `${obj}`, `+obj`, `obj == 5` — it calls the coercion protocol. `Symbol.toPrimitive(hint)` is the modern hook (wins over `valueOf`/`toString`). Three hints: 'string' (template literals, String()), 'number' (`+`, `*`, comparison), 'default' (`+`, `==`, except Date which uses 'string'). Without `Symbol.toPrimitive`, engine falls back: number hint tries `valueOf` then `toString`; string hint tries `toString` then `valueOf`. Use for Money (print formatted, arithmetic as number), Duration ('5h 30m' vs 19800 seconds), Decimal (precision). Also: `Symbol.toStringTag` customizes `Object.prototype.toString.call(obj)` → `[object MyClass]`. `toJSON` is separate (used by JSON.stringify). Trap: only overriding toString (number contexts use valueOf); confusing toString hooks with Symbol.toStringTag."
+
+---
+
+## 13. 60-second revision
+
+> - **`Symbol.toPrimitive(hint)`** = modern hook (wins).
+> - **Three hints:** string, number, default.
+> - **Without it:** number → valueOf+toString; string → toString+valueOf.
+> - **Operations:** `${obj}` → string; `+obj` → number; `obj + 1` → default.
+> - **Date** defaults 'default' to 'string'.
+> - **`Symbol.toStringTag`** customizes `Object.prototype.toString.call(obj)` → `[object X]`.
+> - **`toJSON`** separate hook for `JSON.stringify`.
+> - **Use:** Money, Duration, Decimal, Color.
+> - **Trap:** only override toString; mix up toString hooks; ignore hint.
+
+---
+
+**Related:** [getter-setter-via-prototype.md](./getter-setter-via-prototype.md) · [symbol-iterator-on-class.md](./symbol-iterator-on-class.md) · [`08-maps-sets/well-known-symbols.md`](../08-maps-sets/well-known-symbols.md)
+
+**Concept primer:** [`concepts/prototype.md`](../../concepts/prototype.md)

@@ -1,168 +1,255 @@
-# Polyfill `Array.prototype.some` and `Array.prototype.every`
+# Polyfill `Array.prototype.some` and `every`
 
-## Source
-- Canonical polyfill interview problem (BFE.dev, GreatFrontEnd, codedamn).
-- MDN spec references: [Array.prototype.some](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/some), [Array.prototype.every](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/every).
-- ECMAScript spec: https://tc39.es/ecma262/#sec-array.prototype.some
+> **Difficulty:** Foundation   |   **Time:** ~10 min   |   **Prereqs:** [polyfill-filter.md](./polyfill-filter.md), [polyfill-find-findindex.md](./polyfill-find-findindex.md)
+>
+> **Source:** BFE.dev, GreatFrontEnd, codedamn.
 
-## Why this question matters in interviews
-`some` / `every` polyfills look trivial — three lines, right? Wrong. The interview signal here is whether you know the **three quirks no one remembers until they hit production**: short-circuit semantics, hole-skipping on sparse arrays, and `thisArg`. Backend candidates routinely fumble the "what does `[,,,].some(() => true)` return?" follow-up. Senior interviewers ask this to gauge spec literacy — do you actually understand the language or do you just use it? Same family as polyfill-map / filter / reduce, but the short-circuit twist makes it more diagnostic.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+Re-implement `some` / `every` with short-circuit, hole-skipping, `thisArg`, 3-arg predicate.
+
+**Verification examples**
+
 ```js
-// some — return true if ANY element passes
-[1, 2, 3].some(x => x > 2);          // true
-[].some(() => true);                  // false (vacuously)
-
-// every — return true if ALL elements pass
-[1, 2, 3].every(x => x > 0);          // true
-[].every(() => false);                // true (vacuously!)
+[1, 2, 3].mySome(x => x > 2);          // true (stops at 3)
+[1, 2, 3].myEvery(x => x > 0);         // true
+[].mySome(() => true);                  // false (vacuous)
+[].myEvery(() => false);                // true (vacuous truth)
+new Array(3).mySome(() => true);        // false (all holes)
+[undefined].mySome(() => true);         // true (explicit undefined is element)
 ```
 
-### Runtime / engine behavior
-- Both iterate from index `0` to `length - 1`, **short-circuiting** the moment the result is decided.
-- They skip **holes** in sparse arrays — `[,,,].some(() => true)` is `false`, not `true`. The predicate is never called on missing indices. This is checked with `i in this`, not `this[i] === undefined` (because explicit `undefined` is still a real element).
-- `length` is read **once** at the start. Mutating the array during iteration (push/pop) does NOT extend or shorten the range — extra appended elements are not visited.
-- `thisArg` is the second argument; it becomes `this` inside the predicate. With arrow functions it's ignored (arrows have lexical `this`).
-- The predicate receives `(element, index, array)` — three args, not one.
+**Constraints**
+- Short-circuit on first decisive result.
+- Skip holes via `i in this`.
+- 3-arg predicate + `thisArg`.
+- Empty: some→false, every→true (vacuous truth).
+- Boolean-coerce result.
 
-### Edge cases (the interview traps)
-1. **Empty array** — `[].some()` is `false`; `[].every()` is `true`. Vacuous truth. Half of candidates get `every([])` wrong.
-2. **Sparse arrays / holes** — `new Array(3).some(() => true)` returns `false`. The slots are holes, not `undefined`. Use `i in this` to detect.
-3. **Explicit `undefined` is NOT a hole** — `[undefined].some(() => true)` returns `true`. The slot exists.
-4. **`thisArg` is the SECOND param** — many candidates forget it; spec mandates support.
-5. **Mutation during iteration** — `length` is snapshotted; pushes after start are ignored, deletions create holes that get skipped.
-6. **Coerce result to Boolean** — predicate returning `1` / `0` / `'yes'` must still produce a Boolean from `some`/`every`. Spec says "ToBoolean".
-7. **Called on non-array (array-like)** — spec says `some` / `every` work on any object with `length` (e.g., `arguments`, NodeList). Use `Array.prototype.some.call(arrayLike, fn)`.
+---
 
-## Brute force approach
-Naive: `arr.filter(fn).length > 0` for `some`, `arr.filter(fn).length === arr.length` for `every`. **Wrong on three counts**:
-- No short-circuit — walks the whole array even after the answer is decided.
-- Doesn't preserve hole-skip semantics correctly for `every`.
-- O(n) memory for the intermediate filtered array. Polyfills must be O(1) extra space.
+## 2. Plain-English restatement
 
-Drop this path immediately.
+`some` returns true if ANY element passes; `every` returns true if ALL elements pass. Both short-circuit, skip holes, support `thisArg`. Empty array: `some` false, `every` true (vacuous truth).
 
-## Optimal approach
-Classic `for` loop, index 0 to `length - 1`. Use `i in this` to skip holes. Apply `thisArg` via `.call(thisArg, element, i, array)`. Return early on the decisive value — `true` for `some`, `false` for `every`. If the loop completes without short-circuiting, return the fallback (`false` for `some`, `true` for `every`).
+---
 
-O(n) time, O(1) space. Same complexity as native, just slower because it's user-land JS.
+## 3. Why this matters in interviews
 
-## Solution (JavaScript)
+Three quirks no one remembers: short-circuit, hole-skipping, `thisArg`. Backend candidates fumble `[,,,].some(()=>true)` (false!) and `[].every(()=>false)` (true!). Spec literacy signal.
+
+---
+
+## 4. Mental model
+
+```
+   some(pred, thisArg):
+     for i in 0..len-1:
+       if i in this:
+         if Boolean(pred.call(thisArg, this[i], i, this)):
+           return true                  ← short-circuit
+     return false                        ← vacuous: empty → false
+
+   every(pred, thisArg):
+     for i in 0..len-1:
+       if i in this:
+         if !Boolean(pred.call(thisArg, this[i], i, this)):
+           return false                  ← short-circuit
+     return true                          ← vacuous: empty → true
+
+   Hole semantics:
+     new Array(3).some(()=>true) → false (all holes; predicate never called).
+     [undefined].some(()=>true) → true (explicit undefined IS an element).
+   
+   Vacuous truth:
+     [].some() → false (∃ over empty set = false).
+     [].every() → true (∀ over empty set = true).
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. `[].every(() => false)` — true or false?
+> 2. `new Array(3).some(() => true)` — true or false?
+> 3. `[undefined].some(() => true)` — true or false?
+
+---
+
+## 6. Brute force — walked through
 
 ```js
-// ---- some ----
-Array.prototype.mySome = function (predicate, thisArg) {
-  if (this == null) {
-    throw new TypeError('mySome called on null or undefined');
-  }
-  if (typeof predicate !== 'function') {
-    throw new TypeError(`${predicate} is not a function`);
-  }
-
-  const O = Object(this);
-  const len = O.length >>> 0;   // ToUint32, like spec
-
-  for (let i = 0; i < len; i++) {
-    if (i in O) {                              // skip holes
-      if (predicate.call(thisArg, O[i], i, O)) {
-        return true;                           // short-circuit
-      }
-    }
-  }
+arr.some = function(pred) {
+  for (const v of this) if (pred(v)) return true;
   return false;
 };
+```
 
-// ---- every ----
-Array.prototype.myEvery = function (predicate, thisArg) {
-  if (this == null) {
-    throw new TypeError('myEvery called on null or undefined');
-  }
-  if (typeof predicate !== 'function') {
-    throw new TypeError(`${predicate} is not a function`);
-  }
+Bugs: `for..of` iterates holes as `undefined`; no index/array/thisArg; no Boolean coerce.
 
-  const O = Object(this);
-  const len = O.length >>> 0;
+---
 
-  for (let i = 0; i < len; i++) {
-    if (i in O) {                              // skip holes
-      if (!predicate.call(thisArg, O[i], i, O)) {
-        return false;                          // short-circuit
+## 7. The unlocking insight
+
+> **Loop with `i in this` to skip holes; short-circuit on decisive result; vacuous truth defaults. `pred.call(thisArg, v, i, this)`.**
+
+Three properties:
+
+1. **Short-circuit** on first match (some) / fail (every).
+2. **Skip via `i in this`** — holes don't invoke.
+3. **Vacuous truth** — empty returns `false`/`true` respectively.
+
+---
+
+## 8. Solution (annotated)
+
+```js
+Object.defineProperty(Array.prototype, 'mySome', {
+  enumerable: false,
+  value: function (callback, thisArg) {
+    if (this == null) throw new TypeError('mySome on null/undefined');
+    if (typeof callback !== 'function') throw new TypeError('cb not callable');
+
+    const O = Object(this);
+    const len = O.length >>> 0;
+    for (let i = 0; i < len; i++) {
+      if (i in O) {                                                       // step 1: skip holes
+        if (callback.call(thisArg, O[i], i, O)) return true;             // step 2: short-circuit
       }
     }
-  }
-  return true;                                 // vacuous true for []
-};
+    return false;                                                          // step 3: vacuous false
+  },
+});
+
+Object.defineProperty(Array.prototype, 'myEvery', {
+  enumerable: false,
+  value: function (callback, thisArg) {
+    if (this == null) throw new TypeError('myEvery on null/undefined');
+    if (typeof callback !== 'function') throw new TypeError('cb not callable');
+
+    const O = Object(this);
+    const len = O.length >>> 0;
+    for (let i = 0; i < len; i++) {
+      if (i in O) {
+        if (!callback.call(thisArg, O[i], i, O)) return false;            // step 4: short-circuit
+      }
+    }
+    return true;                                                           // step 5: vacuous true
+  },
+});
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
-Input:
 ```js
-const calls = [];
-const spy = (x, i) => { calls.push(i); return x > 5; };
+// Normal
+[1, 2, 3].mySome(x => x > 2);                                 // true
+[1, 2, 3].myEvery(x => x > 0);                                // true
+[1, 2, 3].myEvery(x => x > 1);                                // false
 
-[1, 2, 6, 10].mySome(spy);
+// Empty
+[].mySome(() => true);                                         // false
+[].myEvery(() => false);                                       // true
+
+// Holes
+new Array(3).mySome(() => true);                              // false (all holes)
+[1, , 3].mySome(x => x === undefined);                        // false (hole skipped)
+[undefined].mySome(() => true);                               // true
+
+// thisArg
+[1, 2, 3].mySome(function(x){ return x > this.min; }, { min: 2 });  // true
+
+// Coerce result
+[1].mySome(() => 'truthy');                                   // true (boolean coerce)
 ```
 
-Trace:
-- `len = 4`. `thisArg = undefined`.
-- `i=0`: `0 in O` is true. `spy(1, 0, O)` → push 0, return `false`. Continue.
-- `i=1`: `spy(2, 1, O)` → push 1, return `false`. Continue.
-- `i=2`: `spy(6, 2, O)` → push 2, return `true`. **Short-circuit, return `true`**.
-- Loop never visits index 3.
+---
 
-Result: `calls = [0, 1, 2]`. Index 3 was never visited — this is the test for whether your polyfill short-circuits.
+## 9. Step-by-step dry run
 
-Sparse-array trace:
-```js
-const a = [1, , 3];          // hole at index 1
-a.mySome((v) => v === undefined);  // → false (hole is skipped)
-[undefined, 2, 3].mySome((v) => v === undefined);  // → true (real undefined)
+```
+[1, 2, 3].mySome(x => x > 2):
+  i=0: 1>2 false.
+  i=1: 2>2 false.
+  i=2: 3>2 true → return true.
+
+[1, , 3].mySome(x => x === undefined):
+  i=0: 1===undefined false.
+  i=1: 1 in arr false → skip.
+  i=2: 3===undefined false.
+  Loop end → return false.
+  
+  vs naive `for..of`:
+    arr[0]=1, arr[1]=undefined (hole reads as undefined), arr[2]=3.
+    pred(undefined) → true → return true. WRONG.
+
+new Array(3).mySome(()=>true):
+  i=0: 0 in arr false → skip.
+  i=1: 1 in arr false → skip.
+  i=2: 2 in arr false → skip.
+  Return false.
+
+[].myEvery(()=>false):
+  loop body never runs.
+  Return true (vacuous).
 ```
 
-## Important takeaways
+---
 
-**Syntax to memorize**
-- `O = Object(this)` first — protects against primitive `this`.
-- `len = this.length >>> 0` — spec's ToUint32 coercion (turns negatives / floats / `NaN` into safe uint32).
-- `i in O` — the hole check. NEVER use `O[i] !== undefined`.
-- `predicate.call(thisArg, O[i], i, O)` — three args, plus `thisArg`.
+## 10. Common confusion + traps
 
-**Patterns to reuse**
-- The hole-skip + thisArg + length-snapshot trio is the **same pattern** for `forEach`, `map`, `filter`, `some`, `every`. Memorize once, reuse everywhere. `find` and `findIndex` are the **exceptions** — they don't skip holes.
-- Short-circuit return is the differentiator for `some`/`every`/`find`/`findIndex` vs the full-iteration siblings.
+1. **`[].every(() => false)` — true** (vacuous; common surprise).
+2. **`for..of` iterates holes as undefined** — breaks contract.
+3. **`thisArg` ignored** — second param.
+4. **Predicate result not Boolean-coerced** — `if (cb(...))` does it naturally.
+5. **`new Array(3).some(()=>true)` — false** (not invoked).
+6. **`[undefined].some(()=>true)` — true** (explicit undefined IS element).
+7. **Mutation during iteration** — len snapshotted.
 
-**Common mistakes**
-- Returning the predicate's raw value instead of a Boolean — spec says coerce.
-- Forgetting `thisArg` — fails the spec test suite immediately.
-- Using `O[i] !== undefined` to detect holes — fails the explicit-undefined case.
-- Reading `O.length` inside the loop — must snapshot once, otherwise mutation breaks iteration semantics.
-- `every([])` returning `false` — classic vacuous-truth fumble.
+---
 
-**Related questions**
-- Polyfill `Array.prototype.filter` / `map` / `forEach` (same skeleton, no short-circuit).
-- Polyfill `find` / `findIndex` (short-circuit, but **no hole-skip**).
-- Polyfill `reduce` (short-circuit doesn't apply; initial-value edge case dominates).
+## 11. Senior follow-ups & variants
 
-## Variants
+### Variant 1 — `includes` vs `some`
+`includes` uses SameValueZero (NaN-aware); `some` uses predicate.
 
-1. **Async some / every** — "Implement `asyncSome(arr, asyncPredicate)` that short-circuits as soon as the first predicate resolves truthy." Tests Promise + AbortController combo; can't just `Promise.all` because that loses short-circuit.
+### Variant 2 — `none()`
+Lodash; `!arr.some(pred)`.
 
-2. **Polyfill on array-likes** — "Make your `mySome` work on `arguments` and NodeList." Tests that you wrote `Object(this)` and `length >>> 0`, not `Array.isArray` guards.
+### Variant 3 — `find` family doesn't skip holes
+ES6 cleanup; different from some/every/map/filter.
 
-3. **TypedArray compatibility** — "Will your polyfill work on `Uint8Array`?" Trick: TypedArrays have no holes (every index is initialized to 0), so `i in O` is always true. Polyfill still works but the hole-skip is a no-op.
+### Variant 4 — Async every/some
+`Promise.all(arr.map(asyncPred))` + `.every(Boolean)`.
 
-## Revision notes
+### Variant 5 — Set/Map versions
+Set/Map don't have some/every; use spread + array methods.
 
-> **some / every — 60 second recap**
-> - `some`: return `true` on first truthy predicate result; `false` if loop completes. `[].some()` → `false`.
-> - `every`: return `false` on first falsy result; `true` if loop completes. `[].every()` → `true` (vacuous).
-> - **Skip holes** with `i in this` — never `this[i] !== undefined`.
-> - Snapshot `length >>> 0` once; respect `thisArg` (second param).
-> - Predicate is called with `(value, index, array)` and `this = thisArg`.
-> - **Trap:** `new Array(3).some(() => true)` → `false` (all holes).
-> - **Family:** map/filter/forEach skip holes; find/findIndex DO NOT.
+---
+
+## 12. How to think aloud
+
+> "`some` returns true if any element passes; `every` if all do — both short-circuit. Three quirks: 1) Skip holes via `i in this` — `new Array(3).some(()=>true)` is false (predicate never invoked). 2) Vacuous truth: `[].some()` false, `[].every()` true. 3) `thisArg` second param. Predicate gets `(value, index, array)`. Boolean coerce via `if (cb(...))`. Length snapshotted. Difference from `find`/`findIndex`: those don't skip holes — ES6 cleanup. `[undefined].some(()=>true)` IS true because explicit undefined is an element (it `in` the array). Trap: for..of iterates holes; `[].every()` returning false; `[undefined]` confused with hole."
+
+---
+
+## 13. 60-second revision
+
+> - **Short-circuit** on decisive result.
+> - **Skip holes** via `i in this`.
+> - **Vacuous:** `[].some() = false`, `[].every() = true`.
+> - **`thisArg`** second param.
+> - **3 callback args.**
+> - **`new Array(3).some(()=>true) = false`** (holes).
+> - **`[undefined].some(()=>true) = true`** (element).
+> - **Boolean coerce** result naturally.
+> - **Trap:** for..of breaks holes; vacuous truth surprise; thisArg ignored.
+
+---
+
+**Related:** [polyfill-filter.md](./polyfill-filter.md) · [polyfill-find-findindex.md](./polyfill-find-findindex.md) · [polyfill-map.md](./polyfill-map.md) · [polyfill-reduce.md](./polyfill-reduce.md)
+
+**Concept primer:** [`concepts/arrays.md`](../../concepts/arrays.md)

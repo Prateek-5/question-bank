@@ -1,202 +1,253 @@
-# Move all zeros to end (in-place, preserve order)
+# Move zeros to end — in-place, preserve order
 
-## Source
-- LeetCode #283 "Move Zeroes": https://leetcode.com/problems/move-zeroes/
-- Canonical two-pointer interview problem (every level).
-- BFE.dev / GreatFrontEnd variants.
+> **Difficulty:** Foundation   |   **Time:** ~10 min   |   **Prereqs:** [rotate-array.md](./rotate-array.md)
+>
+> **Source:** LeetCode #283. Two-pointer gateway problem.
 
-## Why this question matters in interviews
-Move-zeros is the **two-pointer technique gateway problem**. Backend interviewers use it as a 10-minute warm-up before harder array problems (3Sum, rainwater, sliding window). The trap: candidates instinctively reach for `arr.filter(x => x !== 0).concat(arr.filter(x => x === 0))` — clean, but **not in-place**, allocates O(n) memory, and ignores the central constraint. The interviewer wants to see: (1) the **two-pointer write-index pattern**, (2) understanding of **in-place mutation vs functional**, (3) **off-by-one awareness**, and (4) the alternative **swap-based** version with its trade-offs. It's the "do you know array-mutation idioms?" filter.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+In-place: move all zeros to end, preserve relative order of non-zeros. O(1) extra space.
+
+**Verification examples**
+
 ```js
-const arr = [0, 1, 0, 3, 12];
-moveZeros(arr);
-// arr is now [1, 3, 12, 0, 0]   (mutated in place)
+const a = [0, 1, 0, 3, 12];
+moveZeros(a);
+console.log(a);                          // [1, 3, 12, 0, 0]
+
+moveZeros([]);                           // []
+moveZeros([0]);                          // [0]
+moveZeros([1, 2, 3]);                    // [1, 2, 3]
+moveZeros([0, 0, 0]);                    // [0, 0, 0]
 ```
 
-### Runtime / engine behavior
-- "In-place" means O(1) extra memory — only a couple of index variables, no auxiliary arrays.
-- Two pointers: a **read pointer** scans the array; a **write pointer** advances only when a non-zero is written. The gap between them grows as zeros pile up.
-- Order of non-zero elements must be preserved (stable). Some problem variants (LeetCode #75 "Sort Colors") drop this constraint and allow swaps for unstable but in-place sort.
-- V8's array storage: dense small-integer arrays use a packed representation (SMI). Writing zeros at the end is cheap. Mutating an element to a different "shape" (e.g., zero → string) can deopt the array to dictionary mode. Not usually a concern.
-- The "filter + concat" or "two filters" approach is O(n) time but O(n) **memory** and not in-place. Mention it as a non-solution.
+**Constraints**
+- In-place mutation.
+- O(1) extra space.
+- O(n) time.
+- Preserve order of non-zero elements (stable).
+- Don't return new array (caller's ref must be modified).
 
-### Edge cases (the interview traps)
-1. **All zeros** — `[0,0,0]` → no non-zero, write index stays at 0, final fill writes 0s back. No-op effectively. Don't crash.
-2. **No zeros** — `[1,2,3]` → write index walks alongside read, the trailing fill loop doesn't execute (`w === n`).
-3. **Single element** — `[0]` or `[5]` — both should work without index errors.
-4. **Empty array** — `[]` — the loops just don't execute. Return immediately or naturally fall through.
-5. **In-place mutation expectation** — the caller's array reference must be the modified one. Don't return a new array unless asked.
-6. **Off-by-one on the fill loop** — `while (w < n) arr[w++] = 0` is correct; `while (w <= n)` writes past the end and grows the array.
-7. **Swap-based alternative vs overwrite** — swap preserves elements but does up to 2× the writes for the same algorithm. Overwrite is faster but destroys the original zero positions (which we don't care about — we're overwriting them with zeros anyway).
-8. **Sparse arrays / holes** — `[1, , 3]`. A hole is NOT zero. Should it stay a hole or become a zero? Spec it — most candidates default to "treat hole as falsy" which is wrong (`arr[1] === undefined`, not `0`).
+---
 
-## Brute force approach
+## 2. Plain-English restatement
 
-**Approach A — two filters:**
+Two-pointer: `read` scans the array; `write` advances only when a non-zero is written. Then fill remainder with zeros. The gap between pointers = number of zeros seen.
+
+---
+
+## 3. Why this matters in interviews
+
+Two-pointer gateway. Tests: (1) two-pointer write-index pattern, (2) in-place mutation vs functional, (3) off-by-one awareness, (4) swap-based alternative tradeoffs.
+
+---
+
+## 4. Mental model
+
+```
+   Two-pointer (overwrite):
+     write = 0
+     for read = 0 .. n-1:
+       if arr[read] !== 0:
+         arr[write++] = arr[read]
+     while write < n:
+       arr[write++] = 0
+   
+   Two-pointer (swap):
+     write = 0
+     for read = 0 .. n-1:
+       if arr[read] !== 0:
+         swap(arr[write], arr[read])
+         write++
+   
+   Swap version preserves elements (good for moves that aren't to-zero).
+   Overwrite is 1× writes per non-zero + final fill. Faster.
+
+   Wrong: filter + concat:
+     [...arr.filter(x => x !== 0), ...arr.filter(x => x === 0)]
+     ✗ allocates O(n) — not in-place.
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. Difference between overwrite vs swap?
+> 2. Why is `filter+concat` wrong?
+> 3. Edge case: all zeros?
+
+---
+
+## 6. Brute force — walked through
+
 ```js
-function moveZerosNaive(arr) {
-  const nonZeros = arr.filter(x => x !== 0);
-  const zeros    = arr.filter(x => x === 0);
-  return [...nonZeros, ...zeros];   // NOT in-place
+// O(n) time, O(n) memory — NOT in-place
+function wrong(arr) {
+  const nonZero = arr.filter(x => x !== 0);
+  const zeros = arr.filter(x => x === 0);
+  return [...nonZero, ...zeros];          // ✗ returns new; caller's ref unchanged
 }
 ```
-O(n) time, O(n) space, **returns a new array** — fails the in-place constraint.
 
-**Approach B — repeated splice:**
-```js
-function moveZerosSplice(arr) {
-  for (let i = arr.length - 1; i >= 0; i--) {
-    if (arr[i] === 0) {
-      arr.splice(i, 1);
-      arr.push(0);
-    }
-  }
-}
-```
-In-place but O(n²) — each splice shifts elements. Junior tell.
+Fails constraint: in-place.
 
-Both are wrong answers in different ways. Move past them.
+---
 
-## Optimal approach
+## 7. The unlocking insight
 
-**Two-pointer overwrite** — single pass with write index:
+> **Two-pointer write-index: read scans, write advances on non-zero. Fill remainder with zeros. O(n)/O(1).**
 
-1. `w = 0` (write pointer).
-2. Scan `r` from `0` to `n - 1`. If `arr[r] !== 0`, write `arr[w++] = arr[r]`.
-3. After the scan, fill `arr[w..n-1]` with zeros.
+Three properties:
 
-O(n) time, O(1) extra space, single pass + trivial tail fill. The total writes are exactly `n` in the worst case (all non-zero) and `(#non-zeros) + (#zeros)` overall — same as a copy.
+1. **Two pointers** — read & write.
+2. **In-place overwrite** — non-zeros to front.
+3. **Trailing fill** — zeros at end.
 
-**Two-pointer swap** — alternative:
+---
 
-1. `w = 0`. Scan `r`. If `arr[r] !== 0`, `[arr[w], arr[r]] = [arr[r], arr[w]]; w++`.
-2. No tail fill needed — the swap moves each zero to the rear naturally.
-
-Same complexity, but does swaps even when `w === r` (wasted work). Slightly more elegant; ever-so-slightly slower in practice.
-
-## Solution (JavaScript)
+## 8. Solution (annotated)
 
 ```js
-/**
- * Move all zeros to the end, preserving non-zero order.
- * Mutates the input array in place. O(n) time, O(1) space.
- */
 function moveZeros(arr) {
   const n = arr.length;
-  let w = 0;                       // write index
-
-  // Pass 1: pack non-zeros to the front
-  for (let r = 0; r < n; r++) {
-    if (arr[r] !== 0) {
-      arr[w++] = arr[r];
+  let write = 0;
+  for (let read = 0; read < n; read++) {                                 // step 1: scan
+    if (arr[read] !== 0) {
+      arr[write++] = arr[read];                                          // step 2: write non-zero
     }
   }
-
-  // Pass 2: fill the tail with zeros
-  while (w < n) {
-    arr[w++] = 0;
+  while (write < n) {
+    arr[write++] = 0;                                                    // step 3: fill zeros
   }
 }
 
-/**
- * Swap-based alternative — single loop, no tail fill.
- * Same O(n) / O(1). Slightly more writes in worst case.
- */
+// Swap-based alternative
 function moveZerosSwap(arr) {
-  let w = 0;
-  for (let r = 0; r < arr.length; r++) {
-    if (arr[r] !== 0) {
-      if (w !== r) {
-        [arr[w], arr[r]] = [arr[r], arr[w]];
-      }
-      w++;
+  let write = 0;
+  for (let read = 0; read < arr.length; read++) {
+    if (arr[read] !== 0) {
+      [arr[write], arr[read]] = [arr[read], arr[write]];                 // step 4: swap
+      write++;
     }
   }
 }
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
-Input: `[0, 1, 0, 3, 12]`, `n = 5`.
+```js
+const a1 = [0, 1, 0, 3, 12];
+moveZeros(a1);
+console.log(a1);                                              // [1, 3, 12, 0, 0]
 
-**Pass 1 (pack non-zeros):**
-| r | arr[r] | non-zero? | write? | w after | arr after |
-|---|---|---|---|---|---|
-| 0 | 0  | no  | —              | 0 | `[0, 1, 0, 3, 12]` |
-| 1 | 1  | yes | `arr[0] = 1`   | 1 | `[1, 1, 0, 3, 12]` |
-| 2 | 0  | no  | —              | 1 | `[1, 1, 0, 3, 12]` |
-| 3 | 3  | yes | `arr[1] = 3`   | 2 | `[1, 3, 0, 3, 12]` |
-| 4 | 12 | yes | `arr[2] = 12`  | 3 | `[1, 3, 12, 3, 12]` |
+const a2 = [];
+moveZeros(a2);                                                // []
 
-After pass 1: `w = 3`, array is `[1, 3, 12, 3, 12]`. Indices 3 and 4 are "stale" — they hold leftover non-zeros that we already copied to the front.
+moveZeros([0, 0, 0]);                                         // [0, 0, 0]
+moveZeros([1, 2, 3]);                                         // [1, 2, 3]
+moveZeros([0]);                                               // [0]
 
-**Pass 2 (zero-fill tail):**
-| w | action | arr after |
-|---|---|---|
-| 3 | `arr[3] = 0` | `[1, 3, 12, 0, 12]` |
-| 4 | `arr[4] = 0` | `[1, 3, 12, 0, 0]` |
-| 5 | loop ends (`w === n`) | done |
+// Generalized — move "bad" values to end
+function moveToEnd(arr, isBad) {
+  let w = 0;
+  for (let r = 0; r < arr.length; r++) {
+    if (!isBad(arr[r])) arr[w++] = arr[r];
+  }
+  // Caller fills tail or remembers cut point at w.
+  return w;  // first "bad" index after compaction
+}
 
-Final: `[1, 3, 12, 0, 0]`. Three non-zeros at front in original order, two zeros at end. Correct.
+// Sparse arrays (holes)
+moveZeros([1, , 3]);                                          // edge — `,` reads as undefined !== 0.
+                                                              // depends on spec — usually treat hole = falsy not zero.
+```
 
-**Swap variant trace** for same input:
-- `r=0`: `arr[0]=0`, skip.
-- `r=1`: `arr[1]=1` non-zero, swap with `arr[0]`. Array `[1,0,0,3,12]`. `w=1`.
-- `r=2`: `arr[2]=0`, skip.
-- `r=3`: `arr[3]=3` non-zero, swap with `arr[1]`. Array `[1,3,0,0,12]`. `w=2`.
-- `r=4`: `arr[4]=12` non-zero, swap with `arr[2]`. Array `[1,3,12,0,0]`. `w=3`.
-- Same result, four swaps performed.
+---
 
-## Important takeaways
+## 9. Step-by-step dry run
 
-**Syntax to memorize**
-- Two-pointer write index: `let w = 0; for (let r = 0; r < n; r++) if (cond) arr[w++] = arr[r];`. Universal "compact in place" idiom.
-- Tail fill: `while (w < n) arr[w++] = 0;`. Off-by-one is `w <= n` which writes past the end.
-- Swap: `[arr[w], arr[r]] = [arr[r], arr[w]];`. Destructuring swap, no temp variable.
+```
+moveZeros([0, 1, 0, 3, 12]):
+  n=5. write=0.
+  
+  read=0: arr[0]=0 → skip.
+  read=1: arr[1]=1, not 0 → arr[0]=1 → arr=[1,1,0,3,12]. write=1.
+  read=2: arr[2]=0 → skip.
+  read=3: arr[3]=3 → arr[1]=3 → arr=[1,3,0,3,12]. write=2.
+  read=4: arr[4]=12 → arr[2]=12 → arr=[1,3,12,3,12]. write=3.
+  
+  Fill loop: write=3 < 5:
+    arr[3]=0 → arr=[1,3,12,0,12]. write=4.
+    arr[4]=0 → arr=[1,3,12,0,0]. write=5.
+  
+  Done.
 
-**Patterns to reuse**
-- **Write-index two-pointer** — same pattern for: "remove duplicates from sorted array" (LeetCode #26), "remove element" (#27), "compress array" (#443), "sort colors" (#75 with three pointers).
-- **Filter-in-place** — the general shape `let w = 0; for r: if (keep) arr[w++] = arr[r]; arr.length = w;` (truncate variant) drops elements rather than zero-filling them. Different problem, same skeleton.
-- **In-place vs functional** — `filter` allocates; `splice` is O(n) per call. Two-pointer is the in-place workhorse.
+moveZeros([0, 0, 0]):
+  write=0.
+  read=0,1,2: all zero → skip.
+  Fill: write=0 < 3 → arr[0]=0, arr[1]=0, arr[2]=0. write=3.
+  No-op effectively.
 
-**Common mistakes**
-- Using `filter + concat` and not reading the "in-place" constraint. Interview-killer.
-- Using `splice` in a loop — O(n²).
-- Off-by-one in the tail fill (`while (w <= n)`).
-- Swapping unconditionally even when `w === r` — wasteful but harmless.
-- Treating sparse holes as zeros — `[1, , 3]` should preserve the hole unless spec'd otherwise.
-- Forgetting to handle empty / single-element arrays (usually the natural loops do, but state it).
+moveZeros([1, 2, 3]):
+  write tracks read exactly: 1,2,3. write=3.
+  Fill: write=3, no run.
+```
 
-**Related questions**
-- LeetCode #26 — remove duplicates from sorted array (same two-pointer skeleton).
-- LeetCode #27 — remove element (same skeleton with a different predicate).
-- LeetCode #75 — sort colors (Dutch National Flag; three pointers).
-- LeetCode #88 — merge sorted array in place (two pointers from the END).
-- `polyfill-filter` (allocating variant of the same predicate).
+---
 
-## Variants
+## 10. Common confusion + traps
 
-1. **Return count of non-zeros** — LeetCode #27 ("Remove Element") asks for `w` itself as the new "logical length." Then `arr.length = w` truncates if you want the array shorter.
+1. **`filter+concat`** — not in-place; allocates.
+2. **`while (w <= n)`** — off-by-one; writes past end.
+3. **Mutate vs return** — must mutate caller's ref.
+4. **Swap version** — 2× writes per non-zero on average; slower.
+5. **Sparse arrays** — hole !== 0; spec must define.
+6. **All zeros** — write stays 0; fill rewrites zeros. Correct, no special-case.
+7. **Stability** — order of non-zeros preserved naturally.
 
-2. **Move zeros to the FRONT instead** — mirror the algorithm: scan right-to-left with write index from the end. Same skeleton, reversed direction.
+---
 
-3. **Move negatives / specific value / predicate** — generalize: `moveToEnd(arr, predicate)`. The two-pointer pattern is predicate-agnostic.
+## 11. Senior follow-ups & variants
 
-4. **Dutch National Flag (sort 3 values in place)** — LeetCode #75. Three pointers: `low`, `mid`, `high`. Classic interview escalation from move-zeros.
+### Variant 1 — Generalize: move predicate-matching to end
+Compact non-matching; fill matching at tail.
 
-5. **Stable swap variant** — "Why might you choose swap over overwrite?" Swap is more general (works when you can't overwrite, e.g., custom equality on objects). Overwrite is faster when destination doesn't matter.
+### Variant 2 — Move zeros to FRONT
+Mirror: scan reverse; write decreasing.
 
-## Revision notes
+### Variant 3 — Remove duplicates (LeetCode #26)
+Same two-pointer; condition is "different from prev write".
 
-> **move-zeros — 60 second recap**
-> - Two-pointer: `w` (write) and `r` (read). Walk `r` left to right.
-> - If `arr[r] !== 0` → `arr[w++] = arr[r]`. Else skip.
-> - After scan, `while (w < n) arr[w++] = 0`. Off-by-one trap.
-> - O(n) time, O(1) space, in-place.
-> - **Alternative:** swap-based — `[arr[w], arr[r]] = [arr[r], arr[w]]; w++` when non-zero. No tail fill needed; more writes.
-> - **Trap:** `filter + concat` is NOT in-place, allocates O(n) memory.
-> - **Family:** write-index two-pointer is the skeleton for #26, #27, #75, #283, #443.
+### Variant 4 — Sort colors (LeetCode #75)
+Dutch national flag — three pointers for 3 values.
+
+### Variant 5 — Stable partition
+Partition with predicate, preserving order — same algorithm.
+
+---
+
+## 12. How to think aloud
+
+> "Move-zeros tests the two-pointer write-index pattern. Two pointers: `read` scans the array; `write` advances only when we copy a non-zero. After the scan, `write` is the count of non-zeros. Fill `[write..n-1]` with zeros. O(n) time, O(1) space, stable order. Wrong approach: `arr.filter(x=>x!==0).concat(arr.filter(x=>x===0))` — allocates O(n); not in-place; returns new (caller's ref unchanged). Swap variant: swap arr[write] with arr[read] when non-zero — preserves the displaced element (irrelevant when overwriting with zeros). Overwrite faster (1 write per non-zero + tail fill). Edges: empty array, all zeros, no zeros — all naturally handled. Sparse arrays: holes read as undefined !== 0, so they'd be 'kept' as undefined; spec it. Generalizes to: 'move predicate-matching to end' (variant), remove duplicates, Dutch flag sort. Trap: filter+concat (not in-place); off-by-one in fill (`<= n` writes past end); expecting return value vs mutation."
+
+---
+
+## 13. 60-second revision
+
+> - **Two-pointer write-index.**
+> - **Read scans; write advances on non-zero.**
+> - **Tail fill** with zeros after scan.
+> - **O(n)/O(1) in-place stable.**
+> - **`filter+concat` allocates** — not in-place.
+> - **Swap variant** — 2× writes; overwrite faster.
+> - **Generalizes** to predicate-matching, dedup, Dutch flag.
+> - **Trap:** off-by-one fill; return vs mutate; holes !== 0.
+
+---
+
+**Related:** [rotate-array.md](./rotate-array.md) · [find-runs.md](./find-runs.md) · [array-dedup.md](./array-dedup.md)
+
+**Concept primer:** [`concepts/arrays.md`](../../concepts/arrays.md)

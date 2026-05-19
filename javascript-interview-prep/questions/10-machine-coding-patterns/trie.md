@@ -1,90 +1,124 @@
-# Implement a Trie (insert, search, startsWith)
+# Implement a Trie (insert / search / startsWith)
 
-## Source
-- Canonical data-structures interview problem (LeetCode #208 "Implement Trie (Prefix Tree)").
-- Used in autocomplete, spellcheckers, IP routing tables, URL routers (Express, Fastify).
+> **Difficulty:** Medium   |   **Time:** ~20 min   |   **Prereqs:** [`concepts/maps-sets.md`](../../concepts/maps-sets.md), [`concepts/recursion.md`](../../concepts/recursion.md)
+>
+> **Source:** [LeetCode 208 — Implement Trie (Prefix Tree)](https://leetcode.com/problems/implement-trie-prefix-tree/). Used in autocomplete, URL routers (Express, Fastify), IP routing tables.
 
-## Why this question matters in interviews
-Trie is the **string-keyed tree** every backend engineer should know. The naive substring-match approach (loop over a list, check prefix) is O(n*L) per query; a trie collapses this to O(L) — independent of the dictionary size. Implementing one tests **Map-of-Map nesting**, **path-walking with create-or-traverse**, **end-of-word marking**, and the ability to spot when a problem really is a tree problem in disguise. Backend interviewers ask trie when probing **URL routers** (Express stores routes in a trie-like radix tree), **autocomplete services**, **IP longest-prefix matches**, **rate limiter buckets keyed by API path**, and **command-completion in CLIs**. The implementation is small; the family of problems it unlocks is huge.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
-```js
-class TrieNode {
-  constructor() {
-    this.children = new Map();    // char -> TrieNode
-    this.isEnd = false;            // does a word end here?
-  }
-}
-
+**Signature**
+```ts
 class Trie {
-  constructor() { this.root = new TrieNode(); }
-
-  insert(word) {
-    let node = this.root;
-    for (const c of word) {
-      if (!node.children.has(c)) node.children.set(c, new TrieNode());
-      node = node.children.get(c);
-    }
-    node.isEnd = true;
-  }
-
-  search(word) {
-    const n = this._walk(word);
-    return !!n && n.isEnd;
-  }
-
-  startsWith(prefix) {
-    return !!this._walk(prefix);
-  }
-
-  _walk(s) {
-    let node = this.root;
-    for (const c of s) {
-      node = node.children.get(c);
-      if (!node) return null;
-    }
-    return node;
-  }
+  insert(word: string): void;
+  search(word: string): boolean;       // exact match
+  startsWith(prefix: string): boolean; // any inserted word with this prefix
+  autocomplete(prefix: string, limit?: number): string[];   // optional
 }
 ```
 
-### Runtime / engine behavior
-- The trie is a **tree where edges are labelled by characters**. The root holds the empty prefix.
-- `children` is a Map (or plain object) keyed by single characters. For ASCII-only dictionaries you can use an array of size 26, but Map handles Unicode for free.
-- `isEnd` is the **terminator flag** — without it you can't distinguish "this prefix is a valid word" from "this prefix is just on the way to longer words." `insert('cat')` and `insert('cats')` need both `t` (after `ca`) and `s` (after `cat`) to have `isEnd=true`.
-- Time complexity is O(L) where L is the length of the input word — **independent of the dictionary size**. This is the trie's killer feature.
-- Space is O(total characters across all inserted words) in the worst case (no sharing). Real corpora share heavy prefixes and use much less.
+**Input / Output examples**
 
-### Edge cases (these are the interview traps)
-1. **Empty string** — `insert('')` should mark the root as `isEnd`. `search('')` → true. `startsWith('')` → true (every string starts with empty). Some impls reject empty; spec your behavior.
-2. **`search` vs `startsWith` confusion** — `search` requires `isEnd`; `startsWith` doesn't. The two are the same walk with a different terminal check. Classic LeetCode test.
-3. **Repeated insert of the same word** — should be idempotent. `isEnd` flips to true (already true) — no duplicate stored.
-4. **Case sensitivity** — by default the trie is case-sensitive. If you want case-insensitive lookup, lowercase at the boundary, not inside.
-5. **Unicode / surrogate pairs** — iterating with `for (const c of word)` correctly handles BMP and astral plane code points. Iterating with `for (let i = 0; i < word.length; i++)` splits surrogate pairs. Use `for...of`.
-6. **Deletion** — not commonly asked, but: walk to the end, flip `isEnd=false`, then walk back deleting nodes that have no children AND are not `isEnd`. Easy to get wrong; rehearse if asked.
-7. **Memory for sparse tries** — if you use a fixed-size array (size 26 or 128) per node, sparse tries waste massive memory. Map per node is the safe default. Radix/PATRICIA tries compress chains-of-single-children into a single edge — common in production routers.
-8. **Autocomplete (collect all words with prefix)** — walk to the prefix node, then DFS the subtree collecting every path that ends at `isEnd`. O(prefix length + answer size).
+| Operation                         | Result                                   |
+|-----------------------------------|------------------------------------------|
+| `insert('cat'); insert('cats'); insert('cup'); insert('cap')` |  |
+| `search('cat')`                   | `true`                                   |
+| `search('ca')`                    | `false` (not a stored word)             |
+| `search('cats')`                  | `true`                                   |
+| `startsWith('ca')`                | `true`                                   |
+| `startsWith('cab')`               | `false`                                  |
+| `autocomplete('ca')`              | `['cat', 'cats', 'cap']`                |
 
-## Brute force approach
-"I'll store words in a Set; for `search`, check `set.has(word)`; for `startsWith`, iterate the set and check `word.startsWith(prefix)`." Works but `startsWith` is O(n * L) — for a million-word dictionary, every autocomplete keystroke scans the whole set. Trie reduces this to O(L). State the trade-off and pick trie when prefix queries dominate.
+**Constraints**
+- O(L) per op where L = word/prefix length — independent of dictionary size.
+- `isEnd` boolean distinguishes "stored word" from "internal node."
+- Node = `{ children: Map<char, Node>, isEnd: boolean }`.
 
-Another non-starter: sort the dictionary and binary-search by prefix. Better than the Set approach (O(L log n)), still worse than O(L) trie. Only worth it if you also need ordered iteration — but a sorted trie traversal gives you that too.
+---
 
-## Optimal approach
-Map-of-Map tree. `children: Map<char, TrieNode>` per node, `isEnd: boolean`. Insert walks creating nodes as needed; `_walk` is shared by `search` and `startsWith`. O(L) per operation, O(total chars) space.
+## 2. Plain-English restatement
 
-## Solution (JavaScript)
+A tree where each edge is labeled with a single character. The root represents the empty prefix; walking down spells a string. A `isEnd` flag marks "a word ends here." Insertion creates nodes along the path; lookup walks the path; prefix lookup walks and just checks "did we reach a node?" Autocomplete walks to the prefix node, then DFS-collects every `isEnd` descendant.
+
+---
+
+## 3. Why this matters in interviews
+
+The **string-keyed tree** every backend engineer should know. Naive substring match is O(n*L) per query; trie is O(L) regardless of dictionary size. Tests Map-of-Map nesting, path-walking with create-or-traverse, end-of-word marking, and unlocks: URL routers (Express stores routes in radix tries), autocomplete services, IP longest-prefix matches, command-completion CLIs.
+
+---
+
+## 4. Mental model
+
+```
+   After insert('cat'), insert('cats'), insert('cup'), insert('cap'):
+
+   root
+   └── c
+       ├── a
+       │   ├── t  isEnd=true
+       │   │   └── s  isEnd=true
+       │   └── p  isEnd=true
+       └── u
+           └── p  isEnd=true
+
+   search('cat'):  walk c → a → t. t.isEnd? true → true
+   search('ca'):   walk c → a. a.isEnd? false → FALSE (prefix, not word)
+   startsWith('ca'): walk c → a. node exists → true (no isEnd check)
+   autocomplete('ca'): walk to a. DFS collecting isEnd paths:
+                       't' (end), 'ts' (end), 'p' (end) → ['cat', 'cats', 'cap']
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. After `insert('cat')`, what does `search('ca')` return? Why?
+> 2. Why is `for (const ch of word)` safer than `word[i]` iteration?
+> 3. Why use `Map<char, Node>` instead of a fixed-size array `new Array(26)`?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: Set + linear scan
+```js
+this.words = new Set();
+startsWith(prefix) {
+  for (const w of this.words) if (w.startsWith(prefix)) return true;
+  return false;
+}
+```
+O(N×L) per query. Fails at scale.
+
+### Wrong attempt 2: sorted array + binary search
+O(L log N) for `startsWith`. Better, still beaten by trie's O(L).
+
+### Wrong attempt 3: forget `isEnd`
+Can't distinguish "cat is a word" from "ca is on the way to cats." `search('ca')` returns true incorrectly.
+
+---
+
+## 7. The unlocking insight
+
+> **Tree of `{children: Map<char, Node>, isEnd: boolean}`. Walking is O(L). `search` requires `isEnd`; `startsWith` doesn't — they share the same walk helper.**
+
+Three properties:
+
+1. **Map-of-Map nesting** — O(1) per character lookup.
+2. **`isEnd` flag** — separates "word" from "prefix-only."
+3. **Shared `_walk` helper** — `search` and `startsWith` differ only in the terminal check.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
-/**
- * Trie (prefix tree). Stores strings; supports O(L) exact lookup and prefix
- * lookup independent of dictionary size.
- */
 class TrieNode {
   constructor() {
-    this.children = new Map();
+    this.children = new Map();                                       // char → TrieNode
     this.isEnd = false;
   }
 }
@@ -94,10 +128,9 @@ class Trie {
     this.root = new TrieNode();
   }
 
-  /** Insert a word. Idempotent. */
-  insert(word) {
+  insert(word) {                                                      // step 1: idempotent
     let node = this.root;
-    for (const ch of word) {
+    for (const ch of word) {                                          // step 2: for-of handles surrogates
       let next = node.children.get(ch);
       if (!next) {
         next = new TrieNode();
@@ -105,22 +138,19 @@ class Trie {
       }
       node = next;
     }
-    node.isEnd = true;
+    node.isEnd = true;                                                // step 3: mark terminator
   }
 
-  /** Exact-match lookup. */
   search(word) {
     const node = this._walk(word);
-    return !!node && node.isEnd;
+    return !!node && node.isEnd;                                      // step 4: exact match needs isEnd
   }
 
-  /** Any inserted word starts with `prefix`? */
   startsWith(prefix) {
-    return !!this._walk(prefix);
+    return !!this._walk(prefix);                                      // step 5: prefix needs only path
   }
 
-  /** Walk down by characters; return the node at the end, or null. */
-  _walk(s) {
+  _walk(s) {                                                          // step 6: shared walker
     let node = this.root;
     for (const ch of s) {
       node = node.children.get(ch);
@@ -129,108 +159,133 @@ class Trie {
     return node;
   }
 
-  /** Autocomplete: all stored words that start with `prefix`. */
-  autocomplete(prefix, limit = Infinity) {
-    const startNode = this._walk(prefix);
-    if (!startNode) return [];
+  autocomplete(prefix, limit = Infinity) {                            // step 7: walk + DFS collect
+    const start = this._walk(prefix);
+    if (!start) return [];
     const out = [];
     const dfs = (node, path) => {
       if (out.length >= limit) return;
       if (node.isEnd) out.push(path);
       for (const [ch, child] of node.children) dfs(child, path + ch);
     };
-    dfs(startNode, prefix);
+    dfs(start, prefix);
     return out;
   }
 }
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
-Input:
 ```js
 const t = new Trie();
-t.insert('cat');
-t.insert('cats');
-t.insert('cup');
-t.insert('cap');
+['cat', 'cats', 'cup', 'cap'].forEach(w => t.insert(w));
 
-t.search('cat');         // true
-t.search('ca');          // false (not isEnd)
-t.search('cats');        // true
-t.startsWith('ca');      // true
-t.startsWith('cab');     // false
-t.autocomplete('ca');    // ['cat','cats','cap']
+t.search('cat');           // true
+t.search('ca');            // false
+t.startsWith('ca');        // true
+t.startsWith('cab');       // false
+t.autocomplete('ca');      // ['cat', 'cats', 'cap']
+t.autocomplete('c', 2);    // ['cat', 'cats']  (limit 2)
 ```
 
-Trace tree after inserts (text):
+---
+
+## 9. Step-by-step dry run
+
 ```
-root
-└── c
-    └── a
-    │   ├── t  (isEnd)
-    │   │   └── s  (isEnd)
-    │   └── p  (isEnd)
-    └── u
-        └── p  (isEnd)
+After inserts, tree:
+
+   root
+   └── c
+       ├── a
+       │   ├── t  (isEnd)
+       │   │   └── s  (isEnd)
+       │   └── p  (isEnd)
+       └── u
+           └── p  (isEnd)
+
+search('cat'):
+  walk c → a → t. node!=null, isEnd=true → TRUE.
+
+search('ca'):
+  walk c → a. node!=null, isEnd=false → FALSE.
+
+startsWith('cab'):
+  walk c → a. then look for 'b' in a.children → undefined → null → FALSE.
+
+autocomplete('ca'):
+  walk c → a → start
+  dfs(start, 'ca'):
+    isEnd? no
+    children: {t, p}
+    dfs(t, 'cat'):
+      isEnd? yes → push 'cat'
+      children: {s}
+      dfs(s, 'cats'):
+        isEnd? yes → push 'cats'
+        no children
+    dfs(p, 'cap'):
+      isEnd? yes → push 'cap'
+      no children
+  return ['cat', 'cats', 'cap']
 ```
 
-- `insert('cat')`: walk c → a (create) → t (create). Mark t.isEnd=true.
-- `insert('cats')`: walk c → a → t (exists) → s (create). Mark s.isEnd=true. (t.isEnd still true.)
-- `insert('cup')`: walk c → u (create) → p (create). Mark p.isEnd=true.
-- `insert('cap')`: walk c → a → p (create). Mark p.isEnd=true.
-- `search('cat')`: walk reaches t-node. `t.isEnd === true` → true.
-- `search('ca')`: walk reaches a-node. `a.isEnd === false` → false.
-- `startsWith('ca')`: walk reaches a-node → true (not null).
-- `startsWith('cab')`: walk c → a → b. b not in children. Return null → false.
-- `autocomplete('ca')`: walk to a-node, DFS. Visits t (isEnd, push 'cat'), then s (isEnd, push 'cats'), then p (isEnd, push 'cap'). Returns ['cat','cats','cap'].
+---
 
-## Important takeaways
+## 10. Common confusion + traps
 
-**Syntax to memorize**
-- `class TrieNode { children = new Map(); isEnd = false; }`.
-- Insert: `for (const ch of word) { if (!has) create; node = next; } node.isEnd = true;`.
-- Shared `_walk` helper for search and startsWith — keeps DRY.
-- O(L) per op, regardless of dictionary size.
+1. **Forgetting `isEnd`** — `search('ca')` returns true when only `'cat'` was inserted.
+2. **`word.length` + index loop on Unicode** — splits surrogate pairs. Use `for...of`.
+3. **Fixed-size array `new Array(128)`** for non-ASCII alphabets — wasteful or breaks on Unicode.
+4. **`Object.create(null)` instead of Map** — works but loses iteration order and Map API.
+5. **Empty string semantics** — `insert('')` marks root as `isEnd`. State the choice.
+6. **Case sensitivity** — case-fold at the boundary, not inside.
+7. **Deletion edge cases** — flip `isEnd=false`, then walk back deleting childless non-end nodes.
 
-**Patterns to reuse**
-- Trie nesting (Map of Map) is the same shape as: nested router tables, telephone-number area-code trees, IP prefix tables.
-- DFS-collect pattern (`autocomplete`) is the canonical "walk to a point, then enumerate the subtree" — same shape as filesystem `find` with a base path.
+---
 
-**Common mistakes**
-- Forgetting `isEnd` — can't distinguish "cat is a word" from "ca is on the way to cats." `search('ca')` returns true incorrectly.
-- Using `word.length` + index loops on Unicode strings — splits surrogate pairs. Always `for (const ch of word)`.
-- Using a fixed-size array per node for non-ASCII alphabets — wastes memory or breaks on non-ASCII input.
-- Trying to optimize prematurely with a radix trie before you've measured. Map-of-Map is fast enough for most interview workloads.
-- Calling `Object.create(null)` for children instead of Map. Works but loses iteration order and the helpful Map API.
+## 11. Senior follow-ups & variants
 
-**Related questions**
-- Suffix tree / suffix array (similar idea for substring queries).
-- Radix / PATRICIA trie (compressed chains).
-- Aho-Corasick (multi-pattern matching on top of trie).
-- Express route trie / Fastify radix router.
-- Longest-prefix-match for IP routing.
+### Variant 1 — Word-count multiset trie
+Counter at each `isEnd` for frequency tracking; `count(word)`, `decrement(word)`.
 
-## Variants
+### Variant 2 — Wildcard search
+`?` (any char), `*` (any sequence). DFS with backtracking — [LeetCode 211](https://leetcode.com/problems/design-add-and-search-words-data-structure/).
 
-1. **Word-count / multiset trie** — store a counter at each `isEnd` instead of a boolean. Supports `count(word)` and `decrement(word)` for word-frequency tasks.
+### Variant 3 — Ranked autocomplete
+Frequency stored at each node; DFS keeps a heap of top-K. Used by real autocomplete services.
 
-2. **Wildcard search** — support `?` (any single char) or `*` (any sequence). DFS with backtracking; explore all children when seeing `?`. LeetCode #211 "Add and Search Word."
+### Variant 4 — Radix / PATRICIA trie
+Compress single-child chains; edges hold strings, not single chars. Express/Fastify routers.
 
-3. **Autocomplete ranked by frequency** — store a frequency in each node (or at `isEnd`). Maintain a heap during DFS to keep top-K. Used in real autocomplete services.
+### Variant 5 — Persistent (immutable) trie
+Each insert returns a new root sharing unchanged subtrees. Clojure/Immutable.js.
 
-4. **Compressed (radix) trie** — collapse single-child chains: edges hold strings, not single chars. Used by Express/Fastify routers. Implementation is fiddlier; mention as the production-grade variant.
+### Variant 6 — Suffix tree / suffix array
+Substring queries (not just prefix). Aho-Corasick = trie + failure links for multi-pattern matching.
 
-5. **Persistent (immutable) trie** — each insert returns a new root sharing unchanged subtrees. Functional data structure; used in Clojure/Immutable.js.
+---
 
-## Revision notes
+## 12. How to think aloud
 
-> **Trie — 60 second recap**
-> - Node = `{ children: Map<char, Node>, isEnd: boolean }`. Root is empty.
-> - `insert(word)`: walk, create nodes for missing chars, mark last `isEnd=true`.
-> - `search(word)`: walk; return true iff end node exists AND `isEnd`.
-> - `startsWith(prefix)`: walk; return true iff end node exists. (no isEnd check)
-> - O(L) per op, independent of dictionary size.
-> - Autocomplete: walk to prefix node, DFS collecting `isEnd` paths.
-> - Trap: forgetting `isEnd` conflates "prefix" with "word." Using indexed loops splits surrogate pairs. Fixed-size arrays waste memory.
-> - Family: URL routers, IP prefix tables, autocomplete, suffix trees, Aho-Corasick.
+> "Tree of `{children: Map<char, Node>, isEnd: boolean}`. Insert walks creating nodes; `search` walks and checks `isEnd`; `startsWith` walks and just checks if the node exists. Share a `_walk` helper. O(L) per op, independent of dictionary size. Autocomplete: walk to prefix node, DFS the subtree collecting paths where `isEnd=true`. Trap: forgetting `isEnd` conflates prefix with word — `search('ca')` would return true incorrectly. Trap: indexed loop on Unicode splits surrogate pairs — use `for...of`. Trap: fixed-size array per node wastes memory and breaks on Unicode. Family: URL routers (radix tries), IP prefix tables, autocomplete, suffix trees, Aho-Corasick."
+
+---
+
+## 13. 60-second revision
+
+> - **Node** = `{children: Map<char, Node>, isEnd: boolean}`.
+> - **`insert`**: walk, create missing nodes, mark last `isEnd=true`.
+> - **`search`**: walk, require `isEnd`.
+> - **`startsWith`**: walk, require node (no `isEnd` check).
+> - **O(L) per op**; independent of dictionary size.
+> - **`autocomplete(prefix)`**: walk to node, DFS collect `isEnd` paths.
+> - **Use `for...of`** for Unicode safety.
+> - **Family:** Express router (radix trie), IP prefix, suffix tree, Aho-Corasick.
+> - **Trap:** missing `isEnd`; indexed loop on Unicode; fixed-size array.
+
+---
+
+**Related:** [json-parse-recursive-descent.md](./json-parse-recursive-descent.md) · [min-heap-priority-queue.md](./min-heap-priority-queue.md) · [`09-recursion/dfs-iterative-vs-recursive.md`](../09-recursion/dfs-iterative-vs-recursive.md)
+
+**Concept primer:** [`concepts/maps-sets.md`](../../concepts/maps-sets.md)

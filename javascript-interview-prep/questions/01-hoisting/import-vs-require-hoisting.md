@@ -1,235 +1,246 @@
-# `import` vs `require` — Hoisting & Module Semantics
+# `import` vs `require` — hoisting & module semantics
 
-## Source / Origin
-- ES Modules vs CommonJS spec — fundamentally different module systems.
-- Asked at: Razorpay, Stripe, Atlassian, Node-heavy interviews.
-- Concept reference: `concepts/hoisting.md`, sibling `es-module-live-bindings.md`, `04-promises/top-level-await-deadlock-quiz.md`.
+> **Difficulty:** Senior   |   **Time:** ~15 min   |   **Prereqs:** [es-module-live-bindings.md](./es-module-live-bindings.md), [hoisting-in-javascript.md](./hoisting-in-javascript.md)
+>
+> **Source:** ESM vs CJS spec. Razorpay, Stripe, Atlassian Node interviews.
 
-## Why this question matters in interviews
-"What's the difference between `import` and `require`?" The surface answer is "ESM vs CJS." The senior answer is: hoisting behavior, live bindings vs snapshot, sync vs async, static vs dynamic, evaluation order, interop quirks, top-level await, and `__dirname`/`__filename` differences. This is one of the densest signal questions in a Node interview.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+`import` vs `require` differ on: hoisting, live bindings vs snapshot, sync vs async load, static vs dynamic, evaluation order, top-level await, `__dirname`/`__filename`.
+
+**Verification examples**
+
+| Property                    | `import` (ESM)                              | `require` (CJS)                                      |
+|-----------------------------|----------------------------------------------|------------------------------------------------------|
+| Hoisting                    | hoisted to module top                        | runs in source order                                  |
+| Static vs dynamic           | static (parse-time); dynamic via `await import()` | dynamic (runtime call)                              |
+| Bindings                    | live read-only                               | snapshot at call time                                |
+| Sync/async load             | async load + sync access                     | fully sync                                            |
+| Top-level await             | supported (ESM only)                         | not supported                                         |
+| `__dirname` / `__filename`  | NOT defined; use `import.meta.url`           | defined                                               |
+| Conditional `import`        | only via dynamic `await import()`            | conditional `require()` works                        |
+| Interop                     | ESM can import CJS via default               | CJS can `await import('esm')` (dynamic only)         |
+
+**Constraints**
+- `import` is HOISTED; `require` is NOT.
+- ESM is async load + sync access; CJS is fully synchronous.
+- ESM bindings are LIVE; CJS destructure is SNAPSHOT.
+- ESM cannot `require()`; CJS cannot use top-level `await import` (only inside async fn).
+
+---
+
+## 2. Plain-English restatement
+
+`import` is the modern ESM syntax — static, hoisted, gives live read-only bindings, supports top-level await. `require` is older CJS — runs at source position, returns a snapshot of `module.exports`, fully synchronous. The two systems are interop-able but with quirks.
+
+---
+
+## 3. Why this matters in interviews
+
+Densest signal question for Node engineers. Mixed CJS/ESM is the #1 modern Node bug source.
+
+---
+
+## 4. Mental model
+
+```
+   ESM (modern):
+   ┌──────────────────────────────────────┐
+   │ Static `import { x } from './a.js'`  │  ← hoisted to top
+   │ Parsed at compile time                │
+   │ Bindings: live read-only              │
+   │ Load: async (parallel fetch)          │
+   │ Access: sync                          │
+   │ Top-level await: supported            │
+   └──────────────────────────────────────┘
+   
+   CJS (older):
+   ┌──────────────────────────────────────┐
+   │ `const x = require('./a.cjs').x;`    │  ← runs at source position
+   │ Runtime call                          │
+   │ Bindings: snapshot of module.exports │
+   │ Load: fully sync (blocking)           │
+   │ Top-level await: NOT supported        │
+   └──────────────────────────────────────┘
+   
+   Interop in Node:
+   ESM imports CJS:
+     import pkg from 'cjs-pkg';        // pkg === module.exports
+     import { name } from 'cjs-pkg';   // named imports may not be statically analyzable
+   
+   CJS imports ESM:
+     const pkg = await import('./esm.mjs');  // only inside async fn
+     // cannot use require()
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. Where does `import { x } from './a.js'` execute? Top of module or its source position?
+> 2. Can you put `import` inside an `if`?
+> 3. What's `__dirname` in ESM?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: "import and require are interchangeable"
+Different semantics — hoisting, sync, bindings.
+
+### Wrong attempt 2: "ESM is sync, CJS is async"
+Reversed.
+
+### Wrong attempt 3: "`__dirname` works in ESM"
+No; use `import.meta.url` + path utilities.
+
+---
+
+## 7. The unlocking insight
+
+> **ESM `import` is static, hoisted, async-loaded, sync-accessed, with live read-only bindings. CJS `require` is dynamic, runs at source position, fully sync, with snapshot bindings. Top-level await is ESM-only. `__dirname` is CJS-only.**
+
+Three properties:
+
+1. **Hoisting + static** — ESM imports hoist; CJS doesn't.
+2. **Live vs snapshot bindings**.
+3. **Async load + TLA** — ESM-only.
+
+---
+
+## 8. Solution (annotated)
+
 ```js
-// ESM (.mjs, "type":"module")
-import { foo } from './foo.js';         // STATIC, hoisted to top of module
+// ESM (.mjs or "type":"module")
+import { foo } from './foo.js';                                        // step 1: STATIC, hoisted
 import { bar } from './bar.js';
-console.log(foo);
 
-const lazy = await import('./lazy.js'); // DYNAMIC, returns Promise; ESM-only feature
+console.log(foo);                                                       // works (already evaluated)
 
-// CJS (.cjs, default in older Node)
-const { foo } = require('./foo.js');    // RUNTIME, NOT hoisted
-console.log(foo);
-// require() is sync; returns module.exports value at the moment of call
-```
+const lazy = await import('./lazy.js');                                 // step 2: DYNAMIC, returns Promise
 
-### Edge cases / interview traps
-1. **`import` is hoisted; `require` is not.** All `import` statements move to the top of the module (parsed before evaluation). `require` runs in source order.
-2. **`import` bindings are read-only LIVE views.** The exporter mutates `foo`; importers see the new value. CJS bindings are *snapshots* of `module.exports` at require time (unless the export object is mutated in place).
-3. **ESM is async load + sync access.** Loader resolves dependencies async; evaluation is synchronous (top-level await aside).
-4. **CJS is fully sync.** Blocking `require()`.
-5. **Default export interop.** `import x from 'cjs'` — what is `x`? Node's interop: `x === module.exports`. But some bundlers wrap into `{ default: x }`.
-6. **`__dirname`, `__filename`** don't exist in ESM; use `import.meta.url` and parse.
-7. **Conditional `import`** — only via dynamic `await import(...)`. Static `import` cannot be in a conditional.
-8. **CJS in ESM**: `import x from 'cjs-pkg'` — works, but named exports may not be statically analyzable (older Node).
-9. **ESM in CJS**: only via dynamic `await import(...)`; can't `require()` an ESM module.
-
-## Mental Model
-
-Two completely different machines:
-
-```
-   CommonJS (require):
-   ┌─────────────────────────────────────┐
-   │ ./a.js                              │
-   │   const b = require('./b.js')      │  ← runs synchronously when reached
-   │   const c = require('./c.js')      │
-   │   // a body runs                    │
-   │                                     │
-   │ b.js exports = { x: 1 }             │ ← snapshot at require time
-   │ a's `b.x` mutates IF b.x is mutated │
-   │ but `b` itself rebinding doesn't    │
-   └─────────────────────────────────────┘
-
-   ES Modules (import):
-   ┌─────────────────────────────────────┐
-   │ ./a.mjs                             │
-   │   import { x } from './b.mjs'       │  ← hoisted; resolved before a runs
-   │   // body runs                      │
-   │   console.log(x)                    │  ← `x` is LIVE; re-read each access
-   │                                     │
-   │ Phase 1: parse — collect all import │
-   │ Phase 2: link — resolve graph        │
-   │ Phase 3: evaluate (sync, in order)   │
-   └─────────────────────────────────────┘
-```
-
-## Why interviewers care
-
-- **Module-system literacy** — Node and bundlers diverge here.
-- **Hoisting nuance** — ESM imports hoist; require doesn't.
-- **Live bindings** — a non-obvious property.
-- **Async/sync boundary** — ESM allows TLA; CJS is purely sync.
-
-## Common beginner confusion
-
-- **"`import` is like `require`."** Different semantics: hoisted, live, async load.
-- **"`require` is faster."** Not really; depends on the loader. ESM has parallel resolution which can be faster for graphs.
-- **"You can `require` ESM."** No (without explicit interop). Use dynamic import.
-- **"ESM is always faster."** Tree-shaking helps in bundlers; runtime cost is similar.
-- **"`__dirname` works in ESM."** It doesn't.
-
-## Brute force approach
-
-Convert all your CJS to ESM at once. Often introduces TLA deadlocks (see `top-level-await-deadlock-quiz.md`).
-
-## Optimal approach
-
-Pick one (ESM for new code) and stick with it. Bridge with dynamic `import()` for cross-format calls.
-
-## Solution (JavaScript)
-
-```js
-// ESM module
-// ./logger.mjs
-let level = 'info';
-export function setLevel(l) { level = l; }
-export function getLevel() { return level; }
-
-// ./app.mjs
-import { getLevel, setLevel } from './logger.mjs';
-console.log(getLevel());       // 'info'
-setLevel('debug');
-console.log(getLevel());       // 'debug'   — LIVE binding; reflects mutation
-
-// CJS equivalent demonstrating snapshot semantics
-// ./cjs-logger.cjs
-let level = 'info';
-module.exports = {
-  setLevel(l) { level = l; },
-  getLevel() { return level; },
-};
-// ./cjs-app.cjs
-const logger = require('./cjs-logger.cjs');
-console.log(logger.getLevel());    // 'info'
-logger.setLevel('debug');
-console.log(logger.getLevel());    // 'debug' — works through the object methods
-
-// But:
-const { getLevel, setLevel } = require('./cjs-logger.cjs');  // destructuring captures CURRENT values
-// getLevel and setLevel still work because they're functions closed over `level`
-// BUT if module exported a primitive:
-//   module.exports.x = 1;  later module.exports.x = 2;
-//   const { x } = require(...);  // x is 1; later assignments don't update
-```
-
-Dynamic import (works in both ESM and CJS):
-
-```js
-async function loadLazy() {
-  const mod = await import('./lazy.mjs');
-  return mod.default;
-}
-```
-
-ESM `__dirname` replacement:
-
-```js
-import { fileURLToPath } from 'url';
-import path from 'path';
+// __dirname not available; use import.meta.url
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// CJS (.cjs)
+const { foo } = require('./foo.js');                                    // step 3: RUNTIME, NOT hoisted
+console.log(foo);
+
+// __dirname / __filename are defined globally in CJS
+console.log(__dirname);
 ```
 
-## Step-by-step dry run
-
-ESM live binding:
+**Try it yourself**
 
 ```js
-// counter.mjs
-export let n = 0;
-export function inc() { n++; }
+// Conditional import requires dynamic in ESM
+const isProd = process.env.NODE_ENV === 'production';
+// Static (illegal):
+// if (isProd) import './prod.js';   // SyntaxError
+// Dynamic (works):
+const mod = isProd ? await import('./prod.js') : await import('./dev.js');
 
-// main.mjs
-import { n, inc } from './counter.mjs';
-console.log(n);       // 0
-inc();
-console.log(n);       // 1   — LIVE
-n = 99;               // SyntaxError — imports are read-only views
+// CJS conditional require works directly
+const mod = isProd ? require('./prod.js') : require('./dev.js');
+
+// Cannot mix:
+// In CJS file: const x = await import('./esm.mjs');  // valid only inside async fn
+// In ESM file: const x = require('./cjs.cjs');       // ReferenceError (no require)
 ```
 
-CJS snapshot:
+---
 
-```js
-// counter.cjs
-let n = 0;
-module.exports = { n, inc: () => n++ };
-
-// main.cjs
-const { n, inc } = require('./counter.cjs');
-console.log(n);       // 0
-inc();
-console.log(n);       // 0   — destructured snapshot
-```
-
-ESM hoisting:
-
-```js
-// a.mjs
-console.log(b);           // 'hello' — imports hoisted; b initialized before this line
-import { b } from './b.mjs';
-```
-
-```js
-// a.cjs
-console.log(b);           // ReferenceError — `b` not declared yet
-const { b } = require('./b.cjs');
-```
-
-## How to think aloud in the interview
-
-> "ESM and CJS are different module systems. ESM: static imports hoisted to top of module, live read-only bindings (importers see exporter mutations), async load + sync access, supports top-level await. CJS: synchronous require() runs in source order, exports are an object you can read/mutate, importers get a snapshot at require time, no TLA. In ESM, `__dirname` becomes `fileURLToPath(import.meta.url)`. To bridge CJS ↔ ESM: dynamic `import()` works both ways; `require()` of ESM doesn't work."
-
-## Important takeaways
-
-- **`import` is hoisted; `require` is not.**
-- **ESM bindings are LIVE; CJS snapshots are by-value (but objects are by-ref).**
-- **ESM static imports are statically analyzable** (enables tree-shaking).
-- **`import()` is dynamic** (Promise-returning, works in both).
-- **TLA is ESM-only.**
-- **`__dirname` is CJS-only.**
-
-## Variants
-
-- **Bundler interop** (Webpack, esbuild) — wrap CJS in ESM-like shape; `import('cjs-pkg').default`.
-- **Dual-package** (CJS + ESM via `exports` map in package.json) — supports both consumers.
-- **Conditional exports** — `node`, `browser`, `import`, `require` field-specific resolutions.
-- **`import.meta`** — module metadata (URL, environment hints).
-- **Worker-thread interop** — workers can be ESM or CJS independently.
-
-## Revision notes
+## 9. Step-by-step dry run
 
 ```
-ESM (import):
-  - STATIC, HOISTED to top of module
-  - LIVE READ-ONLY bindings (importer sees exporter mutations)
-  - async load + sync access (TLA supported)
-  - tree-shakeable
-  - .mjs or "type":"module"
-  - no __dirname (use fileURLToPath(import.meta.url))
-  - import() dynamic returns Promise
+ESM module load (entry: main.mjs):
 
-CJS (require):
-  - RUNTIME, NOT hoisted
-  - snapshot of module.exports at call time (objects still by-ref)
-  - synchronous, blocking
-  - .cjs or default in old Node
-  - __dirname / __filename present
-  - cannot await at top level
+LINK phase:
+  parse main.mjs → find import './a.js', './b.js'
+    parse a.js, b.js recursively
+  resolve all dependencies (async, parallel-eligible)
+  allocate binding cells, wire importers
 
-Interop:
-  - CJS → ESM: import works (default = module.exports)
-  - ESM → CJS: require() does NOT work; use dynamic await import()
+EVALUATE phase:
+  evaluate in post-order:
+    a.js body runs
+    b.js body runs
+    main.mjs body runs
+  console.log(foo) → foo's cell already initialized → log
+
+  Imports HOISTED — already linked + values ready when main body runs.
+
+CJS module load (entry: main.cjs):
+
+require('./a.cjs') executes at source position:
+  enters a.cjs, runs top-to-bottom, sets module.exports.
+  returns module.exports object.
+
+After require returns, main.cjs continues.
+
+Compare:
+  ESM:    hoisted; all imports resolved before body code.
+  CJS:    in-order; each require() blocks until module loaded.
 ```
+
+---
+
+## 10. Common confusion + traps
+
+1. **Interchangeable** — different semantics.
+2. **`__dirname` in ESM** — undefined; use `import.meta.url`.
+3. **Top-level await in CJS** — not supported.
+4. **`import` in conditional** — only via dynamic.
+5. **CJS `require` of ESM** — error; use `await import()`.
+6. **ESM imports stale snapshot** — live bindings.
+7. **Cyclic import works same way** — ESM lazily resolves; CJS returns partial.
+
+---
+
+## 11. Senior follow-ups & variants
+
+### Variant 1 — `package.json` `"type"`
+`"type": "module"` makes `.js` files ESM by default.
+
+### Variant 2 — Dual-package hazard
+Library shipping both CJS and ESM — singletons may duplicate.
+
+### Variant 3 — `.cjs` / `.mjs` extensions
+Force module type regardless of `"type"`.
+
+### Variant 4 — Bundler emit
+Webpack/Rollup wrap modules differently; dev vs prod may differ.
+
+### Variant 5 — `import.meta.resolve`
+Future API for resolving module specifiers at runtime.
+
+---
+
+## 12. How to think aloud
+
+> "ESM `import` is STATIC (parse-time), HOISTED to module top, with LIVE READ-ONLY bindings. Async load + sync access. Supports top-level await. CJS `require` is dynamic — runs at source position, blocks synchronously, returns `module.exports` SNAPSHOT. Top-level await NOT supported. `__dirname`/`__filename` are CJS-only; in ESM use `import.meta.url`. Conditional imports: in ESM, only via dynamic `await import()`; in CJS, plain `require()` works. Interop: ESM importing CJS gives `module.exports` as default; CJS importing ESM requires `await import()` inside an async function (cannot `require` an ESM module). Trap: assuming interchangeable; using `__dirname` in ESM; TLA in CJS; live vs snapshot bindings."
+
+---
+
+## 13. 60-second revision
+
+> - **`import`** static, hoisted, async load + sync access, live bindings, supports TLA.
+> - **`require`** dynamic, source-position, fully sync, snapshot bindings, NO TLA.
+> - **ESM** = `.mjs` or `"type":"module"`. **CJS** = `.cjs` or default older Node.
+> - **`__dirname`** CJS-only; ESM uses `import.meta.url`.
+> - **Conditional:** ESM via dynamic `await import()`; CJS via plain `require()`.
+> - **Interop:** ESM ↔ CJS allowed but quirky; default + named import differences.
+> - **Top-level await** ESM-only.
+> - **Trap:** assume interchangeable; `__dirname` in ESM; live vs snapshot.
+
+---
+
+**Related:** [es-module-live-bindings.md](./es-module-live-bindings.md) · [circular-import-live-binding-quiz.md](./circular-import-live-binding-quiz.md) · [`04-promises/top-level-await-deadlock-quiz.md`](../04-promises/top-level-await-deadlock-quiz.md) · [`05-event-loop/top-level-await-modules.md`](../05-event-loop/top-level-await-modules.md)
+
+**Concept primer:** [`concepts/hoisting.md`](../../concepts/hoisting.md)

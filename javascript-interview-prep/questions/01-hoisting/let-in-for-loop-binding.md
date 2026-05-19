@@ -1,186 +1,256 @@
-# Per-iteration binding semantics of `let` in for-loops
+# `let` per-iteration binding in for-loops
 
-## Source
-- Canonical senior-JS interview problem (LeetCode-style closures puzzle, BFE.dev #28, Frontend Masters "Deep JS Foundations").
-- MDN reference: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/for#lexical_declarations_in_the_initialization_block
+> **Difficulty:** Medium   |   **Time:** ~12 min   |   **Prereqs:** [let-vs-var-differences.md](./let-vs-var-differences.md), [hoisting-and-scoping.md](./hoisting-and-scoping.md)
+>
+> **Source:** LeetCode-style closure puzzle. BFE.dev #28. Most-asked closure question in JS interview history.
 
-## Why this question matters in interviews
-The "setTimeout in a for-loop" puzzle is the most-asked closure question in the history of JS interviews. The senior twist: explain **mechanically** why the `let` version prints `0 1 2` while the `var` version prints `3 3 3`. The answer is not "let is block-scoped" alone — it's the **per-iteration fresh binding** that ES2015 introduced specifically to fix this pattern. If you can explain how the spec creates a new lexical environment per iteration and copies the previous iteration's value into the next, you've demonstrated mastery of the language semantics, not just lore. Backend angle: Node service workers, batch processors, and async queues where you fire `N` tasks in a loop and need each callback to see *its own* index — this is daily Node code.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+Why does `for (let i = 0; i < 3; i++) setTimeout(() => log(i))` print `0 1 2` while `for (var i...)` prints `3 3 3`?
+
+**Verification examples**
+
+| Loop                                            | Output                                    |
+|-------------------------------------------------|-------------------------------------------|
+| `for (var i = 0; i < 3; i++) setTimeout(()=>log(i))`  | `3, 3, 3` (shared `i`)                    |
+| `for (let i = 0; i < 3; i++) setTimeout(()=>log(i))`  | `0, 1, 2` (fresh `i` per iter)            |
+| `for (const x of arr)` with closure              | works correctly                           |
+| IIFE pre-ES6 fix: `(function(j){...})(i)`         | `0, 1, 2`                                  |
+| `forEach((x) => ...)`                             | always worked correctly (per-call binding) |
+
+**Constraints**
+- Spec creates fresh LE per iteration via `CreatePerIterationEnvironment` (ECMA-262 §14.7.4.4).
+- Block-scope alone is NOT enough — it's block-scope + cloned each iteration.
+- Each closure stores `[[Environment]]` pointing at its iteration's env.
+
+---
+
+## 2. Plain-English restatement
+
+For `for (let i = 0; ...)`, the spec clones the lexical environment at each iteration. So three iterations create three separate `i` bindings; each closure captures its own. For `var`, there's only one `i` in the function scope — all closures share it. By the time timers fire, the loop is done and `i = 3`.
+
+---
+
+## 3. Why this matters in interviews
+
+The canonical closures puzzle. The senior twist: explain mechanically (spec wording: "per-iteration binding") not just "block-scoped".
+
+---
+
+## 4. Mental model
+
+```
+   for (let i = 0; i < 3; i++) { body }
+   
+   Spec: CreatePerIterationEnvironment
+   
+   Env0 = new LE with { i: 0 }
+   while (cond evaluated in Env_n):
+     Env_n+1 = clone(Env_n)              ← fresh LE per iteration
+     body runs in Env_n+1
+       closures capture Env_n+1
+     step expr (i++) runs in Env_n+1
+   
+   Three iterations → three separate Envs → three separate i bindings.
+   Each closure stores [[Environment]] pointing at ITS iteration's env.
+
+   for (var i = 0; ...):
+   ONE binding in function's VE.
+   Three iterations mutate the SAME i.
+   All closures share. By timer fire, i = 3.
+
+   Pre-ES6 fix (IIFE):
+   for (var i = 0; ...; ...) (function(j){ setTimeout(()=>log(j)) })(i);
+   IIFE creates fresh function scope per iter → fresh j.
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. Is "let is block-scoped" enough explanation, or do you need more?
+> 2. What does `forEach` do that prevents the var-loop bug?
+> 3. Does `for (const x of arr)` work? Why doesn't `const` clash with iteration?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: "closures share scope"
+Correct for `var`, wrong for `let`. Incomplete.
+
+### Wrong attempt 2: "let is block-scoped"
+Half-answer. Block-scope alone wouldn't fix it (still one `i` per loop). Need per-iteration cloning.
+
+### Wrong attempt 3: assume `forEach` fix
+Works but obscures the spec mechanism. Use it in code; explain mechanism in interview.
+
+---
+
+## 7. The unlocking insight
+
+> **`for (let i; ...)` creates a FRESH lexical environment per iteration via spec's `CreatePerIterationEnvironment`. Each closure captures its iteration's env. `var` has one binding in function VE; all closures share final value.**
+
+Three properties:
+
+1. **Fresh LE per iteration** — load-bearing.
+2. **Closure captures environment** — that iteration's env.
+3. **Block-scope alone insufficient** — need cloning + block-scope.
+
+---
+
+## 8. Solution (annotated)
+
 ```js
-// The classic puzzle
-for (var i = 0; i < 3; i++) {
-  setTimeout(() => console.log(i), 0);   // 3 3 3
-}
-
-for (let i = 0; i < 3; i++) {
-  setTimeout(() => console.log(i), 0);   // 0 1 2
-}
-```
-
-### Runtime / engine behavior — the spec's per-iteration binding trick
-For `for (let i = 0; cond; step) { body }`, the spec (ECMA-262 §14.7.4.4 *CreatePerIterationEnvironment*) does roughly this:
-
-```
-let lastEnv = a new Lexical Environment with binding { i: 0 }
-while (cond evaluated in lastEnv) {
-  let thisIterEnv = a fresh Lexical Environment cloned from lastEnv
-  // body runs with thisIterEnv as the current scope
-  body
-  // before evaluating `step`, copy `i` from thisIterEnv back into a fresh nextEnv
-  let nextEnv = clone(thisIterEnv)
-  step evaluated in nextEnv
-  lastEnv = nextEnv
-}
-```
-
-So **each iteration creates a brand-new `i` binding**, initialized to the value `i` had at the end of the previous iteration. Closures created inside the body capture *that iteration's* `i`, not a shared one.
-
-For `var`, there is **one** binding in the enclosing function scope. All closures capture the same binding; by the time the timers fire, the loop has finished and `i` is `3`.
-
-### Edge cases (the traps)
-1. **`const` in `for (const x of arr)`** — works fine because `for...of` creates a new binding per iteration *and* never reassigns it.
-2. **`for (let i = 0; i < n; i++)` with `i++` after closure creation** — closure already has its iteration's `i`; subsequent `i++` won't change it.
-3. **`for-in` / `for-of` with `let`** — also per-iteration. Same fix for the `var` bug.
-4. **`for (var ...)` workaround with IIFE** — `(function(j){ setTimeout(...) })(i)` was the pre-ES6 fix. Still seen in legacy code.
-5. **`forEach((x) => ...)`** — has *always* given fresh `x` per iteration because each callback invocation creates a new function scope. The `var`-in-`for` bug never applied to `forEach`.
-6. **Babel transpilation** — when targeting ES5, Babel emits an IIFE per iteration to emulate `let`'s fresh binding. Inspect the output to convince yourself.
-7. **Performance** — per-iteration env creation has measurable overhead. V8 elides it when the body has no closures capturing the loop var. **Don't** prematurely de-`let` to `var`.
-
-## Brute force approach
-"Closures share scope, so all three timers see the final `i`." That's correct for `var` and wrong for `let`. The naive "closures share scope" line skips the fresh-binding-per-iteration step. If the interviewer asks "why does `let` work?", answering "because it's block-scoped" is **incomplete** — block-scoping alone wouldn't fix it (there's still only one `i` per loop). The fresh **per-iteration** binding is what fixes it. State that explicitly.
-
-## Optimal approach
-**Step through the spec.** For each loop iteration:
-1. Clone the previous iteration's lexical environment into a fresh one.
-2. Run the body in that fresh env. Any closure created inside the body captures *this* fresh env.
-3. Apply the `step` expression in a new clone, becoming the env for the next iteration.
-
-That's the entire mechanism. State it, then show the `0 1 2` output drops out naturally.
-
-## Solution (JavaScript)
-
-```js
-// Demonstrate: with `let`, each iteration captures its own i.
 function scheduleWithLet() {
-  for (let i = 0; i < 3; i++) {
-    setTimeout(() => console.log('let:', i), 0);
+  for (let i = 0; i < 3; i++) {                                       // step 1: fresh LE per iter
+    setTimeout(() => console.log('let:', i), 0);                       // closure captures iter's LE
   }
 }
 
-// And the broken version with `var`.
 function scheduleWithVar() {
-  for (var i = 0; i < 3; i++) {
-    setTimeout(() => console.log('var:', i), 0);
+  for (var i = 0; i < 3; i++) {                                       // step 2: shared VE.i
+    setTimeout(() => console.log('var:', i), 0);                       // all closures share
   }
 }
 
-// The pre-ES6 fix using IIFE — what Babel emits when targeting ES5.
 function scheduleWithIIFE() {
-  for (var i = 0; i < 3; i++) {
+  for (var i = 0; i < 3; i++) {                                       // step 3: pre-ES6 fix
     (function (j) {
-      setTimeout(() => console.log('iife:', j), 0);
+      setTimeout(() => console.log('iife:', j), 0);                    // fresh j per call
     })(i);
   }
 }
 
-scheduleWithLet();   // let: 0, let: 1, let: 2
-scheduleWithVar();   // var: 3, var: 3, var: 3
-scheduleWithIIFE();  // iife: 0, iife: 1, iife: 2
+scheduleWithLet();    // let: 0, let: 1, let: 2
+scheduleWithVar();    // var: 3, var: 3, var: 3
+scheduleWithIIFE();   // iife: 0, iife: 1, iife: 2
 ```
 
-## Step-by-step dry run
-
-Trace `scheduleWithLet()`:
+**Try it yourself**
 
 ```js
-// === Loop entry ===
-// Per spec: create initial LE with { i: 0 } — call it Env0.
-// LE(Env0): { i: 0 }
+// for-of and for-in also create fresh bindings
+for (const x of [1, 2, 3]) {
+  setTimeout(() => console.log(x), 0);
+}
+// Output: 1, 2, 3
 
-// --- Iteration 1 ---
-// CreatePerIterationEnvironment: clone Env0 → Env1
-// LE(Env1): { i: 0 }
-// Body runs in Env1.
-//   setTimeout( () => console.log(i) ) — the arrow closes over Env1.
-//   T1 scheduled. T1's [[Environment]] = Env1.
-// Step: i++ in Env1 mutates Env1's i to 1.
-// But before the next iteration, clone Env1 → Env2 (with i=1) for the cond check.
+// const in for-let header doesn't work (header reassigns)
+// for (const i = 0; i < 3; i++) {}   // TypeError: assign to const (i++)
 
-// --- Iteration 2 ---
-// LE(Env2): { i: 1 }
-// Body in Env2: setTimeout closes over Env2. T2 scheduled.
-// Step: i++ → Env2.i = 2. Clone Env2 → Env3.
-
-// --- Iteration 3 ---
-// LE(Env3): { i: 2 }
-// setTimeout closes over Env3. T3 scheduled.
-// Step: i++ → Env3.i = 3. Clone → Env4 (i=3). Cond fails. Exit.
-
-// === Timers fire (microtask queue empty, task queue drains) ===
-// T1 reads i from Env1 → 0   → "let: 0"
-// T2 reads i from Env2 → 1   → "let: 1"
-// T3 reads i from Env3 → 2   → "let: 2"
+// Workaround for legacy var
+for (var i = 0; i < 3; i++) {
+  const j = i;                                                         // fresh body-scope const
+  setTimeout(() => console.log(j), 0);
+}
+// Output: 0, 1, 2  (const j per iter body)
 ```
 
-Now trace `scheduleWithVar()`:
+---
 
-```js
-// === Loop entry ===
-// VE (function scope of scheduleWithVar): { i: 0 }
-// Note: only ONE binding for i, in the function scope. No per-iteration env.
+## 9. Step-by-step dry run
 
-// Iter 1: setTimeout( () => console.log(i) ) — arrow closes over VE.
-// Iter 2: same VE.
-// Iter 3: same VE.
-// Step: i goes 0 → 1 → 2 → 3. Loop exits.
+```
+scheduleWithLet():
 
-// VE now: { i: 3 }.
+Loop entry:
+  Env0 = LE { i: 0 }
 
-// Timers fire. All three read i from the SAME VE → 3 each time.
-// Output: "var: 3" × 3.
+Iter 1:
+  Env1 = clone(Env0) = { i: 0 }
+  Body in Env1:
+    setTimeout(() => log(i))    — arrow captures Env1
+    T1 scheduled. T1.[[Environment]] = Env1.
+  Step: i++ in Env1 → Env1.i = 1
+  Clone Env1 → Env2 (for next cond check)
+
+Iter 2:
+  Env2 = clone with { i: 1 }
+  Body: schedule T2 capturing Env2.
+  Step: Env2.i = 2.
+
+Iter 3:
+  Env3 = { i: 2 }
+  Schedule T3 capturing Env3.
+  Step: Env3.i = 3. Cond fails. Exit.
+
+Timers fire:
+  T1 reads i from Env1 → 0   → 'let: 0'
+  T2 reads i from Env2 → 1   → 'let: 1'
+  T3 reads i from Env3 → 2   → 'let: 2'
+
+scheduleWithVar():
+
+VE = { i: 0 }   (function scope; ONE binding)
+
+Iter 1: schedule T1 closing over VE.
+Iter 2: schedule T2 closing over VE.
+Iter 3: schedule T3 closing over VE.
+Step: i goes 0 → 1 → 2 → 3.
+
+Timers fire:
+  T1 reads VE.i → 3
+  T2 reads VE.i → 3
+  T3 reads VE.i → 3
+Output: var: 3, 3, 3.
 ```
 
-## Important takeaways
+---
 
-**Syntax to memorize**
-- `for (let i = 0; ...)` → fresh `i` per iteration. Closures-in-body capture *that iteration's* `i`.
-- `for (var i = 0; ...)` → single `i` shared across all iterations. Classic closure bug.
-- `for (const x of arr)` and `for (let x of arr)` → also per-iteration. `const` is safe here.
+## 10. Common confusion + traps
 
-**Patterns to reuse**
-- **"Spec-accurate explanation"** — instead of "let is block-scoped", say "ES2015 added CreatePerIterationEnvironment for `for (let ...)` headers specifically to make this pattern work." That phrase wins points.
-- **IIFE fix** is the pre-ES6 equivalent. Knowing both shows historical depth.
-- **`forEach`** sidesteps the bug because each callback invocation has its own arg binding.
+1. **"Block scope fixes it"** — incomplete; need per-iteration cloning.
+2. **`forEach` has the bug** — no, never did (per-call args).
+3. **`for-of` doesn't clone** — it does (per-iteration binding).
+4. **`for (const i)` header** — TypeError (i++ rebinds).
+5. **Babel transpilation cost** — Babel emits IIFE per iter for ES5 target.
+6. **V8 always clones** — elides when no closure captures.
+7. **`var` + IIFE for legacy** — was the pre-ES6 fix.
 
-**Common mistakes**
-- Saying "block scope fixes it" — incomplete. Block scope + per-iteration cloning is what fixes it.
-- Confusing `for...of` semantics with `for(let i;;)` — both work, but for different reasons (`for...of` creates a fresh binding *every iteration* including the first; the C-style `for` clones across the step expression).
-- Believing the `let` version has the same memory cost as `var` — it doesn't. V8 only optimizes away the per-iter env when no closure captures `i`.
+---
 
-**Backend relevance**
-- Firing N async tasks in a loop where each callback needs *its own* index/payload: always use `let` (or destructure into a `const` inside the body).
-- `for (const task of tasks) { await task() }` for sequential awaits — each iteration's `task` is its own binding.
+## 11. Senior follow-ups & variants
 
-## Variants
+### Variant 1 — Replace `setTimeout` with `Promise.resolve().then`
+Same fix applies; bug isn't timer-specific.
 
-1. **Replace `setTimeout` with `Promise.resolve().then`** — same fix (let vs var) applies; demonstrates the bug isn't timer-specific.
-2. **`for (let i = 0; i < 3; i++) { const j = i; ... }`** — `const j` inside the body always works regardless of header, because each iteration creates a fresh body scope. Useful when the header has to be `var` for legacy reasons.
-3. **`for-of` over an async iterable** — `for (const chunk of asyncIter)` — explain the fresh-binding semantics and why this is safe with concurrent awaits.
+### Variant 2 — Body-scope `const`
+`for (var i; ...) { const j = i; setTimeout(()=>log(j)) }` — fresh body scope per iter.
 
-## Revision notes
+### Variant 3 — `for-of` async iter
+`for (const chunk of asyncIter) { await process(chunk) }` — each iter's chunk isolated.
 
-> **let in for-loops — 60 second recap**
-> - `for (let i = 0; ...; ...)` creates a **fresh `i` per iteration** via the spec's `CreatePerIterationEnvironment`.
-> - `for (var i = 0; ...; ...)` creates **one** `i` in the function scope. All closures share it.
-> - The `let` version isn't just "block-scoped" — it's **block-scoped AND cloned each iteration**.
-> - Trace mentally as: `Env0 → clone to Env1 → run body → step in Env1 → clone Env1 → Env2 → ...`.
-> - Each closure stores `[[Environment]]` pointing at its iteration's env, so timers fire with the captured `i`.
-> - Pre-ES6 fix: IIFE — `(function(j){ ... })(i)`. Babel emits this when transpiling.
-> - `forEach`/`map`/`for-of` never had this bug — callback args are fresh per invocation.
-> - **Trap:** "block scope fixes it" is half-answer. Spec wording is "per-iteration binding".
-> - V8 elides per-iter env when the body has no closures over `i` — no premature de-`let`-ing.
-> - **Async loops:** use `for (const task of tasks) { await task() }` to keep each iteration's `task` isolated.
+### Variant 4 — `forEach` vs for-let
+Both work; `forEach` via per-call args, for-let via per-iter LE.
+
+### Variant 5 — Performance
+V8 elides per-iter env when body has no closures. Don't prematurely de-`let`.
+
+---
+
+## 12. How to think aloud
+
+> "Spec wording: `for (let i = 0; ...)` invokes `CreatePerIterationEnvironment`. Each iteration creates a FRESH lexical environment cloned from the previous. Closures created in the body capture THAT iteration's env via [[Environment]]. So three iterations → three separate `i` bindings → timers print 0, 1, 2. With `var`, one binding in function VE; all closures share; by timer fire `i = 3`. Block-scope ALONE doesn't fix it — block-scope + cloning does. Pre-ES6 fix was IIFE (creates fresh function scope per iter); Babel emits this when transpiling let to ES5. `forEach`/`map` never had the bug — callback args are fresh per invocation."
+
+---
+
+## 13. 60-second revision
+
+> - **`for (let i; ...)`** → fresh LE per iter via `CreatePerIterationEnvironment`.
+> - **`for (var i; ...)`** → ONE binding in function VE; closures share.
+> - **Block-scope ALONE insufficient** — need cloning.
+> - **Each closure** stores [[Environment]] pointing at its iter's LE.
+> - **Pre-ES6 fix:** IIFE (`(function(j){...})(i)`) — Babel emits this.
+> - **`forEach`/`for-of`** never had the bug — per-call/per-iter args.
+> - **`for (const i;)`** TypeError (i++).
+> - **Trap:** "block-scope fixes" (half-answer); `var` + closures in async loops.
+
+---
+
+**Related:** [let-vs-var-differences.md](./let-vs-var-differences.md) · [hoisting-and-scoping.md](./hoisting-and-scoping.md) · [`02-closures/loop-closure-var-let.md`](../02-closures/loop-closure-var-let.md) · [var-in-block.md](./var-in-block.md)
+
+**Concept primer:** [`concepts/hoisting.md`](../../concepts/hoisting.md), [`concepts/closures.md`](../../concepts/closures.md)

@@ -1,207 +1,233 @@
-# Difference between `let` and `var`
+# `let` vs `var` — the five differences
 
-## Source
-https://codedamn.com/news/javascript/difference-between-let-and-var-in-javascript — MDN: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/let
+> **Difficulty:** Medium   |   **Time:** ~10 min   |   **Prereqs:** [hoisting-in-javascript.md](./hoisting-in-javascript.md), [tdz-let-const.md](./tdz-let-const.md)
+>
+> **Source:** The "do you know modern JS?" gate question on every senior screen.
 
-## Why this question matters in interviews
-This is the most common "do you know modern JS?" gate question. Backend engineers who learned JS pre-ES6 (or only briefly) often answer "let is the new var" — instantly dating them. Senior screens expect you to enumerate **five distinct differences** (scope, hoisting, redeclaration, global-object attachment, loop binding) and to explain the engine-level reason for each. This question also doubles as a closure setup — interviewers often pivot from "let vs var" directly into "explain the loop-closure bug."
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
-```js
-// 1. Scope
-function f() {
-  if (true) {
-    var v = 'function-scoped';
-    let l = 'block-scoped';
-  }
-  console.log(v);   // 'function-scoped'
-  console.log(l);   // ReferenceError
-}
+Enumerate the **five differences** between `let` and `var`, with engine-level reasoning for each.
 
-// 2. Hoisting + TDZ
-console.log(a);     // undefined
-console.log(b);     // ReferenceError (TDZ)
-var a = 1;
-let b = 2;
+**Verification examples**
 
-// 3. Redeclaration
-var x = 1; var x = 2;     // OK — re-declaration allowed
-let y = 1; let y = 2;     // SyntaxError
+| Property                              | `var`                          | `let`                                |
+|----------------------------------------|--------------------------------|--------------------------------------|
+| Scope                                  | function (or global)           | block (`{...}`)                       |
+| Hoisting                               | binding + `undefined`          | binding + `<uninitialized>` (TDZ)    |
+| Read before declaration                | `undefined`                    | `ReferenceError`                     |
+| `typeof` before declaration            | `'undefined'`                  | `ReferenceError`                     |
+| Redeclaration in same scope            | allowed                        | `SyntaxError`                        |
+| Global object attachment (classic script) | yes                          | no                                   |
+| Loop binding per iteration             | one shared                     | fresh per iteration                  |
+| Lives in                               | Variable Environment           | Lexical Environment                  |
 
-// 4. Global object attachment (classic scripts)
-var g = 'global';
-let h = 'global';
-console.log(globalThis.g); // 'global'
-console.log(globalThis.h); // undefined
+**Constraints**
+- Use `const` by default; `let` when reassigning; never `var` in new code.
+- `let` redeclaration in same scope = `SyntaxError` at parse.
+- ESM top-level `var` does NOT attach to `globalThis`.
 
-// 5. Loop binding
-for (var i = 0; i < 3; i++) setTimeout(() => console.log(i), 0);
-// prints: 3, 3, 3
+---
 
-for (let j = 0; j < 3; j++) setTimeout(() => console.log(j), 0);
-// prints: 0, 1, 2
+## 2. Plain-English restatement
+
+`var` is the ES5 keyword — function-scoped, hoisted as `undefined`, allows redeclaration, leaks out of blocks. `let` (and `const`) are ES6 fixes — block-scoped, hoisted but in TDZ, forbid redeclaration, give fresh bindings per loop iteration.
+
+---
+
+## 3. Why this matters in interviews
+
+The most common "do you know modern JS?" gate. Weak answers stop at "scope is different." Strong answers enumerate FIVE differences with mechanism + an output example. Sets up closure round.
+
+---
+
+## 4. Mental model
+
+```
+   var:                                  let:
+   ┌──────────────────────────┐          ┌──────────────────────────┐
+   │ Variable Environment      │          │ Lexical Environment       │
+   │ Function-scoped           │          │ Block-scoped              │
+   │ Hoisted as undefined      │          │ Hoisted as <uninitialized>│
+   │ Read before init: undefined│          │ Read before init: TDZ error│
+   │ Redeclaration: silent      │          │ Redeclaration: SyntaxError│
+   │ globalThis (in scripts)    │          │ Never globalThis          │
+   │ Loop: one shared binding   │          │ Loop: fresh per iter      │
+   └──────────────────────────┘          └──────────────────────────┘
+
+   Engine: both registered at creation; var → undefined; let → TDZ.
+
+   for (var i = 0; i < 3; i++)           for (let j = 0; j < 3; j++)
+     ↓                                     ↓
+   one i in function's VE                  fresh j in each iter's LE
+   all closures share final value          each closure owns its j
+   prints 3, 3, 3                          prints 0, 1, 2
 ```
 
-### Runtime / engine behavior
+---
 
-| Property | `var` | `let` |
-|---|---|---|
-| **Scope** | function (or global) | block (`{...}`) |
-| **Hoisting** | binding registered, value = `undefined` | binding registered, value = `<uninitialized>` (TDZ) |
-| **Read before declaration** | `undefined` | `ReferenceError` |
-| **`typeof` before declaration** | `'undefined'` | `ReferenceError` |
-| **Redeclaration in same scope** | allowed | `SyntaxError` |
-| **Global object attachment** | yes (in classic scripts only) | never |
-| **Loop binding per iteration** | one shared binding | fresh binding per iteration |
-| **Lives in** | Variable Environment | Lexical Environment |
-| **Strict-mode behavior** | unchanged | unchanged |
+## 5. Try it yourself first
 
-The engine implements both by registering bindings during the **creation phase**, but `let` bindings stay in `<uninitialized>` until their declaration line runs (this is the TDZ). `var` bindings start at `undefined` and are immediately readable.
+> **Predict before reading on:**
+> 1. What does `for (var i = 0; i < 3; i++) setTimeout(() => log(i))` print? With `let`?
+> 2. Does `var x = 1; var x = 2` throw?
+> 3. Does `let y = 1; var y = 2` throw?
 
-### Edge cases (interview traps)
-1. **`let` redeclaration across blocks** — `let x = 1; { let x = 2; }` is fine (different blocks). `let x = 1; let x = 2;` in the same block is `SyntaxError`.
-2. **`var` + `let` collision** — `let x = 1; var x = 2;` is `SyntaxError` (mixing redeclares).
-3. **`var` in `for-in`/`for-of`** — works but the binding outlives the loop. `let` is the right choice.
-4. **Module-level `var` doesn't attach to `globalThis`** in ESM — only in classic scripts. Subtle gotcha when moving code between Node CJS and ESM.
-5. **`switch` blocks** — all `case`s share one block scope. `let` in one case is visible in others (and TDZ before its line). Wrap each case in `{}` to isolate.
-6. **`const` is `let` + immutability of binding** — same scope/hoisting/TDZ semantics; only difference is you can't reassign the binding (the value can still be a mutable object).
+---
 
-## Brute force approach
-Rusty candidate: *"`let` is block-scoped and `var` is function-scoped. That's it."* This answer scores 4/10 — it's correct but covers one out of five differences. Interviewers always follow up with "what else?" and watch you flail. Senior candidates volunteer the full table without prompting.
+## 6. Brute force — walked through
 
-## Optimal approach
-Answer in five buckets, in order of importance:
+### Wrong attempt 1: only mention scope
+"`let` is block-scoped, `var` is function-scoped." Scores 4/10. Interviewer asks "what else?" and you flail.
 
-1. **Scope** — function vs block.
-2. **Hoisting behavior** — undefined vs TDZ.
-3. **Redeclaration** — allowed vs `SyntaxError`.
-4. **Global attachment** — yes (classic script) vs no.
-5. **Loop binding** — shared vs per-iteration (drives the closure bug).
+### Wrong attempt 2: "`let` isn't hoisted"
+It IS — into TDZ.
 
-Then add: "in production code, always use `const` first, `let` if reassigning, never `var` in new code."
+### Wrong attempt 3: assume `var` redeclaration warns
+Silent — accidental shadowing slips through code review.
 
-## Solution (JavaScript)
+---
+
+## 7. The unlocking insight
+
+> **Five buckets: scope (function vs block), hoisting (undefined vs TDZ), redeclaration (yes vs no), globalThis attachment (script-only vs never), loop binding (shared vs fresh). Drive each with mechanism + output example.**
+
+Three properties:
+
+1. **VE vs LE residence** — function vs block scope.
+2. **Init at creation vs TDZ** — `undefined` vs throw.
+3. **Per-iteration fresh `let`** — closures work in loops.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
-// Demonstrate all five differences in one file
 'use strict';
 
-// === 1. Scope ===
+// 1. Scope
 function scopeDemo() {
   if (true) {
     var v = 'in-block';
     let l = 'in-block';
   }
-  console.log(v);                 // 'in-block' — leaked
-  try { console.log(l); }         // ReferenceError
+  console.log(v);                                                     // 'in-block' — leaked
+  try { console.log(l); }                                              // ReferenceError
   catch (e) { console.log('let trapped in block'); }
 }
 scopeDemo();
 
-// === 2. Hoisting / TDZ ===
+// 2. Hoisting / TDZ
 function hoistDemo() {
-  console.log('var before:', typeof a); // 'undefined' — safe
-  try { console.log(typeof b); }       // ReferenceError on TDZ
+  console.log('var before:', typeof a);                                // 'undefined' — safe
+  try { console.log(typeof b); }                                       // ReferenceError on TDZ
   catch (e) { console.log('let TDZ on typeof'); }
   var a = 1;
   let b = 2;
 }
 hoistDemo();
 
-// === 3. Redeclaration ===
+// 3. Redeclaration
 function redeclareDemo() {
   var x = 1;
-  var x = 2;                       // fine
-  console.log('var re-declared:', x);  // 2
-  // let y = 1; let y = 2;         // would SyntaxError at parse
+  var x = 2;                                                            // fine
+  console.log(x);                                                       // 2
+  // let y = 1; let y = 2;                                               // SyntaxError at parse
 }
-redeclareDemo();
 
-// === 4. Global attachment (classic-script-only behavior) ===
-// (in modules this won't attach; demo skipped here)
-
-// === 5. Loop binding ===
+// 5. Loop binding
 function loopDemo() {
   for (var i = 0; i < 3; i++) setTimeout(() => console.log('var i:', i), 0);
   for (let j = 0; j < 3; j++) setTimeout(() => console.log('let j:', j), 0);
 }
 loopDemo();
-// After current task drains:
-// var i: 3 (x3)
-// let j: 0, let j: 1, let j: 2
+// After current task:
+// var i: 3 (×3)
+// let j: 0, 1, 2
 ```
 
-## Step-by-step dry run
+---
 
-Focus on **loopDemo** — the highest-yield difference.
+## 9. Step-by-step dry run
 
-**`for (var i = 0; ...)`**
+```
+loopDemo trace:
 
-`var i` hoists to `loopDemo`'s VE. There is **one `i`** across the loop's lifetime.
+for (var i = 0; i < 3; i++):
+  var i in loopDemo's VE. ONE binding.
+  iter 0: schedule cb_A capturing VE. VE.i=0.
+  iter 1: schedule cb_B capturing same VE. VE.i=1.
+  iter 2: schedule cb_C capturing same VE. VE.i=2.
+  loop exits. VE.i=3.
 
-| Iteration | `i` value when scheduled | Callback closes over |
-|-----------|--------------------------|----------------------|
-| 0         | 0                        | the shared `i` |
-| 1         | 1                        | the shared `i` |
-| 2         | 2                        | the shared `i` |
+  Microtask drain:
+    cb_A: reads VE.i → 3
+    cb_B: reads VE.i → 3
+    cb_C: reads VE.i → 3
 
-After the loop exits, `i === 3`. When the three `setTimeout` callbacks run (after current task drains), each reads the shared `i` → `3` three times.
+for (let j = 0; j < 3; j++):
+  Each iteration creates NEW block LE.
+  iter 0: LE_0 = {j: 0}. schedule cb_D capturing LE_0.
+  iter 1: LE_1 = {j: 1}. schedule cb_E capturing LE_1.
+  iter 2: LE_2 = {j: 2}. schedule cb_F capturing LE_2.
 
-**`for (let j = 0; ...)`**
+  Microtask drain:
+    cb_D: reads LE_0.j → 0
+    cb_E: reads LE_1.j → 1
+    cb_F: reads LE_2.j → 2
+```
 
-Each iteration creates a **fresh block scope** with its own `j` binding. The spec literally describes this as "per-iteration binding."
+---
 
-| Iteration | Block LE | Callback closes over |
-|-----------|----------|----------------------|
-| 0         | `{ j: 0 }` | iter-0's `j` |
-| 1         | `{ j: 1 }` | iter-1's `j` |
-| 2         | `{ j: 2 }` | iter-2's `j` |
+## 10. Common confusion + traps
 
-Each callback reads its own captured `j` → `0, 1, 2`.
+1. **Listing only scope** — 4/5 differences missing.
+2. **"let isn't hoisted"** — into TDZ.
+3. **`var` redeclaration silent** — shadowing slips review.
+4. **ESM top-level `var` attaches to globalThis** — no.
+5. **`switch` cases share scope** — `let` in one is TDZ in earlier.
+6. **`const` immutable values** — only the binding; objects still mutable.
+7. **`typeof` safe on `let` TDZ** — throws.
 
-This single example is the cleanest illustration of why scope + hoisting interaction matters in real code.
+---
 
-## Important takeaways
+## 11. Senior follow-ups & variants
 
-**Syntax to memorize**
-- `var` → function-scoped, hoisted as `undefined`, redeclarable, attaches to `globalThis` in scripts.
-- `let` → block-scoped, hoisted but TDZ, non-redeclarable, never attaches to `globalThis`, fresh binding per loop iteration.
-- `const` → like `let` but no reassignment (object contents still mutable).
+### Variant 1 — "Mixed `var`/`let` in block"
+`var x = 1; { let x = 2; var x = 3; }` — `SyntaxError` (var x redeclares let x).
 
-**Patterns to reuse**
-- "Use `const` by default; `let` when reassigning; never `var`" is the modern style guide.
-- When porting old `var` code, watch for: leaked block scope, loop-closure bugs, and `globalThis` attachments.
-- For loops with async callbacks, **always** use `let`.
+### Variant 2 — `switch` without braces
+case A `let v`; case B reads `v` before line → TDZ.
 
-**Common mistakes**
-- Listing only the scope difference and missing the other four.
-- Saying "let isn't hoisted" — it is, just in TDZ.
-- Forgetting that `var` redeclaration is silent, so accidental shadowing slips through code review.
-- Assuming module-top `var` attaches to `globalThis` (it doesn't in ESM).
+### Variant 3 — `const` mutability gotcha
+`const arr = []; arr.push(1)` works; `arr = [1]` throws TypeError. Binding const, value mutable.
 
-**Related questions**
-- TDZ deep dive
-- Loop closure bug
-- `var` hoisting output prediction
-- Why `const obj = {}; obj.x = 1` is legal
+### Variant 4 — `for-in` / `for-of` with `var`
+Works but binding outlives loop; `let` is the right choice.
 
-## Variants
+### Variant 5 — Module vs script `var` attachment
+Script: top-level `var` → `globalThis.x`. Module: never.
 
-1. **"Predict the output" with mixed `var`/`let`** — `var x = 1; { let x = 2; var x = 3; }` → `SyntaxError`: `var x` inside a block tries to redeclare the `let x` in the same scope (the engine forbids the mix). Tests parser-vs-runtime distinction.
+---
 
-2. **`let` in `switch` without braces** — case A declares `let v`, case B reads `v` before its declaration → TDZ error if execution falls through B first. Fix with `case 'A': { let v = ...; break; }`.
+## 12. How to think aloud
 
-3. **`const` mutability gotcha** — `const arr = []; arr.push(1); console.log(arr);` works (`[1]`). `const arr = []; arr = [1];` throws `TypeError: Assignment to constant variable`. The binding is const, not the value.
+> "Five differences. (1) Scope: `var` function-scoped, `let` block-scoped. (2) Hoisting: `var` initializes to `undefined` at creation, `let` is `<uninitialized>` in TDZ. (3) Redeclaration: `var` silent, `let` SyntaxError at parse. (4) globalThis attachment: `var` in classic scripts attaches, `let` never; ESM top-level `var` doesn't attach either. (5) Loop binding: `for (var i)` shares one i in function's VE → loop-closure bug (3,3,3); `for (let j)` creates fresh LE per iteration (0,1,2). Engine: both registered at creation phase but `let` stays uninitialized until declaration line. Modern style: const by default, let when reassigning, never var. Trap: 'let isn't hoisted'; typeof safe on TDZ; mixed var/let redeclares throw."
 
-## Revision notes
+---
 
-> **let vs var — 60 second recap**
-> - Five differences: **scope** (function vs block), **hoisting** (undefined vs TDZ), **redeclaration** (yes vs no), **globalThis attachment** (yes-in-scripts vs no), **loop binding** (shared vs per-iteration).
-> - `let` and `const` ARE hoisted — into TDZ.
-> - `var` redeclaration is silent; `let` redeclaration is `SyntaxError`.
-> - `for (var i)` → one shared `i`; closures see final value. `for (let j)` → fresh `j` per iteration; closures see iteration value.
-> - `const` = `let` + no rebinding (values still mutable).
-> - Style rule: `const` default, `let` when reassigning, never `var`.
-> - **Trap:** `typeof` on TDZ `let` throws — only safe for genuinely undeclared identifiers.
+## 13. 60-second revision
+
+> - **5 differences:** scope, hoisting, redeclaration, globalThis attachment, loop binding.
+> - **`var`:** function-scoped, `undefined` at creation, redeclarable, attaches to globalThis (scripts), shared loop binding.
+> - **`let`:** block-scoped, TDZ at creation, non-redeclarable, never globalThis, fresh per loop iteration.
+> - **`const`:** like `let` + no rebinding (values still mutable).
+> - **Style:** `const` default, `let` when reassigning, never `var`.
+> - **Trap:** "let isn't hoisted"; typeof safe; var redeclaration silent; ESM var-globalThis assumption.
+
+---
+
+**Related:** [hoisting-in-javascript.md](./hoisting-in-javascript.md) · [tdz-let-const.md](./tdz-let-const.md) · [let-in-for-loop-binding.md](./let-in-for-loop-binding.md) · [var-hoisting-output.md](./var-hoisting-output.md) · [`02-closures/loop-closure-var-let.md`](../02-closures/loop-closure-var-let.md)
+
+**Concept primer:** [`concepts/hoisting.md`](../../concepts/hoisting.md)

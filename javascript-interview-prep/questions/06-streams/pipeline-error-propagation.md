@@ -1,179 +1,273 @@
-# `stream.pipeline` — proper error + cleanup semantics
+# `stream.pipeline` — proper error + cleanup
 
-## Source
-- Node.js docs: https://nodejs.org/api/stream.html#streampipelinesource-transforms-destination-callback
-- Node.js docs (promises): https://nodejs.org/api/stream.html#streampipelinepromisifiedsource-destination-options
-- Standard senior Node.js screening question — appears at any company that ships a file-processing pipeline (data ingestion, ETL, file upload services).
-- Background: `pipeline()` was added in Node 10 specifically because `.pipe()` chains leak descriptors on error.
+> **Difficulty:** Senior   |   **Time:** ~10 min   |   **Prereqs:** [stream-pipeline-lab.md](./stream-pipeline-lab.md), [stream-pipeline-error-handling.md](./stream-pipeline-error-handling.md)
+>
+> **Source:** Node 10+ added `stream.pipeline` to fix `.pipe()` chain fd leaks. Senior Node screening.
 
-## Why this question matters in interviews
-This question separates engineers who copy-paste `.pipe()` chains from those who've actually shipped a Node server that didn't leak file descriptors over a weekend. The classic `readStream.pipe(transform).pipe(writeStream)` pattern is **broken on error**: a failure mid-chain doesn't destroy upstream sources, so file handles and sockets stay open until GC, which can be never under load. `pipeline()` fixes this by destroying every stream on first error and invoking your callback exactly once. Senior interviewers want to hear: "I don't use raw `.pipe()` chains anymore; I use `pipeline()` or `stream/promises`'s `pipeline`." Get this wrong and they assume your services have descriptor leaks.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+Use `stream.pipeline` (or `stream/promises#pipeline`) to compose streams with proper error propagation and cleanup.
+
+**Verification examples**
+
 ```js
-// callback form
-const { pipeline } = require('stream');
-pipeline(
-  fs.createReadStream('input.txt'),
-  zlib.createGzip(),
-  fs.createWriteStream('input.txt.gz'),
-  (err) => {
-    if (err) console.error('pipeline failed:', err);
-    else console.log('pipeline succeeded');
-  }
-);
+// Callback form
+const { pipeline } = require('node:stream');
+pipeline(src, gzip, dst, (err) => {
+  if (err) console.error('failed:', err);
+  else console.log('done');
+});
 
-// promise form (preferred)
-const { pipeline } = require('stream/promises');
-await pipeline(
-  fs.createReadStream('input.txt'),
-  zlib.createGzip(),
-  fs.createWriteStream('input.txt.gz')
-);
+// Promise form (preferred)
+const { pipeline } = require('node:stream/promises');
+await pipeline(src, gzip, dst);
 ```
 
-### Runtime / engine behavior
-- `pipeline(s1, s2, ..., sN, cb?)` wires each pair with the equivalent of `.pipe()` but also installs an `'error'` listener on every stream.
-- **First error wins.** As soon as any stream emits `'error'`, pipeline calls `destroy(err)` on every stream in the chain (including the ones that haven't errored yet) and fires the callback **once**.
-- All other errors after the first are swallowed (or, in newer Node versions, surfaced via `'unhandledError'`). This is by design — you only want one callback invocation.
-- `destroy(err)` on a stream emits `'close'`, releases resources (file descriptor, socket), and prevents further data flow. This is the part `.pipe()` does NOT do for upstream streams on a downstream error.
-- The promise form returns a `Promise<void>` that resolves on success and rejects on the first error — same semantics, modern syntax.
-- Backpressure: pipeline respects backpressure between adjacent pairs (each is internally piped). End-to-end backpressure works.
-- Pipeline supports async iterables, generators, async generators, and Readable/Writable streams as members since Node 12+ — extremely composable.
+**Constraints**
+- `pipe()` chains LEAK file descriptors on error.
+- `pipeline` listens for errors on every stream + destroys all on first error.
+- Callback invoked exactly once.
+- Promise form supports `await` + AbortSignal.
 
-### Edge cases (interview traps)
-1. **Why `.pipe()` leaks.** `a.pipe(b).pipe(c)`. If `c` errors, Node closes `c`, but `a` keeps reading and `a.pipe(b)` keeps writing to `b`. The `'unpipe'` event isn't enough; `a` is never destroyed. The file descriptor for `a` lives until GC.
-2. **Pipeline still requires you to handle the error.** It doesn't *suppress* errors, it just consolidates them into one callback. Forgetting `if (err) ...` → silent failure.
-3. **Callback is called exactly once, regardless of how many streams error.** Don't write code that assumes a callback per stream.
-4. **`process.on('uncaughtException')` doesn't fire** for stream errors handled by pipeline — pipeline catches them. New devs think their error logging is working when it isn't because they only log in `uncaughtException`.
-5. **Async generators in the middle.** Pipeline accepts `async function*` as a stage since Node 12.10+. Errors thrown inside the generator propagate just like stream errors. Very useful for ad-hoc transforms.
-6. **`AbortSignal` support.** `pipeline(s1, s2, dest, { signal })` aborts the whole chain when the signal fires. Use this for request-cancellation in HTTP servers.
-7. **`pipeline()` doesn't return the streams.** If you need a handle on, say, the gzip stream for stats, capture it before passing it in.
-8. **Errors before pipeline starts.** If a stream is already destroyed when passed in, pipeline calls cb synchronously with the error. Don't assume async.
+---
 
-## Brute force approach
-The naive answer is `a.pipe(b).pipe(c); c.on('error', cb)`. Wrong on multiple counts:
-1. Only `c`'s error reaches your handler. Errors on `a` or `b` will crash the process via `uncaughtException`.
-2. If `c` errors, `a` and `b` are not destroyed — descriptor leak.
-3. You'd need to install `'error'` on every stream and manually destroy the others. That code is ~40 lines and always has bugs.
+## 2. Plain-English restatement
 
-Some candidates "fix" this with `.on('error', err => { a.destroy(); b.destroy(); cb(err); })` for each stream. It works for 3 streams but doesn't generalize, you'll double-call cb, and you'll forget one stream. **`pipeline()` is the right answer.**
+`pipeline()` wires `pipe` between consecutive streams, listens for errors on every stream, destroys ALL on the first error, and invokes callback (or rejects promise) exactly once. `pipe()` chains don't do any of this — they leak fds on failure.
 
-## Optimal approach
-Use `stream.pipeline` (callback form) or `stream/promises`.`pipeline` (Promise form). One call, automatic error propagation, automatic destruction, automatic cleanup. You write the failure handler once, at the call site, instead of N error handlers across N streams.
+---
 
-## Solution (JavaScript)
+## 3. Why this matters in interviews
+
+THE difference between "shipped streams" and "shipped streams that didn't leak fds over a weekend." Top-tier senior signal.
+
+---
+
+## 4. Mental model
+
+```
+   pipeline(s1, s2, ..., sN, cb?):
+     For each pair: pipe (s_i, s_{i+1}).
+     For each stream: listen 'error'.
+     On first error:
+       1. Call destroy(err) on ALL streams.
+       2. Invoke cb(err) ONCE.
+       3. Suppress further errors.
+     On natural end:
+       cb() — no error.
+   
+   Two forms:
+   - Callback: pipeline(s1, ..., cb).
+   - Promise: const { pipeline } = require('stream/promises'); await pipeline(...).
+   
+   AbortSignal (Node 16+):
+     await pipeline(s1, ..., { signal });
+     ac.abort() → destroy all with AbortError.
+
+   vs .pipe() chains:
+     src.pipe(t).pipe(dst);
+     dst.on('error', handler);   ← only handles dst
+     src and t NOT destroyed → fd leak.
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. Why does `src.pipe(t).pipe(dst)` leak fds on error?
+> 2. How many times can `pipeline`'s callback fire?
+> 3. What does AbortSignal do to a running pipeline?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: `.pipe()` chain
+Leaks fds when error mid-chain.
+
+### Wrong attempt 2: `.on('error')` on each stream manually
+Easy to miss one; double-listener bugs.
+
+### Wrong attempt 3: ignore error event
+Uncaught 'error' crashes process.
+
+---
+
+## 7. The unlocking insight
+
+> **`pipeline()` listens on all + destroys all on first error + callback once. Promise form for async/await. AbortSignal for user cancellation. Replace `.pipe()` chains.**
+
+Three properties:
+
+1. **Listen + destroy all** on error.
+2. **Callback fires once** — first error or success.
+3. **Promise form + AbortSignal** for modern code.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
-const fs = require('fs');
-const zlib = require('zlib');
-const { pipeline } = require('stream/promises');
-const { Transform } = require('stream');
+const fs = require('node:fs');
+const zlib = require('node:zlib');
+const { pipeline } = require('node:stream/promises');
 
-/**
- * Gzip a file with a "no secrets" filter that throws on a banned token.
- * Demonstrates pipeline's cleanup on Transform error.
- */
-async function safeGzip(input, output) {
-  const redactor = new Transform({
-    transform(chunk, enc, cb) {
-      if (chunk.includes('SECRET')) {
-        // throwing here triggers pipeline cleanup
-        return cb(new Error('Refusing to encode chunk containing SECRET'));
-      }
-      cb(null, chunk);
-    },
-  });
+async function gzipFile(src, dst) {
+  await pipeline(                                                        // step 1: composed stages
+    fs.createReadStream(src),
+    zlib.createGzip(),
+    fs.createWriteStream(dst),
+  );
+}
 
+// With AbortSignal
+async function gzipWithTimeout(src, dst, ms) {
+  const ac = new AbortController();
+  const t = setTimeout(() => ac.abort(), ms);
   try {
-    await pipeline(
-      fs.createReadStream(input),
-      redactor,
+    await pipeline(                                                      // step 2: signal
+      fs.createReadStream(src),
       zlib.createGzip(),
-      fs.createWriteStream(output)
+      fs.createWriteStream(dst),
+      { signal: ac.signal },
     );
-    console.log('gzipped successfully');
-  } catch (err) {
-    // pipeline has already destroyed every stream and unlinked all FDs.
-    // Just decide policy: log, alert, cleanup partial output.
-    console.error('pipeline failed:', err.message);
-    await fs.promises.unlink(output).catch(() => {}); // remove partial .gz
-    throw err;
+  } finally {
+    clearTimeout(t);
   }
 }
 
-safeGzip('input.txt', 'input.txt.gz').catch(() => process.exitCode = 1);
+// Callback form (legacy)
+const { pipeline: pipelineCb } = require('node:stream');
+pipelineCb(src, gzip, dst, (err) => {
+  if (err) console.error('failed:', err);
+  else console.log('done');
+});
 ```
 
-For comparison — the broken `.pipe()` version:
+**Try it yourself**
 
 ```js
-// DO NOT DO THIS — leaks file descriptors on error
-const r = fs.createReadStream('input.txt');
-const t = zlib.createGzip();
-const w = fs.createWriteStream('input.txt.gz');
-r.pipe(t).pipe(w);
-w.on('error', (err) => console.error(err)); // misses r and t errors entirely
+// Pipe vs pipeline comparison
+// BAD: pipe chain
+src.pipe(zlib.createGzip()).pipe(dst);
+dst.on('error', (e) => console.error(e));   // catches dst only
+// If gzip errors → src and dst stay open → fd leak.
+
+// GOOD: pipeline
+await pipeline(src, zlib.createGzip(), dst);
+// All errors caught; all streams destroyed; promise resolves once.
+
+// Async iterable as source
+const { Readable } = require('node:stream');
+await pipeline(
+  Readable.from(asyncGenerator()),
+  transformStream,
+  dst,
+);
+
+// Async function as transform stage
+await pipeline(
+  src,
+  async function* (source) {
+    for await (const chunk of source) yield chunk.toString().toUpperCase();
+  },
+  dst,
+);
 ```
 
-## Step-by-step dry run
+---
 
-Input: `input.txt` contains 1 MB of text. At offset 500 KB, the chunk includes the word `"SECRET"`. The redactor will throw.
+## 9. Step-by-step dry run
 
-- `pipeline()` starts the chain. `r` begins reading 64 KB chunks.
-- Chunks 1-7 flow through `r → redactor → gzip → w`. Each is gzipped and written.
-- Chunk 8 contains `"SECRET"`. `redactor._transform` calls `cb(new Error('Refusing...'))`.
-- Stream emits `'error'`. Pipeline catches it.
-- Pipeline calls `r.destroy(err)` — `r`'s file descriptor for `input.txt` is closed.
-- Pipeline calls `redactor.destroy(err)`.
-- Pipeline calls `gzip.destroy(err)` — releases the zlib state.
-- Pipeline calls `w.destroy(err)` — closes the file descriptor for `input.txt.gz`. (The 7 chunks already written remain in `input.txt.gz` — it's a half-gzipped file. That's why we `unlink` it in the catch.)
-- Pipeline rejects its returned Promise with the error.
-- Our `catch` runs: unlinks the partial output, logs, rethrows.
+```
+await pipeline(src, gzip, dst):
 
-Net: zero leaked file descriptors. With `.pipe()`, `r` would have stayed open until GC because `r` was never notified that `redactor` errored.
+Setup:
+  pipe src → gzip, gzip → dst.
+  Listen 'error' on src, gzip, dst.
 
-## Important takeaways
+Normal path:
+  src reads → gzip compresses → dst writes.
+  Each step's backpressure respected.
+  src emits 'end' → gzip ends → dst ends → 'finish'.
+  pipeline resolves.
 
-**Syntax to memorize**
-- `const { pipeline } = require('stream/promises'); await pipeline(s1, s2, ..., sN);`
-- The order is `source, ...transforms, destination`. Last arg in callback form is the cb.
-- Pass `{ signal }` as final options arg to support abort.
+Error scenario: gzip emits 'error' (invalid input).
+  pipeline's handler fires:
+    1. src.destroy(err) — close fd.
+    2. gzip already destroyed (it emitted error).
+    3. dst.destroy(err) — close fd.
+  Promise rejects with err.
+  Subsequent errors on src/dst SUPPRESSED (already handled).
 
-**Patterns to reuse**
-- Pipeline + async generator in the middle is the modern "shell pipe" in Node: `pipeline(readStream, async function* (src) { for await (const c of src) yield transform(c); }, writeStream)`. Composable, cancellable, leak-free.
-- Wrap pipeline in a function that does cleanup on failure (delete partial output, release locks). That's the "transactional stream" pattern.
+vs raw .pipe() chain:
+  gzip emits 'error':
+    src and dst NOT notified.
+    src keeps reading → fd leak.
+    dst keeps waiting → fd leak.
+    'error' on gzip with no listener → uncaughtException → crash.
 
-**Common mistakes**
-- Using `.pipe()` chains in production code. The leak is real, just slow enough that you discover it during incidents.
-- Installing `'error'` only on the last stream. Misses upstream errors → `uncaughtException`.
-- Calling pipeline twice with the same writable stream → second call errors because the writable is already ended.
-- Forgetting that on success the destination stream is **closed** by pipeline. Can't reuse it.
-- Confusing `pipeline()` with `pipe()` in code review — the one-character difference hides a major semantic gap.
+AbortSignal:
+  ac.abort() during read:
+    pipeline destroys all with AbortError.
+    Promise rejects with err.name === 'AbortError'.
+```
 
-**Related questions**
-- `backpressure-demo` — pipeline respects backpressure end-to-end automatically.
-- `transform-line-parser` — natural middle stage in a pipeline.
-- `callback-API-to-async-iterator` — async iterables compose with pipeline directly.
+---
 
-## Variants
+## 10. Common confusion + traps
 
-1. **With AbortController** — "Cancel the pipeline if the user disconnects from the HTTP request." `pipeline(req, parser, processor, { signal: req.signal })`. Tests knowledge of cancellation propagation.
+1. **`.pipe()` for production** — leaks fds.
+2. **Forget `await pipeline`** — floating promise; errors silently swallowed.
+3. **Callback form fires twice** — never; designed to fire once.
+4. **Multiple `pipeline` on same stream** — undefined.
+5. **`autoDestroy: false`** — manual cleanup required.
+6. **Mix `pipe` and `pipeline`** — confusing; pick one.
+7. **Async transform errors** — generator throws → pipeline rejects.
 
-2. **Multi-tee** — "What if I need to write the same data to two destinations?" Pipeline is linear; you'd `pipeline(source, transformThatDuplicates)` and have the duplicator push to two writers, or use a `PassThrough` + manual pipes. Discuss trade-offs.
+---
 
-3. **Reimplement a minimal pipeline** — "Don't use Node's pipeline. Write `myPipeline(...streams, cb)` yourself." Tests deeper understanding: iterate adjacent pairs, attach `'error'` to all, on first error call `destroy(err)` on all and cb-once. ~20 lines, classic senior whiteboard.
+## 11. Senior follow-ups & variants
 
-## Revision notes
+### Variant 1 — Async iterable / generator stages
+`pipeline(asyncGenerator, async function*(src) { ... }, dst)`.
 
-> **pipeline-error-propagation — 60 second recap**
-> - `stream.pipeline(s1, ..., sN, cb)` — or `await require('stream/promises').pipeline(...)`.
-> - On first error: destroys **every** stream, calls cb **once** with the error. Cleanup is automatic.
-> - `.pipe()` chains DO NOT do this — they leak file descriptors / sockets when downstream errors.
-> - Always prefer `pipeline()` over `.pipe()` in production.
-> - Promise form is the modern syntax — composes with `try/catch` and `await`.
-> - Supports async generators as stages; supports `{ signal }` for cancellation.
-> - **Trap:** partial output files survive failure — clean them up in `catch`.
-> - **Trap:** `.pipe()` + `'error'` on last stream silently misses upstream errors.
+### Variant 2 — `stream.finished`
+Single stream cleanup; not for pipeline composition.
+
+### Variant 3 — AbortController
+User cancellation via `{ signal }`.
+
+### Variant 4 — Web Streams equivalent
+`readable.pipeThrough(t).pipeTo(writable)` — same idea.
+
+### Variant 5 — Custom error transformation
+Wrap pipeline call to translate error types.
+
+---
+
+## 12. How to think aloud
+
+> "`pipeline()` is the only correct way to compose streams in production. It wires `pipe` between consecutive pairs, attaches `'error'` listener to every stream, on first error calls `destroy(err)` on all streams (closing fds), and invokes callback (or rejects promise) exactly once. `.pipe()` chains LEAK fds on error because `pipe` only forwards `end`, not `error` — a failure mid-chain leaves upstream readers and downstream writers open. Promise form (`stream/promises#pipeline`) for `async/await`. AbortSignal (Node 16+) via `{ signal }` option — `ac.abort()` destroys all with `AbortError`. Modern code can put `Readable.from(asyncGenerator)` as a source or use `async function*(source) { for await ... yield }` as a transform stage. `stream.finished(stream)` is the single-stream version (await end/error/close). Trap: `.pipe()` for production (fd leak); forgetting `await` (floating promise); manual `.on('error')` on each (miss one and crash); mixing pipe and pipeline."
+
+---
+
+## 13. 60-second revision
+
+> - **`pipeline()` correct;** `.pipe()` chains leak fds.
+> - **Listens 'error' on all** + destroys all on first.
+> - **Callback fires once** — error or success.
+> - **Promise form for async/await:** `stream/promises#pipeline`.
+> - **`{ signal }`** for AbortSignal.
+> - **Async iterables/generators** as stages.
+> - **`stream.finished`** for single stream.
+> - **Trap:** `.pipe()` prod; forget await; mix pipe/pipeline.
+
+---
+
+**Related:** [stream-pipeline-lab.md](./stream-pipeline-lab.md) · [stream-pipeline-error-handling.md](./stream-pipeline-error-handling.md) · [writable-stream-implementation.md](./writable-stream-implementation.md) · [readable-stream-push.md](./readable-stream-push.md)
+
+**Concept primer:** [`concepts/streams.md`](../../concepts/streams.md)

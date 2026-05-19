@@ -1,89 +1,141 @@
-# Implement `curry(fn)`
+# Implement `curry(fn)` — accumulate args until arity is met
 
-## Source
-- Canonical machine-coding interview problem (codedamn "Curry Function Implementation", BFE.dev, Frontend Masters).
-- codedamn reference: https://codedamn.com/problem/vqf9CjnUNextjlV5yQ4NP
+> **Difficulty:** Medium   |   **Time:** ~20 min   |   **Prereqs:** [`concepts/closures.md`](../../concepts/closures.md), [`02-closures/partial-application.md`](../02-closures/partial-application.md)
+>
+> **Source:** Lodash `_.curry`, Ramda `R.curry`, [codedamn Curry](https://codedamn.com/problem/vqf9CjnUNextjlV5yQ4NP). Common at FE/full-stack rounds.
 
-## Why this question matters in interviews
-Curry is the canonical "do you understand higher-order functions, closures, and `Function.length`" question, packaged in a ten-line implementation. It looks trivial until the interviewer asks for **placeholder support** or **infinite curry** (`f(1)(2)(3)...()` triggers invocation). The implementation tests three things: (1) reading `fn.length` to know the target arity, (2) accumulating args across nested calls via closure, (3) deciding **when to invoke** (when accumulated args ≥ arity). Backend engineers see curry less than frontend (where Ramda / lodash/fp lean on it), but it shows up in middleware factories (`logger(level)(message)`), config builders, and partial-application patterns. The senior bonus is showing the placeholder-aware version (`_`), which is what real libraries ship.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+**Signature**
+```ts
+function curry<F extends (...args: any[]) => any>(fn: F, arity?: number): (...args: any[]) => any;
+```
+
+**Input / Output examples**
+
+| Setup                                  | Behaviour                                              |
+|----------------------------------------|---------------------------------------------------------|
+| `csum = curry((a,b,c) => a+b+c)`       | `fn.length === 3`                                       |
+| `csum(1, 2, 3)`                        | `6` — full arity                                        |
+| `csum(1)(2)(3)`                        | `6` — one at a time                                     |
+| `csum(1, 2)(3)`                        | `6` — partial then complete                             |
+| `csum(1)(2, 3)`                        | `6` — partial mixed                                     |
+| `csum(1)(2)`                           | still a function (incomplete)                           |
+| `const add5 = csum(5); add5(1, 2)`     | `8` — partial is reusable, no contamination             |
+| Variadic fn `(...args) => sum(args)`   | `fn.length === 0` — naive curry fires immediately       |
+
+**Constraints**
+- Accumulate args across closure boundaries.
+- Fire when `args.length >= fn.length`.
+- Support partial applications that are independent (no shared mutable state).
+- Allow explicit arity override (for variadic / default-param fns).
+
+---
+
+## 2. Plain-English restatement
+
+`curry(fn)` returns a function that you can call piecemeal — with one arg at a time, or several at a time. It collects args until it has enough (matching the original `fn`'s declared arity), then invokes `fn`. Used in middleware factories (`logger(level)(scope)(msg)`), Ramda/lodash-fp pipelines, and partial-application patterns.
+
+---
+
+## 3. Why this matters in interviews
+
+Curry is the canonical "do you understand higher-order functions, closures, and `Function.length`" question — packaged in a 10-line implementation. Senior bonus: **placeholder support** (`_`) or **infinite curry**. Tests three things: (1) reading `fn.length` to know target arity, (2) accumulating args across nested calls via closure, (3) deciding **when to invoke** (when accumulated args ≥ arity).
+
+---
+
+## 4. Mental model
+
+A **piggy bank of args**: each call drops in more args; once it hits the threshold (`fn.length`), the bank breaks and runs `fn`.
+
+```
+   csum = curry((a,b,c) => a+b+c)    arity = fn.length = 3
+
+   csum(1)        accumulated=[1]   length=1 < 3  → return wrapper
+        │
+        ▼
+   csum(1)(2)     accumulated=[1,2] length=2 < 3  → return wrapper
+                  ┃ each call builds a NEW args array — siblings independent
+        │
+        ▼
+   csum(1)(2)(3)  accumulated=[1,2,3] length=3 ≥ 3 → fn.apply(this, [1,2,3]) = 6
+```
+
+**Independence of branches:**
+```
+   const add5 = csum(5)             accumulated=[5]
+   add5(1, 2)   → curried([5,1,2])  → 8
+   add5(10, 20) → curried([5,10,20]) → 35
+   ↑ same `add5`, fresh args array each call — no contamination
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. What is `((a, b = 0, c) => a+b+c).length`? Why does it matter for curry?
+> 2. If `csum = curry(sum)`, will `const add5 = csum(5); add5(1); add5(2)` give `6` and `7`?
+> 3. What happens if you call `csum(1, 2, 3, 4)` — does the extra arg break anything?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: fixed arities
+Write `curry1`, `curry2`, `curry3` separately. Embarrassing. Skip.
+
+### Wrong attempt 2: mutate shared args
 ```js
-const sum = (a, b, c) => a + b + c;
-const csum = curry(sum);
-
-csum(1, 2, 3);   // 6
-csum(1)(2, 3);   // 6
-csum(1)(2)(3);   // 6
-csum(1, 2)(3);   // 6
-
 function curry(fn) {
-  return function curried(...args) {
+  const args = [];                        // BUG: shared across all branches
+  return function curried(...next) {
+    args.push(...next);
     if (args.length >= fn.length) return fn.apply(this, args);
-    return (...next) => curried.apply(this, [...args, ...next]);
+    return curried;
   };
 }
 ```
+`add5 = csum(5)` writes `[5]` into the shared `args`. Calling `add5(1, 2)` appends → `[5, 1, 2]`. But calling `add5(10, 20)` again → `[5, 1, 2, 10, 20]`. Sibling partials contaminate each other. Always fresh array.
 
-### Runtime / engine behavior
-- `fn.length` returns the count of **declared formal parameters before the first default or rest**. So `function f(a, b, c) {}` has `length === 3`. `function f(a, b = 1, c) {}` has `length === 1`. `function f(...args) {}` has `length === 0`.
-- This is the trap: if `fn` uses defaults or rest, `curry(fn)` won't fire at the expected arity. Document it.
-- Each curried call returns a **new function** that closes over the accumulated `args`. No mutation; each branch of the curry tree is independent.
-- `apply(this, [...args, ...next])` preserves `this` for method-style use, though curry is usually applied to pure functions.
+### Wrong attempt 3: blindly trust `fn.length`
+For `(...args) => sum(args)`, `fn.length === 0`. Curry fires on the first call with no accumulated args — useless. Accept an explicit `arity` parameter.
 
-### Edge cases (these are the interview traps)
-1. **Variadic functions** (`...args`) → `fn.length === 0`, so the curry fires on the first call with zero args. Useless. Require the user to pass arity explicitly: `curry(fn, arity)`.
-2. **Default parameters** drop `fn.length` to the count before the first default. `curry((a, b = 0) => a + b).length` is `1`, so `csum(5)` would invoke immediately, ignoring `b`. Same fix: explicit arity.
-3. **Placeholder support** (`_`) — Lodash and Ramda allow `curry(fn)(_, 2)(1, 3)` to skip an argument slot. Requires storing the placeholder positions and reconciling on each call. Show as a variant.
-4. **Calling with more args than arity** — `csum(1, 2, 3, 4)` — extras are passed through (ignored by `fn` if it doesn't use them). Don't error.
-5. **Re-using a partially-applied curry** — `const add1 = csum(1)`. `add1(2, 3)` and `add1(5, 10)` should both work and not contaminate each other. The implementation above is correct because `args` is fresh per branch.
-6. **`this` binding** — preserve via `.apply(this, ...)`. Curry is usually used on pure functions, but interviewers sometimes test method-style use.
-7. **Zero-arity functions** — `curry(() => 42)` has `fn.length === 0`, so the first call (with no args) returns `42` immediately. Handle gracefully.
-8. **Infinite curry** — variant where `f()()()` keeps going until you call `.value()` or pass no args. Different problem; mention as a variant.
+---
 
-## Brute force approach
-Write three separate functions: `curry1`, `curry2`, `curry3` for fixed arities. Embarrassing. Skip.
+## 7. The unlocking insight
 
-## Optimal approach
-A self-recursive curried function that accumulates args via closure and checks against `fn.length`. Eight-line implementation. The whole problem fits on one screen.
+> **A self-recursive curried function that accumulates args via closure. On each call, if `args.length >= fn.length`, invoke `fn`; else return a new function closing over a FRESH `[...args, ...next]` array.**
 
-## Solution (JavaScript)
+Three properties:
+
+1. **`fn.length`** = declared arity (defaults/rest break it → allow override).
+2. **Fresh array per branch** — `[...args, ...next]` (not `args.push`) so partials are independent.
+3. **`apply(this, ...)`** for method-style use.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
-/**
- * Curries `fn`. The returned function takes any number of args at a time;
- * it fires the underlying fn when accumulated args >= fn.length.
- * @param {Function} fn
- * @param {number} [arity=fn.length]  override for variadic / default-param fns
- * @returns {Function}
- */
-function curry(fn, arity = fn.length) {
+function curry(fn, arity = fn.length) {                        // step 1: arity override hook
   return function curried(...args) {
-    if (args.length >= arity) {
+    if (args.length >= arity) {                                // step 2: fire when full
       return fn.apply(this, args);
     }
-    return function (...next) {
-      return curried.apply(this, [...args, ...next]);
+    return function (...next) {                                 // step 3: return wrapper
+      return curried.apply(this, [...args, ...next]);          // step 4: fresh args array
     };
   };
 }
-```
 
-With placeholder support (Lodash-style):
-
-```js
+// Placeholder-aware curry (Lodash style)
 const _ = Symbol.for('curry.placeholder');
 
 function curryWithPlaceholder(fn, arity = fn.length) {
   return function curried(...args) {
-    // Fill placeholders left-to-right
-    const filled = [];
-    let i = 0, j = 0;
-    while (i < args.length || j < filled.length) {
-      // (simplified — real impl walks both lists)
-    }
     const concrete = args.filter((a) => a !== _);
     const hasPlaceholder = args.some((a) => a === _);
 
@@ -92,7 +144,6 @@ function curryWithPlaceholder(fn, arity = fn.length) {
     }
 
     return function (...next) {
-      // Merge: fill placeholders in `args` from `next`, then append remaining `next`.
       const merged = [];
       let k = 0;
       for (const a of args) {
@@ -106,95 +157,124 @@ function curryWithPlaceholder(fn, arity = fn.length) {
 }
 ```
 
-Placeholder version is a fair amount more code — only write it if asked.
+**Try it yourself**
 
-## Step-by-step dry run
-
-Input:
 ```js
 const sum = (a, b, c) => a + b + c;     // fn.length === 3
 const csum = curry(sum);
 
-csum(1)(2)(3);
-csum(1, 2)(3);
-csum(1)(2, 3);
-csum(1, 2, 3);
-```
+csum(1)(2)(3);          // 6
+csum(1, 2)(3);          // 6
+csum(1)(2, 3);          // 6
+csum(1, 2, 3);          // 6
 
-Trace `csum(1)(2)(3)`:
-- `csum(1)`: `args = [1]`, length=1 < arity 3 → return `next => curried([1, ...next])`. Call this `f1`.
-- `f1(2)`: invokes `curried([1, 2])`. length=2 < 3 → return `next => curried([1, 2, ...next])`. Call this `f2`.
-- `f2(3)`: invokes `curried([1, 2, 3])`. length=3 ≥ 3 → return `sum(1, 2, 3) = 6`.
-
-Trace `csum(1, 2)(3)`:
-- `csum(1, 2)`: args=[1,2], length=2 < 3 → return `f`.
-- `f(3)`: invokes `curried([1, 2, 3])`. length=3 ≥ 3 → `sum(1,2,3) = 6`.
-
-Trace `csum(1)(2, 3)`:
-- `csum(1)`: args=[1], length=1 < 3 → return `f1`.
-- `f1(2, 3)`: invokes `curried([1, 2, 3])`. length=3 ≥ 3 → `sum(1,2,3) = 6`.
-
-Trace `csum(1, 2, 3)`:
-- Direct call. args=[1,2,3], length=3 ≥ 3 → `sum(1,2,3) = 6`.
-
-Now reuse:
-```js
 const add5 = csum(5);
-add5(10, 20);   // 35
-add5(100, 200); // 305 — fresh args, no contamination
+add5(1, 2);             // 8
+add5(10, 20);           // 35  (no contamination — fresh args branch)
+
+// Variadic — need explicit arity
+const v = (...args) => args.reduce((a, b) => a + b, 0);
+const cv = curry(v, 3);                  // fn.length is 0; pass arity
+cv(1)(2)(3);            // 6
+
+// Placeholder
+csum(_, 2, _)(1)(3);    // 6  (fills _ slots in order)
 ```
 
-Because each call to `curried(...args)` builds a fresh return function closing over **that call's** args, partial applications are independent.
+---
 
-Placeholder trace (`_` = placeholder):
+## 9. Step-by-step dry run
+
+```
+csum(1)(2)(3):
+  call csum(1):     args=[1], 1 < 3 → return wrapper W1 closed over [1]
+  call W1(2):       invokes curried.apply(this, [...[1], 2]) = curried(1, 2)
+                    args=[1,2], 2 < 3 → return wrapper W2 closed over [1,2]
+  call W2(3):       invokes curried(1, 2, 3)
+                    args=[1,2,3], 3 ≥ 3 → return sum.apply(this, [1,2,3]) = 6
+
+csum(1, 2)(3):
+  call csum(1,2):   args=[1,2], 2 < 3 → return wrapper W closed over [1,2]
+  call W(3):        invokes curried(1, 2, 3) → sum(1,2,3) = 6
+
+Branch independence:
+  add5 = csum(5):   args=[5], length=1 < 3 → return wrapper W
+                    wrapper closes over [5]; csum's outer scope is shared but [5] is its own array
+  add5(1, 2):       curried(5, 1, 2) → builds NEW args=[5,1,2], 3 ≥ 3 → fn(5,1,2) = 8
+  add5(10, 20):     curried(5, 10, 20) → builds NEW args=[5,10,20], 3 ≥ 3 → fn(5,10,20) = 35
+                    each call to W creates a fresh [...args, ...next] — no shared mutable list
+```
+
+Placeholder dry run (`_` = placeholder):
+
+```
+csum(_, 2, _)(1)(3):
+  call csum(_, 2, _):  args=[_, 2, _]. concrete=[2]. hasPlaceholder=true → return wrapper
+  call wrapper(1):     walk args, fill first _ with 1 → [1, 2, _]. hasPlaceholder=true → wrapper
+  call wrapper(3):     walk args, fill first _ with 3 → [1, 2, 3]. no _ → fn(1,2,3) = 6
+```
+
+---
+
+## 10. Common confusion + traps
+
+1. **`fn.length` doesn't count defaults** — `((a, b=0, c) => ...).length === 1`. Curry fires too early.
+2. **`fn.length === 0` for rest args** — `(...args) => ...`. Curry fires immediately on the first call.
+3. **Shared mutable args** — `args.push(...next)` contaminates sibling partials.
+4. **`.apply(null, ...)`** — loses `this`. Use `.apply(this, ...)`.
+5. **Returning the wrapper directly** instead of `curried.apply(...)` — breaks deeper currying.
+6. **Treating extra args as errors** — convention: extras pass through to `fn` and are ignored if unused.
+7. **Zero-arity functions** — `curry(() => 42)` — first call returns `42` immediately.
+
+---
+
+## 11. Senior follow-ups & variants
+
+### Variant 1 — Explicit arity
 ```js
-csum(_, 2, _)(1)(3);
-// step 1: args=[_, 2, _]. concrete count = 1 < 3, has placeholder → return inner fn.
-// step 2: call with next=[1]. Walk args, replace first _ with 1 → [1, 2, _].
-//         Still has placeholder → return inner fn.
-// step 3: call with next=[3]. Replace first _ with 3 → [1, 2, 3]. No placeholders. → sum(1,2,3) = 6.
+curry(fn, 3)
+```
+Required for variadic / default-param functions. Always offer this hook.
+
+### Variant 2 — Placeholder support
+`curry(fn)(_, 2)(1, 3)` skips slots. Real libraries (Lodash, Ramda) ship this. Snippet above.
+
+### Variant 3 — Infinite curry
+`f(1)(2)(3)()` — empty-call terminates and invokes. Useful for variadic accumulators: `sum(1)(2)(3)() === 6`.
+```js
+function curryInfinite(fn) {
+  const helper = (acc) => (...args) =>
+    args.length === 0 ? fn(...acc) : helper([...acc, ...args]);
+  return helper([]);
+}
 ```
 
-## Important takeaways
+### Variant 4 — Async curry
+Args can be promises; curry awaits them before applying. Niche.
 
-**Syntax to memorize**
-- `fn.length` = arity = number of formal parameters (not counting defaults or rest).
-- Recursive helper that returns either the result (when full) or a new wrapper that appends more args.
-- `[...args, ...next]` — spread merge of accumulated and new args.
+### Variant 5 — `partial(fn, ...presets)`
+Weaker than curry; fixes leading args once. `partial(fn, a)(b, c) === fn(a, b, c)`.
 
-**Patterns to reuse**
-- "Accumulate state across closure boundaries until a threshold is met" is the same pattern as: batchProcessor (collect args, flush when count ≥ N), retry-with-attempts (count attempts, give up when ≥ max), throttle (count time elapsed).
-- Currying is the foundation of **point-free programming** and **partial application** — useful for building config factories: `const log = curry((level, scope, msg) => ...); const errInDB = log('error', 'db');`.
+---
 
-**Common mistakes**
-- Relying on `fn.length` without realizing default params or rest args break it. Always allow explicit arity override.
-- Mutating `args` (e.g., `args.push(...next)`) — corrupts other branches of the curry tree. Always create a new array.
-- Forgetting `this` forwarding — `.apply(this, ...)` not `.apply(null, ...)`.
-- Returning the wrapper function directly instead of `curried.apply(this, ...)` — breaks deeper currying.
+## 12. How to think aloud
 
-**Related questions**
-- `partial(fn, ...presetArgs)` — fixes args upfront; degenerate case of curry.
-- `compose` / `pipe` — work much better when functions are curried (so they're all unary).
-- Placeholder curry (Ramda `R.__`).
+> "Self-recursive curried function. Outer `curry` returns `curried`. Each call to `curried(...args)`: if `args.length >= arity`, invoke `fn.apply(this, args)`; else return `(...next) => curried.apply(this, [...args, ...next])`. Three things to get right: arity (default to `fn.length`, allow override for variadic / default-param fns); fresh args array per branch (`[...args, ...next]`, not `push` — otherwise sibling partials contaminate); `apply(this, ...)` for method-style use. Senior follow-up: placeholder `_` — walk both args lists and fill placeholders left-to-right. Infinite curry: terminate on zero-arg call."
 
-## Variants
+---
 
-1. **Curry with explicit arity** — `curry(fn, 3)` overrides `fn.length`. Required for variadic functions.
+## 13. 60-second revision
 
-2. **Placeholder curry** — `curry(fn)(_, 2)(1, 3)` skips slots. Real-world libraries (Lodash, Ramda) ship this. Bonus depth — see snippet above.
+> - **`curried(...args)` → `args.length >= fn.length` ? `fn.apply(this, args)` : `(...next) => curried(...args, ...next)`**.
+> - **`fn.length`** = declared arity (broken by defaults / rest — allow explicit override).
+> - **Fresh `[...args, ...next]` array** per branch — never `args.push`.
+> - **`.apply(this, ...)`** for method use.
+> - **Placeholder `_`** — walk and fill left-to-right.
+> - **Infinite curry** — zero-arg call terminates.
+> - **Trap:** `fn.length === 0` for variadic; mutating args; losing `this`.
 
-3. **Infinite / unbounded curry** — `f(1)(2)(3)()` invokes when called with no args. Useful for variadic accumulators: `sum(1)(2)(3)() === 6`. Detect zero-arg call to terminate.
+---
 
-4. **Async curry** — args can be promises; curry awaits them. Niche; mention if asked.
+**Related:** [`02-closures/partial-application.md`](../02-closures/partial-application.md) · [`02-closures/curry-via-closures.md`](../02-closures/curry-via-closures.md) · [function-composition.md](./function-composition.md) · [bind-polyfill.md](./bind-polyfill.md)
 
-5. **`partial`** — `partial(fn, a)(b, c) === fn(a, b, c)`. Strictly weaker than curry but simpler. Useful when arity is unknown.
-
-## Revision notes
-
-> **curry — 60 second recap**
-> - Recursive: `curried(...args)` → if `args.length >= fn.length`, invoke; else return `(...next) => curried([...args, ...next])`.
-> - `fn.length` = declared arity (broken by defaults / rest → pass arity explicitly).
-> - Each partial application is independent (new args array per call).
-> - Variants: placeholder (`_`), infinite curry (terminates on zero-arg call), explicit arity.
-> - **Trap:** `fn.length === 0` for rest/variadic fns — naive curry fires immediately.
-> - **Trap 2:** mutating `args` contaminates sibling partials.
+**Concept primer:** [`concepts/closures.md`](../../concepts/closures.md)

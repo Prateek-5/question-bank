@@ -1,186 +1,253 @@
-# `var` hoisting across if-blocks and loops
+# `var` inside blocks — function-scoped leak
 
-## Source
-- Canonical senior-JS interview problem (BFE.dev, Frontend Masters, "You Don't Know JS: Scope & Closures" Ch. 4).
-- MDN reference: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/var
+> **Difficulty:** Easy-Medium   |   **Time:** ~10 min   |   **Prereqs:** [hoisting-in-javascript.md](./hoisting-in-javascript.md), [let-vs-var-differences.md](./let-vs-var-differences.md)
+>
+> **Source:** Canonical output-prediction warm-up. BFE.dev, "You Don't Know JS".
 
-## Why this question matters in interviews
-This is the warm-up output-prediction puzzle on senior screens. The interviewer is checking *one* thing: can you reason about JavaScript's **two execution phases** (creation → execution) and the fact that `var` is **function-scoped**, not block-scoped. Get this wrong and the entire downstream conversation about closures, hoisting, and async iteration loses credibility. On the backend, this comes up daily: legacy services that still use `var`, transpiled code paths, and `try/catch` blocks where `var`-declared error info "leaks" out of the block on purpose. Knowing exactly what is hoisted where lets you debug a 10-year-old Express middleware in your sleep.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
-```js
-function f() {
-  if (false) {
-    var x = 10;   // declaration is hoisted to top of f, assignment is not
-  }
-  console.log(x); // undefined — not ReferenceError
-}
-f();
+`var` ignores `if`/`for`/`while`/`{}` blocks — it hoists to the nearest enclosing function (or module/script top).
+
+**Verification examples**
+
+| Snippet                                               | Output                                       |
+|-------------------------------------------------------|----------------------------------------------|
+| `function f() { if (false) { var x = 1; } log(x); }` | `undefined` (not `ReferenceError`)           |
+| `function f() { if (true) { var x = 1; } log(x); }`  | `1`                                          |
+| `for (var i = 0; i < 3; i++) {} log(i);`              | `3` (i leaks out of loop)                   |
+| `try { throw 0; } catch (var e) { var f = e; } log(f);` | `0` (var leaks)                            |
+| `{ var x = 1; } { var x = 2; }` — same function       | one binding; final value `2`                |
+
+**Constraints**
+- `var` lives in nearest function or module/script.
+- `var` ignores block boundaries (`if`, `for`, `while`, `try`, bare `{}`).
+- Hoisted to `undefined` at creation; assignment runs at execution.
+- `let`/`const` lives in nearest block.
+
+---
+
+## 2. Plain-English restatement
+
+When you write `var x` inside an `if` or `for`, the binding doesn't live in that block — it lives in the enclosing function. The block boundary is invisible to `var`. So `if (false) { var x = 1; }` STILL creates `x` (as `undefined`) in the function scope; only the assignment is skipped.
+
+---
+
+## 3. Why this matters in interviews
+
+#1 warm-up output-prediction puzzle. Tests whether you can apply the two-phase model + scope rules.
+
+---
+
+## 4. Mental model
+
+```
+   function scope (VE)                     block scope (LE)
+   ┌──────────────────────┐                ┌──────────────────────┐
+   │ var, function decls   │                │ let, const, class    │
+   │ function-scoped       │                │ block-scoped         │
+   │ hoisted to undefined  │                │ hoisted to TDZ       │
+   └──────────────────────┘                └──────────────────────┘
+
+   var ignores: if, for, while, try, bare {}.
+   var stops at: function boundary, module/script top.
+
+   function f() {
+     if (false) {
+       var x = 1;        ← declaration hoisted to f's VE; assignment skipped (false)
+     }
+     console.log(x);     ← x exists in f.VE → undefined
+   }
+
+   for (var i = 0; i < 3; i++) {}  ← i lives in enclosing function/module
+   console.log(i);        ← 3 (loop counter persists)
 ```
 
-### Runtime / engine behavior — the two phases
-1. **Creation phase (a.k.a. hoisting):** the engine walks the function body and registers every `var` and function declaration in the **Variable Environment** of the function's *Lexical Environment*. `var` bindings are initialized to `undefined`. Block-level declarations (`let`, `const`, `class`, `function` in strict mode) are registered in a separate **Lexical Environment** record for that block, but in TDZ until reached.
-2. **Execution phase:** statements run top-to-bottom. Assignments happen here.
+---
 
-For `var`, the relevant scope record is **the nearest enclosing function or module/script** — never an `if`, `for`, `while`, or bare `{}` block.
+## 5. Try it yourself first
 
-### Edge cases (the traps)
-1. **`var` inside `if(false){}`** — declaration still hoisted; assignment never runs. Result: `undefined`, not `ReferenceError`.
-2. **`var` inside a `for` loop** — single binding shared across all iterations. The "setTimeout in a for-loop" closure bug is this.
-3. **`var` inside `try`/`catch`** — escapes to the function scope (intentional in legacy code so `err` info survives the block).
-4. **Redeclaration** — `var x; var x;` is legal and silently merged. `let x; let x;` is a `SyntaxError`.
-5. **Implicit globals via missing `var`** — `function f(){ x = 1; }` creates `x` on `globalThis` in sloppy mode, throws in strict.
-6. **Hoisting across modules** — `var` at the top level of an ES module is **not** added to `globalThis` (unlike a classic script).
-7. **`var` shadowing a `let` in an inner block** — `SyntaxError` at parse time (you can't `var` a name already in TDZ for the same scope).
+> **Predict before reading on:**
+> 1. `function f() { if (false) { var x = 1; } console.log(x); }` — output?
+> 2. `for (var i = 0; i < 3; i++); console.log(i);` — output?
+> 3. `var x = 1; { var x = 2; } console.log(x);` — output?
 
-## Brute force approach
-"Read top-to-bottom and pretend declarations only exist after their line." This is what every junior does. It produces wrong answers for every `var`-in-block puzzle. The brute-force mental model treats JS like C/C++ block scope — but `var` predates block scope. Drop it.
+---
 
-## Optimal approach
-**Two-pass mental model.** On every function you read:
-1. **Pass 1 (creation):** scan the entire function body. List every `var` name and every `function fname()` declaration. They are pre-initialized in the Variable Environment — `var` to `undefined`, function declarations to the function object.
-2. **Pass 2 (execution):** walk statements in order. Reach an assignment? Mutate the existing binding. Reach a `let`/`const`? Initialize the block-scoped binding (it was in TDZ before this line).
+## 6. Brute force — walked through
 
-Annotate each step with the current `VE` (function-scoped, var bindings) and `LE` (block-scoped, let/const/class bindings).
+### Wrong attempt 1: "var x in `if (false)` doesn't exist"
+Wrong. Declaration is hoisted; only assignment is skipped.
 
-## Solution (JavaScript)
+### Wrong attempt 2: "var is block-scoped like let"
+Function-scoped. Ignores block boundaries.
+
+### Wrong attempt 3: read top-to-bottom assuming C-style scope
+JS predates block scope (for var). Apply two-phase model.
+
+---
+
+## 7. The unlocking insight
+
+> **`var` declarations register in the function's Variable Environment during creation phase, regardless of which block they're written in. Only the assignment runs in execution order.**
+
+Three properties:
+
+1. **`var` is function-scoped** — ignores blocks.
+2. **Declaration hoisted at creation** — bound to `undefined`.
+3. **Assignment runs at execution** — may not run if guarded by `if (false)`.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
 function demo() {
-  console.log(a);          // (1) what prints?
-  console.log(b);          // (2) what prints?
-  console.log(typeof c);   // (3) what prints?
+  // CREATION phase: VE = { a: undefined, i: undefined }
+  // (var a and var i are scanned out of nested blocks)
+
+  console.log(a);                                                     // step 1: undefined (hoisted)
 
   if (true) {
-    var a = 1;             // var → hoisted to demo's VE
-    let b = 2;             // let → block-scoped, in TDZ until this line
-    const c = 3;           // const → block-scoped, in TDZ until this line
+    var a = 1;                                                         // step 2: a = 1 (VE update)
+    let b = 2;                                                         // block-scoped to if
   }
 
-  console.log(a);          // (4) what prints?
+  console.log(a);                                                     // step 3: 1
   try {
-    console.log(b);        // (5) what prints?
+    console.log(b);                                                    // ReferenceError (let-scoped)
   } catch (e) {
-    console.log('b is not defined');
+    console.log('b not defined');
   }
 
-  for (var i = 0; i < 3; i++) { /* loop */ }
-  console.log(i);          // (6) what prints?
-}
-
-demo();
-```
-
-Expected output:
-```
-undefined           // (1)
-ReferenceError      // (2) — but caught? no, this throws BEFORE we reach line 5
-```
-
-Wait — line (2) throws synchronously, so lines (3)–(6) never run. The interviewer wants you to **notice** that. Re-order to make it runnable:
-
-```js
-function demo() {
-  console.log(a);          // (1) undefined  — var a is hoisted
-  console.log(typeof b);   // (2) 'undefined' — typeof swallows ReferenceError for undeclared, but here b is in TDZ → ReferenceError still throws
-}
-```
-
-That's the real trap. `typeof` only swallows `ReferenceError` for **truly undeclared** names; a TDZ name throws regardless.
-
-## Step-by-step dry run
-
-Input (the cleaned-up version):
-```js
-function demo() {
-  console.log(a);                    // line A
-  if (true) {
-    var a = 1;
-    let b = 2;
-  }
-  console.log(a);                    // line B
   for (var i = 0; i < 2; i++) {}
-  console.log(i);                    // line C
+  console.log(i);                                                     // step 4: 2 (i in f's VE)
 }
+
 demo();
+// Output:
+// undefined
+// 1
+// b not defined
+// 2
 ```
 
-Trace:
+**Try it yourself**
 
 ```js
-// === Creation phase for demo() ===
-// VE: { a: undefined, i: undefined }
-// LE (function body):  { } (let/const at block level created lazily)
+// var skips false branch but binding still exists
+function g() {
+  if (false) {
+    var x = 1;
+  }
+  console.log(typeof x);                                              // 'undefined' (hoisted, never assigned)
+}
+g();
 
-// === Execution phase ===
+// var leaks from try/catch
+function h() {
+  try { throw new Error('boom'); }
+  catch (e) {
+    var captured = e.message;
+  }
+  console.log(captured);                                              // 'boom' (var leaks)
+}
+h();
 
-// line A: console.log(a)
-//   lookup 'a' in VE → undefined
-//   prints: undefined
-
-// enter if-block — new LE pushed for this block
-//   LE(if-block): { b: <uninitialized, TDZ> }
-//   VE still: { a: undefined, i: undefined } (var a does NOT live in the if's LE)
-
-//   var a = 1  →  VE: { a: 1, i: undefined }
-//   let b = 2  →  LE(if-block): { b: 2 }
-
-// exit if-block — its LE is popped (b is gone)
-//   VE: { a: 1, i: undefined }
-
-// line B: console.log(a) → 1
-
-// for-loop: var i is in demo's VE (NOT the loop's LE), so it's the same `i`
-//   after loop: VE: { a: 1, i: 2 }
-
-// line C: console.log(i) → 2
+// var re-declared in nested block (same function): same binding
+function i() {
+  var x = 1;
+  { var x = 2; }
+  console.log(x);                                                     // 2 (same x)
+}
+i();
 ```
 
-Output:
+---
+
+## 9. Step-by-step dry run
+
 ```
-undefined
-1
-2
+function demo() body:
+
+CREATION phase:
+  Scan all var declarations across body (ignore block boundaries).
+  VE: { a: undefined, i: undefined }
+  LE: { }                                                              (let b is created lazily in its block's LE)
+
+EXECUTION phase:
+  console.log(a)         → VE.a = undefined → 'undefined'
+  
+  enter if-block:
+    block LE: { b: <uninitialized> (TDZ) }
+    var a = 1            → VE.a = 1 (still f's VE, not the block's LE)
+    let b = 2            → block-LE.b = 2 (block-scoped)
+  exit if-block (block LE popped; b gone)
+  
+  console.log(a)         → VE.a = 1 → '1'
+  console.log(b) (in try) → b not in current scope → ReferenceError
+  
+  for-loop:
+    var i = 0            → VE.i = 0
+    iterations...
+    after exit: VE.i = 2
+  
+  console.log(i)         → VE.i = 2 → '2'
 ```
 
-## Important takeaways
+---
 
-**Syntax to memorize**
-- `var` lives in the **nearest function or module/script**. Never in a block.
-- `let` / `const` / `class` / `function` (strict) live in the **nearest block**.
-- During the creation phase, `var` is initialized to `undefined`. `let` / `const` are in **TDZ** until their declaration is reached.
+## 10. Common confusion + traps
 
-**Patterns to reuse**
-- Two-pass model: list hoisted names first, then walk statements. Apply this to every output-prediction puzzle.
-- VE/LE annotation: write them down on the whiteboard. Interviewers love seeing the explicit record.
+1. **`var` in `if (false)` doesn't exist** — wrong; binding hoisted.
+2. **`var` is block-scoped** — function-scoped.
+3. **`for (var i)` is fresh per iter** — no, one shared (loop-closure bug).
+4. **`switch` cases share scope** — yes; `var` in case 1 visible in case 2.
+5. **`try/catch` block scope for var** — no, var leaks out.
+6. **`typeof var-in-block-before-assign`** — `'undefined'` (safe, hoisted).
+7. **Module-top `var` attaches to `globalThis`** — only in scripts; not ESM.
 
-**Common mistakes**
-- Saying "var inside `if(false)` is undeclared" — wrong. It's `undefined`.
-- Confusing TDZ `ReferenceError` with "undeclared `ReferenceError`" — `typeof` swallows the latter but not the former.
-- Thinking `for (var i...)` creates a fresh `i` per iteration — it does not. `let` does (see `let-in-for-loop-binding.md`).
+---
 
-**Backend relevance**
-- Legacy `var` in Express middleware leaking error refs upward — sometimes intentional, sometimes a memory leak.
-- Transpiled output: Babel often emits `var` for `let` when targeting older runtimes, but with renaming to preserve block semantics. Read the output to debug.
+## 11. Senior follow-ups & variants
 
-## Variants
+### Variant 1 — `let` same shape
+Replace every var with let; first log throws TDZ ReferenceError.
 
-1. **`let` in the same shape** — replace every `var` with `let` and re-trace. Each `let` is block-scoped; `console.log(a)` before the block throws `ReferenceError` (TDZ).
-2. **`var` in a `switch` block** — `switch` is a single block; `var` in `case 1:` is visible in `case 2:`. Common bug.
-3. **`var` redeclared inside a nested function** — only shadows in the inner function; outer scope's `var` is untouched. Asked as a follow-up to test that you understand function-scope boundaries.
+### Variant 2 — `switch` case bug
+`switch (x) { case 1: var v = 1; case 2: console.log(v); }` — v leaks; bug.
 
-## Revision notes
+### Variant 3 — `var` in nested function
+Shadows outer var only in inner function's VE; outer untouched.
 
-> **var-in-block — 60 second recap**
-> - JS has two phases: **creation** (hoist) → **execution** (run).
-> - `var`: hoisted to nearest **function / module / script**. Initialized to `undefined`.
-> - `let` / `const` / `class`: hoisted to nearest **block**. In **TDZ** until declared.
-> - `var` ignores `if`, `for`, `while`, `{}` blocks. Only `function`/module boundaries stop it.
-> - `var x` declared inside `if(false){}` still exists as `undefined` in the enclosing function.
-> - `for (var i...)`: single `i` shared across iterations. Source of the classic `setTimeout`-in-loop bug.
-> - `try { var e; } catch {}`: `e` escapes to function scope.
-> - `typeof tdzName` still throws — TDZ overrides `typeof`'s usual `ReferenceError` swallow.
-> - Always annotate **VE** (function-scoped vars) and **LE** (block-scoped lets) on a whiteboard.
-> - **Trap:** redeclaring `var` is silent; redeclaring `let`/`const` is a `SyntaxError`.
+### Variant 4 — Loop-closure bug
+`for (var i)` shares one i — all closures see final value.
+
+### Variant 5 — Babel transpilation
+Babel emits renamed `var` for `let` when targeting ES5, preserving block semantics.
+
+---
+
+## 12. How to think aloud
+
+> "JS has two execution phases: creation (hoist) and execution (run). `var` is function-scoped, so the engine scans the entire function body during creation — IGNORING block boundaries — and registers every `var` name in the Variable Environment as `undefined`. The assignment runs at execution time, so `if (false) { var x = 1; }` STILL creates `x` (as `undefined`) but skips the `= 1`. `let`/`const` are different — block-scoped, in TDZ during creation. Whiteboard trick: draw VE (function-scoped vars) and LE (block-scoped lets) separately. Trap: 'var in if(false) is undeclared' (wrong); 'var is block-scoped' (function-scoped); for-loop counter persists after loop exit."
+
+---
+
+## 13. 60-second revision
+
+> - **`var`** hoisted to nearest **function/module/script** (not block).
+> - **`let`/`const`/`class`** hoisted to nearest **block**.
+> - **Creation:** var → `undefined`; let/const → TDZ.
+> - **`var` ignores** if, for, while, try, bare {}. Stops at function boundary.
+> - **`for (var i)` counter persists** after loop exit (in enclosing scope).
+> - **`try/catch` doesn't block var** — leaks out.
+> - **Whiteboard:** VE for vars; LE for lets per block.
+> - **Trap:** "`var` in `if(false)` is undeclared"; var is block-scoped; switch case bug.
+
+---
+
+**Related:** [hoisting-in-javascript.md](./hoisting-in-javascript.md) · [let-vs-var-differences.md](./let-vs-var-differences.md) · [let-in-for-loop-binding.md](./let-in-for-loop-binding.md) · [hoisting-in-try-catch.md](./hoisting-in-try-catch.md)
+
+**Concept primer:** [`concepts/hoisting.md`](../../concepts/hoisting.md)

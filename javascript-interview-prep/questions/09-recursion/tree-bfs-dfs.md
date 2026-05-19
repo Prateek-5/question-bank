@@ -1,30 +1,22 @@
-# Tree traversal — BFS and DFS, recursive + iterative
+# Tree traversal — BFS and DFS
 
-## Source
-- Canonical interview problem; appears as preorder/inorder/postorder/levelOrder traversals on every coding site.
-- LeetCode #102 (level order BFS), #144/#94/#145 (DFS preorder/inorder/postorder).
-- codedamn "Tree traversal" articles and labs.
+> **Difficulty:** Foundation-Medium   |   **Time:** ~15 min   |   **Prereqs:** [iterative-from-recursive.md](./iterative-from-recursive.md), [directory-walk-async.md](./directory-walk-async.md)
+>
+> **Source:** LeetCode #102, #144, #94, #145.
 
-## Why this question matters in interviews
-Tree traversal is the **most-asked recursion problem**. In one question the interviewer probes: (1) **DFS vs BFS** — when each is appropriate, (2) **recursive vs iterative** DFS — and whether you can convert between them with an explicit stack, (3) **queue choice** for BFS — and whether you know `Array#shift` is O(n) so a million-node BFS with a naive array is O(n²), (4) **cycle handling** — `visited` Set for graphs (trees don't have cycles, but interviewers love sliding into "what if it's a graph?"). As a backend engineer: walking dependency graphs in build tools, traversing recursive S3 prefixes, level-order processing of org-chart hierarchies, shortest-path checks.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+DFS (pre/in/post-order) recursive + iterative. BFS level-order. Handle cycles via visited Set for graphs.
+
+**Verification examples**
+
 ```js
-// Tree node shape used throughout
-const node = {
-  value: 1,
-  children: [
-    { value: 2, children: [{ value: 4, children: [] }] },
-    { value: 3, children: [] },
-  ],
-};
-
-// DFS recursive (preorder)
+// DFS recursive preorder
 function dfs(node, visit) {
   if (!node) return;
-  visit(node);                      // visit BEFORE children = preorder
+  visit(node);
   for (const child of node.children) dfs(child, visit);
 }
 
@@ -35,264 +27,344 @@ function dfsIter(root, visit) {
   while (stack.length) {
     const n = stack.pop();
     visit(n);
-    // Reverse children when pushing so popping yields left-to-right
     for (let i = n.children.length - 1; i >= 0; i--) stack.push(n.children[i]);
   }
 }
 
-// BFS iterative
+// BFS
 function bfs(root, visit) {
   if (!root) return;
   const queue = [root];
-  let head = 0;                     // index-pointer to avoid O(n) shift
-  while (head < queue.length) {
-    const n = queue[head++];
+  while (queue.length) {
+    const n = queue.shift();   // O(n) — circular buffer for big trees
     visit(n);
     for (const c of n.children) queue.push(c);
   }
 }
 ```
 
-### Runtime / engine behavior
-- **DFS recursive** uses the JS call stack. One frame per node along the current path. Depth = tree height. **V8 has no TCO** — a 50,000-deep skewed tree stack-overflows.
-- **DFS iterative** uses a heap-allocated array as stack. Same O(h) memory but on the heap, which is much larger.
-- **BFS** uses a queue. The classic mistake: `queue.shift()` is **O(n)** because V8 has to compact the array. For 1M nodes that's O(n²) total. Use one of:
-  - **Index pointer**: `head` cursor + `queue[head++]`; memory grows but reads are O(1).
-  - **Two-stack queue** (Okasaki): push to one stack, pop from the other; amortized O(1).
-  - **Linked-list queue**: explicit head/tail; truly O(1) per op.
-- **Visit ordering**:
-  - Preorder = visit before children. Postorder = visit after. Inorder is only meaningful for binary trees.
-  - DFS iterative naturally yields preorder. For postorder iteratively you typically use 2-stack trick or a "visited" flag per frame.
-- **Cycles**: trees have none by definition. The moment the structure can have shared references (a graph), you need a `visited: WeakSet` keyed by node identity. Without it, BFS/DFS hang on cycles.
-- **BFS guarantees shortest-edge-count path** from root (if edges have equal weight). DFS does not.
+**Constraints**
+- DFS: stack; BFS: queue.
+- Visit order: pre/in/post.
+- `Array.shift` O(n) — use circular buffer for big BFS.
+- Graphs: `visited` Set to break cycles.
 
-### Edge cases (interview traps)
-1. **Null root** — `dfs(null)` / `bfs(null)` should no-op, not throw.
-2. **Missing `children`** — defend with `node.children || []` or normalize the input.
-3. **Cycles in a graph version** — `visited.has(node)` check using a `Set` (or `WeakSet`) before enqueuing/pushing.
-4. **`Array#shift` performance** — interviewers will ask "why is your BFS slow on 100k nodes?" Answer: shift is O(n).
-5. **Iterative postorder** — surprisingly tricky. Trick: do "reverse preorder" (push children left-to-right, prepend each visit to output), then reverse at the end.
-6. **Stack overflow** — recursive DFS on a deeply skewed tree. Switch to iterative.
-7. **Order of children** — iterative DFS with `pop()` reverses the order unless you push reverse. Test with `[1, [2, 3]]` to verify.
-8. **Visit side effects modifying the tree** — usually out of scope, but mention if asked.
+---
 
-## Brute force approach
-For most "find a node / collect all values" tasks the brute force IS the answer — a single traversal. The "wrong default" trap is using `Array#shift` for BFS without realizing the cost. Or writing recursive DFS without acknowledging stack depth risk. Or forgetting `visited` when the structure could be a graph.
+## 2. Plain-English restatement
 
-## Optimal approach
-- Tree DFS preorder: recursive for clarity; iterative with explicit stack for safety.
-- Tree BFS: queue with index pointer (or proper FIFO).
-- Graph traversal: same shape + `visited` Set keyed by node identity.
+DFS goes deep first; BFS goes wide. Pick by problem: "shortest path / level k" → BFS; "explore one branch fully" → DFS.
 
-All are O(n) time and O(n) memory in the worst case.
+---
 
-## Solution (JavaScript)
+## 3. Why this matters in interviews
+
+Most-asked recursion problem. Tests: DFS vs BFS, recursive vs iterative, queue choice, cycle handling.
+
+---
+
+## 4. Mental model
+
+```
+   DFS (depth-first):
+     Recursive: clean; stack depth = tree height.
+     Iterative: explicit stack; push children reverse for natural order.
+     Orders:
+       Preorder:  visit, then children (recurse).
+       Inorder:   binary only — left, visit, right.
+       Postorder: children first, then visit.
+   
+   BFS (breadth-first):
+     Queue; level-by-level.
+     For level-grouped: track size of queue per level.
+   
+   `Array.shift()` is O(n) — for million-node BFS, use circular buffer.
+   
+   Cycle handling:
+     Trees: no cycles, no visited.
+     Graphs: visited Set; check before push.
+   
+   Use cases:
+     Shortest path in unweighted: BFS.
+     Connected components: DFS or BFS.
+     Topological sort: DFS post-order or Kahn's BFS.
+     Cycle detection: DFS with white/gray/black coloring.
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. DFS vs BFS — which for shortest path?
+> 2. Why `Array.shift` slow for BFS?
+> 3. How handle cycles in graph BFS?
+
+---
+
+## 6. Brute force — walked through
 
 ```js
-// ---------- DFS (recursive) ----------
-/**
- * Preorder DFS. Visit BEFORE recursing into children.
- */
-function dfsRecursive(node, visit) {
-  if (!node) return;                     // base case
-  visit(node);                            // preorder
-  for (const child of node.children || []) {
-    dfsRecursive(child, visit);          // recursive case
-  }
-}
-
-// Postorder variant — visit AFTER children
-function dfsPostorder(node, visit) {
-  if (!node) return;
-  for (const child of node.children || []) dfsPostorder(child, visit);
+// Recursive BFS — wrong shape; BFS needs queue
+function badBfs(node, visit) {
   visit(node);
-}
-
-// ---------- DFS (iterative, explicit stack) ----------
-/**
- * Iterative preorder DFS. Heap-allocated stack — safe for deeply skewed trees.
- */
-function dfsIterative(root, visit) {
-  if (!root) return;
-  const stack = [root];
-  while (stack.length) {
-    const node = stack.pop();
-    visit(node);
-    // Push children in REVERSE so pop() yields them left-to-right
-    const kids = node.children || [];
-    for (let i = kids.length - 1; i >= 0; i--) stack.push(kids[i]);
-  }
-}
-
-// ---------- BFS (queue with index pointer) ----------
-/**
- * Level-order BFS. Uses an index pointer instead of Array#shift to keep dequeue O(1).
- */
-function bfs(root, visit) {
-  if (!root) return;
-  const queue = [root];
-  let head = 0;                          // dequeue cursor
-  while (head < queue.length) {
-    const node = queue[head++];
-    visit(node);
-    for (const child of node.children || []) queue.push(child);
-  }
-}
-
-// BFS with explicit level boundaries (useful for "print each level on a line")
-function bfsByLevel(root) {
-  if (!root) return [];
-  const levels = [];
-  let current = [root];
-  while (current.length) {
-    const next = [];
-    const values = [];
-    for (const node of current) {
-      values.push(node.value);
-      for (const child of node.children || []) next.push(child);
-    }
-    levels.push(values);
-    current = next;
-  }
-  return levels;
-}
-
-// ---------- Graph traversal (with cycle handling) ----------
-/**
- * DFS over a graph. WeakSet of visited node identities prevents infinite loops.
- */
-function graphDfs(start, visit) {
-  if (!start) return;
-  const visited = new WeakSet();
-  const stack = [start];
-  while (stack.length) {
-    const node = stack.pop();
-    if (visited.has(node)) continue;     // already seen → skip
-    visited.add(node);
-    visit(node);
-    const neighbors = node.neighbors || node.children || [];
-    for (let i = neighbors.length - 1; i >= 0; i--) {
-      if (!visited.has(neighbors[i])) stack.push(neighbors[i]);
-    }
-  }
-}
-
-function graphBfs(start, visit) {
-  if (!start) return;
-  const visited = new WeakSet([start]);
-  const queue = [start];
-  let head = 0;
-  while (head < queue.length) {
-    const node = queue[head++];
-    visit(node);
-    for (const n of node.neighbors || node.children || []) {
-      if (!visited.has(n)) {
-        visited.add(n);                  // mark when ENQUEUED, not when visited
-        queue.push(n);
-      }
-    }
-  }
+  for (const c of node.children) badBfs(c, visit);   // depth-first, not BFS
 }
 ```
 
-## Step-by-step dry run
+That's DFS preorder, not BFS.
 
-Tree:
-```
-        1
-       / \
-      2   3
-     / \
-    4   5
-```
-Encoded:
+---
+
+## 7. The unlocking insight
+
+> **DFS = stack (or recursion); BFS = queue. Push reverse for natural DFS order. Use circular buffer for big BFS. Visited Set for graph cycles.**
+
+Three properties:
+
+1. **Stack DFS; queue BFS.**
+2. **Reverse-push children** for natural order.
+3. **Visited Set** for graphs.
+
+---
+
+## 8. Solution (annotated)
+
 ```js
+// Tree node
 const root = {
   value: 1,
   children: [
-    { value: 2, children: [
-        { value: 4, children: [] },
-        { value: 5, children: [] },
-    ]},
+    { value: 2, children: [{ value: 4 }, { value: 5 }] },
     { value: 3, children: [] },
   ],
 };
+
+// DFS recursive preorder
+function dfsPreorder(node, visit) {
+  if (!node) return;
+  visit(node);                                                              // step 1: pre
+  for (const child of node.children) dfsPreorder(child, visit);
+}
+
+// DFS iterative
+function dfsIter(root, visit) {
+  if (!root) return;
+  const stack = [root];
+  while (stack.length) {
+    const n = stack.pop();
+    visit(n);
+    for (let i = n.children.length - 1; i >= 0; i--) {                     // step 2: reverse
+      stack.push(n.children[i]);
+    }
+  }
+}
+
+// BFS level-order
+function bfs(root, visit) {
+  if (!root) return;
+  const queue = [root];
+  while (queue.length) {
+    const n = queue.shift();                                                // step 3: queue
+    visit(n);
+    for (const c of n.children) queue.push(c);
+  }
+}
+
+// BFS with level grouping
+function bfsByLevels(root) {
+  if (!root) return [];
+  const result = [];
+  let queue = [root];
+  while (queue.length) {
+    const level = [];
+    const next = [];
+    for (const n of queue) {                                                // step 4: snapshot level
+      level.push(n.value);
+      next.push(...n.children);
+    }
+    result.push(level);
+    queue = next;
+  }
+  return result;
+}
+
+// Graph DFS with cycle detection
+function graphDfs(start, neighbors, visit) {
+  const visited = new Set();
+  function dfs(node) {
+    if (visited.has(node)) return;                                          // step 5: cycle break
+    visited.add(node);
+    visit(node);
+    for (const n of neighbors(node)) dfs(n);
+  }
+  dfs(start);
+}
+
+// Binary inorder iterative
+function inorderBinary(root, visit) {
+  const stack = [];
+  let curr = root;
+  while (curr || stack.length) {
+    while (curr) { stack.push(curr); curr = curr.left; }
+    curr = stack.pop();
+    visit(curr);                                                            // step 6: visit mid
+    curr = curr.right;
+  }
+}
+
+// Circular buffer queue for big BFS
+class FastQueue {
+  constructor() { this.data = []; this.head = 0; }
+  push(v) { this.data.push(v); }
+  shift() { return this.head < this.data.length ? this.data[this.head++] : undefined; }
+  get length() { return this.data.length - this.head; }
+}
 ```
 
-**DFS recursive (preorder)** — visit order: 1, 2, 4, 5, 3.
-- Visit 1, recurse into children [2, 3].
-  - Visit 2, recurse into [4, 5].
-    - Visit 4, no children.
-    - Visit 5, no children.
-  - Visit 3, no children.
+**Try it yourself**
 
-**DFS iterative** — stack trace:
-- stack=[1]. Pop 1, visit. Push children reversed → stack=[3, 2].
-- Pop 2, visit. Push [4, 5] reversed → stack=[3, 5, 4].
-- Pop 4, visit. No children → stack=[3, 5].
-- Pop 5, visit. → stack=[3].
-- Pop 3, visit. → stack=[].
-- Visit order: 1, 2, 4, 5, 3. **Matches recursive preorder.**
+```js
+const values = [];
+dfsPreorder(root, n => values.push(n.value));
+values;                                                        // [1, 2, 4, 5, 3]
 
-**BFS** — queue trace (head pointer in brackets):
-- queue=[1] head=0. Read 1, visit. Push children → queue=[1, 2, 3] head=1.
-- Read 2, visit. Push [4, 5] → queue=[1, 2, 3, 4, 5] head=2.
-- Read 3, visit. No children → head=3.
-- Read 4 → head=4. Read 5 → head=5. head === length, stop.
-- Visit order: 1, 2, 3, 4, 5. **Level-order, as promised.**
+const bfsValues = [];
+bfs(root, n => bfsValues.push(n.value));
+bfsValues;                                                     // [1, 2, 3, 4, 5]
 
-**Performance note**: if we'd used `queue.shift()` instead of the head pointer, each shift would re-index the remaining array. On 1M nodes that's ~500B array moves total. The index pointer keeps it O(n).
+bfsByLevels(root);                                            // [[1], [2, 3], [4, 5]]
 
-## Important takeaways
+// Shortest path in unweighted graph
+function shortestPath(start, target, neighbors) {
+  if (start === target) return [start];
+  const queue = [[start, [start]]];
+  const visited = new Set([start]);
+  while (queue.length) {
+    const [node, path] = queue.shift();
+    for (const next of neighbors(node)) {
+      if (visited.has(next)) continue;
+      if (next === target) return [...path, next];
+      visited.add(next);
+      queue.push([next, [...path, next]]);
+    }
+  }
+  return null;
+}
 
-**Syntax to memorize**
-- DFS recursive base case: `if (!node) return;`. Recursive case: loop over `node.children`.
-- DFS iterative: `const stack = [root]; while (stack.length) { const n = stack.pop(); ... push children REVERSED; }`.
-- BFS: `const queue = [root]; let head = 0; while (head < queue.length) { ...queue[head++]... queue.push(child); }`. **Never** `queue.shift()` in tight loops.
-- Graph: add `visited` Set; mark **when enqueuing** in BFS (prevents double-enqueue), mark **when popping** is also valid for DFS but slightly less efficient.
+// Big tree benchmark
+const big = { children: [] };
+let cur = big;
+for (let i = 0; i < 1_000_000; i++) {
+  const n = { children: [] };
+  cur.children.push(n);
+  cur = n;
+}
+// BFS with Array.shift: O(n²) — slow.
+// BFS with FastQueue: O(n) — fast.
+```
 
-**Patterns to reuse**
-- Stack-of-frames as recursive-to-iterative converter — same recipe as flatten, deep clone, JSON serializer.
-- Index-pointer queue (or two-stack queue) is the standard fix for `Array#shift` cost. Use everywhere you need a FIFO.
-- "Mark on enqueue" vs "mark on dequeue" — pick mark-on-enqueue for BFS (cheaper, simpler proof of correctness).
-- Level-by-level processing (`bfsByLevel`) is the same loop with a snapshot of the current frontier — reuse for "print each level", "find depth of node X", "rightmost element at each level".
+---
 
-**Common mistakes**
-- `queue.shift()` for BFS — O(n) per call, O(n²) overall. Always mention this.
-- Recursive DFS on a deeply skewed tree without acknowledging stack overflow risk. V8 has no TCO; offer the iterative variant when input depth is unbounded.
-- Iterative DFS pushing children in forward order → output reversed sibling order. Push reversed.
-- Marking `visited` on dequeue in BFS — node gets enqueued multiple times from different parents → memory waste. Mark on enqueue.
-- Forgetting `visited` when the structure has cycles (graph not tree) → infinite loop.
-- Using `instanceof TreeNode` checks across realms or for plain objects — just check shape (`node && Array.isArray(node.children)`).
+## 9. Step-by-step dry run
 
-**Related questions**
-- Inorder traversal of a binary tree (left, root, right) — only meaningful for binary trees; uses `node.left` / `node.right`.
-- Iterative inorder using a stack and a "current" pointer (LeetCode #94).
-- Lowest common ancestor — typically post-order DFS that returns the LCA up the recursion.
-- Shortest path in an unweighted graph — BFS with parent map and reconstruction.
-- Topological sort — DFS post-order on a DAG, reverse output.
+```
+Tree:
+      1
+     / \
+    2   3
+   / \
+  4   5
 
-## Variants
+dfsPreorder visit order:
+  1, recurse 2:
+    2, recurse 4:
+      4 (no children).
+    recurse 5:
+      5.
+  recurse 3:
+    3.
+  Order: 1, 2, 4, 5, 3.
 
-1. **Async DFS / BFS** — `children` returned by `await node.getChildren()`. Drives a `for ... of` with `await`. Sequential by default; can be parallelized with `Promise.all`.
+dfsIter:
+  stack=[1].
+  Pop 1: visit. Push children REVERSE: 3, then 2. stack=[3, 2].
+  Pop 2: visit. Push 5, 4. stack=[3, 5, 4].
+  Pop 4: visit. No children.
+  Pop 5: visit.
+  Pop 3: visit.
+  Order: 1, 2, 4, 5, 3. ✓
 
-2. **Bidirectional BFS** — search from both ends, meet in the middle. Halves the explored frontier.
+BFS:
+  queue=[1].
+  Shift 1: visit. Push 2, 3. queue=[2, 3].
+  Shift 2: visit. Push 4, 5. queue=[3, 4, 5].
+  Shift 3: visit. queue=[4, 5].
+  Shift 4: visit.
+  Shift 5: visit.
+  Order: 1, 2, 3, 4, 5.
 
-3. **DFS with depth limit** — `dfs(node, depth)` that returns when `depth === 0`. Same skeleton as `flat(arr, depth)`.
+Cycle detection:
+  Graph: a → b → c → a.
+  dfs(a): visited={a}. neighbors(a) = [b].
+    dfs(b): visited={a,b}. neighbors(b) = [c].
+      dfs(c): visited={a,b,c}. neighbors(c) = [a]. a visited → return.
+    return.
+  return.
+```
 
-4. **Iterative postorder** — two-stack trick: push to stack1, pop and push to stack2 along with children; finally pop stack2. Or use a `visited` flag per frame.
+---
 
-5. **Generator-based traversal** — `function* dfs(node) { yield node; for (const c of node.children) yield* dfs(c); }`. Lazy, drives via `for ... of`. Pair with `break` for early termination.
+## 10. Common confusion + traps
 
-6. **Parent pointers / path reconstruction** — keep a `parent` map during BFS so you can walk back from any visited node to the root.
+1. **`Array.shift` for big BFS** — O(n²) total.
+2. **Forward push DFS children** — reverses order.
+3. **No visited for graphs** — infinite cycles.
+4. **Confuse pre/in/post** — recursive position matters.
+5. **`Array.shift` vs Map for visited** — Set is right.
+6. **Recursive DFS on deep tree** — stack overflow.
+7. **BFS without level tracking** when needed.
 
-## Revision notes
+---
 
-> **Tree BFS / DFS — 60 second recap**
-> - **DFS recursive**: base `if (!node) return`, visit + recurse on children. Stack depth = tree height. **V8 no TCO** → deeply skewed tree overflows.
-> - **DFS iterative**: explicit stack, push children REVERSED so pop yields left-to-right.
-> - **BFS**: queue with **index pointer**, NOT `Array#shift` (which is O(n)).
-> - **Graph**: add `visited` Set/WeakSet; mark **on enqueue** (BFS) to prevent double-enqueue.
-> - **Preorder** = visit before children, **postorder** = after, **level-order** = BFS.
-> - O(n) time, O(n) memory worst case. DFS recursive O(h) call stack; iterative O(h) heap.
-> - **Traps:** `shift()` O(n) cost; recursion stack overflow on skewed trees; missing `visited` on cyclic graphs; pushing children in wrong order in iterative DFS.
+## 11. Senior follow-ups & variants
+
+### Variant 1 — Level grouping BFS
+Snapshot per level.
+
+### Variant 2 — Bidirectional BFS
+For shortest path; two-front search.
+
+### Variant 3 — Iterative deepening
+DFS with depth bound, increasing.
+
+### Variant 4 — Topological sort
+DFS post-order or Kahn's BFS.
+
+### Variant 5 — Cycle coloring (white/gray/black)
+For directed graph cycle detection.
+
+---
+
+## 12. How to think aloud
+
+> "DFS uses stack (recursion's implicit stack OR explicit). BFS uses queue. Picking: shortest path in unweighted graph → BFS; explore-one-branch-fully (backtracking, topological sort) → DFS. Pre/in/post-order for DFS: pre visits before children; in visits between left and right subtrees (binary only); post visits after children — useful for 'delete bottom-up' or computing height. Iterative DFS: explicit stack, push children in REVERSE (right then left) so left pops first. BFS: queue, but `Array.shift()` is O(n) — for million-node trees you get O(n²) total. Use a circular buffer (head index advances; don't shift). Level-grouped BFS: snapshot queue size at start of each level OR track levels separately. Graph cycle handling: `visited` Set; check before recursing/queueing. Variants: bidirectional BFS (search from both ends, meet in middle — sqrt speedup for unweighted shortest path); iterative deepening DFS (depth-limit, increase); topological sort via DFS post-order or Kahn's BFS (in-degree zero queue); white/gray/black coloring for directed cycle detection. Trap: Array.shift big BFS O(n²); forward children push reverses DFS order; no visited Set on graphs (infinite); recursive DFS on deep tree (V8 stack overflow)."
+
+---
+
+## 13. 60-second revision
+
+> - **DFS stack; BFS queue.**
+> - **Reverse-push children** for natural DFS order.
+> - **Pre/in/post-order** differ by visit timing.
+> - **`Array.shift` O(n)** — circular buffer for big BFS.
+> - **Visited Set** for graphs.
+> - **Iterative deepening** for memory-bounded.
+> - **Topo sort:** DFS post-order or Kahn's BFS.
+> - **Trap:** Array.shift; forward push; no visited; stack overflow.
+
+---
+
+**Related:** [iterative-from-recursive.md](./iterative-from-recursive.md) · [directory-walk-async.md](./directory-walk-async.md) · [tree-zipper-basics.md](./tree-zipper-basics.md) · [`07-arrays/sliding-window-helper.md`](../07-arrays/sliding-window-helper.md)
+
+**Concept primer:** [`concepts/recursion-and-the-call-stack.md`](../../concepts/recursion-and-the-call-stack.md)

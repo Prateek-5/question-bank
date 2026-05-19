@@ -1,156 +1,248 @@
-# Implement the `instanceof` operator
+# Polyfill the `instanceof` operator
 
-## Source
-- Canonical "do you understand the prototype chain?" interview question (BFE.dev #19, GreatFrontEnd, every senior JS round).
-- MDN reference: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/instanceof
+> **Difficulty:** Easy-Medium   |   **Time:** ~10 min   |   **Prereqs:** [prototype-chain-inheritance.md](./prototype-chain-inheritance.md)
+>
+> **Source:** BFE.dev #19, GreatFrontEnd. Litmus test for prototype-chain understanding.
 
-## Why this question matters in interviews
-`instanceof` is the litmus test for whether a candidate actually understands the prototype chain or has only memorized the word "prototype." The operator's entire job is to walk `obj.__proto__` and compare each link with `Constructor.prototype`. Writing the polyfill in 8 lines proves you know (a) the difference between `__proto__` (instance link) and `.prototype` (constructor's blueprint), (b) that the chain terminates at `null`, and (c) that the check is **chain membership**, not equality. As a backend engineer you'll use this when implementing duck-typing fallbacks, custom error hierarchies, and ORM model checks.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
-```js
-function myInstanceof(obj, Ctor) {
-  if (obj === null || (typeof obj !== 'object' && typeof obj !== 'function')) return false;
-  let proto = Object.getPrototypeOf(obj);
-  const target = Ctor.prototype;
-  while (proto !== null) {
-    if (proto === target) return true;
-    proto = Object.getPrototypeOf(proto);
-  }
-  return false;
-}
-```
+`myInstanceof(obj, Ctor)` — return `true` if `Ctor.prototype` is anywhere on `obj`'s prototype chain.
 
-### Runtime / engine behavior
-- Every object has an internal `[[Prototype]]` slot, exposed via `Object.getPrototypeOf(obj)` (modern) or the legacy `obj.__proto__` accessor.
-- A constructor function has a `.prototype` property — the object that gets assigned as `[[Prototype]]` of every instance it creates via `new`.
-- `instanceof` walks **up** from the instance's `[[Prototype]]` and asks "is this slot `=== Ctor.prototype`?" The walk stops at `null` (top of chain).
-- `Object.create(null)` produces an object with `[[Prototype]] === null` — the chain is one link long.
+**Verification examples**
 
-### Edge cases (these are the interview traps)
-1. **`null` input** — `instanceof null` would throw natively, but our polyfill should return `false` for `obj === null`.
-2. **Primitives** — `5 instanceof Number` is `false` (primitives are not boxed). Guard with `typeof`.
-3. **Functions as left operand** — functions ARE objects, so `function f(){}; f instanceof Function` is `true`. Allow `typeof obj === 'function'` to pass the type guard.
-4. **Right operand must be callable** — native `instanceof` throws `TypeError` if RHS isn't a function. Decide whether to mirror or no-op; most interviewers want the throw.
-5. **`Symbol.hasInstance`** — ES2015 allows a class to override `instanceof` via `static [Symbol.hasInstance](v) { ... }`. A complete polyfill should honor it (bonus).
-6. **Prototype reassignment after construction** — `Object.setPrototypeOf(obj, NewCtor.prototype)` changes the chain mid-life. The polyfill handles it correctly because we walk live.
-7. **Cross-realm objects** — across iframes / Node `vm` contexts, two `Array` constructors are distinct. `arrFromOtherRealm instanceof Array` is `false`. Mention if asked about edge cases.
-8. **Chain termination** — must check `proto !== null` to avoid infinite loop. `Object.prototype`'s `[[Prototype]]` is `null`.
-
-## Brute force approach
-"Compare `obj.constructor === Ctor`." This fails the moment inheritance enters the picture: a `Dog` instance has `constructor === Dog`, but `dog instanceof Animal` must still be `true`. Constructor-equality is one rung; `instanceof` is the whole ladder.
-
-## Optimal approach
-Linear walk up the prototype chain comparing each slot with `Ctor.prototype`. O(depth) time, O(1) space. Stop at `null`. That's the entire algorithm — anything longer is over-engineering.
-
-## Solution (JavaScript)
-
-```js
-/**
- * Polyfill for the `instanceof` operator.
- * @param {unknown} obj   left operand
- * @param {Function} Ctor right operand (must be callable)
- * @returns {boolean}
- */
-function myInstanceof(obj, Ctor) {
-  if (typeof Ctor !== 'function') {
-    throw new TypeError('Right-hand side of instanceof is not callable');
-  }
-
-  // Honor user-defined hook (ES2015+)
-  if (typeof Ctor[Symbol.hasInstance] === 'function') {
-    return Boolean(Ctor[Symbol.hasInstance](obj));
-  }
-
-  // Primitives and null short-circuit to false
-  if (obj === null || (typeof obj !== 'object' && typeof obj !== 'function')) {
-    return false;
-  }
-
-  const target = Ctor.prototype;
-  if (target === null || typeof target !== 'object') {
-    throw new TypeError('Function has non-object prototype in instanceof check');
-  }
-
-  let proto = Object.getPrototypeOf(obj);
-  while (proto !== null) {
-    if (proto === target) return true;
-    proto = Object.getPrototypeOf(proto);
-  }
-  return false;
-}
-```
-
-## Step-by-step dry run
-
-Input:
 ```js
 class Animal {}
 class Dog extends Animal {}
 const d = new Dog();
 
-myInstanceof(d, Dog);     // ?
-myInstanceof(d, Animal);  // ?
-myInstanceof(d, Object);  // ?
-myInstanceof(d, Array);   // ?
+myInstanceof(d, Dog);        // true
+myInstanceof(d, Animal);     // true (chain walk)
+myInstanceof(d, Object);     // true
+myInstanceof(d, Array);      // false
+myInstanceof(5, Number);     // false (primitive, not boxed)
+myInstanceof(null, Object);  // false (null short-circuits)
 ```
 
-Trace `myInstanceof(d, Animal)`:
-- `Ctor` is `Animal` — callable, no `Symbol.hasInstance` override.
-- `obj` is `d` — typeof `'object'`, not null. Continue.
-- `target = Animal.prototype`.
-- Iter 1: `proto = Object.getPrototypeOf(d) === Dog.prototype`. `Dog.prototype !== Animal.prototype`. Climb.
-- Iter 2: `proto = Object.getPrototypeOf(Dog.prototype) === Animal.prototype`. Match! Return `true`.
+**Constraints**
+- Walk `Object.getPrototypeOf(obj)` upward.
+- Compare each link with `Ctor.prototype`.
+- Stop on match (true) or `null` (false).
+- Handle `Symbol.hasInstance` override.
 
-Trace `myInstanceof(d, Object)`:
-- Climbs `Dog.prototype → Animal.prototype → Object.prototype`. Match at depth 3. Return `true`.
+---
 
-Trace `myInstanceof(d, Array)`:
-- Climbs full chain to `Object.prototype`, then `null`. Loop exits. Return `false`.
+## 2. Plain-English restatement
 
-Bonus — `myInstanceof(5, Number)`:
-- `typeof 5 === 'number'` → fails type guard → returns `false`. Matches native behavior.
+Walk up the prototype chain from `obj`, asking at each step "is this link `=== Ctor.prototype`?" Stop on match (true) or when the chain ends at `null` (false). Not constructor equality — chain membership.
 
-## Important takeaways
+---
 
-**Syntax to memorize**
-- `Object.getPrototypeOf(x)` over `x.__proto__` — works on `Object.create(null)` instances too.
-- Loop condition: `while (proto !== null)`, not `while (proto)` (defends against weird falsy protos — rare but real).
-- Cache `Ctor.prototype` in a local before the loop; one property read instead of N.
+## 3. Why this matters in interviews
 
-**Patterns to reuse**
-- "Walk a chain until you hit `null`" is the same skeleton as: prototype lookup for property access, scope chain resolution, linked-list traversal, parent-pointer tree walks.
-- The two-link mental model (instance `[[Prototype]]` vs constructor `.prototype`) is the foundation for `Object.create`, `extends/super`, and class desugaring questions.
+Litmus test for understanding the prototype chain. 8 lines proves you know `__proto__` vs `.prototype` and chain mechanics.
 
-**Common mistakes**
-- Comparing `proto === Ctor` instead of `proto === Ctor.prototype`. The chain holds prototype objects, not constructor functions.
-- Forgetting the `null` check — infinite loop on a chain that's already exhausted.
-- Returning `false` for functions (e.g., `(()=>{}) instanceof Function` should be `true`).
-- Skipping `Symbol.hasInstance` — small detail, but classes like `Promise` use it internally for thenable detection.
+---
 
-**Related questions**
-- `Object.create` polyfill (constructs a chain)
-- `extends`/`super` manual implementation (configures the chain)
-- "Why does `[] instanceof Array` return `false` across iframes?" (realm-specific globals)
+## 4. Mental model
 
-## Variants
+```
+   instanceof = "is Ctor.prototype anywhere on obj's chain?"
+   
+   obj.__proto__ ──▶ obj.__proto__.__proto__ ──▶ ... ──▶ null
+                              ↑
+                       compare each step
+                       with Ctor.prototype
+   
+   Stop conditions:
+   - Match: return true.
+   - Hit null: return false.
+   
+   `instance.constructor === Ctor` is NOT instanceof — that's just one rung.
+   instanceof is the WHOLE LADDER walk.
+   
+   Symbol.hasInstance:
+   - Class can override via static [Symbol.hasInstance](v).
+   - Polyfill should honor it before falling back to chain walk.
+```
 
-1. **`Symbol.hasInstance` override demo** — "Make a class `Even` such that `5 instanceof Even` is `false` and `4 instanceof Even` is `true`, with no instances ever created." Tests the static hook.
+---
 
-2. **Cross-realm `instanceof`** — "Why does `arr instanceof Array` from another iframe fail? How would you write `isArray` correctly?" Answer: `Array.isArray` checks the internal `[[Class]]` brand, not the chain.
+## 5. Try it yourself first
 
-3. **`isPrototypeOf` polyfill** — "Implement `Animal.prototype.isPrototypeOf(d)`." Same walk, but the comparison target is `this` (already a prototype object) instead of `Ctor.prototype`. Highlights that `isPrototypeOf` skips the `.prototype` indirection.
+> **Predict before reading on:**
+> 1. Why is `5 instanceof Number` `false`?
+> 2. What's the difference between `obj.constructor === Ctor` and `obj instanceof Ctor`?
+> 3. Can a class override `instanceof` behavior?
 
-## Revision notes
+---
 
-> **instanceof polyfill — 60 second recap**
-> - Walks `Object.getPrototypeOf(obj)` upward, comparing each link with `Ctor.prototype`.
-> - Stop on match (`true`) or `null` (`false`).
-> - Guard against `null` / primitives on the left (return `false`).
-> - Throw `TypeError` if `Ctor` isn't a function.
-> - Honor `Ctor[Symbol.hasInstance]` if present (ES2015+ hook).
-> - **Two-link rule:** instance side = `[[Prototype]]`; constructor side = `.prototype`. The polyfill bridges them.
-> - **Trap:** comparing with `Ctor` instead of `Ctor.prototype`. The chain stores prototype objects.
-> - Cross-realm gotcha: each iframe / vm context has its own `Array`, `Object`. Use `Array.isArray` for arrays.
+## 6. Brute force — walked through
+
+### Wrong attempt 1: `obj.constructor === Ctor`
+Single rung; misses inheritance. `Dog` instance has `constructor === Dog` but `instanceof Animal` is also true.
+
+### Wrong attempt 2: compare `proto === Ctor`
+Wrong — chain holds prototype OBJECTS, not constructor functions.
+
+### Wrong attempt 3: no null check
+Infinite loop on chain that's exhausted.
+
+---
+
+## 7. The unlocking insight
+
+> **Walk `Object.getPrototypeOf(obj)` upward. Compare each link with `Ctor.prototype`. Stop on match (true) or `null` (false). Honor `Symbol.hasInstance` if defined.**
+
+Three properties:
+
+1. **Chain walk** — not single comparison.
+2. **Compare `proto === Ctor.prototype`** — not `Ctor`.
+3. **Null termination** — chain ends.
+
+---
+
+## 8. Solution (annotated)
+
+```js
+function myInstanceof(obj, Ctor) {
+  if (typeof Ctor !== 'function') {
+    throw new TypeError('Right-hand side of instanceof is not callable');
+  }
+
+  if (typeof Ctor[Symbol.hasInstance] === 'function') {                  // step 1: honor override
+    return Boolean(Ctor[Symbol.hasInstance](obj));
+  }
+
+  if (obj === null || (typeof obj !== 'object' && typeof obj !== 'function')) {
+    return false;                                                        // step 2: primitive/null
+  }
+
+  const target = Ctor.prototype;
+  if (target === null || typeof target !== 'object') {
+    throw new TypeError('Function has non-object prototype');
+  }
+
+  let proto = Object.getPrototypeOf(obj);
+  while (proto !== null) {                                                // step 3: walk chain
+    if (proto === target) return true;
+    proto = Object.getPrototypeOf(proto);
+  }
+  return false;
+}
+```
+
+**Try it yourself**
+
+```js
+class Animal {}
+class Dog extends Animal {}
+const d = new Dog();
+
+myInstanceof(d, Dog);        // true
+myInstanceof(d, Animal);     // true
+myInstanceof(d, Object);     // true
+myInstanceof(d, Array);      // false
+myInstanceof(5, Number);     // false
+myInstanceof(null, Object);  // false
+
+// Symbol.hasInstance override
+class Even {
+  static [Symbol.hasInstance](v) { return typeof v === 'number' && v % 2 === 0; }
+}
+myInstanceof(4, Even);       // true (no instance ever created)
+myInstanceof(5, Even);       // false
+```
+
+---
+
+## 9. Step-by-step dry run
+
+```
+myInstanceof(d, Animal):
+
+  Ctor = Animal (function ✓).
+  Symbol.hasInstance on Animal? No.
+  obj = d (typeof 'object', not null) — pass guard.
+  target = Animal.prototype.
+
+  Walk:
+    proto = Object.getPrototypeOf(d) = Dog.prototype.
+    proto === Animal.prototype? No.
+    proto = Object.getPrototypeOf(Dog.prototype) = Animal.prototype.
+    proto === Animal.prototype? YES. Return true.
+
+myInstanceof(d, Object):
+  target = Object.prototype.
+  Walk: Dog.prototype → Animal.prototype → Object.prototype (match). True.
+
+myInstanceof(d, Array):
+  target = Array.prototype.
+  Walk full chain to Object.prototype, then null. No match. False.
+
+myInstanceof(5, Number):
+  typeof 5 === 'number' → primitive guard fails → return false.
+
+Symbol.hasInstance override:
+  myInstanceof(4, Even):
+    Even[Symbol.hasInstance] is a function.
+    Call Even[Symbol.hasInstance](4) → 4 % 2 === 0 → true.
+    Return true.
+```
+
+---
+
+## 10. Common confusion + traps
+
+1. **Compare `proto === Ctor`** — chain holds prototype OBJECTS.
+2. **Forget `null` check** — infinite loop.
+3. **Return false for functions** — functions ARE objects (`fn instanceof Function` true).
+4. **Skip `Symbol.hasInstance`** — Promise uses it.
+5. **Primitives** — `5 instanceof Number` is false (not boxed).
+6. **Cross-realm objects** — `arr instanceof Array` false across iframes/vm.
+7. **Constructor equality vs instanceof** — different (single rung vs walk).
+
+---
+
+## 11. Senior follow-ups & variants
+
+### Variant 1 — `Symbol.hasInstance` demo
+`class Even { static [Symbol.hasInstance](v) { ... } }`. No instance needed.
+
+### Variant 2 — Cross-realm
+Different iframes have different `Array` constructors. Use `Array.isArray` for arrays.
+
+### Variant 3 — `isPrototypeOf` polyfill
+`Animal.prototype.isPrototypeOf(d)` — same walk, no `.prototype` indirection.
+
+### Variant 4 — `Object.create(null)` instance
+Chain has 1 link (`null`); `instanceof Object` is false.
+
+### Variant 5 — `Object.setPrototypeOf` mid-life
+Polyfill handles dynamically; walks live chain.
+
+---
+
+## 12. How to think aloud
+
+> "`instanceof` is a CHAIN WALK, not a single comparison. Walk `Object.getPrototypeOf(obj)` upward, comparing each link with `Ctor.prototype`. Stop on match (return true) or `null` (return false). Guard against primitives/null up front. Honor `Symbol.hasInstance` (ES2015+) if defined — classes can override instanceof. Compare with `Ctor.prototype`, NOT `Ctor` — the chain holds prototype OBJECTS, not constructor functions. `obj.constructor === Ctor` is just one rung; instanceof is the whole ladder. Cross-realm gotcha: different iframes have different `Array`/`Object` constructors. For arrays specifically use `Array.isArray`. Trap: comparing with Ctor instead of Ctor.prototype; missing null check (infinite loop); returning false for functions (they ARE objects)."
+
+---
+
+## 13. 60-second revision
+
+> - **Walk** `Object.getPrototypeOf(obj)` upward.
+> - **Compare** each link with `Ctor.prototype` (NOT `Ctor`).
+> - **Stop:** match → true; `null` → false.
+> - **Honor `Symbol.hasInstance`** if defined (Promise uses it).
+> - **Primitives:** `5 instanceof Number` is false.
+> - **Cross-realm:** different constructors per realm; use `Array.isArray`.
+> - **Two-link rule:** instance side = `[[Prototype]]`; constructor side = `.prototype`.
+> - **Trap:** compare with Ctor; no null check; return false for functions.
+
+---
+
+**Related:** [prototype-chain-inheritance.md](./prototype-chain-inheritance.md) · [polyfill-new.md](./polyfill-new.md) · [object-create-polyfill.md](./object-create-polyfill.md) · [class-to-prototype-desugar.md](./class-to-prototype-desugar.md)
+
+**Concept primer:** [`concepts/prototype.md`](../../concepts/prototype.md)

@@ -1,217 +1,264 @@
-# Build a sync data pipeline with generators
+# Generator pipeline — Unix pipes in JS
 
-## Source
-- MDN Generators: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/function*
-- "Generators in 2018" by Eric Elliott (still the cleanest write-up on pipelines via `yield`).
-- Comes up in functional-leaning Node interviews and ETL roles — anyone who's used Python's `itertools.chain` style coding asks for the JS equivalent.
+> **Difficulty:** Medium-Senior   |   **Time:** ~15 min   |   **Prereqs:** [fibonacci-generator.md](./fibonacci-generator.md), [custom-iterator.md](./custom-iterator.md)
+>
+> **Source:** ETL pipelines, functional Node. Modern alternative to `Array.prototype.map().filter().slice()` chains for large data.
 
-## Why this question matters in interviews
-Generators are the "I know JS deeply" signal. Most candidates use `map`/`filter`/`reduce` and stop. Senior backend engineers — especially those dealing with large CSV/log/JSON-lines files — pull out generators because they avoid materializing intermediate arrays. A 100 MB log file processed with `arr.filter(...).map(...)` peaks at ~300 MB of allocations. The same pipeline with generators peaks at one record. The interviewer is checking: can you compose `function*` stages like Unix `cat file | grep ERROR | awk '{print $1}' | head -10`? Bonus: it sets up the natural follow-up about async generators, which become full-featured streams.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+Compose `function*` stages into a pipeline: source → filter → map → take → consumer. O(1) memory per stage.
+
+**Verification examples**
+
 ```js
-function* take(iter, n) {
-  for (const x of iter) {
-    if (n-- <= 0) return;
-    yield x;
-  }
-}
-
 function* map(iter, fn)    { for (const x of iter) yield fn(x); }
 function* filter(iter, fn) { for (const x of iter) if (fn(x)) yield x; }
+function* take(iter, n)    { for (const x of iter) { if (n-- <= 0) return; yield x; } }
 
-// compose
-const lines    = readLines('access.log');          // function*
-const errors   = filter(lines, l => l.includes('ERROR'));
-const ips      = map(errors, l => l.split(' ')[0]);
-const firstTen = take(ips, 10);
-
-for (const ip of firstTen) console.log(ip);
+// Unix: cat log | grep ERROR | awk '{print $1}' | head -10
+const pipeline = take(map(filter(readLines('log'), l => l.includes('ERROR')), l => l.split(' ')[0]), 10);
+for (const ip of pipeline) console.log(ip);
 ```
 
-### Runtime / engine behavior
-- A generator function (`function*`) returns a **Generator** object: an iterator AND an iterable. It has a `.next()` method and also `[Symbol.iterator]()` returning itself.
-- Each `.next()` runs the generator body until the next `yield` (or `return`), then suspends. Returns `{ value, done }`.
-- **Lazy by construction.** `map(iter, fn)` doesn't run `fn` on anything until the consumer calls `.next()` on the resulting generator.
-- Composition is just function calling: `take(map(filter(source, ...), ...), 10)`. Each wrapper is itself a generator.
-- `for...of` calls `.next()` until `{ done: true }`. `break` triggers the generator's `.return()` method, which runs `try/finally` blocks — your cleanup hook.
-- **Memory: O(1) per stage.** Only one value flows through the pipeline at a time. No intermediate arrays.
-- **Backpressure is natural.** Downstream pulls when ready. If `take(iter, 10)` stops after 10 items, upstream stops being driven — `readLines` never reads more than ~10 lines worth of source.
-- Generators are sync — for I/O you'd reach for **async** generators (`async function*` + `for await`), which is the natural follow-up.
+**Constraints**
+- Each stage is `function*`.
+- No intermediate arrays — O(1) per stage.
+- `for...of` drives pulls; `take` stops the chain.
+- `try/finally` in source for resource cleanup.
 
-### Edge cases (interview traps)
-1. **Cleanup on `break`.** If `readLines` opens a file descriptor, you must `try/finally` inside the generator to close it. Otherwise, breaking out of a `for...of` loop early leaks the fd.
-2. **`return value` semantics.** A generator can `return v` — that `v` shows up as `{ value: v, done: true }`. `for...of` ignores the value when `done`. So don't rely on consumers seeing `return` values.
-3. **Generators are single-use.** Once exhausted, calling `.next()` returns `{ done: true }` forever. Can't reset. If you need re-iteration, wrap in a function and call it fresh.
-4. **No parallelism.** Generators are sequential. If a stage is expensive, the pipeline stalls. For CPU-heavy work you'd want worker threads; for I/O you'd want async generators.
-5. **`yield*` delegates** — `yield* otherGen()` flattens another generator inline. Equivalent to `for (const x of otherGen()) yield x;`, slightly cleaner.
-6. **Spreading is dangerous.** `[...generator]` materializes the entire output — defeats the streaming benefit. Use only when you know the output is small.
-7. **Errors mid-pipeline.** If a stage throws, the exception propagates up through `for...of`. The generator is then marked done. Downstream stages never see the value that caused the throw.
-8. **`.throw(err)`** lets a consumer inject an exception into the generator at the suspended `yield`. Used by frameworks; ordinary code rarely calls it.
+---
 
-## Brute force approach
-"I'll just chain array methods: `arr.filter(...).map(...).slice(0, 10)`." Works for small data but:
-- Each method materializes a new array. `filter` builds the full filtered array even if you only `take(10)`.
-- Memory peak is sum of all intermediates.
-- For a generator-style source (e.g., reading from disk lazily), you'd have to `[...gen]` first — converting your O(1) memory pipeline to O(n).
-- The interviewer specifically wants to see that you understand lazy composition.
+## 2. Plain-English restatement
 
-## Optimal approach
-Define each stage as `function*` taking the previous iterable as input. Compose by function calls: each call is O(1) (returns the generator object); no work happens until a consumer calls `.next()`. The for-loop at the end drives the entire pipeline one value at a time. Memory is constant in the size of the pipeline (one value in flight per stage).
+Generators chain like Unix pipes. Each stage yields one value at a time; the consumer pulls from the end, which pulls back through the chain. Memory is constant — one value in flight per stage.
 
-## Solution (JavaScript)
+---
+
+## 3. Why this matters in interviews
+
+Senior backend literacy. ETL, log processing, JSON Lines parsing. The mental model behind RxJS, Highland, Node streams.
+
+---
+
+## 4. Mental model
+
+```
+   Unix pipes in JS:
+   
+   cat log | grep ERROR | awk '{print $1}' | head -10
+   
+   becomes:
+   
+   take(map(filter(readLines('log'), isError), firstField), 10)
+   ↑     ↑   ↑                                              ↑
+   sink  stage stage                                       limit
+   
+   Pull model:
+   - for...of drives pulls.
+   - take pulls from map; map pulls from filter; filter pulls from source.
+   - One value flows through pipeline per iteration.
+   - Memory O(1) per stage.
+   
+   Backpressure FREE:
+   - Downstream pulls when ready. If take stops at 10, upstream stops.
+   - readLines never reads more source than needed.
+   
+   Cleanup:
+   - Source uses try/finally to close fds on early termination.
+   - for...of break → calls .return() on chain → propagates up.
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. Why does `take(map(filter(source, p), f), 10)` not materialize the whole source?
+> 2. What happens when consumer `break`s mid-loop?
+> 3. Where do you put `try/finally` for resource cleanup?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: chain array methods
+`.filter().map().slice()` — each method materializes intermediate array; O(n) memory.
+
+### Wrong attempt 2: spread between stages
+`[...filter(...)]` defeats laziness.
+
+### Wrong attempt 3: forget `try/finally`
+Early break leaks file descriptor.
+
+---
+
+## 7. The unlocking insight
+
+> **Each `function*` stage pulls from previous; composes via function calls. O(1) memory; backpressure free via pull model. `try/finally` in source for cleanup.**
+
+Three properties:
+
+1. **Pull model** — consumer drives.
+2. **Lazy composition** — no work until pulled.
+3. **Cleanup via `try/finally`** in source.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
 const fs = require('fs');
 
-/* ============================================================
-   stage primitives — generic, reusable
-   ============================================================ */
+// Stage primitives
+function* map(iter, fn)    { for (const x of iter) yield fn(x); }
+function* filter(iter, fn) { for (const x of iter) if (fn(x)) yield x; }
+function* take(iter, n)    { for (const x of iter) { if (n-- <= 0) return; yield x; } }
+function* flatMap(iter, fn){ for (const x of iter) yield* fn(x); }
 
-function* map(iter, fn) {
-  for (const x of iter) yield fn(x);
-}
-
-function* filter(iter, fn) {
-  for (const x of iter) if (fn(x)) yield x;
-}
-
-function* take(iter, n) {
-  for (const x of iter) {
-    if (n-- <= 0) return;
-    yield x;
-  }
-}
-
-function* flatMap(iter, fn) {
-  for (const x of iter) yield* fn(x);
-}
-
-function reduce(iter, fn, init) {
-  let acc = init;
-  for (const x of iter) acc = fn(acc, x);
-  return acc;
-}
-
-/* ============================================================
-   source — synchronous line reader with cleanup
-   ============================================================ */
-
+// Source with cleanup
 function* readLinesSync(path) {
-  // toy synchronous reader; in real code use a buffered stream
-  const fd = fs.openSync(path, 'r');
+  const fd = fs.openSync(path, 'r');                                     // step 1: open
   try {
     const buf = Buffer.alloc(64 * 1024);
     let tail = '';
-    let bytesRead;
-    while ((bytesRead = fs.readSync(fd, buf, 0, buf.length, null)) > 0) {
-      const text = tail + buf.toString('utf8', 0, bytesRead);
+    let bytes;
+    while ((bytes = fs.readSync(fd, buf, 0, buf.length, null)) > 0) {
+      const text = tail + buf.toString('utf8', 0, bytes);
       const lines = text.split('\n');
       tail = lines.pop();
-      for (const line of lines) yield line;
+      for (const line of lines) yield line;                              // step 2: yield
     }
     if (tail.length) yield tail;
   } finally {
-    fs.closeSync(fd);  // runs even if consumer breaks early — fd is safe
+    fs.closeSync(fd);                                                    // step 3: ALWAYS close
   }
 }
 
-/* ============================================================
-   compose a pipeline — Unix pipes in JS
-   ============================================================ */
-
-// equivalent of:   cat access.log | grep ERROR | awk '{print $1}' | head -10
+// Compose
 const pipeline = take(
   map(
-    filter(readLinesSync('access.log'), l => l.includes('ERROR')),
-    l => l.split(' ')[0]
+    filter(readLinesSync('access.log'), (l) => l.includes('ERROR')),
+    (l) => l.split(' ')[0],
   ),
-  10
+  10,
 );
 
 for (const ip of pipeline) console.log(ip);
-```
 
-If you prefer left-to-right reading, you can define a helper:
-
-```js
+// Or left-to-right
 function pipe(source, ...stages) {
   return stages.reduce((iter, stage) => stage(iter), source);
 }
-
 const result = pipe(
   readLinesSync('access.log'),
-  iter => filter(iter, l => l.includes('ERROR')),
-  iter => map(iter, l => l.split(' ')[0]),
-  iter => take(iter, 10),
+  (iter) => filter(iter, (l) => l.includes('ERROR')),
+  (iter) => map(iter, (l) => l.split(' ')[0]),
+  (iter) => take(iter, 10),
 );
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
-`access.log` has 1,000,000 lines. 50,000 contain `"ERROR"`. We want the first 10 ERROR IPs.
+```js
+// Compose tree traversal via yield*
+function* inorder(node) {
+  if (!node) return;
+  yield* inorder(node.left);
+  yield node.value;
+  yield* inorder(node.right);
+}
 
-- `for (const ip of pipeline)` calls `pipeline.next()` (which is `take`'s generator).
-- `take.next()` calls `for (const x of iter)` → `map.next()`.
-- `map.next()` calls `filter.next()`.
-- `filter.next()` calls `readLinesSync.next()` → reads buffer 1, yields line 1.
-- `filter` checks `line.includes('ERROR')` → most lines false. It calls `readLinesSync.next()` again, again, again — driving the source — until it finds an ERROR line at, say, line 247.
-- Yields line 247 to `map`.
-- `map` calls `line.split(' ')[0]` → `"10.0.0.5"`. Yields to `take`.
-- `take` decrements counter (10 → 9), yields `"10.0.0.5"` to `for...of`.
-- `console.log('10.0.0.5')`.
-- Loop iterates. Each iteration drives the source until one more ERROR line is found.
-- After 10 ERROR lines have been emitted, `take`'s counter hits 0. `take` calls `return`, which terminates the `take` generator.
-- The `for...of` loop exits. The `take` generator's cleanup runs (none here).
-- Critically: `readLinesSync` is suspended mid-read with the file descriptor open. When the `take` generator is garbage-collected (or when the consumer triggers `.return()` via early exit), the **`finally` block** in `readLinesSync` runs and closes the fd.
+const tree = { value: 2, left: { value: 1 }, right: { value: 3 } };
+[...inorder(tree)];                                                       // [1, 2, 3]
 
-Net: we read maybe ~10,000 source lines (depending on ERROR distribution), not 1,000,000. Memory is O(1). The file descriptor is correctly closed via `try/finally`.
+// Composes with for await for async sources
+async function* fetchLines(url) { /* yield lines from chunked HTTP */ }
+async function* asyncMap(iter, fn) { for await (const x of iter) yield fn(x); }
+```
 
-## Important takeaways
+---
 
-**Syntax to memorize**
-- `function*` declares a generator. `yield x` produces a value. `yield* gen()` delegates.
-- Generators implement both `Iterator` AND `Iterable` (their `[Symbol.iterator]()` returns themselves). They plug into `for...of`, spread, destructuring.
-- Stage helpers: `map`, `filter`, `take`, `flatMap` — all four-liners.
-- `try/finally` inside the generator is your cleanup hook. Critical for resource-holding sources.
+## 9. Step-by-step dry run
 
-**Patterns to reuse**
-- "Unix pipes in JS" — same mental model. Each stage is a process, each `yield` is a pipe.
-- This pattern naturally lifts to **async generators** (`async function*`, `for await`) for I/O-bound pipelines. Same shape, async semantics.
-- The same composed-iterable pattern powers RxJS-lite, Highland.js, and Node's `readable.iterator()`.
-- Once you have a generator pipeline, `Readable.from(gen)` (or `Readable.from(asyncGen)`) lifts it into a Node stream that plugs into `stream.pipeline`.
+```
+Pipeline: take(map(filter(readLinesSync('log'), isError), firstField), 10)
+Source has 1M lines, 50k contain ERROR.
 
-**Common mistakes**
-- Materializing intermediates with `[...]` or `Array.from(...)` between stages — destroys the memory benefit.
-- Forgetting `try/finally` in the source generator — leaks file descriptors, DB connections, etc. on early `break`.
-- Using array methods (`.map`, `.filter`) for huge data sources — same logic but eager and array-allocating.
-- Trying to reuse an exhausted generator. Always returns `{ done: true }`. Wrap in a thunk if needed.
-- Mixing sync generators with async I/O — you'll get sync-but-blocking code or hit "yield can't await." For async I/O, use `async function*`.
+for (const ip of pipeline):
+  Iteration 1:
+    pipeline.next() → take.next()
+    take asks map.next() → asks filter.next() → asks readLinesSync.next()
+    readLinesSync yields line 1.
+    filter: line 1 has ERROR? no. asks again. line 2. ... line 247 has ERROR.
+    filter yields line 247.
+    map: line.split(' ')[0] = '10.0.0.5'. yields to take.
+    take: counter 10 → 9. yields '10.0.0.5' to for..of.
+    Print '10.0.0.5'.
+  
+  ... continues until take counter hits 0.
+  
+After take counter 0: take returns. Chain unwinds. readLinesSync still suspended with fd open.
+When pipeline gets GC'd OR for...of calls .return() on early exit, readLinesSync's finally runs → fs.closeSync(fd).
 
-**Related questions**
-- `callback-API-to-async-iterator` — async generator version of source stage.
-- `transform-line-parser` — same line-splitting idea as a Node Transform stream.
-- `pipeline-error-propagation` — `pipeline(asyncGen, transform, dest)` is the async-stream analog.
+Total source reads: ~10k lines (depending on ERROR distribution), not 1M.
+Memory: O(1) per stage.
+```
 
-## Variants
+---
 
-1. **Async generator pipeline** — "Make every stage `async function*` so the source can do async I/O (HTTP, DB queries)." Same skeleton; `for...of` becomes `for await...of`. Composes with `stream.pipeline` since Node 12.
+## 10. Common confusion + traps
 
-2. **Reverse direction — push-based observers** — "Build the same pipeline but with push semantics (observer pattern)." Contrast: pull (generators) gives backpressure for free; push (observers) requires explicit buffering. Pull wins for data pipelines, push wins for events.
+1. **Materialize between stages** — `[...filter(...)]` kills laziness.
+2. **Array methods** — eager; allocate intermediates.
+3. **Forget `try/finally`** in source — fd leak on early break.
+4. **Reuse exhausted generator** — always done.
+5. **Mix sync + async** — sync `function*` can't `await`.
+6. **`yield` outside `function*`** — syntax error.
+7. **Throwing in stage** — propagates; downstream sees `done`.
 
-3. **Implement `pipe(source, ...stages)`** — "Write the left-to-right composition helper." 3-liner with `reduce` (shown above). Demonstrates functional fluency.
+---
 
-## Revision notes
+## 11. Senior follow-ups & variants
 
-> **generator-pipeline — 60 second recap**
-> - `function*` + `yield` = lazy iterator. `for...of` drives it one value at a time.
-> - Stage primitives: `map(iter, fn)`, `filter(iter, fn)`, `take(iter, n)`, `flatMap(iter, fn)`.
-> - Compose by function calling: `take(map(filter(source, p), f), 10)`. Or use a `pipe()` helper for left-to-right.
-> - Memory: O(1) per stage. Source isn't fully read if `take` ends early.
-> - **Trap:** `[...gen]` materializes everything — kills the streaming benefit.
-> - **Trap:** No `try/finally` in source = fd leak on `break`.
-> - Generators are single-use, sequential, sync. For I/O, lift to `async function*` + `for await`.
-> - Composes with `Readable.from(gen)` to plug into Node `stream.pipeline`.
-> - Mental model: **Unix pipes in JS**.
+### Variant 1 — Async generator pipeline
+`async function*` + `for await` for I/O sources.
+
+### Variant 2 — Push-based (observers)
+Pull (generators) gives backpressure for free; push requires explicit buffering.
+
+### Variant 3 — `pipe(source, ...stages)` helper
+Left-to-right composition via reduce.
+
+### Variant 4 — `Readable.from(gen())`
+Lift generator into Node stream for `pipeline()` integration.
+
+### Variant 5 — Iterator helpers (TC39 stage-4)
+`source().filter().map().take().toArray()` natively.
+
+---
+
+## 12. How to think aloud
+
+> "Generators chain like Unix pipes. Each stage is a `function*` that pulls from the previous iterable and yields transformed values. `take(map(filter(source, p), f), 10)` reads bottom-up at construction (no work yet); execution happens when consumer pulls. `for...of` at the sink drives pulls back through the chain. Memory O(1) per stage — only one value in flight. Source `try/finally` for cleanup (close file descriptor, DB cursor). For...of's `break` triggers `.return()` on chain — propagates up. For I/O-bound sources, switch to `async function*` + `for await...of` — same shape, async semantics. Compose with `Readable.from(asyncGen)` to plug into Node `stream.pipeline`. Trap: materializing intermediates (`[...filter(...)]`); using array methods (eager); forgetting try/finally; reusing exhausted generators."
+
+---
+
+## 13. 60-second revision
+
+> - **`function*` stages** chain like Unix pipes.
+> - **Pull model:** consumer drives; backpressure free.
+> - **O(1) memory** per stage — no intermediate arrays.
+> - **`try/finally` in source** for resource cleanup.
+> - **`for...of` break** → `.return()` → cleanup propagates.
+> - **`yield*` delegates** (tree traversal).
+> - **Lift to async:** `async function*` + `for await`.
+> - **`Readable.from(gen())`** for Node streams.
+> - **Trap:** spread between stages; array methods; forget try/finally.
+
+---
+
+**Related:** [fibonacci-generator.md](./fibonacci-generator.md) · [custom-iterator.md](./custom-iterator.md) · [async-iterator-pagination.md](./async-iterator-pagination.md) · [transform-line-parser.md](./transform-line-parser.md) · [pipeline-error-propagation.md](./pipeline-error-propagation.md)
+
+**Concept primer:** [`concepts/streams.md`](../../concepts/streams.md)

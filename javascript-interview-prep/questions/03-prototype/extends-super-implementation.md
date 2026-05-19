@@ -1,173 +1,242 @@
-# Implement `extends` + `super` manually (without the `class` keyword)
+# Implement `extends` + `super` manually
 
-## Source
-- Senior JS interview question — tests whether you understand the two prototype links `extends` installs.
-- MDN reference: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/super
+> **Difficulty:** Senior   |   **Time:** ~15 min   |   **Prereqs:** [prototype-chain-inheritance.md](./prototype-chain-inheritance.md), [class-to-prototype-desugar.md](./class-to-prototype-desugar.md)
+>
+> **Source:** Senior JS interview question. Tests the two prototype links `extends` installs.
 
-## Why this question matters in interviews
-Most candidates can write `class Dog extends Animal`. Far fewer can explain that `extends` performs **two** prototype writes — one on the instance side and one on the constructor side. This question separates "memorized the syntax" from "internalized the model." When you implement it manually with `Object.setPrototypeOf`, the interviewer can see whether you understand: (a) how `child.inheritedMethod` finds the parent method, (b) how `Child.inheritedStatic()` finds the parent static, (c) how `super(...)` initializes parent fields, and (d) how `super.method()` calls the parent's override. Backend engineers hit this when extending `EventEmitter`, `Error`, `Readable`, or building custom mongoose model hierarchies.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+Without using `class`, manually wire inheritance + super calls.
+
+**Verification examples**
+
 ```js
-// What we want to replicate, without using `class`:
-//   class B extends A { constructor(...) { super(...); ... }; m() { super.m(); ... } }
-
 function extend(Child, Parent) {
-  Object.setPrototypeOf(Child.prototype, Parent.prototype); // instance side
-  Object.setPrototypeOf(Child, Parent);                     // constructor (static) side
+  Object.setPrototypeOf(Child.prototype, Parent.prototype);   // instance chain
+  Object.setPrototypeOf(Child, Parent);                        // STATIC chain
 }
 
-function callSuper(Parent, instance, args) {
-  return Parent.call(instance, ...args);                    // = super(...args) in ctor
-}
-
-function callSuperMethod(Parent, instance, methodName, args) {
-  return Parent.prototype[methodName].call(instance, ...args); // = super.method(...)
-}
-```
-
-### Runtime / engine behavior
-- A constructor function has **two** important slots:
-  - `Ctor.prototype` — the object that becomes every instance's `[[Prototype]]`.
-  - `[[Prototype]]` of `Ctor` itself — the parent constructor, used for static method lookup.
-- `Object.setPrototypeOf(child, parent)` updates the internal `[[Prototype]]` slot. Engines deoptimize on this — avoid in hot paths.
-- Property lookup is uniform: when you write `Child.foo`, JS first checks `Child`'s own props, then walks `Child.__proto__`. Same for instances. The "two chains" exist because constructors are objects too.
-- `super(...)` semantics: in a class, it allocates `this` via the parent constructor (using `new.target` so the child's prototype is still installed). In manual code, `Parent.call(this, ...args)` is the practical equivalent for simple cases.
-
-### Edge cases (these are the interview traps)
-1. **Forgetting the static chain** — most common bug. `Object.setPrototypeOf(Child.prototype, Parent.prototype)` alone misses `Child.parentStatic()`.
-2. **`Child.prototype = Object.create(Parent.prototype)`** — pre-ES6 pattern. Works for the instance chain but clobbers `Child.prototype.constructor` (now points to `Parent`) and **doesn't** set the static chain. Always re-pin `Child.prototype.constructor = Child` if you use this pattern.
-3. **`Object.setPrototypeOf` deopt** — engines see this as "shape change," disable inline caches for affected objects. Fine at module init, terrible inside per-request handlers.
-4. **`super.method` is NOT `this.__proto__.method`** — common mistake. In multi-level inheritance (`A ← B ← C`), if `C.m` calls `super.m`, `this.__proto__` is always `C.prototype`, leading to infinite recursion. The correct lookup is from the method's *home object* (`Object.getPrototypeOf(homeObject)`).
-5. **`Reflect.construct` for built-ins** — to subclass `Array`, `Error`, `Map`, `Parent.call(this, ...)` fails (these constructors ignore `this`). Use `Reflect.construct(Parent, args, new.target)`.
-6. **`Error` subclasses** — `class MyError extends Error {}` loses stack traces unless you call `Error.captureStackTrace(this, this.constructor)` (V8-specific) or set `this.name = 'MyError'`. Worth mentioning.
-7. **Symbol.species** — when a subclass method returns a new instance (e.g., `Array.prototype.map`), the engine consults `this.constructor[Symbol.species]` to decide the constructor. Subtle, but relevant for built-in subclassing.
-
-## Brute force approach
-"Use `Child.prototype = new Parent()`." Runs the parent constructor at definition time (with no arguments — likely throws), and any side effects (DB connection, file open) happen once globally instead of per-instance. The pre-ES5 hack that everyone moved away from.
-
-## Optimal approach
-Two `Object.setPrototypeOf` calls — done. Call `Parent.call(this, ...args)` inside `Child` to mimic `super(...)`. For built-in parents or precise spec semantics, use `Reflect.construct`. Re-pin `constructor` if needed for `instance.constructor === Child` checks.
-
-## Solution (JavaScript)
-
-```js
-/**
- * Manually wire up inheritance, replicating what `class Child extends Parent` does.
- * @param {Function} Child
- * @param {Function} Parent
- */
-function inherit(Child, Parent) {
-  if (typeof Parent !== 'function' && Parent !== null) {
-    throw new TypeError('Class extends value is not a constructor or null');
-  }
-  // Instance-side chain — instances of Child inherit Parent's prototype methods
-  Object.setPrototypeOf(Child.prototype, Parent === null ? null : Parent.prototype);
-  // Constructor-side chain — Child inherits Parent's static methods
-  Object.setPrototypeOf(Child, Parent === null ? Function.prototype : Parent);
-  // Re-pin constructor (it was reset when we touched the prototype object)
-  Object.defineProperty(Child.prototype, 'constructor', {
-    value: Child, writable: true, configurable: true, enumerable: false,
-  });
-}
-
-// ---- Example use ----
-
-function Animal(name) {
-  this.name = name;
-}
-Animal.prototype.speak = function () {
-  console.log(this.name + ' makes a sound');
-};
-Animal.kingdom = function () { return 'Animalia'; };
+function Animal(name) { this.name = name; }
+Animal.prototype.speak = function() { return `${this.name} speaks`; };
+Animal.kingdom = function() { return 'Animalia'; };
 
 function Dog(name, breed) {
-  // super(name) — for built-ins, swap to Reflect.construct
-  Animal.call(this, name);
+  Animal.call(this, name);          // = super(name)
   this.breed = breed;
 }
-inherit(Dog, Animal);
+extend(Dog, Animal);
 
-// Override + super.method()
-Dog.prototype.speak = function () {
-  // super.speak() — look up via the home object, not this.__proto__
-  Object.getPrototypeOf(Dog.prototype).speak.call(this);
-  console.log(this.name + ' barks');
-};
-
-const rex = new Dog('Rex', 'Lab');
-rex.speak();             // 'Rex makes a sound' then 'Rex barks'
-rex instanceof Dog;      // true
-rex instanceof Animal;   // true
-Dog.kingdom();           // 'Animalia' — found via static chain
-rex.constructor === Dog; // true (because we re-pinned it)
+const d = new Dog('rex', 'lab');
+d.speak();                          // 'rex speaks' (inherited)
+Dog.kingdom();                      // 'Animalia' (STATIC chain)
+d instanceof Animal;                // true
 ```
 
-## Step-by-step dry run
+**Constraints**
+- `extends` installs TWO prototype writes — instance side AND static side.
+- `super(args)` = `Parent.call(this, ...args)` (or `Reflect.construct` for built-ins).
+- `super.method()` = `Parent.prototype.method.call(this, ...)`.
 
-Input: `const rex = new Dog('Rex', 'Lab'); rex.speak(); Dog.kingdom();`
+---
 
-Setup state after `inherit(Dog, Animal)`:
-- `Dog.prototype.__proto__ === Animal.prototype` (instance chain).
-- `Dog.__proto__ === Animal` (static chain).
-- `Dog.prototype.constructor === Dog` (re-pinned).
+## 2. Plain-English restatement
 
-Trace `new Dog('Rex', 'Lab')`:
-- `new` creates `obj = {}`, sets `obj.__proto__ = Dog.prototype`, calls `Dog.call(obj, 'Rex', 'Lab')`.
-- Inside `Dog`: `Animal.call(obj, 'Rex')` → sets `obj.name = 'Rex'`. Then `obj.breed = 'Lab'`.
-- `obj` is returned implicitly. `rex = { name: 'Rex', breed: 'Lab' }` with chain to `Dog.prototype → Animal.prototype → Object.prototype`.
+`class Child extends Parent` does two things: wires `Child.prototype` to inherit from `Parent.prototype` (so instances find inherited methods), AND wires `Child` itself to inherit from `Parent` (so static methods are inherited too). Most candidates remember the first; forget the second.
 
-Trace `rex.speak()`:
-- `rex.speak`: not own → `Dog.prototype.speak` (the override). Call with `this = rex`.
-- `Object.getPrototypeOf(Dog.prototype).speak` → `Animal.prototype.speak`. `.call(rex)` → logs `'Rex makes a sound'`.
-- Then `console.log(rex.name + ' barks')` → `'Rex barks'`.
+---
 
-Trace `Dog.kingdom()`:
-- Property lookup on `Dog`. Not own. Walk `Dog.__proto__` → `Animal`. Found `kingdom`. Call with `this = Dog`. Returns `'Animalia'`.
-- This is the static-chain payoff. Without `Object.setPrototypeOf(Dog, Animal)`, this would throw `Dog.kingdom is not a function`.
+## 3. Why this matters in interviews
 
-## Important takeaways
+Separates "memorized syntax" from "internalized model." Two prototype links, not one.
 
-**Syntax to memorize**
-- TWO links every time:
-  - `Object.setPrototypeOf(Child.prototype, Parent.prototype)` — instances inherit methods.
-  - `Object.setPrototypeOf(Child, Parent)` — constructor inherits statics.
-- `super(...)` ≈ `Parent.call(this, ...args)` for simple cases; `Reflect.construct(Parent, args, new.target)` for built-ins.
-- `super.method(...)` ≈ `Object.getPrototypeOf(homeObject).method.call(this, ...args)`. The home object is `Child.prototype` for instance methods, `Child` for static methods.
+---
 
-**Patterns to reuse**
-- The two-link rule generalizes: any time you "extend" something in JS, ask "what's the instance-side chain?" and "what's the static-side chain?"
-- `Object.setPrototypeOf` at module init is fine; never in hot paths (deopt).
+## 4. Mental model
 
-**Common mistakes**
-- Setting only the instance-side chain — `Dog.parentStatic()` silently breaks.
-- Using `this.__proto__.method.call(this)` for `super.method` — infinite loop in 3+ level hierarchies.
-- Forgetting `Child.prototype.constructor = Child` after replacing `Child.prototype` — `instance.constructor` lies.
-- Calling `Parent.call(this, ...)` when `Parent` is a built-in (`Array`, `Error`, `Map`) — the parent ignores `this` and returns a new instance. Use `Reflect.construct`.
+```
+   class Child extends Parent {} does TWO writes:
+   
+   1. Object.setPrototypeOf(Child.prototype, Parent.prototype)
+      → child instances find inherited instance methods.
+   
+   2. Object.setPrototypeOf(Child, Parent)
+      → Child.someStatic() finds Parent's static methods.
+   
+   super(args) inside constructor:
+      Parent.call(this, ...args)  // simple case
+      Reflect.construct(Parent, args, new.target)  // built-in subclassing
+   
+   super.method(args) inside method:
+      Parent.prototype.method.call(this, ...args)
+   
+   NOT this.__proto__.method() — that's wrong for multi-level inheritance.
+```
 
-**Related questions**
-- Class-to-prototype desugar (this is the same question framed differently)
-- `instanceof` polyfill (walks the instance-side chain you just built)
-- "Why doesn't `class MyArray extends Array {}` work in pre-ES6 desugar?" (answer: `Reflect.construct` required)
+---
 
-## Variants
+## 5. Try it yourself first
 
-1. **Diamond inheritance / mixin** — "How would you compose multiple parents?" JS doesn't support multiple inheritance directly; use function-returning-class mixins: `function Serializable(Base) { return class extends Base { ... } }`.
+> **Predict before reading on:**
+> 1. What does `class Child extends Parent` write besides `Child.prototype.__proto__`?
+> 2. Why does `Parent.call(this, ...)` work for `super(...)` in simple cases?
+> 3. Why doesn't it work for `Array`/`Error`/`Map`?
 
-2. **`Reflect.construct` for built-ins** — "Subclass `Error` manually so stack traces work." Use `Reflect.construct(Error, [msg], new.target)`; assign `this.name = 'MyError'`; call `Error.captureStackTrace(this, MyError)` for V8.
+---
 
-3. **Lazy super setup** — "Defer `inherit(Child, Parent)` until first instantiation." Wrap the constructor: on first `new`, run inherit then call the real ctor. Avoids the `Object.setPrototypeOf` deopt at module load if classes are rarely used.
+## 6. Brute force — walked through
 
-## Revision notes
+### Wrong attempt 1: only set instance chain
+`Object.setPrototypeOf(Child.prototype, Parent.prototype)` alone misses static inheritance.
 
-> **extends/super manual — 60 second recap**
-> - `extends` installs **two** prototype links — instance side (`Child.prototype → Parent.prototype`) and static side (`Child → Parent`).
-> - `super(...args)` in constructor → `Parent.call(this, ...args)` (or `Reflect.construct` for built-ins).
-> - `super.method(...)` → `Object.getPrototypeOf(homeObject).method.call(this, ...)`. Home object, NOT `this.__proto__`.
-> - Re-pin `Child.prototype.constructor = Child` if you replace the prototype object.
-> - `Object.setPrototypeOf` is a deopt — fine at init, terrible in hot paths.
-> - **Trap:** forgetting the static chain — inherited statics silently break.
-> - **Trap:** `this.__proto__.method` for super → infinite recursion in 3-level hierarchies.
-> - Built-in parents (`Array`, `Error`, `Map`) require `Reflect.construct` + `new.target`.
+### Wrong attempt 2: `Child.prototype = new Parent()`
+Runs Parent constructor at definition time; side effects fire globally.
+
+### Wrong attempt 3: `super.method = this.__proto__.method`
+Infinite recursion in multi-level inheritance.
+
+---
+
+## 7. The unlocking insight
+
+> **`extends` does TWO `Object.setPrototypeOf` writes. `super(args)` ≈ `Parent.call(this, args)`. `super.method(args)` = `Parent.prototype.method.call(this, args)`. For built-in subclassing (Array, Error), use `Reflect.construct`.**
+
+Three properties:
+
+1. **TWO prototype writes** — instance + static chains.
+2. **`super(args)`** = `Parent.call(this, ...)`.
+3. **`super.method`** uses home-object lookup, NOT `this.__proto__`.
+
+---
+
+## 8. Solution (annotated)
+
+```js
+function extend(Child, Parent) {
+  Object.setPrototypeOf(Child.prototype, Parent.prototype);              // step 1: instance chain
+  Object.setPrototypeOf(Child, Parent);                                   // step 2: STATIC chain
+}
+
+function Animal(name) { this.name = name; }
+Animal.prototype.speak = function() { return `${this.name} speaks`; };
+Animal.kingdom = function() { return 'Animalia'; };
+
+function Dog(name, breed) {
+  Animal.call(this, name);                                                // step 3: super(name)
+  this.breed = breed;
+}
+Dog.prototype.speak = function() {                                         // step 4: override + super.speak
+  const parent = Animal.prototype.speak.call(this);
+  return `${parent}; ${this.name} barks`;
+};
+extend(Dog, Animal);
+
+const d = new Dog('rex', 'lab');
+d.speak();                                                                 // 'rex speaks; rex barks'
+Dog.kingdom();                                                              // 'Animalia' (via static chain)
+d instanceof Animal;                                                        // true
+```
+
+**Try it yourself**
+
+```js
+// Subclassing built-ins needs Reflect.construct
+function MyArray() {
+  return Reflect.construct(Array, arguments, MyArray);                     // <- new.target
+}
+Object.setPrototypeOf(MyArray.prototype, Array.prototype);
+Object.setPrototypeOf(MyArray, Array);
+
+const a = new MyArray(1, 2, 3);
+a instanceof MyArray;                                                       // true
+a instanceof Array;                                                         // true
+a.length;                                                                   // 3
+```
+
+---
+
+## 9. Step-by-step dry run
+
+```
+extend(Dog, Animal):
+  Object.setPrototypeOf(Dog.prototype, Animal.prototype)
+    → Dog.prototype.__proto__ = Animal.prototype
+  Object.setPrototypeOf(Dog, Animal)
+    → Dog.__proto__ = Animal
+
+new Dog('rex', 'lab'):
+  obj = Object.create(Dog.prototype)
+  Dog.apply(obj, ['rex', 'lab']):
+    Animal.call(this, 'rex'):  // super
+      obj.name = 'rex'
+    obj.breed = 'lab'
+  return obj
+
+d.speak():
+  Walk: d → Dog.prototype.speak found.
+  Invoke with this=d:
+    Animal.prototype.speak.call(this) → 'rex speaks'
+    return 'rex speaks; rex barks'
+
+Dog.kingdom():
+  Walk: Dog own? No. Dog.__proto__ = Animal own? YES → Animal.kingdom.
+  Invoke → 'Animalia'.
+  ← static chain at work!
+```
+
+---
+
+## 10. Common confusion + traps
+
+1. **Forget static chain** — `Child.staticMethod` won't find `Parent.staticMethod`.
+2. **`Child.prototype = new Parent()`** — pre-ES5 anti-pattern; runs ctor at definition.
+3. **`super.method = this.__proto__.method`** — wrong for multi-level (infinite recursion).
+4. **`Object.setPrototypeOf` deopt** — fine at module init; avoid in hot paths.
+5. **Built-in subclassing** — `Array.call(this)` fails; use `Reflect.construct`.
+6. **`Error` subclass** — loses stack; use `Error.captureStackTrace`.
+7. **Re-pin `constructor`** if you reassign Child.prototype.
+
+---
+
+## 11. Senior follow-ups & variants
+
+### Variant 1 — `Reflect.construct` for built-ins
+`new.target` controls which prototype is installed. Required for `Array`, `Error`, `Map`.
+
+### Variant 2 — Symbol.species
+Subclass methods returning instances use `this.constructor[Symbol.species]`.
+
+### Variant 3 — Multi-level inheritance
+A ← B ← C. `super.m` in C must look up from C.prototype's home, not `this.__proto__`.
+
+### Variant 4 — Mixin pattern
+Multiple inheritance via `Object.assign(Target.prototype, ...mixins)`.
+
+### Variant 5 — Class fields desugar
+Public fields become assignments in constructor; private fields use WeakMap.
+
+---
+
+## 12. How to think aloud
+
+> "`class Child extends Parent` does TWO prototype writes — most candidates remember only one. (1) `Object.setPrototypeOf(Child.prototype, Parent.prototype)` so child INSTANCES find inherited instance methods. (2) `Object.setPrototypeOf(Child, Parent)` so `Child.someStatic()` finds Parent's STATIC methods. Inside constructor: `super(args)` is `Parent.call(this, ...args)` for simple cases, `Reflect.construct(Parent, args, new.target)` for built-in subclassing (Array, Error, Map ignore `this` in normal call). Inside method: `super.method(args)` is `Parent.prototype.method.call(this, ...args)`. NOT `this.__proto__.method` — that recurses infinitely in multi-level inheritance because home-object lookup is from the method's defining class. Trap: forget static chain; use new Parent() at definition; build-in subclassing without Reflect.construct."
+
+---
+
+## 13. 60-second revision
+
+> - **`extends`** = TWO `setPrototypeOf` writes.
+> - **Instance chain:** `Child.prototype.__proto__ = Parent.prototype`.
+> - **Static chain:** `Child.__proto__ = Parent`.
+> - **`super(args)`** ≈ `Parent.call(this, ...args)`; built-ins need `Reflect.construct`.
+> - **`super.method(args)`** = `Parent.prototype.method.call(this, ...args)`.
+> - **Home-object lookup** — NOT `this.__proto__.method`.
+> - **`Object.setPrototypeOf` deopts** — fine at init; avoid hot paths.
+> - **Trap:** forget static chain; pre-ES5 `Child.prototype = new Parent()`; built-in subclass without Reflect.construct.
+
+---
+
+**Related:** [prototype-chain-inheritance.md](./prototype-chain-inheritance.md) · [class-to-prototype-desugar.md](./class-to-prototype-desugar.md) · [reflect-construct-vs-new.md](./reflect-construct-vs-new.md) · [polyfill-new.md](./polyfill-new.md)
+
+**Concept primer:** [`concepts/prototype.md`](../../concepts/prototype.md)

@@ -1,225 +1,308 @@
-# Generate the power set (all subsets) of an array
+# Power set — all subsets
 
-## Source
-- Canonical recursion + bitmask interview problem.
-- LeetCode #78 "Subsets": https://leetcode.com/problems/subsets/
-- LeetCode #90 "Subsets II" (with duplicates) is the natural follow-up: https://leetcode.com/problems/subsets-ii/
+> **Difficulty:** Medium   |   **Time:** ~10 min   |   **Prereqs:** [permutations.md](./permutations.md), [backtracking-template.md](./backtracking-template.md)
+>
+> **Source:** LeetCode #78. Subsets II for duplicates (#90).
 
-## Why this question matters in interviews
-Power set is the **simplest non-trivial recursion problem that has two genuinely different solutions** — include/exclude recursion and bitmask iteration. Senior interviewers love it because the *follow-up* "give me a second solution" instantly separates rote candidates from people who actually understand the structure (2^n subsets ↔ n-bit numbers). The bitmask variant is also a load-bearing technique in real backend work: feature-flag combinations, permission matrix enumeration, RBAC role-fan-out testing, and subset-sum / knapsack DP. If `n <= 20` you can enumerate every subset by iterating `for (let mask = 0; mask < 1 << n; mask++)`. Knowing this is a senior-level move.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+Generate all 2^n subsets. Two solutions: include/exclude recursion, and bitmask iteration.
 
-Two canonical solutions. Memorize both.
+**Verification examples**
+
+```js
+powerSet([1, 2, 3]);
+// [[], [3], [2], [2,3], [1], [1,3], [1,2], [1,2,3]]
+
+powerSet([]);                              // [[]]
+powerSet([1]);                             // [[], [1]]
+
+// Bitmask variant — order may differ
+powerSetBitmask([1, 2]);
+// [[], [1], [2], [1,2]]
+```
+
+**Constraints**
+- 2^n outputs.
+- Bitmask viable for n ≤ 30 (bit ops).
+- Order: recursion natural; bitmask numeric.
+
+---
+
+## 2. Plain-English restatement
+
+For each element: include or exclude. Two solutions: recursion (binary tree depth n) or bitmask iteration (for each integer 0..2^n-1, bits indicate inclusion).
+
+---
+
+## 3. Why this matters in interviews
+
+Two genuinely different solutions. Follow-up "give second solution" separates rote from understanding (2^n ↔ n-bit numbers).
+
+---
+
+## 4. Mental model
+
+```
+   Include/exclude recursion:
+     bt(index, current):
+       if index === n: push [...current]; return
+       bt(index + 1, current)      ← exclude
+       current.push(nums[index])
+       bt(index + 1, current)      ← include
+       current.pop()                ← unchoose
+   
+   Bitmask iteration:
+     for mask = 0; mask < (1 << n); mask++:
+       subset = []
+       for i = 0; i < n; i++:
+         if (mask & (1 << i)) subset.push(nums[i])
+       push subset
+   
+   Bitmask viable for n ≤ 30:
+     1 << 30 = 1B; loop manageable but output limit.
+     n=20: 1M subsets; OK.
+     n=32: overflow in JS (>>> 0 handling).
+   
+   With duplicates (LeetCode #90):
+     Sort + iterative include all + skip duplicates.
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. Output count?
+> 2. Bitmask order vs recursion order?
+> 3. Why is bitmask "interesting" follow-up?
+
+---
+
+## 6. Brute force — walked through
+
+```js
+// Iterative push-all
+function ps(nums) {
+  let result = [[]];
+  for (const n of nums) {
+    const next = [];
+    for (const sub of result) next.push(sub, [...sub, n]);
+    result = next;
+  }
+  return result;
+}
+```
+
+Works. Conceptually: each new element doubles results (include/exclude each existing).
+
+---
+
+## 7. The unlocking insight
+
+> **Include/exclude recursion OR bitmask iteration. 2^n subsets correspond to n-bit numbers. Pick by clarity.**
+
+Three properties:
+
+1. **Include/exclude** branch.
+2. **2^n ↔ n bits** bitmask.
+3. **`start` for dedup** (skip).
+
+---
+
+## 8. Solution (annotated)
 
 ```js
 // (A) Include/exclude recursion
 function powerSet(nums) {
   const result = [];
-  function backtrack(index, current) {
+  function bt(index, current) {
     if (index === nums.length) {
-      result.push([...current]);
+      result.push([...current]);                                            // step 1: snapshot
       return;
     }
-    // exclude nums[index]
-    backtrack(index + 1, current);
-    // include nums[index]
+    bt(index + 1, current);                                                  // step 2: exclude
     current.push(nums[index]);
-    backtrack(index + 1, current);
-    current.pop();                    // restore
+    bt(index + 1, current);                                                  // step 3: include
+    current.pop();                                                            // step 4: unchoose
   }
-  backtrack(0, []);
+  bt(0, []);
   return result;
 }
 
-// (B) Bitmask iteration — no recursion at all
+// (B) Bitmask iteration — no recursion
 function powerSetBitmask(nums) {
   const n = nums.length;
   const result = [];
-  for (let mask = 0; mask < (1 << n); mask++) {   // 2^n iterations
+  for (let mask = 0; mask < (1 << n); mask++) {                              // step 5: 2^n masks
     const subset = [];
     for (let i = 0; i < n; i++) {
-      if (mask & (1 << i)) subset.push(nums[i]);  // bit i set ⇒ include
+      if (mask & (1 << i)) subset.push(nums[i]);                             // step 6: bit set
     }
     result.push(subset);
   }
   return result;
 }
+
+// (C) Iterative double
+function powerSetDouble(nums) {
+  let result = [[]];
+  for (const n of nums) {
+    const next = [];
+    for (const sub of result) {
+      next.push(sub);
+      next.push([...sub, n]);                                                // step 7: double
+    }
+    result = next;
+  }
+  return result;
+}
+
+// With duplicates
+function powerSetUnique(nums) {
+  nums = [...nums].sort((a, b) => a - b);
+  const result = [];
+  function bt(start, current) {
+    result.push([...current]);
+    for (let i = start; i < nums.length; i++) {
+      if (i > start && nums[i] === nums[i - 1]) continue;                   // step 8: skip dup
+      current.push(nums[i]);
+      bt(i + 1, current);
+      current.pop();
+    }
+  }
+  bt(0, []);
+  return result;
+}
 ```
 
-### Runtime / engine behavior
-- **Output size is `2^n`** — fixed. Total work is `O(n · 2^n)` because each subset has average length `n/2` and we copy it out.
-- **Recursion variant:** stack depth `O(n)`, branching factor 2, exactly `2^n` leaves. Tree is a perfect binary tree of height n.
-- **Bitmask variant:** zero recursion. Uses the fact that there are exactly `2^n` n-bit integers, each corresponding to a unique subset (bit i = "include element i").
-- **`1 << n` for n >= 32** breaks: JS bitwise ops are 32-bit signed. For `n=31` `1 << 31` is `-2147483648`. Use `2 ** n` or `BigInt` for `n >= 31`. (Realistically the loop OOMs first — `2^30` subsets is already infeasible.)
-- **`mask & (1 << i)`** is `0` or non-zero, not strictly `true`/`false`. Use as truthy in an `if`, or compare `!== 0` for clarity.
-
-### Edge cases
-1. **Empty input** — `[]` has exactly one subset, the empty set `[[]]`. Don't return `[]`.
-2. **Single element** — `[1]` returns `[[], [1]]`.
-3. **Duplicates** — `[1, 1, 2]` produces 8 subsets but only 6 *distinct* (LC #90). To dedupe: sort, then skip the include branch when `nums[i] === nums[i-1]` and the previous wasn't included.
-4. **Order of output** — include/exclude gives `[]` first; bitmask gives `[]` first (mask=0). But the **intermediate ordering differs**. Don't assume.
-5. **n > 25** is operationally infeasible — `2^25` ≈ 33M subsets, several GB of arrays. Cap any test at `n <= 20`.
-6. **Reference aliasing** — same trap as permutations: `result.push(current)` shares the live array. Always `[...current]` or build a fresh one (bitmask variant does this naturally).
-7. **Bit shift gotcha at n=32** — `1 << 32` in JS is `1`, not `2^32`. Bitwise ops mod by 32. Don't use bitmask for `n >= 31`.
-
-## Brute force approach
-"Generate all permutations and dedupe to subsets." Wastes `n!` work to produce `2^n` results — for n=10 that's 3.6M perms reduced to 1024 subsets, ~3500x wasted. Mention only to dismiss.
-
-## Optimal approach
-Two equally optimal solutions at `O(n · 2^n)`:
-
-**Recursive** is structural — clearly mirrors "for each element, two choices: in or out." Best for explanation and for problems where you need to *prune* (e.g., subsets summing to a target).
-
-**Bitmask** is iterative, has no stack overhead, and is the canonical way to enumerate subsets for small `n` in competitive programming and backend feature-flag work. It also makes "the k-th subset" a constant-time lookup: just write `k` in binary.
-
-Show both. State that you'd pick recursion when the subset has a *constraint* (so you can prune) and bitmask when you genuinely need all `2^n`.
-
-## Solution (JavaScript)
+**Try it yourself**
 
 ```js
-/**
- * Power set via include/exclude recursion.
- * Time: O(n · 2^n).  Space: O(n · 2^n) output, O(n) stack.
- */
-function powerSet(nums) {
+powerSet([1, 2, 3]).length;                                   // 8 = 2^3
+powerSet([]).length;                                          // 1 (just the empty set)
+powerSet([1]);                                                // [[], [1]]
+
+powerSetBitmask([1, 2]);                                      // [[], [1], [2], [1,2]]
+
+// Feature flag combinations (real backend use)
+const flags = ['darkmode', 'beta', 'experimental'];
+powerSetBitmask(flags);                                       // all 8 combos for testing
+
+// Subsets with constraint
+function subsetsOfSize(nums, k) {
   const result = [];
-  function backtrack(index, current) {
-    if (index === nums.length) {
-      result.push([...current]);
-      return;
+  function bt(start, current) {
+    if (current.length === k) { result.push([...current]); return; }
+    for (let i = start; i < nums.length; i++) {
+      current.push(nums[i]);
+      bt(i + 1, current);
+      current.pop();
     }
-    backtrack(index + 1, current);          // exclude
-    current.push(nums[index]);
-    backtrack(index + 1, current);          // include
-    current.pop();
   }
-  backtrack(0, []);
+  bt(0, []);
   return result;
 }
-
-/**
- * Power set via bitmask iteration.
- * Best when you need O(1) random access to the k-th subset.
- */
-function powerSetBitmask(nums) {
-  const n = nums.length;
-  if (n >= 31) throw new RangeError('use BigInt or recursion for n >= 31');
-  const total = 1 << n;
-  const result = new Array(total);
-  for (let mask = 0; mask < total; mask++) {
-    const subset = [];
-    for (let i = 0; i < n; i++) {
-      if (mask & (1 << i)) subset.push(nums[i]);
-    }
-    result[mask] = subset;
-  }
-  return result;
-}
-
-/**
- * Lazy generator — yields one subset at a time. Useful when 2^n
- * would OOM but you only need to scan or filter.
- */
-function* powerSetLazy(nums) {
-  const n = nums.length;
-  const current = [];
-  function* go(i) {
-    if (i === n) {
-      yield current.slice();
-      return;
-    }
-    yield* go(i + 1);
-    current.push(nums[i]);
-    yield* go(i + 1);
-    current.pop();
-  }
-  yield* go(0);
-}
+subsetsOfSize([1, 2, 3, 4], 2);                               // [[1,2],[1,3],[1,4],[2,3],[2,4],[3,4]]
 ```
 
-## Step-by-step dry run
+---
 
-Input: `powerSet([1, 2, 3])`.
+## 9. Step-by-step dry run
 
-Recursion tree (exclude is left, include is right):
 ```
-                          (i=0, [])
-               exclude /            \ include
-              (i=1, [])              (i=1, [1])
-         excl /     \ incl       excl /      \ incl
-    (i=2,[])      (i=2,[2])    (i=2,[1])   (i=2,[1,2])
-    excl/ \incl   excl/ \incl  excl/ \incl excl/ \incl
-   []   [3]      [2] [2,3]    [1] [1,3]   [1,2] [1,2,3]
+powerSet([1, 2]):
+
+bt(0, []):
+  bt(1, []):            // exclude 1
+    bt(2, []):          // exclude 2 → push [].
+    push 2: bt(2, [2]) → push [2]. pop.
+  push 1: bt(1, [1]):
+    bt(2, [1]) → push [1].
+    push 2: bt(2, [1,2]) → push [1,2]. pop.
+  pop.
+
+Result: [[], [2], [1], [1,2]].
+
+powerSetBitmask([1, 2]):
+  n=2. masks 0, 1, 2, 3.
+  mask=0 (00): no bits → [].
+  mask=1 (01): bit 0 → [1].
+  mask=2 (10): bit 1 → [2].
+  mask=3 (11): bits 0, 1 → [1, 2].
+  Result: [[], [1], [2], [1, 2]].
+
+Bitmask order: by integer; recursion order: by include/exclude tree.
+
+With dups [1, 1, 2]:
+  sorted = [1, 1, 2].
+  bt(0, []): push [].
+    i=0 (1): push 1, bt(1, [1]): push [1].
+      i=1 (1): push 1, bt(2, [1,1]): push [1,1].
+        i=2 (2): push 2, bt(3, [1,1,2]): push [1,1,2]. pop.
+      pop.
+      i=2 (2): push 2, bt(3, [1,2]): push [1,2]. pop.
+    pop.
+    i=1 (1): i>start && nums[1]===nums[0] → SKIP.
+    i=2 (2): push 2, bt(3, [2]): push [2]. pop.
+
+  Result: [[], [1], [1,1], [1,1,2], [1,2], [2]]   (6 unique, vs 2^3=8).
 ```
 
-Output: `[[], [3], [2], [2,3], [1], [1,3], [1,2], [1,2,3]]` — exactly 2³ = 8 subsets.
+---
 
-Now the bitmask variant for the same input, with `mask` from 0 to 7:
+## 10. Common confusion + traps
 
-| mask (binary) | bits set | subset |
-|--|--|--|
-| 0 (000) | — | `[]` |
-| 1 (001) | i=0 | `[1]` |
-| 2 (010) | i=1 | `[2]` |
-| 3 (011) | i=0,1 | `[1, 2]` |
-| 4 (100) | i=2 | `[3]` |
-| 5 (101) | i=0,2 | `[1, 3]` |
-| 6 (110) | i=1,2 | `[2, 3]` |
-| 7 (111) | i=0,1,2 | `[1, 2, 3]` |
+1. **Order differs** between recursion and bitmask.
+2. **n > 30** — bitmask exceeds 32-bit; need BigInt.
+3. **Push live current** — all entries final state.
+4. **Dedup variant** — sort + `i > start` skip.
+5. **`for..in` over mask** — wrong; numeric loop.
+6. **Subsets of size k** — start parameter for combinations.
+7. **n! vs 2^n** — perm vs subset.
 
-Same 8 subsets, **different order**. Same `O(2^n)` count.
+---
 
-## Important takeaways
+## 11. Senior follow-ups & variants
 
-**Syntax to memorize**
-- `(1 << n)` for the loop bound. `mask & (1 << i)` for "is bit i set."
-- Include/exclude order matters for output order — recurse-then-modify-then-recurse keeps the inserts/pops paired.
-- Always `result.push([...current])`, never the live array.
+### Variant 1 — Subsets of size k (combinations)
+Add length check + start parameter.
 
-**Patterns to reuse**
-- Bitmask enumeration is the foundation of **subset-DP** (e.g., Traveling Salesman O(n² · 2^n), bitmask DP for assignment problems). Lock the `for (mask = 0; mask < (1 << n); mask++)` skeleton in.
-- Include/exclude recursion is the parent template for: combinations, partition problems, subset-sum, expression-add-operators, palindrome-partition.
-- Counting trick: "number of subsets containing element i" = `2^(n-1)`. Number containing both i and j = `2^(n-2)`. These come up in expected-value questions.
+### Variant 2 — Bitmask for feature flags
+Real backend use.
 
-**Common mistakes**
-- Returning `[]` for empty input — should be `[[]]`.
-- Pushing `current` instead of `[...current]` — every entry ends up empty.
-- Using bitmask with `n >= 31` — `1 << 31` flips sign in JS.
-- Forgetting `current.pop()` after the include branch — every subsequent subset stays polluted.
-- Claiming bitmask is "asymptotically faster" — it isn't. Both are `O(n · 2^n)`. The bitmask variant just has lower constant factors and no recursion overhead.
+### Variant 3 — Subsets with sum target
+Subset-sum DP.
 
-**Related questions**
-- Permutations (`09-recursion/permutations.md`) — n! vs 2^n; permutations branch by position, subsets branch by element.
-- Combinations (n choose k) — restrict subset size in the same recursion.
-- Subset sum / partition equal-sum — same template with a sum-tracking parameter and pruning.
-- Bitmask DP (TSP, assignment).
+### Variant 4 — Sorted output
+Match expected order.
 
-## Variants
+### Variant 5 — Lazy generator
+Yield one at a time.
 
-1. **Subsets II (with duplicates)** — sort input, then in the include/exclude tree skip the include branch if `i > 0 && nums[i] === nums[i-1] && !includedPrev`. Eliminates duplicate subsets without a `Set<string>`.
+---
 
-2. **K-th subset in O(n)** — given index `k`, return the k-th subset directly: iterate bits of `k`, push `nums[i]` for each set bit. No need to materialize the full power set. Senior-level answer to "I only need the 1000th subset, don't generate them all."
+## 12. How to think aloud
 
-3. **Subsets of a fixed size k** — change the recursion's terminal condition to `current.length === k`. Output size: `C(n, k)` (binomial coefficient), not `2^n`.
+> "Power set = all 2^n subsets. Two genuinely different solutions: (A) Include/exclude recursion — for each index, recurse with element excluded, then push element, recurse with included, pop. Backtrack template. O(2^n) calls. (B) Bitmask iteration — for each integer `mask` in `[0, 2^n)`, check each bit `i`: if `mask & (1 << i)`, include `nums[i]`. O(n × 2^n) but no recursion. Valid for n ≤ 30 (32-bit JS bitwise); for n > 30 use BigInt. Senior signal: interviewer asks 'give me another' — bitmask answer shows you understand 2^n ↔ n-bit numbers. Real backend use: feature flag combinations for testing, RBAC permission matrices. With duplicates (Subsets II): sort + skip `i > start && nums[i] === nums[i-1]` — same dedup idea as combination-sum. Variants: subsets of size k (combinations, add length check + start parameter); subset-sum problem (DP); lazy generator yielding one subset at a time. Trap: push live state (all entries become final); n > 30 bitmask overflow; iterating order differs between solutions; expecting deterministic order from bitmask (it's numeric)."
 
-4. **Subset with constraint** (e.g., sums to target) — same skeleton, prune branches when `currentSum > target` or `currentSum + remainingSum < target`. Pruning is why recursion beats bitmask in practice for constrained problems.
+---
 
-5. **Set.prototype representation** — instead of arrays, build `Set` objects per subset. Same complexity but useful when downstream needs `O(1)` membership.
+## 13. 60-second revision
 
-## Revision notes
+> - **2^n subsets.**
+> - **Include/exclude recursion** OR **bitmask iteration**.
+> - **Bitmask:** for `mask in [0, 2^n)`, `if mask & (1 << i)` include.
+> - **n ≤ 30** for bitmask in JS.
+> - **Dedup variant** — sort + `i > start` skip.
+> - **Combinations** = subsets of size k.
+> - **Feature flags** use bitmask.
+> - **Trap:** push live; n > 30 overflow; order differs.
 
-> **power set — 60 second recap**
-> - Output size **2^n**. n=20 is 1M subsets, n=25 OOMs.
-> - Two solutions — know both:
->   - (A) Include/exclude recursion: depth `n`, branching 2.
->   - (B) Bitmask: `for (mask = 0; mask < (1 << n); mask++)`; bit i = element i.
-> - Both are `O(n · 2^n)`. Bitmask has lower constant, no stack.
-> - **Trap 1:** empty input → return `[[]]`, not `[]`.
-> - **Trap 2:** `1 << 31` flips sign — bitmask only works for `n < 31`.
-> - **Trap 3:** `result.push(current)` instead of `[...current]` → all entries empty.
-> - K-th subset = `O(n)` lookup via binary digits of k — don't materialize all 2^n if you only need one.
-> - Duplicates → sort + skip-include rule (LC #90).
-> - Use recursion when you can **prune** (constraint), bitmask when you genuinely want all 2^n.
+---
+
+**Related:** [permutations.md](./permutations.md) · [backtracking-template.md](./backtracking-template.md) · [generate-parentheses.md](./generate-parentheses.md)
+
+**Concept primer:** [`concepts/recursion-and-the-call-stack.md`](../../concepts/recursion-and-the-call-stack.md)

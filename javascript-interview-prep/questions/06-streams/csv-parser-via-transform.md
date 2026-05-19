@@ -1,44 +1,159 @@
-# CSV Parser via TransformStream
+# CSV parser via TransformStream
 
-## Source / Origin
-- Common stream-parsing question.
-- Asked at: Cloudflare, Stripe, Razorpay (data-heavy roles).
-- Concept reference: `concepts/streams.md`, sibling `web-streams-transform.md`.
+> **Difficulty:** Medium-Senior   |   **Time:** ~15 min   |   **Prereqs:** [transform-line-parser.md](./transform-line-parser.md)
+>
+> **Source:** Cloudflare, Stripe, Razorpay (data-heavy roles). Production-grade lib: `csv-parser`, `papaparse`.
 
-## Why this question matters in interviews
-Parse a CSV without loading it into memory. Tests stream composition + CSV quirks (quoted fields, embedded commas, embedded newlines, CRLF). Senior bar: you handle quoted-field state machine cleanly and compose two transforms: one for lines (newline-aware), one for fields (quote-aware).
+---
 
-## Concepts involved
+## 1. Problem statement
+
+Stream-parse CSV without loading into memory. Handle quoted fields, embedded commas, embedded newlines, CRLF.
+
+**Verification examples**
 
 ```js
-// Line-by-line transform (CSV-aware: respect quoted fields containing \n)
-class CSVLineSplitter extends TransformStream {
-  constructor() {
-    let buf = '', inQuotes = false;
-    super({
-      transform(chunk, ctl) {
-        for (const c of chunk) {
-          if (c === '"') inQuotes = !inQuotes;
-          if (c === '\n' && !inQuotes) {
-            ctl.enqueue(buf.replace(/\r$/, ''));
-            buf = '';
-          } else {
-            buf += c;
-          }
-        }
-      },
-      flush(ctl) { if (buf) ctl.enqueue(buf); },
-    });
+// Input:
+// name,age,note
+// "alice",30,"contains, comma"
+// "bob",25,"multi
+// line"
+
+// Output (stream of rows):
+// ['name', 'age', 'note']
+// ['alice', '30', 'contains, comma']
+// ['bob', '25', 'multi\nline']
+```
+
+| Edge case                                | Behaviour                                              |
+|------------------------------------------|---------------------------------------------------------|
+| Quoted field with comma                  | comma is data, not separator                            |
+| Quoted field with newline                | newline is data, not row terminator                    |
+| Escaped quote (`""`)                     | literal `"` in field                                    |
+| CRLF                                     | treat `\r\n` as one line break                          |
+| Final line without `\n`                  | emit via flush                                          |
+
+**Constraints**
+- Two-level state machine: line splitter (quote-aware) + field splitter (quote-aware).
+- Quoted fields can span chunks AND lines.
+- `_flush` handles final partial.
+
+---
+
+## 2. Plain-English restatement
+
+CSV is tricky: commas inside quoted fields aren't separators; newlines inside quoted fields aren't row terminators. Need a state machine tracking "inside quotes" across chunks. Two transforms: one splits into rows (newline-aware, quote-aware); one splits row into fields (comma-aware, quote-aware).
+
+---
+
+## 3. Why this matters in interviews
+
+Stream composition + state machine + practical CSV quirks. Senior bar: handle quoted fields with embedded delimiters.
+
+---
+
+## 4. Mental model
+
+```
+   Two-stage pipeline:
+   bytes → TextDecoder → CSVLineSplitter (quote-aware) → CSVRowParser → rows
+   
+   CSVLineSplitter state:
+     buf, inQuotes
+     for each char:
+       if quote: toggle inQuotes
+       if newline AND !inQuotes: emit line, reset buf
+       else: append to buf
+     flush: emit buf if non-empty.
+
+   CSVRowParser (per line):
+     fields = [], cur = '', inQuotes
+     for each char:
+       if inQuotes:
+         if char === '"' and next === '"': cur += '"', skip next  (escaped quote)
+         else if char === '"': inQuotes = false
+         else: cur += char
+       else:
+         if char === ',': push cur, reset
+         else if char === '"': inQuotes = true
+         else: cur += char
+     push cur (last field).
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. Why split CSV at the line level FIRST, then split fields?
+> 2. What does `""` (two double-quotes) mean inside a quoted field?
+> 3. Can newlines appear inside a CSV field?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: split on `\n` then on `,`
+Breaks for `"alice","x,y"` (comma inside quotes) and `"alice","x\ny"` (newline inside quotes).
+
+### Wrong attempt 2: regex
+Fragile; CSV grammar isn't regular due to escaping.
+
+### Wrong attempt 3: load entire CSV into memory
+OOM on large files.
+
+---
+
+## 7. The unlocking insight
+
+> **Two state machines: line splitter (quote-aware so embedded newlines don't split) + field splitter (quote-aware so embedded commas don't split). Handle `""` as escaped quote.**
+
+Three properties:
+
+1. **Two-stage** — line split, then field split.
+2. **Quote-aware at both stages** — embedded delimiters.
+3. **`""` = literal `"`** inside quoted field.
+
+---
+
+## 8. Solution (annotated)
+
+```js
+const { Transform } = require('node:stream');
+
+class CSVLineSplitter extends Transform {                               // step 1: quote-aware line split
+  constructor(opts = {}) {
+    super({ ...opts, readableObjectMode: true });
+    this._buf = '';
+    this._inQuotes = false;
+  }
+  _transform(chunk, enc, cb) {
+    const text = chunk.toString('utf8');
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (c === '"') this._inQuotes = !this._inQuotes;
+      if (c === '\n' && !this._inQuotes) {
+        this.push(this._buf.replace(/\r$/, ''));                         // step 2: strip CRLF
+        this._buf = '';
+      } else {
+        this._buf += c;
+      }
+    }
+    cb();
+  }
+  _flush(cb) {
+    if (this._buf) this.push(this._buf);
+    cb();
   }
 }
 
-function parseCsvRow(line) {
+function parseCsvRow(line) {                                            // step 3: quote-aware field split
   const fields = [];
   let cur = '', inQuotes = false;
   for (let i = 0; i < line.length; i++) {
     const c = line[i];
     if (inQuotes) {
-      if (c === '"' && line[i+1] === '"') { cur += '"'; i++; }
+      if (c === '"' && line[i + 1] === '"') { cur += '"'; i++; }       // step 4: escaped quote
       else if (c === '"') inQuotes = false;
       else cur += c;
     } else {
@@ -50,112 +165,148 @@ function parseCsvRow(line) {
   fields.push(cur);
   return fields;
 }
+
+class CSVRowParser extends Transform {                                  // step 5: row → fields
+  constructor(opts = {}) {
+    super({ ...opts, writableObjectMode: true, readableObjectMode: true });
+  }
+  _transform(line, enc, cb) {
+    this.push(parseCsvRow(line));
+    cb();
+  }
+}
+
+// Use
+const fs = require('node:fs');
+const { pipeline } = require('node:stream/promises');
+
+await pipeline(
+  fs.createReadStream('data.csv'),
+  new CSVLineSplitter(),
+  new CSVRowParser(),
+  async function* (rows) {
+    let header;
+    for await (const row of rows) {
+      if (!header) { header = row; continue; }
+      yield Object.fromEntries(header.map((h, i) => [h, row[i]]));
+    }
+  },
+  writableSink,
+);
 ```
 
-### Edge cases / traps
-1. **Quoted fields can contain commas and newlines.** Naive `.split(',')` and `.split('\n')` both fail.
-2. **Escaped quote**: `""` inside a quoted field is one `"`.
-3. **CRLF line endings** — strip `\r` at end.
-4. **No header line** — caller decides; parser doesn't.
-5. **Empty fields** — `a,,b` → ['a', '', 'b'].
-6. **BOM** at start — strip.
-7. **Encoding** — assume UTF-8 via TextDecoder.
-8. **Field count mismatch** — strict mode throws; lenient mode emits with null padding.
-
-## Mental Model
-
-```
-   bytes → TextDecoderStream → CSVLineSplitter → row strings → parseCsvRow → arrays
-   
-   line splitter: state = {buf, inQuotes}
-   field parser: per-char state machine
-```
-
-## Why interviewers care
-
-- **State machine fluency.**
-- **Streaming + correctness.**
-- **CSV trickier than it looks.**
-
-## Solution
+**Try it yourself**
 
 ```js
-async function* csvRows(stream) {
-  const decoded = stream.pipeThrough(new TextDecoderStream());
-  let header = null;
-  let buf = '', inQuotes = false;
-  for await (const chunk of decoded) {
-    for (const c of chunk) {
-      if (c === '"') inQuotes = !inQuotes;
-      if (c === '\n' && !inQuotes) {
-        const row = parseCsvRow(buf.replace(/\r$/, ''));
-        buf = '';
-        if (!header) { header = row; continue; }
-        yield Object.fromEntries(header.map((h, i) => [h, row[i]]));
-      } else {
-        buf += c;
-      }
-    }
-  }
-  if (buf) {
-    const row = parseCsvRow(buf);
-    if (header) yield Object.fromEntries(header.map((h, i) => [h, row[i]]));
-  }
-}
+// Test edge cases
+parseCsvRow('"alice",30,"x,y"');                                        // ['alice', '30', 'x,y']
+parseCsvRow('"al""ice",30');                                            // ['al"ice', '30']    (escaped quote)
+parseCsvRow('a,,b');                                                    // ['a', '', 'b']      (empty field)
+parseCsvRow('"alice"');                                                 // ['alice']
 
-// Usage with fetch
-const res = await fetch('/data.csv');
-for await (const row of csvRows(res.body)) {
-  console.log(row.name, row.email);
-}
+// Multi-line quoted field
+// Input: '"alice","multi\nline"\nbob,42'
+// CSVLineSplitter emits TWO logical lines (embedded newline preserved):
+// 1: '"alice","multi\nline"'
+// 2: 'bob,42'
 ```
 
-## Dry run
+---
+
+## 9. Step-by-step dry run
 
 ```
-input: "name,email\nalice,a@x.com\n\"bob, jr.\",b@y.com\n"
-chunk 1: "name,email\nalice,"
-  parse chars; on \n (not inQuotes): line "name,email" → header=['name','email']; buf=""
-  buf="alice,"
-chunk 2: "a@x.com\n\"bob, jr.\",b@y.com\n"
-  parse chars; on \n (not inQuotes): line "alice,a@x.com" → row=['alice','a@x.com'] → yield {name:'alice', email:'a@x.com'}
-  then enter quotes at "; comma inside quotes preserved
-  on closing "; comma outside; on \n: line "\"bob, jr.\",b@y.com" → row=['bob, jr.', 'b@y.com'] → yield ...
+Input chunks:
+chunk1: 'name,age\n"al'
+chunk2: 'ice",30\n"x,y","emb'
+chunk3: 'edded\nnewline",42\n'
+
+CSVLineSplitter:
+  chunk1: 'name,age\n"al'
+    'n','a','m','e' → buf='name'
+    ',','a','g','e' → buf='name,age'
+    '\n' & !inQuotes → push('name,age'), buf=''
+    '"' → inQuotes=true, buf='"'
+    'a','l' → buf='"al'
+  
+  chunk2: 'ice",30\n"x,y","emb'
+    'i','c','e' → buf='"alice'
+    '"' → inQuotes=false, buf='"alice"'
+    ',','3','0' → buf='"alice",30'
+    '\n' & !inQuotes → push('"alice",30'), buf=''
+    '"' → inQuotes=true, buf='"'
+    'x',',','y' → buf='"x,y'   ← comma inside quotes preserved
+    '"' → inQuotes=false, buf='"x,y"'
+    ',','"' → buf='"x,y","', inQuotes=true
+    'e','m','b' → buf='"x,y","emb'
+  
+  chunk3: 'edded\nnewline",42\n'
+    'e','d','d','e','d' → buf='"x,y","embedded'
+    '\n' & inQuotes → buf='"x,y","embedded\n'   ← newline inside quotes preserved
+    'n','e','w','l','i','n','e' → buf='"x,y","embedded\nnewline'
+    '"' → inQuotes=false, buf='"x,y","embedded\nnewline"'
+    ',','4','2' → buf='...,"embedded\nnewline",42'
+    '\n' & !inQuotes → push('"x,y","embedded\nnewline",42')
+
+CSVRowParser receives each line, splits into fields with quote-aware logic.
+Output:
+  ['name', 'age']
+  ['alice', '30']
+  ['x,y', 'embedded\nnewline', '42']
 ```
 
-## How to think aloud
+---
 
-> "CSV has two state machines: one for line splitting (newlines outside quotes are real), one for field splitting (commas outside quotes are real). I split into a streaming line splitter and a per-line field parser. Stream the bytes through TextDecoder, accumulate, split. Handle CRLF by stripping `\r`. Handle escaped quote via lookahead `""`. Use header row to emit objects; for CSV without headers, emit arrays."
+## 10. Common confusion + traps
 
-## Important takeaways
+1. **Split on `\n` then `,`** — breaks for embedded delimiters.
+2. **Regex** — fragile.
+3. **Forget escaped quote** `""` — literal `"`.
+4. **No CRLF handling** — Windows files.
+5. **No `_flush`** — drops final line.
+6. **OOM on large CSV** — must stream.
+7. **Headers** — handle separately or via async iter.
 
-- **Two state machines**: line (newline-aware), field (quote-aware).
-- **Quoted fields**: commas and newlines allowed inside.
-- **Escape**: `""` inside quotes = `"`.
-- **CRLF**: strip `\r`.
-- **Use TextDecoderStream** + custom transform.
+---
 
-## Variants
+## 11. Senior follow-ups & variants
 
-- **`csv-parse` / `papaparse`** libraries — production-grade.
-- **TSV** — same shape, different delimiter.
-- **Streaming row writes** to DB with batched inserts.
-- **Validation** — Zod schema per row.
+### Variant 1 — Production libs
+`csv-parser`, `papaparse` — battle-tested edge cases.
 
-## Revision notes
+### Variant 2 — Streaming aggregation
+`for await (const row of rows) { agg.add(row) }`.
 
-```
-streaming CSV:
-  line splitter (newline-aware): state {buf, inQuotes}; only \n outside quotes splits
-  field parser (quote-aware): per-char state machine
-  escaped quote: ""
+### Variant 3 — TSV / other delimiters
+Parametric delimiter argument.
 
-handle:
-  CRLF: strip \r at end of line
-  empty fields: a,,b → ['a','','b']
-  BOM: strip at start
-  encoding: TextDecoderStream
+### Variant 4 — Web Streams equivalent
+`TransformStream` instead of Node's `Transform`.
 
-compose:
-  res.body → TextDecoderStream → lineSplitter → parseCsvRow → object
-```
+### Variant 5 — Backpressure all the way
+Pipeline already handles; consumer slowness propagates.
+
+---
+
+## 12. How to think aloud
+
+> "CSV is tricky because commas inside quoted fields aren't separators and newlines inside quoted fields aren't row terminators. Two-stage pipeline: first a quote-aware LINE splitter (tracks `inQuotes` boolean across chunks; only splits on `\n` when not in quotes), then a quote-aware FIELD splitter (per-line; handles `""` as escaped quote). State must survive chunk boundaries — the line splitter's `inQuotes` flag is the key. `_flush` emits the final line if no trailing newline. CRLF: strip trailing `\r`. Pipeline composition: bytes → CSVLineSplitter → CSVRowParser → header-binding async generator → sink. For production use battle-tested libs (`csv-parser`, `papaparse`) — the edge cases are surprisingly nasty. Trap: naive split on `\n` then `,`; regex; forgetting escaped quote; missing _flush; CRLF; OOM on large files."
+
+---
+
+## 13. 60-second revision
+
+> - **Two-stage:** quote-aware line splitter + quote-aware field splitter.
+> - **`inQuotes` flag** survives chunk boundaries.
+> - **`""`** = literal `"` (escaped).
+> - **CRLF:** strip trailing `\r`.
+> - **`_flush`** emits final line.
+> - **Stream — don't load** entire CSV.
+> - **Production libs:** `csv-parser`, `papaparse`.
+> - **Trap:** naive split; regex; escaped quote; missing _flush.
+
+---
+
+**Related:** [transform-line-parser.md](./transform-line-parser.md) · [ndjson-splitter.md](./ndjson-splitter.md) · [web-streams-transform.md](./web-streams-transform.md) · [stream-pipeline-lab.md](./stream-pipeline-lab.md)
+
+**Concept primer:** [`concepts/streams.md`](../../concepts/streams.md)

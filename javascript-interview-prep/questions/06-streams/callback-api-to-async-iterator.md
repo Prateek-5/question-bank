@@ -1,227 +1,285 @@
-# Convert a callback-based API to an async iterator
+# Callback API → async iterator
 
-## Source
-- Symbol.asyncIterator spec: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Symbol/asyncIterator
-- Async iteration proposal: https://github.com/tc39/proposal-async-iteration
-- `events.on(emitter, name)` (the inverse — events to iterator): https://nodejs.org/api/events.html#eventsonemitter-eventname-options
-- Common at companies with paginated REST APIs (Stripe, Shopify, GitHub) and at AWS-heavy shops (S3 ListObjects, DynamoDB Scan).
+> **Difficulty:** Medium-Senior   |   **Time:** ~15 min   |   **Prereqs:** [async-iterator-pagination.md](./async-iterator-pagination.md), [custom-iterator.md](./custom-iterator.md)
+>
+> **Source:** AWS S3 list, GitHub API. Wrapping legacy callback or paginated APIs as `for await`.
 
-## Why this question matters in interviews
-Modern Node.js code uses `for await ... of` everywhere — but most third-party APIs (Node-style `cb(err, data)`, paginated REST, EventEmitters) predate it. Senior backend engineers are expected to adapt callback / pagination APIs into async iterables so callers can write idiomatic `for await` loops. Knowing this is the difference between a junior who buries their pagination inside one function and a senior who exposes a clean, lazy, cancellable iterator that composes with `pipeline()`, `stream.pipeline`, and `Readable.from`. The question doubles as a `Symbol.asyncIterator` protocol probe — most candidates have never written one by hand.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+Wrap a callback-style API as an async iterable so callers use `for await...of`.
+
+**Verification examples**
+
 ```js
-// the protocol
+// Legacy callback API:
+function pull(cb) { /* eventually calls cb(err, value, done) */ }
+
+// Wrapped as async iterable
 const iter = {
   [Symbol.asyncIterator]() {
     return {
       next() {
         return new Promise((resolve, reject) => {
-          underlyingPullFn((err, value, done) => {
+          pull((err, value, done) => err ? reject(err) : resolve({value, done}));
+        });
+      },
+      return() { return Promise.resolve({done: true}); },               // cleanup
+    };
+  },
+};
+
+for await (const item of iter) console.log(item);
+```
+
+**Constraints**
+- `[Symbol.asyncIterator]()` returns iterator.
+- `next()` returns `Promise<{value, done}>`.
+- `return()` for cleanup on early break.
+- Use `async function*` whenever possible — much cleaner.
+
+---
+
+## 2. Plain-English restatement
+
+Wrap a callback-based "pull next" API so consumers can write `for await (const x of api)`. Each `next()` triggers one callback invocation and resolves with the result.
+
+---
+
+## 3. Why this matters in interviews
+
+Senior backend pattern. Old SDKs use callbacks; modern code wants `for await`. Tests `Symbol.asyncIterator` protocol literacy.
+
+---
+
+## 4. Mental model
+
+```
+   Callback API: pull(cb) → eventually cb(err, value, done).
+   
+   Wrap as iterator:
+     next() returns Promise.
+     Inside promise: call pull, resolve/reject based on cb args.
+   
+   Three approaches:
+   1. Manual: implement Symbol.asyncIterator + next() directly.
+   2. Promisify pull then async function*:
+        async function* iter() {
+          while (true) {
+            const {value, done} = await new Promise(r => pull((e,v,d) => r({err:e,value:v,done:d})));
+            if (done) return;
+            yield value;
+          }
+        }
+   3. EventEmitter: events.on(emitter, 'data') (built-in Node).
+
+   AbortSignal:
+     pass signal to underlying API; abort rejects pending pull.
+   
+   Cleanup:
+     for await break → iterator.return() called → release resources.
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. Why is `async function*` cleaner than manual `Symbol.asyncIterator`?
+> 2. What does `iterator.return()` do?
+> 3. How do you propagate `AbortSignal` to a callback API?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: collect all into array first
+Defeats laziness; OOM on large.
+
+### Wrong attempt 2: manual Symbol.asyncIterator everywhere
+Verbose; `async function*` does it in 5 lines.
+
+### Wrong attempt 3: no cleanup on break
+Resource leak.
+
+---
+
+## 7. The unlocking insight
+
+> **Wrap callback's pull in a Promise inside `async function*`. Yield values as they arrive; loop until `done`. Cleanup via `try/finally`.**
+
+Three properties:
+
+1. **Promisify the pull** — one promise per `next()`.
+2. **`async function*`** for clean syntax.
+3. **`try/finally`** for cleanup on break.
+
+---
+
+## 8. Solution (annotated)
+
+```js
+// Manual class
+const cbApiIterable = {
+  [Symbol.asyncIterator]() {                                            // step 1: protocol
+    let closed = false;
+    return {
+      next() {
+        return new Promise((resolve, reject) => {
+          if (closed) return resolve({value: undefined, done: true});
+          pullApi((err, value, done) => {                                // step 2: callback
             if (err) reject(err);
-            else resolve({ value, done });
+            else if (done) { closed = true; resolve({value: undefined, done: true}); }
+            else resolve({value, done: false});
           });
         });
       },
-      return() { /* optional: cleanup on break/throw */ return Promise.resolve({ done: true }); }
+      return() {                                                          // step 3: cleanup
+        closed = true;
+        return Promise.resolve({done: true});
+      },
     };
-  }
+  },
 };
 
-for await (const item of iter) {
-  // ...
+// Cleaner: async function*
+async function* cbApiGenerator() {
+  try {
+    while (true) {
+      const {value, done} = await new Promise((res, rej) => {
+        pullApi((e, v, d) => e ? rej(e) : res({value: v, done: d}));
+      });
+      if (done) return;
+      yield value;
+    }
+  } finally {
+    cleanupResources();                                                   // step 4: try/finally
+  }
+}
+
+// EventEmitter → async iter (built-in)
+const { on } = require('node:events');
+for await (const [data] of on(emitter, 'data')) {                        // step 5: events.on
+  console.log(data);
 }
 ```
 
-### Runtime / engine behavior
-- `for await...of` calls `obj[Symbol.asyncIterator]()` once, then repeatedly awaits `.next()` until `{ done: true }`.
-- `.next()` must return a `Promise<{ value, done }>`. Each call is a "pull" — the iterator must not produce more than one result at a time.
-- `.return()` is invoked when the consumer breaks out of the loop (or throws). This is your **cleanup hook**: close connections, abort in-flight requests, free buffers. Forgetting `return()` is a leak.
-- `.throw()` (rare) lets the consumer inject an error into the iterator. Mostly used by transpilers; you can usually skip implementing it.
-- Async iterators **don't buffer ahead** by default. Each `next()` is awaited before the next is called. This means an iterator backed by a paginated API only fetches a page when the consumer is ready — natural backpressure.
-- An async generator function (`async function*`) auto-implements the protocol — it's the easiest way to build one. But for wrapping a callback API, the hand-rolled object form is often clearer.
-- `Readable.from(asyncIterable)` (Node 12+) converts any async iterable into a Readable stream — so once you have the iterator, it plugs into `pipeline()`.
-
-### Edge cases (interview traps)
-1. **Re-entrant `.next()`.** If two consumers call `.next()` simultaneously, both will trigger an underlying pull. For most callback APIs this is a bug — track in-flight state.
-2. **Cleanup on `break`.** Consumers do `for await (const x of iter) { if (cond) break; }`. The runtime calls `iter.return()`. If you don't implement it, in-flight requests leak.
-3. **Errors mid-iteration.** If `next()` rejects, the `for await` loop throws. Subsequent `next()` calls should keep returning `{ done: true }` — don't reset.
-4. **Empty iteration.** First `next()` returns `{ done: true }` → the `for await` body never runs. Make sure your pagination handles "no results" cleanly.
-5. **AbortSignal support.** Modern callers will want `pageIterator(opts, { signal })`. Hook signal into both your in-flight pull AND your `return()` cleanup.
-6. **Backpressure naturally works.** Don't pre-fetch the next page in the background "to be helpful" unless asked — you defeat lazy iteration and may fetch pages the consumer never reads.
-7. **`done` semantics.** `{ value: x, done: true }` means "this is the last value AND we're done." Most generators emit `{ value: x, done: false }` then `{ value: undefined, done: true }`. Either works — pick one and stick with it.
-8. **Promise.resolve in synchronous path.** If your callback fires synchronously (uncommon but possible), you still want to return a Promise — wrap in `new Promise(...)` always, or use `async`.
-
-## Brute force approach
-"I'll just fetch all pages first, then iterate over the array." This loads the entire dataset into memory — defeats the purpose. For a paginated API with 10,000 pages of 100 items each, you'd buffer a million records. Async iteration's whole value is **streaming consumption**: pull one page at a time, process, discard.
-
-Another anti-pattern: "I'll emit each item via an EventEmitter and the consumer subscribes." Works but inverts control — consumers can't apply backpressure, they can only `pause/resume`. Not idiomatic in 2024+.
-
-## Optimal approach
-Hand-roll an object with `[Symbol.asyncIterator]()` returning an iterator object. The iterator holds:
-- A cursor / page token (state across calls).
-- An in-flight flag (or queue) for safety.
-- A `done` flag to short-circuit after exhaustion or error.
-- A `return()` method that aborts any in-flight call and marks done.
-
-Each `next()`: if done, resolve `{ done: true }`. Else, await one pull from the underlying API, advance the cursor, resolve `{ value, done: false }`. When the underlying API signals "no more pages," set done and resolve `{ done: true }`.
-
-## Solution (JavaScript)
+**Try it yourself**
 
 ```js
-/**
- * Turn a paginated callback API into an async iterable.
- *
- * Underlying API shape (assumed):
- *   fetchPage(cursor, (err, { items, nextCursor }) => {})
- *   where nextCursor === null means "no more pages"
- *
- * @param {(cursor: string|null, cb: (err: Error|null, page?: {items: any[], nextCursor: string|null}) => void) => void} fetchPage
- * @returns {AsyncIterable<any>}
- */
-function paginate(fetchPage) {
-  return {
-    [Symbol.asyncIterator]() {
-      let cursor = null;
-      let buffer = [];      // items from the latest page not yet yielded
-      let done = false;
-      let inflight = null;  // current pending pull, for cleanup
-
-      const pullNextPage = () => new Promise((resolve, reject) => {
-        fetchPage(cursor, (err, page) => {
-          if (err) return reject(err);
-          buffer = page.items.slice();
-          cursor = page.nextCursor;
-          if (cursor === null && buffer.length === 0) done = true;
-          resolve();
-        });
-      });
-
-      return {
-        async next() {
-          if (done) return { value: undefined, done: true };
-
-          // refill buffer if empty
-          while (buffer.length === 0 && !done) {
-            inflight = pullNextPage();
-            try {
-              await inflight;
-            } finally {
-              inflight = null;
-            }
-            if (cursor === null && buffer.length === 0) {
-              done = true;
-              return { value: undefined, done: true };
-            }
-          }
-          return { value: buffer.shift(), done: false };
-        },
-
-        async return() {
-          // consumer broke out — mark done and let in-flight resolve naturally
-          done = true;
-          buffer = [];
-          // (if your underlying API supports cancellation, call it here)
-          return { value: undefined, done: true };
-        },
-      };
-    },
-  };
+// AWS S3 ListObjectsV2 paginator (modern SDK already provides this)
+async function* listObjects(s3, bucket) {
+  let token;
+  do {
+    const resp = await s3.listObjectsV2({ Bucket: bucket, ContinuationToken: token });
+    for (const obj of resp.Contents ?? []) yield obj;
+    token = resp.NextContinuationToken;
+  } while (token);
 }
 
-// usage with a fake paginated API
-function fakeFetchPage(cursor, cb) {
-  setTimeout(() => {
-    const page = Number(cursor ?? 0);
-    if (page >= 3) return cb(null, { items: [], nextCursor: null });
-    cb(null, {
-      items: [`p${page}-a`, `p${page}-b`],
-      nextCursor: String(page + 1),
-    });
-  }, 10);
+for await (const obj of listObjects(s3, 'mybucket')) {
+  console.log(obj.Key);
 }
 
-(async () => {
-  for await (const item of paginate(fakeFetchPage)) {
-    console.log(item);
-    // backpressure: next page only fetched after each yield is consumed
+// With AbortSignal
+async function* withSignal(asyncIter, signal) {
+  for await (const item of asyncIter) {
+    if (signal.aborted) throw new Error('Aborted');
+    yield item;
   }
-})();
+}
 ```
 
-## Step-by-step dry run
+---
 
-Using `fakeFetchPage` above, which has 3 pages of 2 items each.
+## 9. Step-by-step dry run
 
-- `for await` calls `[Symbol.asyncIterator]()`. Returns iterator with `cursor=null, buffer=[], done=false`.
-- **next() #1**: buffer empty, not done. `pullNextPage()` with `cursor=null` → after 10 ms, `items=['p0-a','p0-b'], nextCursor='1'`. buffer becomes `['p0-a','p0-b']`. Shift `'p0-a'`. Return `{value: 'p0-a', done: false}`.
-- Consumer logs `'p0-a'`.
-- **next() #2**: buffer has `['p0-b']`. Shift. Return `{value: 'p0-b', done: false}`.
-- Consumer logs `'p0-b'`.
-- **next() #3**: buffer empty. Pull with `cursor='1'` → `items=['p1-a','p1-b'], nextCursor='2'`. Shift `'p1-a'`. Return.
-- ... continues for page 1 and page 2 ...
-- After yielding `'p2-b'`, **next() #7**: buffer empty. Pull with `cursor='3'` → `items=[], nextCursor=null`. Buffer stays empty. `done=true`. Return `{value: undefined, done: true}`.
-- `for await` exits.
+```
+for await (const item of cbApiGenerator()):
+  iter = cbApiGenerator()[Symbol.asyncIterator]()
+  
+  iter.next():
+    Enter generator body.
+    Loop iter 1: await new Promise → calls pullApi(cb).
+    pullApi async work; eventually cb(null, 'item1', false).
+    Promise resolves to {value:'item1', done:false}.
+    yield 'item1'. PAUSE.
+    Return {value:'item1', done:false} from next().
+  
+  Consumer processes 'item1'; calls iter.next() again.
+  
+  iter.next():
+    Resume after yield. Loop iter 2.
+    await pullApi → cb(null, 'item2', false).
+    yield 'item2'. PAUSE.
+  
+  ... continues until cb(null, undefined, true).
+  
+  iter.next():
+    await → resolves to {done: true}.
+    if done: return. Generator returns.
+    finally runs → cleanupResources.
+  
+  Loop exits.
 
-Net: 4 underlying `fetchPage` calls, 6 items yielded, memory never holds more than one page at a time. Backpressure works because page 1 isn't fetched until page 0 is fully consumed.
+Early break:
+  consumer breaks at item2.
+  iter.return() called → generator's finally runs → cleanup.
+  pullApi may still resolve once more (no listener) — that's the trap.
+```
 
-## Important takeaways
+---
 
-**Syntax to memorize**
-- `[Symbol.asyncIterator]() { return { next() { ... }, return() { ... } } }`.
-- `.next()` returns `Promise<{ value, done }>`. Always a Promise.
-- `.return()` is the cleanup hook — implement it whenever your iterator holds resources.
+## 10. Common confusion + traps
 
-**Patterns to reuse**
-- This converts **any** pull-based callback API into something compatible with `for await`, `Readable.from`, `stream.pipeline`, and async generator composition. Paginated REST, AWS SDK v2 cursors, MongoDB cursors, DB result streams.
-- The buffer + cursor + in-flight skeleton is the same shape as a fetch-ahead reader, a producer-consumer queue, or any pull-based protocol.
-- Once you have an async iterable, `async function*` lets you trivially compose transforms: `async function* upper(iter) { for await (const x of iter) yield x.toUpperCase(); }`.
+1. **Manual protocol when `async function*` works** — much cleaner.
+2. **No `try/finally`** — resource leak on break.
+3. **Promise per pull** but underlying cb may be re-called — should debounce.
+4. **EventEmitter → for-await** without `on(emitter)` helper — manual is painful.
+5. **`for await` over emitter with `'error'`** — also use `events.on` with abort.
+6. **Abort doesn't reach callback** — thread signal explicitly.
+7. **Mixing pull and push** — async iter is pull; emitter is push.
 
-**Common mistakes**
-- Forgetting `return()` → resources leak on `break`.
-- Pre-fetching the next page eagerly in the background → defeats lazy iteration and can over-fetch when consumer breaks early.
-- Forgetting to set `done = true` after the last page → infinite loop hitting the API forever.
-- Returning `{ done: true }` with the last *value* in the same step — confuses some consumers. Stick to the "yield then `{ done: true }`" pattern.
-- Using `async function*` syntax sugar without realizing you need explicit `return()` semantics for cancellable cleanup (the generator's `try/finally` handles it, but only if you use one).
+---
 
-**Related questions**
-- `transform-line-parser` — its output is consumable via `for await`, same protocol.
-- `generator-pipeline` — sync version of the same idea.
-- `pipeline-error-propagation` — async iterables plug into `stream.pipeline` as stages.
+## 11. Senior follow-ups & variants
 
-## Variants
+### Variant 1 — `events.on(emitter, 'event')`
+Built-in Node helper; yields `[data]` arrays.
 
-1. **Async generator form** — "Rewrite using `async function*`." Much shorter:
-   ```js
-   async function* paginate(fetchPage) {
-     let cursor = null;
-     while (true) {
-       const { items, nextCursor } = await new Promise((res, rej) =>
-         fetchPage(cursor, (err, p) => err ? rej(err) : res(p)));
-       yield* items;
-       if (nextCursor === null) return;
-       cursor = nextCursor;
-     }
-   }
-   ```
-   The `try/finally` inside the generator becomes the cleanup hook automatically.
+### Variant 2 — Backpressure mismatch
+Push source faster than consumer pulls → buffer/drop.
 
-2. **EventEmitter to async iterator** — wrap `emitter.on('data', ...)` into a pull iterator. Tricky because events are push-based — you need a queue + a pending-resolver. Node provides `events.on(emitter, name)` for this exact case.
+### Variant 3 — `Readable.from(asyncGen)`
+Bridge to Node stream pipeline.
 
-3. **AbortSignal-aware** — accept `{ signal }`, abort the in-flight pull on `signal.aborted`, and reject `next()` with `AbortError`. Required for HTTP-server-side iteration where the client may disconnect.
+### Variant 4 — `Symbol.asyncIterator` with retry
+Retry pull on transient error before yielding.
 
-## Revision notes
+### Variant 5 — Cancellation via AbortSignal
+Pass signal to underlying API; signal.aborted → throw in generator.
 
-> **callback-API-to-async-iterator — 60 second recap**
-> - Implement `[Symbol.asyncIterator]() { return { next, return } }`.
-> - `next()` returns `Promise<{ value, done }>` — one pull per call.
-> - `return()` is the cleanup hook called on `break` / `throw`.
-> - Backpressure is built-in: next page fetched only when consumer requests next item.
-> - Easier with `async function*` — `yield*` items, `return` to end.
-> - Use case: paginated REST, callback-style DB cursors, AWS SDK v2.
-> - **Trap:** forget `return()` → leak on early break.
-> - **Trap:** pre-fetching ahead → over-fetch on early break.
-> - **Trap:** don't set `done = true` after last → infinite loop.
-> - Composes with `Readable.from(asyncIterable)` and `stream.pipeline`.
+---
+
+## 12. How to think aloud
+
+> "Wrap callback-style pull in a Promise inside `async function*`. Each iteration: `const {value, done} = await new Promise(r => pullApi((e,v,d) => e ? rej(e) : r({value:v, done:d}))); if (done) return; yield value;`. Cleaner than manual Symbol.asyncIterator. `try/finally` in generator for resource cleanup on early break. For EventEmitter sources, use built-in `events.on(emitter, 'event')` — yields `[data]` arrays. AWS SDK v3 provides paginators; older callback-style APIs need manual wrapping. AbortSignal: thread to underlying API; signal.aborted check in loop. Mismatch between pull (async iter) and push (emitter): push sources may overrun; consider bounded queue. `Readable.from(asyncGen)` bridges to Node stream pipeline. Trap: manual protocol when async function* works; no try/finally; abort not threaded; push/pull mismatch."
+
+---
+
+## 13. 60-second revision
+
+> - **`async function*`** = cleanest wrapper.
+> - **Per `next()`:** await new Promise wrapping the callback.
+> - **`try/finally`** for resource cleanup.
+> - **`events.on(emitter, 'event')`** for EventEmitter → for-await.
+> - **AbortSignal** threaded to underlying API.
+> - **`Readable.from(asyncGen)`** bridges to streams.
+> - **Trap:** manual protocol; no cleanup; push/pull mismatch; abort not threaded.
+
+---
+
+**Related:** [async-iterator-pagination.md](./async-iterator-pagination.md) · [fetch-response-async-iter.md](./fetch-response-async-iter.md) · [custom-iterator.md](./custom-iterator.md) · [`04-promises/promisify-node-callback.md`](../04-promises/promisify-node-callback.md)
+
+**Concept primer:** [`concepts/streams.md`](../../concepts/streams.md), [`concepts/promises.md`](../../concepts/promises.md)

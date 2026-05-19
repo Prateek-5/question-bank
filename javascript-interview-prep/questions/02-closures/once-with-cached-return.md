@@ -1,69 +1,171 @@
-# Implement `once(fn)` that caches the first return value
+# Build `once(fn)` that caches and replays the first return value
 
-## Source
-- Classic interview problem (BFE.dev, Frontend Masters, lodash `_.once`).
-- Underpins lodash's `_.once` and the "init only once" idiom used in DB clients, config loaders, and singletons.
+> **Difficulty:** Easy-Medium   |   **Time:** ~15 min   |   **Prereqs:** [allow-one-function-call.md](./allow-one-function-call.md), [`concepts/closures.md`](../../concepts/closures.md)
+>
+> **Source:** Classic interview problem (BFE.dev, Frontend Masters, lodash `_.once`).
 
-## Why this question matters in interviews
-`once(fn)` is the smallest non-trivial closure problem an interviewer can ask. It tests whether you can carry **two** pieces of state across calls — a boolean flag *and* a cached return value — and whether you understand why the cached return must be reused. As a backend engineer you write `once` constantly without naming it: lazy DB pool creation, one-shot migration runners, idempotent webhook handlers, env-loaders. Senior interviewers will follow up with "what if `fn` throws?" and "what if `fn` is async?" — both probe your understanding of closure-held state lifecycles.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+**Signature**
+```ts
+function once<F extends (...args: any[]) => any>(fn: F):
+  ((...args: Parameters<F>) => ReturnType<F>) & { reset(): void };
+```
+
+**Input / Output examples**
+
+| Setup                                              | Sequence of calls         | Output sequence  |
+|----------------------------------------------------|---------------------------|------------------|
+| `let n=0; const f = once(() => ++n)`               | `f(); f(); f();`          | `1, 1, 1` (cached) |
+| `const f = once((x) => x*2)`                       | `f(5); f(99); f(0);`      | `10, 10, 10`     |
+| `const f = once(() => undefined)`                  | `f(); f();`               | `undefined, undefined` (distinguish from "no entry") |
+| `let n=0; const f = once(() => ++n); f(); f.reset(); f();` | with reset()       | `1, 2`           |
+
+**Constraints**
+- After the first call, every subsequent call returns the **cached first result** (lodash semantics — different from LeetCode 2666 which returns `undefined`).
+- `fn` is invoked **exactly once** across the wrapper's lifetime (until reset).
+- Forward `this` and arguments on the first call. Subsequent args are discarded.
+- `undefined` must be cacheable as a legitimate return value.
+
+---
+
+## 2. Plain-English restatement
+
+Build `once(fn)` such that the first invocation runs `fn` and stores its return value, and every subsequent invocation **returns that same stored value** without re-running `fn`. The hard part: `undefined` is a legitimate return value, so you can't use `result === undefined` as the "has it been called yet?" check — you need a separate boolean flag.
+
+This is the cousin of LeetCode's "Allow One Function Call" (which returns `undefined` on subsequent calls) — `once` from lodash, and the canonical lazy-init pattern.
+
+---
+
+## 3. Why this matters in interviews
+
+`once(fn)` is the smallest non-trivial closure problem. It tests whether you can carry **two** pieces of state across calls — a boolean flag *and* a cached return value — and whether you understand why each is necessary. As a backend engineer, you write `once` constantly without naming it: lazy DB pool creation, one-shot migration runners, idempotent webhook handlers, env loaders, singleton config readers. Senior follow-ups: "what if `fn` throws?" and "what if `fn` is async?" — both probe your understanding of closure-held state lifecycles.
+
+---
+
+## 4. Mental model
+
+A **photo booth** that takes one photo and then keeps handing out the same print. The booth has two slots inside: a flag (`called`) saying "have we taken the photo yet?" and a print rack (`result`) holding the developed photo.
+
+```
+   once(fn)
+     │
+     ├── booth: ┌──────────────────┐
+     │         │  called: false   │
+     │         │  result: <slot>  │
+     │         └──────────────────┘
+     │
+     └── returns ──► wrapper(...args)
+                       │
+                       ├── called?  yes → return cached result
+                       │
+                       └── no → flip flag → result = fn.apply(this, args)
+                                              → return result
+```
+
+The flag is the discriminator (lets `undefined` be a valid cached value). The result slot is the snapshot. Together they implement "memoize a zero-argument call."
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. Why can't you check `result === undefined` as the "has it been called yet?" sentinel?
+> 2. If `fn` throws on the first call, what should the second call do — return the cached result (there isn't one), retry, or return `undefined`?
+> 3. For an async `fn`, what should the *cached* value be — the resolved value, or the Promise itself? Why?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: use `result === undefined` as the sentinel
+
 ```js
 function once(fn) {
-  let called = false;
   let result;
   return function (...args) {
-    if (called) return result;
-    called = true;
+    if (result !== undefined) return result;
     result = fn.apply(this, args);
     return result;
   };
 }
 ```
 
-### Runtime / engine behavior
-- Two variables (`called`, `result`) are captured in the inner function's closure and live on the heap as long as the returned wrapper is reachable.
-- Setting `called = true` **before** invoking `fn` would protect against re-entry if `fn` itself calls the wrapper synchronously — but loses the return value if `fn` throws. The standard order (set flag, then assign result) is the common LeetCode answer; the "set flag first" variant is the *re-entrant-safe* answer. Mention both.
-- This is the closure form of the **memoize-with-arity-0** pattern: same skeleton as `memoize`, but with no cache key (one slot only).
+Looks clean. But: if `fn` legitimately returns `undefined`, the wrapper sees `result === undefined` on every subsequent call → re-runs `fn` every time. Sentinel collision. You need a **separate flag**.
 
-### Edge cases (the interview traps)
-1. **`fn` throws on first call** — should the wrapper be "consumed" or retry? Default: the wrapper is consumed, second call returns `undefined`. Lodash matches this. Some interviewers expect retry-on-throw — clarify upfront.
-2. **`this` and arguments** — forward both with `fn.apply(this, args)`. The cached return ignores subsequent args, by definition.
-3. **Async `fn`** — the cached "result" is the **Promise itself**, so concurrent callers all `await` the same promise. This is the dedupe-in-flight pattern (see Variants).
-4. **`undefined` as a valid return value** — that's why you use a separate `called` flag instead of checking `result === undefined`.
-5. **Memory** — `result` is retained forever. If `fn` returns a 1GB buffer, that buffer never GCs. Mention this for senior bonus points.
-6. **Re-entrancy** — if `fn(...)` synchronously calls the wrapper, you either get infinite recursion (flag-after) or the cached `undefined` (flag-before).
-7. **Resettability** — interviewers may ask for `.reset()`. Trivial closure addition.
-
-## Brute force approach
-"I'll use a counter and check if count > 0." Works but reveals you don't understand that this is a **boolean state** problem, not a counting problem. Also vulnerable to the `undefined`-result trap if you use the result itself as the sentinel.
-
-## Optimal approach
-Closure over a `called` boolean and a `result` slot. O(1) memory, O(1) per call. The whole pattern is < 10 lines.
-
-## Solution (JavaScript)
+### Wrong attempt 2: flag, but flipped after `fn`
 
 ```js
-/**
- * Returns a function that invokes `fn` at most once.
- * Subsequent calls return the cached first result.
- * @param {Function} fn
- * @returns {Function & { reset: () => void }}
- */
 function once(fn) {
   let called = false;
   let result;
-
-  function wrapper(...args) {
+  return function (...args) {
     if (called) return result;
-    called = true;                // set BEFORE invoking — re-entrant safe
     result = fn.apply(this, args);
+    called = true;       // ← re-entrancy risk; throw leaves called=false
     return result;
+  };
+}
+```
+
+Same trap as in [allow-one-function-call.md](./allow-one-function-call.md). If `fn` synchronously invokes the wrapper before returning, the inner call sees `called === false` → re-runs `fn` → recursion. If `fn` throws, `called` stays `false` → next caller retries.
+
+### Wrong attempt 3: counter pattern
+
+```js
+function once(fn) {
+  let count = 0;
+  let result;
+  return function (...args) {
+    if (count++ > 0) return result;
+    return result = fn.apply(this, args);
+  };
+}
+```
+
+Works, but uses unnecessary state (a counter when a boolean suffices). Also incrementing every call means the counter could overflow on heavily-called wrappers — though that's largely theoretical.
+
+---
+
+## 7. The unlocking insight
+
+> **You need *two* closure slots — a flag (the discriminator) and a value (the cache). Flip the flag before invoking `fn`, so re-entrancy and throws both leave the wrapper consistent.**
+
+The closure must carry:
+
+1. **`called: boolean`** — distinguishes "never invoked" from "invoked and got `undefined`." Without this, you can't safely cache an `undefined` return.
+2. **`result: any`** — the cached return value, set exactly once.
+
+The invocation order matters:
+
+```js
+if (called) return result;    // gate first
+called = true;                 // flip the flag (before fn — re-entrancy + throw safety)
+result = fn.apply(this, args); // invoke
+return result;                 // serve the cached value
+```
+
+If `fn` synchronously re-enters the wrapper, the second call sees `called === true` and returns `result` (which is whatever was assigned at the point of re-entry — usually `undefined` if `fn` hasn't returned yet). If `fn` throws, `called` is already `true` → the ticket is consumed, next caller gets the (undefined) cached result. Whether throw-consumes-ticket matches your spec depends on the contract — clarify upfront.
+
+---
+
+## 8. Solution (annotated)
+
+```js
+function once(fn) {                              // step 1: factory captures fn + 2 private slots
+  let called = false;                             // step 2: discriminator (also handles undefined returns)
+  let result;                                     // step 3: cache slot
+
+  function wrapper(...args) {                     // step 4: returned wrapper
+    if (called) return result;                    // step 5: gate — subsequent calls just return cached value
+    called = true;                                 // step 6: FLIP FIRST (re-entrant safe)
+    result = fn.apply(this, args);                 // step 7: invoke, forwarding this + args
+    return result;                                 // step 8: return (and cache) the first result
   }
 
-  wrapper.reset = () => {
+  wrapper.reset = () => {                          // step 9: decorated reset() — shares the closure
     called = false;
     result = undefined;
   };
@@ -72,9 +174,8 @@ function once(fn) {
 }
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
-Input:
 ```js
 let n = 0;
 const init = once((label) => {
@@ -85,58 +186,152 @@ const init = once((label) => {
 console.log(init('a'));   // logs "init: a", returns 1
 console.log(init('b'));   // no log, returns 1 (cached)
 console.log(init('c'));   // no log, returns 1 (cached)
+
+init.reset();
+console.log(init('d'));   // logs "init: d", returns 2 (fresh)
 ```
 
-Trace:
-- Initial closure state: `called = false`, `result = undefined`.
-- `init('a')`: `called` is false → set `called = true`, call `fn('a')` → logs `init: a`, `n` becomes 1, returns 1. `result = 1`. Wrapper returns 1.
-- `init('b')`: `called` is true → return `result` (which is 1). `fn` is **not** called; `'b'` is discarded; `n` stays 1.
-- `init('c')`: same as `'b'`. Returns 1.
+---
 
-Net: `fn` invoked exactly once. Cached return value (`1`) served to all subsequent callers.
+## 9. Step-by-step dry run
 
-What's on the heap: the wrapper holds `called` and `result` in its closure record. The original `fn` is also retained (referenced by the wrapper). Until `wrapper` itself becomes unreachable, none of these can be GC'd.
+Input:
 
-## Important takeaways
+```js
+let n = 0;
+const f = once((label) => ++n);
+f('a'); f('b'); f.reset(); f('c');
+```
 
-**Syntax to memorize**
-- Two closed-over variables: a **flag** and a **value slot**.
-- Set the flag **before** calling `fn` to be re-entrant-safe.
-- Forward `this` + `args` via `fn.apply(this, args)`.
+Values-first trace:
 
-**Patterns to reuse**
-- This is **`memoize` with a single cache slot** (no key). If you generalize the slot to a `Map<key, value>`, you get `memoize(fn)`.
-- It's also `throttle(fn, Infinity)` and `debounce` with `{ leading: true, trailing: false, wait: Infinity }` — the "leading-only" forever pattern.
-- Lazy-init singletons (DB pool, logger, config loader) are `once` in disguise.
+| Step | Call         | `called` | `result` | `fn` invoked? | Returns |
+|------|--------------|----------|----------|----------------|---------|
+| init | `once(...)`  | `false`  | `undefined` | no          | wrapper |
+| 1    | `f('a')`     | `true`   | `1`      | yes            | `1`     |
+| 2    | `f('b')`     | `true`   | `1`      | no (gated)     | `1`     |
+| 3    | `f.reset()`  | `false`  | `undefined` | no          | undefined |
+| 4    | `f('c')`     | `true`   | `2`      | yes            | `2`     |
 
-**Common mistakes**
-- Using `result === undefined` as the sentinel — breaks when `fn` legitimately returns `undefined`.
-- Setting `called = true` *after* the call — re-entrant calls inside `fn` recurse forever.
-- Forgetting `this` forwarding — breaks `obj.init = once(obj.init)` patterns.
-- Forgetting that the cached result holds heap references — memory leak risk on big returns.
+`fn` was invoked exactly twice across the lifetime — once before reset, once after.
 
-**Related questions**
-- `memoize(fn)` (closure over a `Map`)
-- `memoize(fn, { ttl })`
-- Async `once` / in-flight dedupe (cache the promise)
-- `lazy(fn)` (alias for `once` in some libraries)
+---
 
-## Variants
+## 10. Common confusion + traps
 
-1. **Async `once` (in-flight dedupe)** — "If `fn` is async, multiple concurrent callers should share the same in-flight promise; if it rejects, the next call retries." Cache the Promise, not the resolved value; reset `called` on rejection.
+1. **`result === undefined` is not a valid sentinel.**
+   Functions can legitimately return `undefined`. Using the result itself as the "has-been-called" check breaks that case. Always use a separate boolean.
 
-2. **`once` with `.reset()` and `.invoked` getter** — Expose internal state so callers can re-arm the function. Tests whether you can attach metadata methods to a returned function.
+2. **Flip-after-invoke breaks re-entrancy and throws.**
+   See section 7 — flip-before is the safe order.
 
-3. **`onceN(fn, n)`** — Call `fn` at most `n` times; thereafter return the last result. Generalises `once` and shows you can swap a boolean for a counter while preserving the cached-value slot.
+3. **Forgetting `this` forwarding.**
+   `fn(args)` doesn't pass the receiver. `fn.apply(this, args)` does. Critical for `obj.init = once(obj.init); obj.init();` patterns.
 
-## Revision notes
+4. **Caching a rejected promise.**
+   If `fn` is async and rejects, the cached "result" is a rejected promise. Every subsequent caller awaits it and gets the same rejection — possibly forever. For async with retry-on-fail, delete the cached promise in a `.catch`. See Variant 1.
 
-> **once — 60 second recap**
-> - Closure over a `called` flag + a `result` slot. Two pieces of state, both heap-retained.
-> - Set the flag **before** invoking `fn` → re-entrant safe.
-> - Forward `this` + `args` with `fn.apply(this, args)`. After the first call, args are ignored.
-> - Use a **boolean flag**, not `result === undefined`, as the sentinel (functions can return `undefined`).
-> - Async variant: cache the **Promise**, not the resolved value — concurrent callers share one in-flight call.
-> - Memory: `result` is retained forever — big returns become leaks.
-> - Family: `memoize` (Map cache), `lazy`, leading-only `throttle`.
-> - **Trap:** flag-after-call → infinite recursion if `fn` calls the wrapper. Using `undefined`-check → breaks on `undefined` return.
+5. **Memory pinning of large returns.**
+   The closure retains `result` indefinitely. If `fn` returns a 1 GB buffer, that buffer is pinned until the wrapper itself is GC'd. For long-lived wrappers around expensive returns, document the lifetime.
+
+6. **Re-arming via property access.**
+   Stashing the flag on the wrapper as `wrapper.called` exposes it to mutation. Use closure-over-let for true privacy. Decorate with `wrapper.reset` if you *want* re-arming — that's an explicit API.
+
+---
+
+## 11. Senior follow-ups & variants
+
+### Variant 1 — Async `once` with in-flight dedupe
+
+```js
+function onceAsync(fn) {
+  let pending = null;        // Promise<T> | null
+  return function (...args) {
+    if (pending) return pending;
+    pending = Promise.resolve()
+      .then(() => fn.apply(this, args))
+      .catch((err) => { pending = null; throw err; }); // reset on reject so next call retries
+    return pending;
+  };
+}
+```
+
+Cache the **Promise**, not the resolved value, so concurrent callers all share one in-flight call. Delete the cache on rejection — your "transient failure" doesn't become "sticky failure for the rest of the process."
+
+This is the **request-dedupe / cache-stampede** pattern. See [`10-machine-coding-patterns/cache-stampede-single-flight.md`](../10-machine-coding-patterns/cache-stampede-single-flight.md).
+
+### Variant 2 — `onceN(fn, n)` — allow N calls, cache last result
+
+```js
+function onceN(fn, n) {
+  let remaining = n;
+  let last;
+  return function (...args) {
+    if (remaining <= 0) return last;
+    remaining--;
+    last = fn.apply(this, args);
+    return last;
+  };
+}
+```
+
+Counter replaces boolean. Cached result is the *last* invocation, not the first. Useful for "warm up the cache N times" patterns.
+
+### Variant 3 — `.invoked` getter for inspection
+
+```js
+function once(fn) {
+  let called = false;
+  let result;
+  function wrapper(...args) {
+    if (called) return result;
+    called = true;
+    return result = fn.apply(this, args);
+  }
+  Object.defineProperty(wrapper, 'invoked', { get: () => called });
+  wrapper.reset = () => { called = false; result = undefined; };
+  return wrapper;
+}
+const f = once(() => 1);
+f.invoked;   // false
+f();
+f.invoked;   // true
+```
+
+Exposes the internal flag read-only — useful in tests and metrics.
+
+### Variant 4 — `lazy(fn)` alias
+
+Some libraries (e.g., Vue, RxJS) call this `lazy`. Identical implementation; the alias documents intent: "evaluate this expensive thing the first time it's needed, then memoize."
+
+```js
+const config = lazy(() => loadConfigSync());
+console.log(config().port);   // first call: loads
+console.log(config().host);   // cached
+```
+
+---
+
+## 12. How to think aloud in the interview
+
+> "Closure over two slots: a boolean `called` and a value `result`. The flag is the discriminator — without it I can't distinguish 'never called' from 'called and got undefined.' First call: flip the flag (before invoking, for re-entrancy/throw safety), call `fn.apply(this, args)`, store the result. Subsequent calls: gate on the flag and return the cached result. For async, I cache the *Promise* so concurrent callers dedupe, and delete it on rejection so transient failures don't become sticky. Decorate with `.reset()` if re-arming is required."
+
+---
+
+## 13. 60-second revision
+
+> - **Pattern:** closure over `let called = false; let result;` — two slots, both heap-retained.
+> - **Set the flag *before* invoking** `fn` → re-entrant-safe and throw-safe.
+> - **Forward** `this` + `args` with `fn.apply(this, args)`. Args are discarded on subsequent calls.
+> - Use the **boolean flag**, not `result === undefined`, as the sentinel.
+> - **Async variant:** cache the **Promise**, not the resolved value. Delete on rejection for retry-on-fail.
+> - **Memory:** the cached result is retained forever — large returns become leaks.
+> - **Family:** `memoize` (Map cache), `lazy`, leading-only `throttle`, request dedupe.
+> - **Trap:** flag-after-call → infinite recursion on re-entry; throw leaves wrapper un-consumed.
+> - **Trap:** `result === undefined` as sentinel → breaks for `undefined`-returning functions.
+
+---
+
+**Related:** [allow-one-function-call.md](./allow-one-function-call.md) · [memoize-with-ttl.md](./memoize-with-ttl.md) · [memoize-with-deep-equality.md](./memoize-with-deep-equality.md) · [`10-machine-coding-patterns/cache-stampede-single-flight.md`](../10-machine-coding-patterns/cache-stampede-single-flight.md)
+
+**Concept primer:** [`concepts/closures.md`](../../concepts/closures.md)

@@ -1,23 +1,160 @@
-# NDJSON Splitter
+# NDJSON splitter
 
-## Source / Origin
-- Newline-delimited JSON — popular for streaming APIs (Stripe events, OpenAI streaming, logs).
-- Asked at: Stripe, Cloudflare, Razorpay.
-- Concept reference: `concepts/streams.md`, sibling `csv-parser-via-transform.md`.
+> **Difficulty:** Medium   |   **Time:** ~10 min   |   **Prereqs:** [transform-line-parser.md](./transform-line-parser.md)
+>
+> **Source:** Stripe events, OpenAI streaming, log pipelines. Asked at Stripe, Cloudflare, Razorpay.
 
-## Why this question matters in interviews
-NDJSON is simpler than CSV: one JSON value per line, separated by `\n`. Tests basic streaming + handling chunks that don't align on line boundaries. Senior bar: you parse correctly across chunk boundaries, handle the final line without trailing `\n`, and survive malformed lines without dying.
+---
 
-## Concepts involved
+## 1. Problem statement
+
+Parse NDJSON (newline-delimited JSON) from a byte stream. Each line is a JSON value.
+
+**Verification examples**
 
 ```js
+// Input bytes (across chunks):
+// '{"a":1}\n{"b":2}\n{"c":3}\n'
+
+// Output: stream of parsed JS values:
+// {a: 1}
+// {b: 2}
+// {c: 3}
+```
+
+| Edge case                          | Behaviour                                              |
+|------------------------------------|---------------------------------------------------------|
+| Trailing newline                   | works                                                  |
+| No trailing newline                | works via `_flush`                                     |
+| Empty lines (blank)                | skip                                                   |
+| Malformed JSON                     | emit error sentinel or rethrow                         |
+| Huge line                          | buffer grows; bound for safety                         |
+| CRLF                               | be lenient (spec says LF only)                        |
+| Multi-byte UTF-8 across chunks     | use StringDecoder                                      |
+
+**Constraints**
+- Simpler than CSV — no embedded newlines in JSON line.
+- Buffer the partial line across chunks.
+- `JSON.parse` each complete line.
+- `_flush` for final partial.
+
+---
+
+## 2. Plain-English restatement
+
+NDJSON = one JSON value per line, `\n`-separated. Stream-parse without loading entire payload. Buffer the partial line; on each chunk, split, parse complete lines, save partial.
+
+---
+
+## 3. Why this matters in interviews
+
+Common framing question for log pipelines + AI streaming. Simpler than CSV but tests the same chunk-boundary skill.
+
+---
+
+## 4. Mental model
+
+```
+   bytes → TextDecoderStream → ndjsonSplitter → JSON value per line → consumer
+   
+   ndjsonSplitter state:
+     buf accumulates partial line across chunks.
+     
+     _transform(chunk):
+       buf += chunk
+       lines = buf.split('\n')
+       buf = lines.pop()        ← LAST is partial (or empty if trailing \n)
+       for line in lines:
+         if !line.trim(): skip  ← empty lines
+         try emit JSON.parse(line)
+         catch: emit error sentinel or rethrow
+     
+     _flush:
+       if buf.trim(): try parse; emit.
+
+   Simpler than CSV:
+   - JSON values can't contain literal newlines (only escaped \n).
+   - So \n is unambiguous separator.
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. Why is NDJSON simpler than CSV?
+> 2. What happens to the final line if there's no trailing `\n`?
+> 3. How to handle a malformed JSON line?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: per-chunk JSON.parse
+Chunks split lines; fails.
+
+### Wrong attempt 2: load full payload
+OOM on large.
+
+### Wrong attempt 3: no `_flush`
+Drops final line if no trailing `\n`.
+
+---
+
+## 7. The unlocking insight
+
+> **Buffer partial line across chunks. Split on `\n`, pop last (partial), JSON.parse each. `_flush` emits final. Malformed JSON: pick policy — throw, skip, or sentinel.**
+
+Three properties:
+
+1. **Buffer partial** across chunks.
+2. **JSON.parse per line** — simpler than CSV (no embedded newlines).
+3. **`_flush` for final partial**.
+
+---
+
+## 8. Solution (annotated)
+
+```js
+const { Transform } = require('node:stream');
+
 function makeNdjsonSplitter() {
+  let buf = '';
+  return new Transform({
+    readableObjectMode: true,
+    transform(chunk, enc, cb) {                                          // step 1: chunk handler
+      buf += chunk.toString('utf8');
+      const lines = buf.split('\n');
+      buf = lines.pop();                                                 // step 2: partial last
+      for (const line of lines) {
+        if (!line.trim()) continue;                                      // step 3: skip empty
+        try {
+          this.push(JSON.parse(line));                                   // step 4: parse + emit
+        } catch (e) {
+          this.push({ __error: e.message, line });                       // step 5: error sentinel
+        }
+      }
+      cb();
+    },
+    flush(cb) {                                                          // step 6: final partial
+      if (buf.trim()) {
+        try { this.push(JSON.parse(buf)); }
+        catch (e) { this.push({ __error: e.message, line: buf }); }
+      }
+      buf = '';
+      cb();
+    },
+  });
+}
+
+// Web Streams variant
+function ndjsonTransformWeb() {
   let buf = '';
   return new TransformStream({
     transform(chunk, ctl) {
       buf += chunk;
       const lines = buf.split('\n');
-      buf = lines.pop();        // last is partial
+      buf = lines.pop();
       for (const line of lines) {
         if (!line.trim()) continue;
         try { ctl.enqueue(JSON.parse(line)); }
@@ -34,109 +171,128 @@ function makeNdjsonSplitter() {
 }
 ```
 
-### Edge cases / traps
-1. **Trailing newline vs no trailing newline.** `split('\n')` handles both; `pop()` saves the partial.
-2. **Empty lines** (blank between records) — skip.
-3. **Malformed JSON** — choose: throw (rare), emit error sentinel (common), skip silently (loose).
-4. **Huge line** — buffer can grow if the line is bigger than expected; safer with line length limit.
-5. **No `\r\n` issue** — NDJSON spec says LF only, but be lenient with CRLF.
-6. **Encoding** — TextDecoderStream before splitter.
-
-## Mental Model
-
-```
-   bytes → TextDecoderStream → ndjsonSplitter → JSON value per line → consumer
-   buf accumulates partial line across chunks
-   split('\n') → all complete lines + one partial → keep partial in buf
-```
-
-## Solution
+**Try it yourself**
 
 ```js
-// Compose
-const res = await fetch('/events.ndjson');
-const piped = res.body
-  .pipeThrough(new TextDecoderStream())
-  .pipeThrough(makeNdjsonSplitter());
+const fs = require('node:fs');
+const { pipeline } = require('node:stream/promises');
 
-for await (const event of piped) {
-  if (event.__error) console.warn('skip malformed', event);
-  else handleEvent(event);
-}
-
-// As async generator (alternative)
-async function* ndjsonGen(url, { signal } = {}) {
-  const res = await fetch(url, { signal });
-  const dec = new TextDecoder();
-  let buf = '';
-  for await (const chunk of res.body) {
-    buf += dec.decode(chunk, { stream: true });
-    const lines = buf.split('\n');
-    buf = lines.pop();
-    for (const line of lines) {
-      if (line.trim()) yield JSON.parse(line);
+await pipeline(
+  fs.createReadStream('events.ndjson'),
+  makeNdjsonSplitter(),
+  async function* (events) {
+    for await (const event of events) {
+      if (event.__error) {
+        console.error('parse error:', event.__error);
+        continue;
+      }
+      yield processEvent(event);
     }
-  }
-  if (buf.trim()) yield JSON.parse(buf);
+  },
+  writableSink,
+);
+
+// HTTP streaming (OpenAI-style)
+const response = await fetch('https://api.openai.com/v1/chat/completions', { /* ... */ });
+const reader = response.body.pipeThrough(new TextDecoderStream()).pipeThrough(ndjsonTransformWeb());
+for await (const event of reader) {
+  console.log(event);
 }
-
-for await (const event of ndjsonGen('/events.ndjson')) console.log(event);
 ```
 
-## Dry run
+---
 
-`'{"a":1}\n{"b":2}\n{"c":3}'` in two chunks: `'{"a":1}\n{"b":2'`, `'}\n{"c":3}'`.
-
-```
-chunk 1: buf = '{"a":1}\n{"b":2'
-  split → ['{"a":1}', '{"b":2']
-  pop → buf = '{"b":2'; complete=['{"a":1}']
-  yield {a:1}
-
-chunk 2: buf = '{"b":2' + '}\n{"c":3}' = '{"b":2}\n{"c":3}'
-  split → ['{"b":2}', '{"c":3}']
-  pop → buf = '{"c":3}'; complete=['{"b":2}']
-  yield {b:2}
-
-stream ends:
-  buf = '{"c":3}' → yield {c:3}
-```
-
-## How to think aloud
-
-> "Accumulate bytes through TextDecoder. Split by `\n`; the last piece is partial — save in buf. Emit JSON.parse of each complete line; on flush, emit the saved buf if non-empty. Decide error policy: emit `{__error, line}` sentinels so consumers see all lines, or throw to stop. For huge files, add a length guard so a runaway line doesn't OOM."
-
-## Important takeaways
-
-- **`split('\n')` + `pop()`** keeps trailing partial line.
-- **Flush emits saved partial** at end.
-- **Skip empty lines.**
-- **Error policy**: sentinel object or throw.
-- **TextDecoderStream first** for byte safety.
-
-## Variants
-
-- **JSON-array streaming** — different format; needs a JSON-aware streaming parser (e.g., `oboe.js`).
-- **Length-prefixed framing** — alternative to newline-delimited.
-- **Compression**: `DecompressionStream` upstream.
-- **Bounded line size** — reject lines over N MB.
-
-## Revision notes
+## 9. Step-by-step dry run
 
 ```
-NDJSON splitter:
-  buf = ''
-  transform(chunk):
-    buf += chunk
-    lines = buf.split('\n')
-    buf = lines.pop()
-    for each line: yield JSON.parse(line)
-  flush:
-    if buf: yield JSON.parse(buf)
+Input: '{"a":1}\n{"b":2}\n{"c":3}\n'
 
-error policy:
-  emit {__error, line} sentinels (lenient)
-  or throw (strict)
+chunks: ['{"a":1}\n{"', 'b":2}\n{"c":3', '}\n']
 
-compose: res.body → TextDecoderStream → splitter → consumer
+ndjsonSplitter state:
+
+chunk1: '{"a":1}\n{"'
+  buf = '{"a":1}\n{"'
+  split('\n') = ['{"a":1}', '{"']
+  pop → buf = '{"'
+  parse '{"a":1}' → emit {a:1}
+
+chunk2: 'b":2}\n{"c":3'
+  buf = '{"' + 'b":2}\n{"c":3' = '{"b":2}\n{"c":3'
+  split('\n') = ['{"b":2}', '{"c":3']
+  pop → buf = '{"c":3'
+  parse '{"b":2}' → emit {b:2}
+
+chunk3: '}\n'
+  buf = '{"c":3' + '}\n' = '{"c":3}\n'
+  split('\n') = ['{"c":3}', '']
+  pop → buf = ''
+  parse '{"c":3}' → emit {c:3}
+
+upstream.end() → _flush:
+  buf is empty → skip.
+
+Output: {a:1}, {b:2}, {c:3}.
+
+Without trailing \n:
+  Final chunk: '{"c":3}' (no \n).
+  buf = '{"c":3}'.
+  upstream.end() → _flush: buf.trim() truthy → parse → emit.
 ```
+
+---
+
+## 10. Common confusion + traps
+
+1. **Per-chunk parse** — fails on cross-chunk lines.
+2. **No `_flush`** — drops final line.
+3. **Malformed JSON policy** — pick: throw, skip, or sentinel.
+4. **CRLF** — be lenient (spec is LF only).
+5. **UTF-8 multi-byte split** — use `StringDecoder`.
+6. **Empty lines** — skip.
+7. **Huge line** — buffer can grow; consider bounded reader.
+
+---
+
+## 11. Senior follow-ups & variants
+
+### Variant 1 — Web Streams TransformStream
+Same logic; browser + modern Node.
+
+### Variant 2 — Streaming API (OpenAI, Stripe events)
+HTTP `Transfer-Encoding: chunked` + NDJSON.
+
+### Variant 3 — Error recovery
+Continue past bad lines vs abort on first error.
+
+### Variant 4 — Backpressure
+Pipeline propagates; consumer slowness slows reader.
+
+### Variant 5 — Line-size limit
+Reject lines larger than N bytes for safety.
+
+---
+
+## 12. How to think aloud
+
+> "NDJSON is simpler than CSV: one JSON value per line, separated by `\n`. JSON spec doesn't allow literal newlines inside values (only escaped `\n`), so `\n` is unambiguous separator. State machine: buffer the partial line across chunks. Per chunk: append, split on `\n`, pop the last (partial), `JSON.parse` each complete line, push to output. `_flush` emits final partial (handles 'no trailing newline' case). Malformed JSON: pick policy — emit sentinel `{__error, line}` for downstream filter, OR rethrow to abort pipeline. Spec says LF only but be lenient with CRLF (`split(/\r?\n/)`). For UTF-8 safety across chunks use `StringDecoder` (raw `toString('utf8')` on partial multi-byte produces replacement char). Web Streams version uses `TransformStream` — same logic. Use cases: OpenAI streaming responses, Stripe events feed, application logs. Trap: per-chunk parse; no _flush; ignoring malformed; huge unbounded lines."
+
+---
+
+## 13. 60-second revision
+
+> - **One JSON value per `\n`-delimited line.**
+> - **Buffer partial** across chunks.
+> - **`JSON.parse` each complete line.**
+> - **`_flush` emits final** (no trailing `\n` case).
+> - **Malformed policy:** sentinel, skip, or throw.
+> - **CRLF lenient;** UTF-8 via StringDecoder.
+> - **Web Streams** version available.
+> - **Use:** OpenAI streaming, Stripe events, logs.
+> - **Trap:** per-chunk parse; no _flush; unbounded line size.
+
+---
+
+**Related:** [transform-line-parser.md](./transform-line-parser.md) · [csv-parser-via-transform.md](./csv-parser-via-transform.md) · [fetch-response-async-iter.md](./fetch-response-async-iter.md) · [web-streams-transform.md](./web-streams-transform.md)
+
+**Concept primer:** [`concepts/streams.md`](../../concepts/streams.md)

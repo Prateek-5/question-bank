@@ -1,238 +1,300 @@
-# Nested Iterator class — `next()` / `hasNext()` API over nested array
+# NestedIterator class — `next()` / `hasNext()` API
 
-## Source
-- LeetCode #2649 "Nested Array Generator": https://leetcode.com/problems/nested-array-generator/
-- Classic Iterator-protocol companion to LeetCode #341 "Flatten Nested List Iterator".
+> **Difficulty:** Medium   |   **Time:** ~12 min   |   **Prereqs:** [nested-array-generator-codedamn.md](./nested-array-generator-codedamn.md), [`06-streams/custom-iterator.md`](../06-streams/custom-iterator.md)
+>
+> **Source:** LeetCode #2649. Sibling to #341 "Flatten Nested List Iterator."
 
-## Why this question matters in interviews
-This is the "OO interview" sibling of the `function*` version. The interviewer wants to see whether you can build the **Iterator Protocol by hand** — `next()` and `hasNext()` methods on a class, with internal state. It tests three things: (1) understanding that the iterator protocol is just `{ next(): {value, done} }` plus optional `[Symbol.iterator]`, (2) ability to convert a naturally recursive walk into stored state, and (3) awareness of the **lazy** vs **eager** trade-off. Backend parallels: building a paginated cursor over a B-tree, implementing a streaming reader over an LSM SST file, exposing a "next batch" API over a recursive query.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+Class with `next()` returning next leaf and `hasNext()` returning boolean. Stateful across calls.
+
+**Verification examples**
+
 ```js
-// LeetCode API
-class NestedIterator {
-  constructor(nestedList) { /* setup */ }
-  next() { /* return next leaf */ }
-  hasNext() { /* return boolean */ }
-}
-
 const it = new NestedIterator([1, [2, [3, 4]], 5]);
-while (it.hasNext()) console.log(it.next());  // 1 2 3 4 5
+while (it.hasNext()) console.log(it.next());           // 1 2 3 4 5
+
+it.hasNext();                                           // false at end
 ```
 
+**Constraints**
+- `next()` and `hasNext()` methods.
+- State explicit (not implicit via generator).
+- `hasNext` may need to peek-and-advance (lazy "skip past arrays").
+- LeetCode contract: nested list of `NestedInteger` objects.
+
+---
+
+## 2. Plain-English restatement
+
+OO sibling of generator. Maintain stack of iterators or pre-flatten. `hasNext` must skip past empty arrays to determine if any leaf remains.
+
+---
+
+## 3. Why this matters in interviews
+
+OO interview: build Iterator Protocol by hand. Tests: protocol literacy, state mgmt, lazy vs eager tradeoff.
+
+---
+
+## 4. Mental model
+
+```
+   Two implementations:
+   
+   (A) Eager pre-flatten:
+     constructor: flatten to leaves array; index = 0.
+     next(): return leaves[index++].
+     hasNext(): index < leaves.length.
+     Pros: simple. Cons: O(n) construction memory.
+   
+   (B) Lazy stack of indices:
+     stack = [{list, idx}]
+     hasNext(): advance until top has unflat leaf or empty.
+       If current item is array, push frame, recurse.
+       If leaf, return true (peeked).
+       If frame exhausted, pop.
+     next(): return peeked leaf; advance.
+     Pros: O(depth) memory. Cons: trickier.
+   
+   (C) Generator delegate:
+     constructor: build generator.
+     next/hasNext wrap buffered next.
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. Why not just generator?
+> 2. Lazy vs eager tradeoff?
+> 3. What does `hasNext` need to handle?
+
+---
+
+## 6. Brute force — walked through
+
 ```js
-// JS-native equivalent (Symbol.iterator) — same algorithm
-class NestedIterator {
-  constructor(nestedList) { /* ... */ }
-  [Symbol.iterator]() { return this; }
-  next() {
-    if (!this.hasNext()) return { value: undefined, done: true };
-    return { value: this._next(), done: false };
+// Eager
+class Eager {
+  constructor(nested) {
+    this.leaves = [];
+    (function flatten(arr) {
+      for (const x of arr) Array.isArray(x) ? flatten(x) : leaves.push(x);
+    })(nested);
+    this.i = 0;
   }
-  hasNext() { /* ... */ }
 }
 ```
 
-### Runtime / engine behavior
-- The iterator must be **stateful between `next()` calls**. Unlike a generator (where state is implicit in the paused frame), here you carry the state explicitly as instance fields.
-- **Two implementation styles:**
-  - **Eager**: flatten the input in the constructor, then `next()` is just `O(1)` array indexing. Simple but uses O(n leaves) memory upfront.
-  - **Lazy**: store a stack of iterators / positions, advance one step at a time. O(d) memory where d = nesting depth, but constructor is O(1).
-- `hasNext()` is often called multiple times before `next()` — make it **idempotent**. A common idiom: `hasNext()` advances the stack to the next leaf, leaving it ready; `next()` consumes it.
-- The "advance to next leaf" routine pops empty frames and pushes nested-array frames until the top of the stack is a primitive ready to consume.
-- Generator-based shortcut: wrap a generator inside the class and call `.next()` on it. The class becomes a 5-line adapter. Mention this for bonus points — it shows you know both layers.
+Works; O(n) memory upfront.
 
-### Edge cases (interview traps)
-1. **Empty input** — `new NestedIterator([])` then `hasNext()` should be `false`, not throw.
-2. **All-empty nested** — `[[], [[]], []]` should also yield `false` from `hasNext()`. Requires `hasNext()` to drill through empties.
-3. **Multiple `hasNext()` calls without `next()`** — must be idempotent. Don't advance position on `hasNext()`.
-4. **Calling `next()` past the end** — LeetCode tests don't usually exercise this, but defensive code returns a sentinel or throws clearly.
-5. **Deeply nested input** — eager flatten = call stack risk. Lazy stack-of-iterators = safe.
-6. **Mixed nesting** — `[1, [2], 3, [[4]]]`. Make sure the algorithm handles arrays appearing at any position, not just trailing.
-7. **Mutation during iteration** — out of spec; don't worry unless asked.
+---
 
-## Brute force approach
-Eager flatten in the constructor, then index into a flat array with a cursor. Works, passes LeetCode tests, but loses the "lazy / streaming" point of the problem. If asked "why is this approach worse?", say: memory upfront, can't be used over an infinite-feeling generator, can't short-circuit.
+## 7. The unlocking insight
 
-## Optimal approach
-**Lazy** iterator with an explicit stack of `{ items, index }` frames. `hasNext()` drains empty frames and dives into nested arrays until the top frame points at a primitive. `next()` returns that primitive and advances. O(1) amortized per `next()`, O(depth) memory.
+> **Eager pre-flatten OR lazy stack of iterators. Generator wraps cleanly. `hasNext` may need to advance past empty arrays.**
 
-## Solution (JavaScript)
+Three properties:
+
+1. **Eager flatten** simple.
+2. **Lazy stack** O(depth).
+3. **Generator wrap** cleanest.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
-/**
- * LeetCode-style nested iterator.
- * Lazy: explicit stack of { items, index } frames.
- */
-class NestedIterator {
-  /**
-   * @param {Array<*>} nestedList — arbitrarily nested array of primitives
-   */
+// (A) Eager
+class NestedIteratorEager {
   constructor(nestedList) {
-    // Each frame: { items: Array, index: number }
-    this.stack = [{ items: nestedList, index: 0 }];
+    this.leaves = [];
+    this.i = 0;
+    this._flatten(nestedList);                                              // step 1: flatten once
   }
+  _flatten(list) {
+    for (const x of list) {
+      if (Array.isArray(x)) this._flatten(x);
+      else this.leaves.push(x);
+    }
+  }
+  hasNext() { return this.i < this.leaves.length; }
+  next() { return this.leaves[this.i++]; }
+}
 
-  /**
-   * Returns true if there's still a primitive leaf to yield.
-   * Idempotent: safe to call multiple times in a row.
-   * Side effect: advances the stack until the top frame is at a primitive
-   * (so next() can read it in O(1)).
-   */
+// (B) Lazy stack of iterators
+class NestedIteratorLazy {
+  constructor(nestedList) {
+    this.stack = [{ list: nestedList, idx: 0 }];                             // step 2: explicit stack
+  }
   hasNext() {
     while (this.stack.length) {
-      const top = this.stack[this.stack.length - 1];
-      // Frame exhausted — pop it.
-      if (top.index >= top.items.length) {
-        this.stack.pop();
+      const frame = this.stack[this.stack.length - 1];
+      if (frame.idx >= frame.list.length) {
+        this.stack.pop();                                                    // step 3: exhausted
         continue;
       }
-      const item = top.items[top.index];
+      const item = frame.list[frame.idx];
       if (Array.isArray(item)) {
-        // Dive in. Consume slot in parent first to avoid re-entry.
-        top.index++;
-        this.stack.push({ items: item, index: 0 });
+        frame.idx++;
+        this.stack.push({ list: item, idx: 0 });                             // step 4: descend
       } else {
-        // Top of stack is now sitting on a primitive — ready for next().
-        return true;
+        return true;                                                         // step 5: leaf available
       }
     }
     return false;
   }
-
-  /**
-   * Returns the next primitive leaf and advances.
-   * Caller should have verified hasNext() first.
-   * @returns {*} the next leaf value
-   */
   next() {
-    if (!this.hasNext()) return undefined;     // or: throw
-    const top = this.stack[this.stack.length - 1];
-    return top.items[top.index++];
-  }
-
-  // JS-native iteration sugar so `for ... of` works directly.
-  [Symbol.iterator]() {
-    return {
-      next: () => this.hasNext()
-        ? { value: this.next(), done: false }
-        : { value: undefined, done: true },
-    };
+    if (!this.hasNext()) return undefined;
+    const frame = this.stack[this.stack.length - 1];
+    return frame.list[frame.idx++];
   }
 }
 
-/**
- * Generator-adapter alternative — shows mastery of both layers.
- * The class becomes a thin shim over a generator.
- */
+// (C) Generator delegate (cleanest)
+function* leaves(arr) {
+  for (const x of arr) {
+    if (Array.isArray(x)) yield* leaves(x);
+    else yield x;
+  }
+}
+
 class NestedIteratorGen {
   constructor(nestedList) {
-    function* walk(arr) {
-      for (const item of arr) {
-        if (Array.isArray(item)) yield* walk(item);
-        else yield item;
-      }
-    }
-    this._gen = walk(nestedList);
-    this._peeked = null;            // 1-slot lookahead so hasNext() is non-destructive
+    this.iter = leaves(nestedList);
+    this._next = this.iter.next();                                           // step 6: buffer next
   }
-  hasNext() {
-    if (this._peeked !== null) return true;
-    const { value, done } = this._gen.next();
-    if (done) return false;
-    this._peeked = { value };
-    return true;
-  }
+  hasNext() { return !this._next.done; }
   next() {
-    if (this._peeked !== null) {
-      const v = this._peeked.value;
-      this._peeked = null;
-      return v;
-    }
-    return this._gen.next().value;
+    const v = this._next.value;
+    this._next = this.iter.next();                                           // step 7: advance buffer
+    return v;
   }
+  // Optional: make iterable
+  [Symbol.iterator]() { return this; }
 }
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
-Input: `new NestedIterator([1, [2, [3, 4]], 5])`.
+```js
+const it = new NestedIteratorLazy([1, [2, [3, 4]], 5]);
+while (it.hasNext()) console.log(it.next());                  // 1 2 3 4 5
 
-Initial: `stack = [{items: [1,[2,[3,4]],5], index: 0}]`.
+// Edge: leading empty array
+const it2 = new NestedIteratorLazy([[], [1, []]]);
+const all = [];
+while (it2.hasNext()) all.push(it2.next());
+all;                                                           // [1]
 
-1. `hasNext()`:
-   - Top: index 0, items[0]=`1` (primitive) → return `true`. Stack unchanged.
-2. `next()` → reads `1`, advances index to 1. Returns `1`. Stack: `[{items:[1,[2,[3,4]],5], index:1}]`.
-3. `hasNext()`:
-   - Top: items[1]=`[2,[3,4]]` (array) → bump parent index to 2, push frame. Stack: `[{...,index:2}, {items:[2,[3,4]],index:0}]`.
-   - Top: items[0]=`2` (primitive) → return `true`.
-4. `next()` → reads `2`, advances. Returns `2`. Stack top: `{items:[2,[3,4]],index:1}`.
-5. `hasNext()`:
-   - Top: items[1]=`[3,4]` (array) → bump parent to 2, push. Stack: `[{...idx2}, {idx2}, {items:[3,4],index:0}]`.
-   - Top: items[0]=`3` (primitive) → `true`.
-6. `next()` → `3`. Top frame index→1.
-7. `hasNext()`:
-   - Top: items[1]=`4` (primitive) → `true`.
-8. `next()` → `4`. Top frame index→2.
-9. `hasNext()`:
-   - Top: index 2 >= length 2 → pop. Stack: `[{idx2}, {idx2}]`.
-   - New top: index 2 >= length 2 → pop. Stack: `[{idx2}]`.
-   - New top: items[2]=`5` (primitive) → `true`.
-10. `next()` → `5`. Top frame index→3.
-11. `hasNext()`:
-    - Top: 3 >= 3 → pop. Stack empty.
-    - Return `false`.
+// LeetCode passes [NestedInteger] not raw arrays
+// NestedInteger has .isInteger() and .getList() — adapt accordingly.
 
-Output sequence: `1, 2, 3, 4, 5`. Total leaves yielded with O(1) amortized cost per call.
+// Use as iterable (with Symbol.iterator)
+const it3 = new NestedIteratorGen([1, [2, [3]]]);
+[...it3];                                                      // [1, 2, 3]
 
-## Important takeaways
+// Compare to generator
+const gen = leaves([1, [2, [3]]]);
+[...gen];                                                      // [1, 2, 3] — same
+```
 
-**Syntax to memorize**
-- Iterator protocol: `next() → {value, done}`. LeetCode's API is `next()/hasNext()` — both styles are common.
-- Eager-flatten constructor + cursor is the easy answer; explicit stack of frames is the lazy answer.
-- `hasNext()` must be **idempotent**: multiple calls without intervening `next()` should yield the same answer.
-- "Dive into nested array" idiom: increment parent's index FIRST, then push child. Prevents double-visiting.
+---
 
-**Patterns to reuse**
-- "Stack of `{items, index}` frames" is the explicit conversion of any depth-first recursion into iterative form. Use it for AST walks, tree DFS, deep clone with depth limit.
-- "Peek-buffer adapter" (1-slot lookahead) turns any `next()`-only iterator into a `hasNext()/peek()` iterator. Useful when wrapping native generators.
-- The class-over-generator pattern (`NestedIteratorGen`) is the production way to expose iterator state with a richer API while keeping the algorithm declarative.
+## 9. Step-by-step dry run
 
-**Common mistakes**
-- `hasNext()` advances the position even when called twice → `next()` skips values. Fix with idempotent dive logic OR with a peek buffer.
-- Pushing the child frame before bumping the parent's index → on re-entry you re-visit the same nested array forever.
-- Eager-flattening in the constructor and forgetting that it allocates O(n) memory upfront — fine for small inputs, awful for large or unknown-size streams.
-- Forgetting to handle `[[], []]` style empty nesting — `hasNext()` should loop and drain those empty frames, not return `true` once and then crash in `next()`.
-- Calling `Array.isArray` on `null` and worrying it'll crash — it won't, returns `false`. Cite this to look polished.
+```
+NestedIteratorLazy([1, [2, []], 3]):
 
-**Related questions**
-- Generator version (`function*` + `yield*`) — see `nested-array-generator-codedamn.md`.
-- LeetCode #341 "Flatten Nested List Iterator" — same algorithm, with `NestedInteger` interface.
-- BST iterator with `next()/hasNext()` — same stack-of-frames pattern over a tree.
-- Two-pointer merge of two iterators.
+constructor: stack = [{list:[1,[2,[]],3], idx:0}].
 
-## Variants
+hasNext():
+  Top frame idx=0, item=1. Not array. Return true.
 
-1. **`peek()` method** — return next leaf without advancing. Implement with a 1-slot buffer.
+next():
+  hasNext peeked. frame.idx++ → 1. Return 1.
 
-2. **Bidirectional** — `prev()` as well. Requires storing visited values in an array (you've lost the laziness benefit).
+hasNext():
+  Top idx=1, item=[2,[]]. Array. frame.idx++=2. Push {list:[2,[]], idx:0}.
+  Top idx=0, item=2. Not array. Return true.
 
-3. **`takeWhile(pred)` / `skipWhile(pred)`** — typical functional combinators built on top of the basic iterator.
+next():
+  Return 2. Top idx=1.
 
-4. **Async version** — items themselves are Promises that resolve to nested arrays. `async next() { ... }`, drive with `for await ... of`.
+hasNext():
+  Top idx=1, item=[]. Array. idx++=2. Push {list:[], idx:0}.
+  Top idx=0, frame.idx=0 ≥ list.length=0 → exhausted. POP.
+  Back to {list:[2,[]], idx:2}. idx=2 ≥ length=2 → exhausted. POP.
+  Back to outer {list:[1,[2,[]],3], idx:2}. item=3. Not array. Return true.
 
-5. **Pluggable predicate** — yield only leaves matching `pred`. Or yield arrays too (interview twist).
+next(): Return 3.
 
-## Revision notes
+hasNext():
+  Top idx=3 ≥ length=3 → exhausted. POP.
+  Stack empty. Return false.
 
-> **NestedIterator (next/hasNext) — 60 second recap**
-> - Iterator protocol: `next()` returns `{value, done}`; LeetCode wants explicit `next()` + `hasNext()`.
-> - Lazy implementation: explicit stack of `{items, index}` frames.
-> - `hasNext()` drains empty frames and dives into nested arrays until top frame is at a primitive. **Idempotent.**
-> - `next()` reads the primitive at top frame and advances.
-> - Dive idiom: bump parent index FIRST, then push child frame. Avoids re-entry.
-> - O(1) amortized per call, O(depth) memory.
-> - Bonus: wrap a `function*` generator + 1-slot peek buffer to make a 10-line implementation.
-> - **Trap:** non-idempotent `hasNext()` skips values; eager flatten loses laziness.
+Loop exit.
+
+Key insight: hasNext must advance through empty arrays / arrays-of-arrays
+to determine if a leaf actually remains. It mutates state — peeking by
+positioning the stack to point at the next leaf.
+```
+
+---
+
+## 10. Common confusion + traps
+
+1. **`hasNext` doesn't advance** — returns true forever if leaves exhausted but arrays remain.
+2. **Generator without buffer** — `hasNext` peek hard.
+3. **`next()` without `hasNext`** check — returns undefined at end.
+4. **Strings as iterable** — beware string yielding chars.
+5. **Mutate input** — class methods should not mutate.
+6. **Symbol.iterator** missing — can't use for-of on instance.
+7. **LeetCode NestedInteger** API — different from raw arrays.
+
+---
+
+## 11. Senior follow-ups & variants
+
+### Variant 1 — Eager flatten
+Simple; O(n) memory.
+
+### Variant 2 — Lazy stack of indices
+O(depth) memory.
+
+### Variant 3 — Generator wrap
+Cleanest.
+
+### Variant 4 — Bidirectional iterator
+Add `prev()`.
+
+### Variant 5 — Iterator over object tree
+Same idea, for object children.
+
+---
+
+## 12. How to think aloud
+
+> "OO iterator over nested array. Three implementations: (A) Eager — flatten once in constructor; O(n) memory; next/hasNext are array index ops. (B) Lazy — stack of `{list, idx}` frames; `hasNext()` advances by popping exhausted frames and pushing into nested arrays until top is a leaf or stack empty; `next()` calls `hasNext()` to position then returns and advances; O(depth) memory. (C) Generator wrap — define `function* leaves(arr)` with `yield*`, store generator + buffered next in instance; cleanest. `hasNext()` MUST advance internal state past empty arrays / nested-empty-arrays — peeking is stateful. Optionally `[Symbol.iterator]() { return this; }` to enable `for..of` and spread. LeetCode #2649 / #341 pass `NestedInteger` objects with `.isInteger()` and `.getList()` instead of raw arrays — same algorithm. Trap: `hasNext` that doesn't advance through empty arrays (returns true forever); calling `next()` without `hasNext()` check; missing Symbol.iterator (can't spread)."
+
+---
+
+## 13. 60-second revision
+
+> - **Eager flatten** simple; O(n).
+> - **Lazy stack** O(depth).
+> - **Generator wrap** cleanest.
+> - **`hasNext` advances** state.
+> - **`Symbol.iterator`** for spread.
+> - **LeetCode `NestedInteger`** wraps integers.
+> - **Trap:** non-advancing hasNext; no Symbol.iterator; strings iterable.
+
+---
+
+**Related:** [nested-array-generator-codedamn.md](./nested-array-generator-codedamn.md) · [flatten-array-simple.md](./flatten-array-simple.md) · [`06-streams/custom-iterator.md`](../06-streams/custom-iterator.md)
+
+**Concept primer:** [`concepts/recursion-and-the-call-stack.md`](../../concepts/recursion-and-the-call-stack.md), [`concepts/streams.md`](../../concepts/streams.md)

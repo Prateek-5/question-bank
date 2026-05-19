@@ -1,227 +1,295 @@
 # Object vs Map vs Set — when to use which
 
-## Source
-- Canonical conceptual interview question. Surfaces in every senior JS round.
-- MDN reference: Map / Set / WeakMap / WeakSet docs.
+> **Difficulty:** Foundation   |   **Time:** ~10 min   |   **Prereqs:** [`07-arrays/array-dedup.md`](../07-arrays/array-dedup.md)
+>
+> **Source:** Canonical conceptual. Every senior JS round.
 
-## Why this question matters in interviews
-This is the question that separates "I use JavaScript" from "I understand JavaScript." Every senior engineer has reached for `{}` as a hash and gotten burned by **prototype pollution**, by **string-only keys**, by **`for...in` walking the prototype**, by **`.length` being O(n)**, or by **JSON serialization breaking on Maps**. The interviewer wants you to articulate the trade-offs *crisply* and pick the right tool. Backend engineers feel this most when modeling caches (Map), dedup sets (Set), config lookups (Object), and per-request state (WeakMap). A clean decision table — memorized — is your edge.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+Pick the right keyed collection for the task. Know the trade-offs cold.
+
+**Verification scenarios**
 
 ```js
-// --- Object as map (legacy / config / JSON-friendly) ---
-const o = Object.create(null);   // null-prototype = no inherited keys
-o['foo'] = 1;
-Object.keys(o).length;            // size = O(n)
-'foo' in o;                       // has = O(1) but walks prototype if not Object.create(null)
+// Object: static shape, JSON-friendly
+const config = { port: 3000, host: 'localhost' };
 
-// --- Map (general-purpose keyed collection) ---
-const m = new Map();
-m.set({}, 1);                     // ANY key type — even objects, NaN
-m.size;                           // O(1)
-m.has(k); m.get(k); m.delete(k);
-for (const [k, v] of m) { /* insertion order */ }
+// Map: any key type, insertion order, O(1) size
+const cache = new Map();
+cache.set({}, 1);                                 // object key — Object would coerce
+cache.size;                                       // O(1)
 
-// --- Set (dedup / membership) ---
-const s = new Set([1, 2, 2, 3]);  // -> {1, 2, 3}
-s.has(2);  s.size;                // both O(1)
-const unique = [...new Set(arr)]; // canonical dedup idiom
+// Set: dedup / membership
+const seen = new Set([1, 2, 2, 3]);              // {1, 2, 3}
+seen.has(2);
 
-// --- WeakMap / WeakSet (GC-friendly, object keys only) ---
-const wm = new WeakMap();         // entries vanish when key is GC'd
-const ws = new WeakSet();         // membership test for objects with auto-cleanup
+// WeakMap / WeakSet: GC-friendly metadata
+const meta = new WeakMap();
+meta.set(domNode, { hits: 0 });                  // released when domNode GC'd
 ```
 
-### Runtime / engine behavior
-- **Object**: implemented as a hidden-class + inline-cache-friendly property bag in V8. Fast for static shapes (declared keys at construction time, never deleted), slow when treated as a dictionary with churn. JS engines deoptimize objects with dynamic key insertion/deletion into a slower "dictionary mode" hash table.
-- **Map**: always a hash table with parallel insertion-order index. Predictable O(1) — no shape-based deopt risk.
-- **Set**: same backing as Map but stores only keys.
-- **Object key coercion**: every key is stringified (except symbols). `o[1] === o['1']`. `o[{}] === o['[object Object]']` — all object keys collide on a single bucket.
-- **Map key identity**: no coercion. `m.set(1, 'a'); m.set('1', 'b')` are distinct entries. `m.set(NaN, 'x'); m.get(NaN)` works (SameValueZero equality).
-- **Iteration order**: Map and Set iterate in **insertion order**. Object property iteration order is "integer-like keys ascending, then strings in insertion order, then symbols in insertion order" — annoying gotcha when keys look like numbers.
-- **JSON**: `JSON.stringify({a:1})` → `'{"a":1}'`. `JSON.stringify(new Map([['a',1]]))` → `'{}'`. Map needs `JSON.stringify([...m])`.
+**Constraints**
+- Object keys: strings/symbols only; numeric coerced.
+- Map keys: any (objects, NaN, etc.).
+- Set/Map use SameValueZero (NaN handled).
+- Object `.size` is O(n); Map `.size` is O(1).
+- WeakMap/WeakSet keys must be objects; entries vanish on GC.
 
-### The decision table
+---
 
-| Question | Object | Map | Set | WeakMap | WeakSet |
-|---|---|---|---|---|---|
-| **Key types allowed** | string, symbol | **any** value | n/a (values are the "keys") | object, symbol | object |
-| **Iterates in insertion order?** | Mostly, but integer-like keys sort numerically | **Yes, strictly** | Yes, strictly | **No — not iterable** | No |
-| **Walks prototype chain on `in` / `for...in`?** | Yes (use `Object.hasOwn` or `Object.create(null)`) | No | No | No | No |
-| **`size` lookup** | `Object.keys(o).length` — **O(n)** | **`m.size` — O(1)** | **`s.size` — O(1)** | None | None |
-| **Has/Get/Set/Delete** | O(1) avg, slow path on shape churn | **O(1) avg, predictable** | O(1) avg | O(1) avg | O(1) avg |
-| **Serializable via `JSON.stringify`?** | **Yes, natively** | No — `[...m]` first | No — `[...s]` first | No (and you can't iterate) | No |
-| **Prototype pollution risk?** | **Yes** (`o.__proto__ = ...`) unless `Object.create(null)` | No | No | No | No |
-| **GC-friendly (keys auto-released)?** | No | No | No | **Yes** | Yes (for values) |
-| **Allows `NaN` as a key?** | No (coerced to `"NaN"`) | **Yes** (SameValueZero) | Yes | n/a (object keys only) | n/a |
-| **Best for** | Static config, JSON, fixed-shape records | Dynamic dictionaries, caches, frequent add/remove, non-string keys | Membership/dedup | Per-object cache, private data, DOM-attached state | Object membership with auto-cleanup |
-| **Worst for** | Dynamic-key churn (deopt), object keys, JSON-unfriendly key strings | Anything needing JSON round-trip | Anything needing key→value lookup | Anything needing iteration/size | Anything needing iteration/size |
+## 2. Plain-English restatement
 
-### Edge cases (the interview traps)
-1. **`{}.toString = ...`** — every plain object inherits `toString`, `hasOwnProperty`, `__proto__` etc. `o.hasOwnProperty` collides with a user-supplied `'hasOwnProperty'` key. Use `Object.hasOwn(o, k)` or `Object.create(null)`.
-2. **Integer-like keys reorder** — `{2:'a', 1:'b', 10:'c'}` iterates as `1, 2, 10`. Map preserves your literal insertion order.
-3. **`Map` key identity** — `m.set({}, 1); m.get({})` is `undefined`. Two object literals are different keys. Same trap as `===` on objects.
-4. **`Set` membership for objects** — `new Set([{},{}]).size === 2`. Same identity rule.
-5. **`JSON.stringify(map)` is `'{}'`** — silently. Senior bug bait. Convert: `JSON.stringify([...m])` then parse back with `new Map(parsed)`.
-6. **Cloning** — `structuredClone` handles Map/Set; `JSON.parse(JSON.stringify(...))` does not. Spread `[...m]` is shallow.
-7. **`Object.create(null)`** — has no `toString`, no `valueOf`. `console.log` may print oddly. Iteration works fine, but `${o}` throws.
-8. **`for...in` vs `for...of`** — `for...in` is for object string keys (walks prototype!). `for...of` is for iterables (Map, Set, Array). Mixing them up is a top-tier mistake.
-9. **Map's spread `{...m}`** — does **nothing useful**. Map isn't a plain object; spreading a Map into an object literal yields `{}`. Use `Object.fromEntries(m)`.
-10. **`Object.fromEntries(m)` ↔ `new Map(Object.entries(o))`** — the two bridges between the worlds. Memorize them.
+A decision table: Object for static shapes / JSON / config. Map for runtime keyed data, any key type. Set for unique-membership. WeakMap/WeakSet for object-keyed metadata you want GC'd.
 
-## Brute force approach
-Use `{}` for everything. It "works" until your keys aren't strings, until they collide with `Object.prototype`, until you need O(1) size, until you need ordered iteration, until you have to deal with a user-supplied `__proto__` key. Then you fix bugs forever.
+---
 
-## Optimal approach
-Pick the data structure by the **constraints** you have:
+## 3. Why this matters in interviews
 
-- **Need JSON round-trip + static keys?** → Object (preferably `Object.create(null)` if keys come from user input).
-- **Need dynamic add/remove, predictable O(1), non-string keys, or insertion-order iteration?** → Map.
-- **Need to test membership / dedup?** → Set.
-- **Need per-object data with automatic cleanup?** → WeakMap (or WeakSet for membership-only).
+"I use JS" vs "I understand JS." Every senior has been burned by prototype pollution, string-only keys, `for..in` walking prototype, JSON ignoring Maps.
 
-If unsure, **default to `Map`**. It's strictly more powerful than `Object`-as-dict in every dimension except JSON-friendliness and direct property syntax.
+---
 
-## Solution (JavaScript)
+## 4. Mental model
+
+```
+   Decision table:
+   
+   Need               | Pick       | Why
+   -------------------+------------+----------------------------------
+   Static shape       | Object     | hidden class, inline cache.
+   JSON-friendly      | Object     | JSON.stringify works.
+   Dynamic key churn  | Map        | no shape deopt; O(1) size.
+   Non-string key     | Map        | objects/NaN preserved.
+   Insertion order    | Map        | guaranteed by spec.
+   Unique items       | Set        | O(1) has + add.
+   Object key + GC    | WeakMap    | auto-cleanup.
+   Object membership  | WeakSet    | auto-cleanup.
+   
+   Equality:
+     Map/Set: SameValueZero (NaN === NaN; +0 === -0).
+     Object: string coercion (5 and '5' collide).
+   
+   Iteration:
+     Map: insertion order.
+     Object: integer-like keys ascending, then strings insertion, then Symbols.
+     Set: insertion order.
+   
+   Prototype pollution:
+     {} inherits Object.prototype → 'toString', '__proto__' keys are dangerous.
+     Object.create(null) for safer.
+     Map has none.
+   
+   JSON:
+     JSON.stringify(map) → '{}' (Map → empty object).
+     JSON.stringify(set) → '{}'.
+     Use replacer or .entries() / [...set].
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. What does `JSON.stringify(new Map([[1, 'a']]))` return?
+> 2. Why does `obj[5]` equal `obj['5']`?
+> 3. When use WeakMap vs Map?
+
+---
+
+## 6. Brute force — walked through
 
 ```js
-/* -------- Object as a record (static shape, JSON-shaped) -------- */
-const config = {
+// Object as map — these break:
+const o = {};
+o['__proto__'] = 'bad';                          // prototype pollution
+o[5] = 1; o['5'];                                 // string coercion — collide
+Object.keys(o).length;                            // O(n)
+for (const k in o) ...;                           // walks prototype
+```
+
+---
+
+## 7. The unlocking insight
+
+> **Map is the general-purpose keyed collection — use it by default. Object only for static shapes / JSON. Set for membership. WeakMap/WeakSet for GC-friendly metadata.**
+
+Three properties:
+
+1. **Default to Map** for dynamic data.
+2. **Object for JSON/static.**
+3. **WeakMap/WeakSet** for auto-cleanup.
+
+---
+
+## 8. Solution (annotated)
+
+```js
+// Object — static config; JSON-friendly
+const config = Object.freeze({                                            // step 1: immutable static
+  port: 3000,
   host: 'localhost',
-  port: 5432,
-  ssl: false,
-};
-JSON.stringify(config); // works natively
+});
 
-/* -------- Object as a safe dictionary (user-supplied keys) -------- */
-const lookup = Object.create(null);
-for (const { key, value } of userInput) {
-  lookup[key] = value;       // safe: no inherited __proto__
+// Object as dictionary (with care)
+const dict = Object.create(null);                                          // step 2: no prototype pollution
+dict['__proto__'] = 'safe';                                                // own key, not prototype
+
+// Map — general-purpose keyed collection
+const cache = new Map();
+cache.set('key1', 'value1');
+cache.set({}, 'object key');                                               // step 3: any key
+cache.set(NaN, 'NaN works');
+cache.size;                                                                // O(1)
+
+for (const [k, v] of cache) {                                              // step 4: insertion order
+  console.log(k, v);
 }
 
-/* -------- Map: cache with dynamic non-string keys -------- */
-const sessionByUser = new Map();   // key = user object
-sessionByUser.set(user, { token, expiresAt });
-sessionByUser.size;                // O(1)
+// Set — dedup / membership
+const seen = new Set();
+seen.add(1); seen.add(1);                                                   // step 5: idempotent
+seen.size;                                                                  // 1
+seen.has(1);                                                                // true
 
-/* -------- Set: dedup / membership -------- */
-const visited = new Set();
-function bfs(start) {
-  const queue = [start];
-  while (queue.length) {
-    const node = queue.shift();
-    if (visited.has(node)) continue;   // O(1)
-    visited.add(node);
-    queue.push(...node.children);
-  }
+// WeakMap — object-keyed metadata
+const requestMeta = new WeakMap();
+function tagRequest(req, meta) {
+  requestMeta.set(req, meta);                                               // step 6: GC-friendly
 }
+// When req is GC'd, the meta entry vanishes automatically.
 
-/* -------- WeakMap: per-object private state -------- */
-const _priv = new WeakMap();
-class Connection {
-  constructor(socket) {
-    _priv.set(this, { socket, buffered: [] });
-  }
-  send(msg) { _priv.get(this).buffered.push(msg); }
+// WeakSet — object membership with GC
+const visited = new WeakSet();
+function visit(node) {
+  if (visited.has(node)) return;
+  visited.add(node);
+  // process
 }
-// When a Connection instance is GC'd, its _priv entry is auto-released.
-
-/* -------- Bridges -------- */
-const obj = Object.fromEntries(map);        // Map -> plain object (lossy if non-string keys)
-const map2 = new Map(Object.entries(obj));  // Plain object -> Map
-const jsonable = [...map];                  // Map -> serializable [[k,v],...]
-const map3 = new Map(JSON.parse(jsonStr));  // round-trip
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
-Scenario — "Build a frequency counter for user IDs streaming in." Compare the four options:
-
-**Option A — plain object** (the rookie answer):
 ```js
-const counts = {};
-for (const id of stream) {
-  counts[id] = (counts[id] || 0) + 1;
-}
-Object.keys(counts).length; // O(n) just to know "how many unique"
-```
-Problem: if `id === '__proto__'`, you pollute `Object.prototype`. If IDs are integers, iteration reorders them numerically — bad if you needed first-seen order.
+// JSON quirks
+JSON.stringify(new Map([[1, 'a']]));                          // '{}' — Map → {}
+JSON.stringify([...new Map([[1, 'a']])]);                     // '[[1,"a"]]' — array works
+JSON.stringify(Object.fromEntries(map));                       // '{"1":"a"}'
 
-**Option B — null-prototype object** (safer rookie):
-```js
-const counts = Object.create(null);
-// same code; no prototype pollution. But still O(n) size and integer-key reorder.
-```
+// String coercion in Object
+const o = {};
+o[5] = 'five';
+o['5'];                                                        // 'five' — same key
+o[true] = 'bool';
+o['true'];                                                     // 'bool' — coerced
 
-**Option C — `Map`** (the right answer):
-```js
-const counts = new Map();
-for (const id of stream) {
-  counts.set(id, (counts.get(id) || 0) + 1);
-}
-counts.size;          // O(1)
-// Iteration is in first-seen insertion order. Works with object IDs too.
-```
+// Map handles NaN
+const m = new Map();
+m.set(NaN, 1);
+m.get(NaN);                                                    // 1
 
-**Option D — `Map<string, Set<...>>`** if values are also collections:
-```js
-const usersByRole = new Map(); // role -> Set<userId>
-for (const { role, id } of stream) {
-  if (!usersByRole.has(role)) usersByRole.set(role, new Set());
-  usersByRole.get(role).add(id);
-}
-// O(1) membership inside each bucket. Set dedupes for free.
+// for..in vs for..of
+const obj = { a: 1 };
+Object.prototype.bad = 'leak';
+for (const k in obj) console.log(k);                          // 'a', 'bad' — walks prototype!
+for (const k of Object.keys(obj)) console.log(k);             // 'a' only — own enumerable
+
+// Map size O(1) vs Object O(n)
+const m2 = new Map();
+m2.size;                                                       // direct property — O(1)
+Object.keys({a:1, b:2}).length;                               // O(n) — must enumerate
 ```
 
-The interviewer wants you to land on C or D and **explain why** A/B are worse: O(n) size, prototype pollution risk, integer-key reorder, string-only keys.
+---
 
-## Important takeaways
+## 9. Step-by-step dry run
 
-**Syntax to memorize**
-- Bridges: `Object.fromEntries(map)` and `new Map(Object.entries(obj))`.
-- Map → JSON: `JSON.stringify([...m])`. JSON → Map: `new Map(JSON.parse(s))`.
-- Dedup: `[...new Set(arr)]`.
-- Safe dict: `Object.create(null)`.
+```
+Object as map traps:
+  o = {}
+  o[5] = 'a' → o['5'] = 'a' (string coerced).
+  o[true] = 'b' → o['true'] = 'b'.
+  o[{a:1}] = 'c' → o['[object Object]'] = 'c'.
+  o[null] = 'd' → o['null'] = 'd'.
+  
+  All keys collide if they string-coerce to the same value.
 
-**Patterns to reuse**
-- Default to `Map` for dynamic key/value collections.
-- `Object.create(null)` whenever **user input** decides keys.
-- `WeakMap` for "per-object data" that should clean up automatically.
-- `Map<K, Set<V>>` for one-to-many relationships.
-- `Map<K, V[]>` when order or duplicates matter; `Map<K, Set<V>>` when uniqueness matters.
+Map preserves identity:
+  m.set(5, 'a'); m.get(5) === 'a'; m.get('5') === undefined.
+  m.set(obj, 'b'); m.get(obj) === 'b'.
 
-**Common mistakes**
-- Reaching for `{}` and getting bitten by `__proto__` pollution.
-- `JSON.stringify(map)` returning `'{}'` and assuming a bug elsewhere.
-- `Object.keys(o).length` on a hot path — should be `map.size`.
-- `for...in` on a Map (does nothing useful) or `for...of` on a plain object (throws — not iterable).
-- Spreading a Map into an object literal: `{...m}` is empty. Use `Object.fromEntries(m)`.
-- Storing objects in a `Set` and expecting structural dedup — only identity is checked.
+JSON.stringify(map):
+  JSON has no concept of Map.
+  Result: '{}'.
+  Workaround: [...map] or Object.fromEntries(map) (if keys are strings).
 
-**Related questions**
-- LRU Cache using Map (insertion-order trick).
-- WeakMap memoize (per-object cache).
-- `groupBy` returning Map vs Object (ES2024 added both).
-- Implement Set using object (`{[k]: true}`) — what's wrong with that.
+WeakMap behavior:
+  let req = { id: 1 };
+  wm.set(req, 'meta');
+  req = null;     // remove last strong ref
+  // GC later: entry removed automatically.
+  // No way to detect; no iteration on WeakMap (by design).
 
-## Variants
+for..in walks prototype:
+  Object.prototype.foo = 'leak'.
+  for (const k in {a: 1}) → 'a', 'foo'.
+  Object.keys filters to own enumerable.
+```
 
-1. **Set operations (union / intersection / difference)** — ES2025 ships native `Set.prototype.union/intersection/difference/symmetricDifference/isSubsetOf/isSupersetOf/isDisjointFrom`. Until you can rely on them: `new Set([...a].filter(x => b.has(x)))` for intersection, etc.
+---
 
-2. **Ordered set / unique-by-key** — `Set` is already insertion-ordered. For "unique by extracted key," reduce into a `Map` keyed by `keyFn(item)`: `const byKey = new Map(items.map(i => [keyFn(i), i]))`.
+## 10. Common confusion + traps
 
-3. **Object pool with WeakSet** — track which objects in a pool are "checked out" using a WeakSet so they don't leak when the consumer forgets to release.
+1. **`{}` for runtime keyed data** — string coercion + prototype pollution.
+2. **`Object.keys(obj).length`** — O(n); Map size O(1).
+3. **JSON.stringify(map)** — `{}`.
+4. **`for..in`** walks prototype — use Object.keys.
+5. **WeakMap not iterable** — by design (GC).
+6. **WeakSet for primitives** — only objects allowed.
+7. **Map insertion order** — preserved; Object integer keys reorder.
 
-## Revision notes
+---
 
-> **Object vs Map vs Set — 60 second recap**
-> - **Object**: string/symbol keys only, prototype chain, `Object.keys().length` is O(n), JSON-native. Best for static records and config.
-> - **Map**: any key type (incl. objects, NaN), insertion-ordered iteration, `.size` is O(1), no prototype, no native JSON. Best for dynamic dicts and caches.
-> - **Set**: insertion-ordered membership/dedup. `[...new Set(arr)]` is the idiom.
-> - **WeakMap / WeakSet**: keys must be objects, entries auto-GC'd, NOT iterable, NO size. Best for per-object data + DOM tagging.
-> - **Bridges**: `Object.fromEntries(m)` and `new Map(Object.entries(o))`. `JSON.stringify([...m])` to round-trip.
-> - **Traps**: `{}` and prototype pollution; integer-like object keys reorder; `JSON.stringify(map) === '{}'`; `for...in` on Map does nothing.
-> - Default to **Map** when in doubt; reach for **Object** only for static/JSON-shaped data.
+## 11. Senior follow-ups & variants
+
+### Variant 1 — WeakMap private state
+Use as `#private` analog pre-class-fields.
+
+### Variant 2 — `Object.fromEntries` / `entries`
+Bridge Map ↔ Object.
+
+### Variant 3 — ES2024 `Object.groupBy` / `Map.groupBy`
+Native group-by; Map preserves key identity.
+
+### Variant 4 — JSON.stringify replacer
+Custom serialize Map/Set.
+
+### Variant 5 — `Record`/`Tuple` proposal
+Stage 2 immutable values; structurally equal.
+
+---
+
+## 12. How to think aloud
+
+> "Decision-tree by use case. **Object** — static shape, JSON-friendly, hidden-class optimized in V8 (fast property access for declared shapes). Pitfalls: keys coerce to strings (`obj[5] === obj['5']`); prototype pollution (`__proto__` is dangerous); `Object.keys().length` is O(n); `for..in` walks prototype. Mitigate with `Object.create(null)`. **Map** — general-purpose keyed; any key type (objects, NaN, functions); insertion-order iteration guaranteed by spec; O(1) size; SameValueZero equality (handles NaN). Default to Map for runtime data. **Set** — unique-membership; O(1) add/has; dedup idiom `[...new Set(arr)]`; SameValueZero. **WeakMap / WeakSet** — object-only keys; entries auto-cleared on key GC; not iterable (by design — no way to enumerate GC-determined state); use for per-instance metadata (e.g., tag DOM nodes, mark visited request objects). JSON: `JSON.stringify(map)` returns `'{}'` — Map has no JSON encoding; use `[...map]` or `Object.fromEntries(map)` (when keys are strings). Trap: Object as runtime map (coercion, pollution); for..in (walks proto); JSON on Map (silent loss); WeakMap iteration (impossible by design)."
+
+---
+
+## 13. 60-second revision
+
+> - **Object:** static shape, JSON, hidden-class fast.
+> - **Map:** any key, O(1) size, insertion order; **default for runtime data**.
+> - **Set:** unique-membership, O(1).
+> - **WeakMap/WeakSet:** object keys; GC-friendly; not iterable.
+> - **`Object.create(null)`** for safer object-as-dict.
+> - **`JSON.stringify(map) = '{}'`** — known limitation.
+> - **`for..in` walks proto**; `Object.keys` is own-enumerable.
+> - **SameValueZero** for Map/Set.
+> - **Trap:** Object key coercion; prototype pollution; size O(n).
+
+---
+
+**Related:** [composite-key-strategies.md](./composite-key-strategies.md) · [map-vs-record-and-tuple.md](./map-vs-record-and-tuple.md) · [weakmap-memoize.md](./weakmap-memoize.md) · [ordered-map-insertion-order-quiz.md](./ordered-map-insertion-order-quiz.md) · [`07-arrays/array-dedup.md`](../07-arrays/array-dedup.md)
+
+**Concept primer:** [`concepts/maps-sets.md`](../../concepts/maps-sets.md)

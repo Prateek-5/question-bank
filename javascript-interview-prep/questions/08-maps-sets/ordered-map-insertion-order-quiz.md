@@ -1,151 +1,259 @@
-# Map / Object — Insertion Order Quiz
+# Map / Object — insertion-order quiz
 
-## Source / Origin
-- ES2015 Map; ES2020 codified Object key ordering.
-- Asked at: Stripe, Razorpay, Atlassian — output-prediction.
-- Concept reference: `concepts/maps-sets.md`.
+> **Difficulty:** Foundation   |   **Time:** ~8 min   |   **Prereqs:** [object-vs-map-vs-set.md](./object-vs-map-vs-set.md)
+>
+> **Source:** ES2015 Map; ES2020 codified Object key ordering. Stripe, Razorpay, Atlassian output-prediction.
 
-## Why this question matters in interviews
-"In what order are these keys iterated?" Most JS devs say "no guarantee" — wrong since ES2020. Senior bar: you know the exact spec rules — Map preserves insertion; Object orders integer-like keys ascending, then string keys in insertion order, then Symbol keys in insertion order.
+---
 
-## Concepts involved
+## 1. Problem statement
+
+Predict iteration order of Map and Object. Map always insertion. Object: integer-like keys ascending, then string keys insertion, then symbol keys insertion.
+
+**Verification examples**
+
+```js
+// Map: always insertion
+const m = new Map();
+m.set('b', 1); m.set('a', 2); m.set(3, 3);
+[...m.keys()];                            // ['b', 'a', 3]
+
+// Object: quirky
+const o = {};
+o.b = 1; o.a = 2; o['10'] = 3; o['2'] = 4;
+Object.keys(o);                           // ['2', '10', 'b', 'a']
+
+// Negative/non-integer numeric strings are string keys
+Object.keys({'-1': 'a', '1.5': 'b', '1': 'c', '0': 'd'});
+// ['0', '1', '-1', '1.5']
+```
+
+**Constraints**
+- Map: insertion order for all key types.
+- Object: integer-like keys ascending FIRST, then strings insertion, then Symbols insertion.
+- "Integer-like": non-negative integer that stringifies back to same form.
+- `Reflect.ownKeys(o)` includes Symbol keys.
+
+---
+
+## 2. Plain-English restatement
+
+Map always preserves insertion order. Object reorders integer-like keys to ascending; non-integer string keys retain insertion order; Symbol keys retain insertion order, after strings.
+
+---
+
+## 3. Why this matters in interviews
+
+"In what order are these keys iterated?" Common answer "no guarantee" is wrong post-ES2020. Senior bar: know the exact rules.
+
+---
+
+## 4. Mental model
+
+```
+   Map iteration order: ALWAYS insertion.
+     map.keys() / values() / entries() / forEach / for..of map
+     All in insertion order.
+     Keys can be any value (no coercion).
+   
+   Object iteration order (Object.keys, for..in, JSON.stringify, spread):
+     1. Integer-like keys ASCENDING (parsed as uint32, < 2^32 - 1):
+        '0', '1', '2', '10' — converted, sorted, then iterated.
+     2. Non-integer string keys in INSERTION order:
+        'a', 'b', '-1', '1.5' (negative/decimal don't qualify).
+     3. Symbol keys in INSERTION order.
+        Only via Reflect.ownKeys / Object.getOwnPropertySymbols.
+   
+   "Integer-like" rule:
+     ToString(ToUint32(key)) === key.
+     'A non-negative integer canonical form'.
+     '10' qualifies. '-1', '1.5', '01' don't.
+   
+   for..in:
+     Same order as Object.keys.
+     Walks prototype enumerable too (after own keys).
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. `Object.keys({b: 1, a: 2, '2': 3})` order?
+> 2. Does `'-1'` count as integer-like?
+> 3. Does `Map.keys` preserve insertion for numeric keys?
+
+---
+
+## 6. Brute force — walked through
+
+Output-prediction problem; no algorithm to brute-force. The mental model IS the solution.
+
+---
+
+## 7. The unlocking insight
+
+> **Map: always insertion. Object: integer-like ASC first, then strings/symbols insertion.**
+
+Three properties:
+
+1. **Map insertion** universal.
+2. **Object integer-like ASC** first.
+3. **Symbols last** (in `Reflect.ownKeys`).
+
+---
+
+## 8. Solution (annotated)
 
 ```js
 // Map — always insertion order
 const m = new Map();
-m.set('b', 1); m.set('a', 2); m.set(3, 3);
-[...m.keys()];     // ['b', 'a', 3]
+m.set('z', 1);
+m.set(1, 2);
+m.set('a', 3);
+[...m.keys()];                                                 // step 1: ['z', 1, 'a']
 
 // Object — quirky
 const o = {};
-o.b = 1; o.a = 2; o['10'] = 3; o['2'] = 4; o[Symbol('s')] = 5;
-Object.keys(o);    // ['2', '10', 'b', 'a']  — integer-like first, then insertion
-Reflect.ownKeys(o);// ['2', '10', 'b', 'a', Symbol(s)]
+o.z = 1;
+o[1] = 2;       // integer-like (string '1' under the hood)
+o.a = 3;
+o[100] = 4;
+o[Symbol('s')] = 5;
 
-// Negative or non-integer numeric strings act like strings
-const o2 = { '-1': 'a', '1.5': 'b', '1': 'c', '0': 'd' };
-Object.keys(o2);   // ['0', '1', '-1', '1.5']  — integer-like first, others insertion order
+Object.keys(o);                                                // step 2: ['1', '100', 'z', 'a']
+Reflect.ownKeys(o);                                            // step 3: ['1', '100', 'z', 'a', Symbol(s)]
+JSON.stringify(o);                                             // step 4: '{"1":2,"100":4,"z":1,"a":3}'
+
+// Workaround: force string with leading char
+const o2 = {};
+o2['_1'] = 'a';
+o2['_2'] = 'b';
+o2['_10'] = 'c';
+Object.keys(o2);                                               // ['_1', '_2', '_10'] (insertion!)
+
+// Map preferred when order matters
+const ordered = new Map();
+ordered.set('first', 1);
+ordered.set('second', 2);
+[...ordered];                                                  // [['first', 1], ['second', 2]]
 ```
 
-### Edge cases / traps
-1. **"Integer-like" key** — a non-negative integer that, when stringified back, matches. `'10'` qualifies; `'-1'`, `'1.5'`, `'01'` don't.
-2. **`-0`** is treated as `0`.
-3. **Map preserves insertion order for ALL key types** including numbers.
-4. **`for...in`** iterates own + inherited enumerable; same ordering rules apply.
-5. **`JSON.stringify`** of an object uses `Object.keys()` order — integer-like first.
-6. **Spread `{...o}` and `Object.assign`** copy in iteration order; integer-like first.
-7. **`Map.prototype.entries`, `keys`, `values`, `forEach`, `for...of`** all use insertion order.
-8. **Map keys can be any value**; Object keys coerce to string (except Symbol).
-
-## Mental Model
-
-```
-   Object key iteration order:
-     1. integer-like (non-negative int that round-trips), ascending
-     2. other string keys, insertion order
-     3. Symbol keys, insertion order
-
-   Map iteration order:
-     insertion order, for all keys
-```
-
-## Why interviewers care
-
-- **Spec-level knowledge** — codified in ES2020.
-- **Predictability** of JSON output.
-- **Common bug source** — `{1:'a', 0:'b'}` is *not* in source order.
-
-## Common confusion
-
-- **"Object key order is unspecified."** Specified since ES2020.
-- **"Maps and Objects iterate the same."** They don't — integer-like quirk for Object only.
-- **"`for...in` and `Object.keys` differ."** They don't (modulo `for...in` walking the prototype chain for inherited enumerable).
-- **"`Map` is slower than Object."** Not for large keysets; often faster, especially with non-string keys.
-
-## Solution
+**Try it yourself**
 
 ```js
-// Force insertion order on an Object — use Map instead
-const m = new Map();
-m.set('z', 1); m.set('1', 2); m.set('a', 3);
-[...m];           // [['z',1], ['1',2], ['a',3]]
+// Quiz examples
+Object.keys({b: 1, a: 2});                                    // ['b', 'a']    string insertion
+Object.keys({2: 'a', 1: 'b', 'x': 'c'});                      // ['1', '2', 'x']  int asc, then x
+Object.keys({'-1': 'a', '1': 'b', '0.5': 'c'});               // ['1', '-1', '0.5']  '1' is int-like
+Object.keys({'01': 'a', '1': 'b'});                           // ['1', '01']  '01' is NOT int-like
 
-// JSON-stringify with stable key order
-function stableStringify(obj) {
-  const keys = Object.keys(obj).sort();
-  return '{' + keys.map(k => JSON.stringify(k) + ':' + stableStringify(obj[k])).join(',') + '}';
-}
-// (recurse properly for nested)
+// Map
+const m2 = new Map([[2, 'a'], [1, 'b'], ['x', 'c']]);
+[...m2.keys()];                                                // [2, 1, 'x']   insertion order
 
-// Map → Object preserves intent but loses Map's insertion-order property
-function mapToObj(m) {
-  return Object.fromEntries(m);   // integer-like keys reordered!
-}
+// JSON
+JSON.stringify({2: 'a', 1: 'b'});                              // '{"1":"a","2":"b"}'  int asc
 
-// Map → JSON (preserving order)
-function mapToJson(m) {
-  return JSON.stringify([...m]);    // array of [key, value] pairs
-}
+// Spread
+const o3 = {2: 'a', 1: 'b', x: 'c'};
+const o4 = {...o3};
+Object.keys(o4);                                               // ['1', '2', 'x']
+
+// for..in
+for (const k in {2: 'a', 1: 'b'}) console.log(k);             // '1', '2'
+
+// -0 is treated as 0 in Object keys
+Object.keys({[-0]: 'a'});                                      // ['0']
 ```
 
-## Dry run
+---
 
-```js
+## 9. Step-by-step dry run
+
+```
 const o = {};
-o.x = 1;
-o['10'] = 2;
-o.y = 3;
-o['2'] = 4;
-o['-1'] = 5;
-Object.keys(o);
-//   integer-like sort: '2', '10'
-//   then strings in insertion: 'x', 'y', '-1'
-//   result: ['2', '10', 'x', 'y', '-1']
+o.b = 1;      // own keys: ['b']
+o.a = 2;      // own keys: ['b', 'a']
+o['10'] = 3;  // '10' is integer-like → goes to head of int section.
+              // V8 internally: integer-keys (sorted) + string-keys (insertion).
+              // own keys order: ['10', 'b', 'a']
+o['2'] = 4;   // '2' int-like, inserted into int section sorted: ['2', '10'].
+              // overall: ['2', '10', 'b', 'a']
+
+Object.keys(o);  // ['2', '10', 'b', 'a']
+
+Why '01' is NOT int-like:
+  ToUint32('01') = 1. ToString(1) = '1'. '1' !== '01'. Not canonical.
+  → '01' is a regular string key.
+
+Why '-1' is NOT int-like:
+  ToUint32('-1') = 4294967295 (max - 1) due to modular wrap.
+  ToString(4294967295) = '4294967295'. !== '-1'. Not canonical.
+  → '-1' is a regular string key.
+
+Why Map preserves number keys:
+  Map keys are stored as-is; no coercion.
+  Insertion order = the order set() was called.
+
+JSON.stringify:
+  Uses Object.keys order internally.
+  Output reflects: int-like first sorted, then strings insertion, NO SYMBOLS.
 ```
 
-```js
-const m = new Map();
-m.set('x', 1);
-m.set('10', 2);
-m.set('y', 3);
-m.set('2', 4);
-[...m.keys()];     // ['x', '10', 'y', '2']  — insertion order
-```
+---
 
-## How to think aloud
+## 10. Common confusion + traps
 
-> "Object key iteration: integer-like keys ascending first, then string keys in insertion order, then Symbol keys in insertion order. Integer-like means non-negative int that round-trips through `String(parseInt(k))`. Map: pure insertion order, all key types. If iteration order matters for app logic, use Map. For JSON stability, sort keys. Spread, Object.assign, JSON.stringify all use this order."
+1. **"No order guarantee"** — wrong since ES2020.
+2. **"Map preserves" but treated like Object** — different rules.
+3. **`'01'` int-like** — no; not canonical.
+4. **Negative numeric strings** — string keys.
+5. **Symbol keys missed** — `Object.keys` excludes; use `Reflect.ownKeys`.
+6. **`for..in` walks prototype** — own then inherited.
+7. **`Object.assign` preserves order** of source iteration.
 
-## Important takeaways
+---
 
-- **Object: integer-like first (ascending), then strings (insertion), then Symbols (insertion).**
-- **Map: pure insertion order.**
-- **`{1: 'a', 0: 'b'}` iterates as `0` then `1`.**
-- **For deterministic insertion order, use Map.**
-- **`stableStringify`** = sort keys at every level.
+## 11. Senior follow-ups & variants
 
-## Variants
+### Variant 1 — `Reflect.ownKeys`
+All own keys including symbols.
 
-- **`Object.keys` vs `Reflect.ownKeys`** — Reflect includes Symbol and non-enumerable.
-- **`for...in`** walks prototype chain too.
-- **`JSON.stringify(obj, keys[])`** — pass array of keys to control order.
+### Variant 2 — `Object.getOwnPropertyNames`
+Own string keys (including non-enumerable).
 
-## Revision notes
+### Variant 3 — `Object.getOwnPropertySymbols`
+Symbol keys only.
 
-```
-Object iteration order (ES2020+):
-  1. integer-like keys: ascending
-     (non-neg int, String(parseInt(k)) === k)
-  2. other string keys: insertion order
-  3. Symbol keys: insertion order
+### Variant 4 — Force string keys
+Prefix with `_` or `#` to avoid integer ordering.
 
-Map iteration order:
-  insertion order, ALL keys
+### Variant 5 — Map for ordered data
+Always preferred when order matters semantically.
 
-TRAPS:
-  {1:'a', 0:'b'}  iterates 0, 1
-  Object.fromEntries([...m]) — REORDERS integer-like
-  spread, Object.assign, JSON.stringify all use Object order
+---
 
-USE MAP when insertion order matters
-```
+## 12. How to think aloud
+
+> "Map iteration order is always insertion — keys can be any value (no coercion), `keys()`, `values()`, `entries()`, `forEach`, `for..of map` all preserve insertion. Object iteration is quirky: integer-like keys ASCENDING first, then non-integer string keys in INSERTION order, then Symbol keys in INSERTION order (Symbols only visible via `Reflect.ownKeys` or `Object.getOwnPropertySymbols`). 'Integer-like' means `ToString(ToUint32(k)) === k` — a canonical non-negative-integer form. `'10'` qualifies; `'-1'`, `'1.5'`, `'01'` don't (negative becomes huge after Uint32 wrap; decimal isn't integer; leading-zero isn't canonical). `for..in` follows same order, then walks prototype enumerable. `JSON.stringify` uses Object.keys order. `Object.assign` and spread preserve iteration order. Practical advice: use Map when order matters semantically; if you must use Object for numeric-like keys and need insertion order, prefix with `_` or `#` to force them into the string-keys section. Trap: 'no order guarantee' (wrong since ES2020); '01' int-like; negative numeric int-like; Symbol keys missed by Object.keys."
+
+---
+
+## 13. 60-second revision
+
+> - **Map: ALWAYS insertion.**
+> - **Object:** int-like ASC, then strings insertion, then Symbols.
+> - **Int-like:** `ToString(ToUint32(k)) === k` (non-negative canonical).
+> - **`'01'`, `'-1'`, `'1.5'`** — not int-like.
+> - **`for..in`** = Object.keys order + prototype.
+> - **`JSON.stringify`** uses same order.
+> - **`Reflect.ownKeys`** includes Symbols.
+> - **Workaround:** prefix `_` for force-string.
+> - **Trap:** "no guarantee" myth; misjudge int-like.
+
+---
+
+**Related:** [object-vs-map-vs-set.md](./object-vs-map-vs-set.md) · [composite-key-strategies.md](./composite-key-strategies.md) · [lru-cache-with-map.md](./lru-cache-with-map.md) · [`07-arrays/holey-vs-packed-arrays.md`](../07-arrays/holey-vs-packed-arrays.md)
+
+**Concept primer:** [`concepts/maps-sets.md`](../../concepts/maps-sets.md)

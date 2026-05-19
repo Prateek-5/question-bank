@@ -1,165 +1,261 @@
-# Lodash-style `reduce` — Works on Arrays *and* Objects
+# Lodash-style `reduce` — arrays AND objects
 
-## Source
-- codedamn Lab: "Lodash _.reduce() Lab" — https://codedamn.com/problem/ApyKwJzkW0be4dtQpP3vK
-- Lodash docs: https://lodash.com/docs/4.17.15#reduce
-- Common follow-up after the standard `reduce` polyfill.
+> **Difficulty:** Medium   |   **Time:** ~12 min   |   **Prereqs:** [polyfill-reduce.md](./polyfill-reduce.md)
+>
+> **Source:** codedamn Lab. Lodash `_.reduce`. Standard followup to native polyfill.
 
-## Why this question matters in interviews
-Once you've nailed the `Array.prototype.reduce` polyfill, the interviewer flips the question: **"now make it work on plain objects too — like lodash."** This single twist tests whether you know (a) how to detect "array-like vs plain object" in the wild, (b) `Object.keys` vs `Object.entries` vs `for...in` (with prototype-chain gotchas), and (c) how to design a function that handles two collection shapes without leaking abstractions. Backend engineers reduce over objects constantly — config trees, header maps, aggregated counters keyed by user. If you internalize this you'll stop reaching for the lodash dep for one-off folds.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Lodash signature
+Reimplement `_.reduce(collection, iteratee, [accumulator])` — works on **arrays OR plain objects**.
+
+**Verification examples**
+
 ```js
-_.reduce(collection, iteratee, [accumulator]);
-// iteratee(accumulator, value, key|index, collection)
+reduce([1, 2, 3], (acc, v) => acc + v, 0);              // 6
+reduce({a: 1, b: 2, c: 3}, (acc, v) => acc + v, 0);    // 6
+
+reduce({a: 1, b: 2}, (acc, v, key) => { acc[key] = v * 2; return acc; }, {});
+// {a: 2, b: 4}
+
+reduce([], (a, b) => a + b);                            // undefined (lodash; native throws)
 ```
 
-Key differences from native:
-1. **Accepts arrays *or* plain objects.** Iterates keys/values for objects.
-2. **Iteratee's third arg is `key`** (string) for objects, `index` (number) for arrays.
-3. **If no accumulator is provided**, uses the first element of the collection as the seed (same as native for arrays; for objects, "first" means the first key in iteration order).
-4. **Empty collection + no accumulator** → returns `undefined` (lodash does NOT throw; native `reduce` does). Mention this divergence explicitly.
+**Constraints**
+- Detect array vs plain object via `Array.isArray`.
+- Iteratee `(acc, value, key|index, collection)`.
+- Object iteration: `Object.keys` (insertion order for strings, ints ascending).
+- No accumulator + empty → `undefined` (NOT throw, unlike native).
 
-### Iteration order for objects
-- `Object.keys(obj)` returns keys in the order: integer-like keys ascending, then string keys in insertion order, then Symbol keys (excluded by `Object.keys`). This is **deterministic** since ES2015 but candidates often think it's random.
-- `for...in` walks the prototype chain too — that's why you guard with `hasOwnProperty` or just use `Object.keys`. The latter is safer.
+---
 
-### Detecting "what kind of collection"
-- `Array.isArray(coll)` — the only reliable array check. `instanceof Array` fails across iframes/realms.
-- Plain object: fall through. Lodash also accepts strings (iterates chars) and array-likes (objects with `length`); skip those unless the interviewer pushes.
+## 2. Plain-English restatement
 
-### Mutating vs non-mutating
-`reduce` is non-mutating regardless of collection. The accumulator may be mutated *by the iteratee* (common: `(acc, v) => { acc[v] = true; return acc; }`), but that's the caller's choice — the polyfill doesn't touch the input.
+Like native reduce but handles plain objects too. For objects: iterate `Object.keys`, third arg is the string key.
 
-## Brute force approach
-Two completely separate code paths, one calling `arr.reduce(...)` and one looping `Object.keys` — duplicated logic, no shared seed/empty-collection handling. Works, but reads like a junior PR. Refactor into a single function that branches on `Array.isArray` only for *choosing the key list*, then runs one unified loop.
+---
 
-## Optimal approach
-Compute a `keys` list once — indices `[0..len-1]` for arrays, `Object.keys(obj)` for objects. Then run the standard reduce loop over `keys`, treating each `k` uniformly. The "no accumulator" branch picks the first key's value and starts iteration at the next key.
+## 3. Why this matters in interviews
 
-## Solution (JavaScript)
+Tests collection-shape detection, `Object.keys` semantics, prototype-chain awareness, ability to handle two shapes without leaking abstractions.
+
+---
+
+## 4. Mental model
+
+```
+   reduce(coll, iteratee, [acc]):
+     keys = Array.isArray(coll) 
+       ? Array.from({length: coll.length}, (_, i) => i)
+       : Object.keys(coll)
+     
+     hasInit = arguments.length >= 3
+     i = 0
+     if hasInit:
+       result = acc
+     else:
+       if keys.length === 0:
+         return undefined            ← lodash divergence from native
+       result = coll[keys[0]]
+       i = 1
+     
+     while i < keys.length:
+       k = keys[i]
+       result = iteratee(result, coll[k], k, coll)
+       i++
+     return result
+   
+   Key iteration order:
+     Object.keys: integer-like keys ascending, then string keys insertion order.
+     for...in: WALKS PROTOTYPE — avoid.
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. Differences from native reduce?
+> 2. Object iteration order guarantees?
+> 3. Why use `Object.keys` not `for..in`?
+
+---
+
+## 6. Brute force — walked through
 
 ```js
-/**
- * Lodash-style reduce that works on arrays AND plain objects.
- * @param {Array|Object} collection
- * @param {(acc:any, value:any, keyOrIndex:string|number, collection:any) => any} iteratee
- * @param {*} [accumulator]
- * @returns {*}
- */
-function reduce(collection, iteratee, accumulator) {
-  if (collection == null) return accumulator;
-  if (typeof iteratee !== 'function') {
-    throw new TypeError('iteratee is not a function');
-  }
-
-  const isArr = Array.isArray(collection);
-  const keys = isArr
-    ? collection.map((_, i) => i)        // [0..n-1]; preserves hole skipping via the loop guard below
-    : Object.keys(collection);            // own enumerable keys, insertion order
-
-  let i = 0;
-  let acc;
-  const hasInitial = arguments.length >= 3;
-
-  if (hasInitial) {
-    acc = accumulator;
-  } else {
-    // Skip leading holes for arrays
-    if (isArr) {
-      while (i < keys.length && !(keys[i] in collection)) i++;
-    }
-    if (i >= keys.length) return undefined;   // lodash: no throw on empty
-    acc = collection[keys[i++]];
-  }
-
-  for (; i < keys.length; i++) {
-    const k = keys[i];
-    if (isArr && !(k in collection)) continue; // skip holes
-    acc = iteratee(acc, collection[k], isArr ? k : String(k), collection);
-  }
-  return acc;
+function reduce(coll, fn, acc) {
+  if (Array.isArray(coll)) return coll.reduce(fn, acc);
+  let result = acc;
+  for (const k in coll) result = fn(result, coll[k], k, coll);   // PROTO WALK
+  return result;
 }
 ```
 
-## Step-by-step dry run
+Bug: `for..in` walks prototype chain. Use `Object.keys`.
 
-**Array input:**
+---
+
+## 7. The unlocking insight
+
+> **Unified loop over a `keys` list. For arrays: `[0..len-1]`. For objects: `Object.keys`. Handle no-acc + empty as `undefined` (lodash).**
+
+Three properties:
+
+1. **Compute keys list once** — `[0..n-1]` or `Object.keys`.
+2. **Lodash diverges:** empty + no init → `undefined`, not throw.
+3. **`Object.keys`, not `for..in`** — avoid prototype.
+
+---
+
+## 8. Solution (annotated)
+
 ```js
-reduce([1, 2, 3], (acc, v, i) => acc + v * i, 0);
-// iterations: (0,1,0)→0, (0,2,1)→2, (2,3,2)→8 → 8
-```
-- `isArr=true`, `keys=[0,1,2]`, `hasInitial=true`, `acc=0`.
-- `i=0`: `acc = 0 + 1*0 = 0`. `i=1`: `acc = 0 + 2*1 = 2`. `i=2`: `acc = 2 + 3*2 = 8`.
-- Return `8`.
+function reduce(collection, iteratee, ...rest) {
+  if (collection == null) return rest.length ? rest[0] : undefined;
 
-**Object input — sum values:**
+  const keys = Array.isArray(collection)                                  // step 1: detect shape
+    ? Array.from({ length: collection.length }, (_, i) => i)
+    : Object.keys(collection);                                            // step 2: own enumerable keys
+
+  const hasInit = rest.length >= 1;
+  let result;
+  let i = 0;
+
+  if (hasInit) {
+    result = rest[0];
+  } else {
+    if (keys.length === 0) return undefined;                              // step 3: lodash: undefined not throw
+    result = collection[keys[0]];
+    i = 1;
+  }
+
+  while (i < keys.length) {
+    const k = keys[i];
+    result = iteratee(result, collection[k], k, collection);              // step 4: iteratee
+    i++;
+  }
+  return result;
+}
+```
+
+**Try it yourself**
+
 ```js
-reduce({ a: 10, b: 20, c: 30 }, (acc, v) => acc + v, 0);
-// → 60
+// Array
+reduce([1, 2, 3], (a, b) => a + b, 0);                       // 6
+reduce([1, 2, 3], (a, b) => a + b);                          // 6 (no init)
+
+// Object
+reduce({a: 1, b: 2, c: 3}, (acc, v, k) => {
+  acc[k] = v * 2;
+  return acc;
+}, {});
+// {a: 2, b: 4, c: 6}
+
+// Sum object values
+reduce({a: 1, b: 2}, (acc, v) => acc + v, 0);                // 3
+
+// Empty cases
+reduce([], (a, b) => a + b);                                  // undefined (lodash)
+reduce({}, (a, b) => a + b);                                  // undefined
+reduce([], (a, b) => a + b, 99);                              // 99
+reduce(null, fn, 5);                                          // 5
+
+// Inheritance: Object.keys excludes inherited
+class Foo { constructor() { this.a = 1; } }
+Foo.prototype.b = 2;
+reduce(new Foo(), (acc, v, k) => { acc[k] = v; return acc; }, {});
+// {a: 1}   ← b excluded
+
+// Object key order quirk
+reduce({2: 'a', 1: 'b', x: 'c'}, (acc, v, k) => acc + k + v, '');
+// '1b2ax' (integer-like keys first, then string keys in insertion order)
 ```
-- `isArr=false`, `keys=['a','b','c']`. `acc=0`.
-- iter: 10, 30, 60. Return `60`.
 
-**Object input — no accumulator (uses first value as seed):**
-```js
-reduce({ x: 5, y: 7, z: 11 }, (acc, v) => acc * v);
-// keys = ['x','y','z']; acc=5; then 5*7=35; 35*11=385.
+---
+
+## 9. Step-by-step dry run
+
+```
+reduce({a: 1, b: 2, c: 3}, (acc, v, k) => acc + v, 0):
+  Array.isArray → false. keys = ['a', 'b', 'c'].
+  hasInit = true. result = 0. i = 0.
+  
+  i=0: k='a'. result = fn(0, 1, 'a', coll) = 1.
+  i=1: k='b'. result = fn(1, 2, 'b', coll) = 3.
+  i=2: k='c'. result = fn(3, 3, 'c', coll) = 6.
+  Return 6.
+
+reduce({}, fn):
+  keys = []. hasInit = false.
+  keys.length === 0 → return undefined. (lodash divergence)
+
+reduce({2: 'a', 1: 'b', x: 'c'}, (acc, v, k) => acc + k, ''):
+  Object.keys order: '1', '2' (integer-like ascending), then 'x' (insertion).
+  i=0: k='1', acc = '' + '1' = '1'.
+  i=1: k='2', acc = '1' + '2' = '12'.
+  i=2: k='x', acc = '12' + 'x' = '12x'.
+  Return '12x'.
+
+reduce(new Foo(), fn, {}):
+  Object.keys returns OWN enumerable only.
+  Foo.prototype.b is on prototype → excluded.
 ```
 
-**Empty collection + no accumulator:**
-```js
-reduce({}, (a,b)=>a+b);          // undefined (lodash) — NOT throw (native does throw)
-reduce([], (a,b)=>a+b);          // undefined
-reduce([], (a,b)=>a+b, 0);       // 0
-```
+---
 
-**`null` collection — lodash safety:**
-```js
-reduce(null, fn, 42);    // 42
-reduce(undefined, fn);    // undefined
-```
+## 10. Common confusion + traps
 
-## Important takeaways
+1. **`for..in` walks prototype** — use `Object.keys`.
+2. **Empty + no init throws** — lodash returns undefined, not throw.
+3. **String keys for objects** — third arg type differs.
+4. **`Object.keys` order** — integer keys ascending first, then strings insertion.
+5. **Symbols excluded** — `Object.getOwnPropertySymbols` for those.
+6. **Map/Set as collection** — lodash skips; document.
+7. **Null coll** — lodash returns acc; document.
 
-**Syntax to memorize**
-- `Array.isArray(coll)` is the **only** reliable array check.
-- `Object.keys(obj)` for own enumerable keys, in deterministic order (integer-like ascending, then strings in insertion order).
-- `arguments.length >= 3` for "did caller pass an accumulator?" — same trick as native `reduce`.
+---
 
-**Patterns to reuse**
-- "Compute the key list, then loop uniformly" is the lodash pattern for `forEach`, `map`, `filter`, `every`, `some`, `find` — all of them dispatch on `Array.isArray` exactly once.
-- Treating arrays as objects-with-numeric-keys is a useful mental model when writing generic data utilities.
+## 11. Senior follow-ups & variants
 
-**Common mistakes**
-- Using `for...in` on `collection` — walks the prototype chain, picks up inherited props, and on arrays gives string keys (`"0"`, `"1"`) not numbers.
-- Forgetting that lodash *doesn't* throw on empty + no accumulator. If you ship the native-style throw, lodash users will be surprised.
-- Not handling `null`/`undefined` `collection`. Lodash's defensive style here is part of the appeal — replicate it.
-- Calling `Object.entries` and destructuring inside the loop — works, but allocates an extra `[k,v]` array per iteration. Fine for small data; flag as a perf note for large objects.
+### Variant 1 — Support Map / Set
+Iterate via `for..of` if `Symbol.iterator`.
 
-**Related questions**
-- Lodash `_.map`, `_.filter`, `_.forEach` on objects — same dispatch pattern.
-- `_.groupBy(coll, iteratee)` — built as a reduce.
-- `_.keyBy(coll, iteratee)` — also a reduce.
+### Variant 2 — `forEach`-style
+Iterate without folding.
 
-## Variants
+### Variant 3 — `reduceRight`
+Object: `Object.keys().reverse()`.
 
-1. **`reduceRight` over keys** — for objects, reverse the `Object.keys` array. For arrays, walk indices descending. Useful for right-folds (e.g., function composition: `compose = fns => x => fns.reduceRight((acc, f) => f(acc), x)`).
-2. **Support array-likes** — objects with `length` (e.g., `arguments`, `NodeList`). Detect via `typeof coll.length === 'number'`. Lodash does this; native `reduce` doesn't.
-3. **Iteratee shorthand** — lodash accepts strings (`'name'` → `obj => obj.name`) and objects (`{ active: true }` → predicate). Build an `iteratee` resolver that wraps the user input. Common follow-up to test design taste.
+### Variant 4 — Strings as collection
+Lodash iterates char-by-char.
 
-## Revision notes
+### Variant 5 — Inheriting properties
+Switch to `for..in` + `hasOwnProperty` for parity (default off).
 
-> **lodash _.reduce — 60 second recap**
-> - Works on **arrays** and **plain objects**. Dispatch on `Array.isArray`.
-> - Key list: `[0..n-1]` for arrays, `Object.keys(obj)` for objects.
-> - Iteratee args: `(acc, value, keyOrIndex, collection)`. Key is string for objects, number for arrays.
-> - No accumulator → seed with first element/value; for arrays, skip leading holes first.
-> - Empty + no accumulator → **return `undefined`** (lodash quirk; native `reduce` throws).
-> - `null`/`undefined` collection → return the accumulator (or `undefined`). Defensive by design.
-> - Detect "initial passed" via `arguments.length >= 3`, never `=== undefined`.
-> - Skip array holes with `i in collection` inside the loop.
-> - **Trap:** using `for...in` — walks prototype chain. Use `Object.keys`.
-> - **Trap:** forgetting that lodash doesn't throw on empty; align with the library's convention.
+---
+
+## 12. How to think aloud
+
+> "Lodash `_.reduce` works on arrays AND plain objects. Unified implementation: compute a `keys` list once based on `Array.isArray(coll)` — `[0..len-1]` for arrays, `Object.keys(coll)` for objects. Then loop over keys, calling iteratee with `(acc, coll[k], k, coll)` — third arg is key (string for objects, number for arrays). Use `Object.keys`, NOT `for..in` — for..in walks the prototype chain. `Object.keys` returns own enumerable keys with this order: integer-like keys ascending, then string keys in insertion order. Critical lodash divergence from native: empty collection without accumulator returns `undefined`, NOT throw. Variants: support Map/Set via `Symbol.iterator`; reduceRight reverses keys; strings iterate char-by-char in lodash. Trap: for..in (proto walk); throwing on empty (wrong); ignoring string keys for objects; Symbol keys (excluded by Object.keys)."
+
+---
+
+## 13. 60-second revision
+
+> - **Unified loop** over `keys` list.
+> - **Array.isArray** to detect shape.
+> - **`Object.keys`** not `for..in`.
+> - **3rd iteratee arg** = key (string) or index (number).
+> - **Empty + no init → `undefined`** (lodash divergence).
+> - **Key order:** ints ascending, then strings insertion.
+> - **Own enumerable only** — excludes proto.
+> - **Trap:** for..in proto walk; throw on empty; null/Symbol keys.
+
+---
+
+**Related:** [polyfill-reduce.md](./polyfill-reduce.md) · [polyfill-map.md](./polyfill-map.md) · [`08-maps-sets/group-by.md`](../08-maps-sets/group-by.md)
+
+**Concept primer:** [`concepts/arrays.md`](../../concepts/arrays.md), [`concepts/maps-sets.md`](../../concepts/maps-sets.md)

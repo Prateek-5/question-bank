@@ -1,103 +1,131 @@
-# Implement `flat(arr, depth)` — recursive AND iterative
+# `flat(arr, depth)` — recursive AND iterative
 
-## Source
-- codedamn "Flatten Deeply Nested Arrays" lab: https://codedamn.com/problem/nM6u_iLTYEQxUl_yFC890
-- LeetCode #2625 "Flatten Deeply Nested Array".
-- Native: `Array.prototype.flat(depth)` (ES2019).
+> **Difficulty:** Medium   |   **Time:** ~10 min   |   **Prereqs:** [flatten-array-simple.md](./flatten-array-simple.md), [flatten-deeply-nested-array.md](./flatten-deeply-nested-array.md)
+>
+> **Source:** codedamn. LeetCode #2625.
 
-## Why this question matters in interviews
-This is the **mid-tier** flatten question — interviewers ask it after the single-level warm-up to test whether you can (a) generalize, (b) reason about call stack depth, and (c) ship a production-safe iterative variant. A candidate who only writes the recursive version and shrugs about deep input gets a "junior" sticker. A candidate who proactively offers the iterative stack-based version and explains **V8 doesn't optimize tail calls** signals senior maturity. Practical use: parsing arbitrarily-nested JSON trees, flattening recursive RPC payloads, normalizing nested CSV exports.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+Implement flatten with depth parameter. Recursive + iterative.
+
+**Verification examples**
+
 ```js
-[1, [2, [3, [4]]]].flat(1);         // [1, 2, [3, [4]]]
-[1, [2, [3, [4]]]].flat(2);         // [1, 2, 3, [4]]
-[1, [2, [3, [4]]]].flat(Infinity);  // [1, 2, 3, 4]
+flat([1, [2, [3]]], 0);                   // [1, [2, [3]]] (shallow copy, no flatten)
+flat([1, [2, [3]]], 1);                   // [1, 2, [3]]
+flat([1, [2, [3, [4]]]], 2);              // [1, 2, 3, [4]]
+flat([1, [2, [3, [4]]]], Infinity);       // [1, 2, 3, 4]
+flat([1, [2]], -1);                       // [1, [2]]  (negative treated as 0)
 ```
 
+**Constraints**
+- depth = 0: shallow copy.
+- depth = Infinity: full flatten.
+- Negative depth treated as 0.
+- Both recursive and iterative must be available.
+
+---
+
+## 2. Plain-English restatement
+
+Generalized flatten. Same recursive + iterative as flatten-deeply-nested, but emphasis on depth=0 (shallow copy) and negative coercion.
+
+---
+
+## 3. Why this matters in interviews
+
+Mid-tier. Tests generalization (depth control), iterative discipline, edge cases.
+
+---
+
+## 4. Mental model
+
+```
+   Same as flatten-deeply-nested but explicit depth handling:
+     depth = 0 → shallow copy via arr.slice().
+     depth < 0 → coerce to 0.
+     depth = Infinity → recursive until leaf.
+   
+   Recursive: O(d) stack frames.
+   Iterative: O(d) heap stack entries.
+   
+   Why depth=0 is shallow COPY not reference:
+     Spec returns new array always. arr.slice() copies one level.
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. `flat([1, [2]], 0)` — same array or copy?
+> 2. Negative depth?
+> 3. `flat([1, [2, [3]]], Infinity - 1)` — what depth used?
+
+---
+
+## 6. Brute force — walked through
+
 ```js
-// Recursive shell — the elegant version
 function flat(arr, depth = 1) {
   return depth > 0
-    ? arr.reduce((acc, x) =>
-        acc.concat(Array.isArray(x) ? flat(x, depth - 1) : x), [])
+    ? arr.reduce((a, x) => a.concat(Array.isArray(x) ? flat(x, depth - 1) : x), [])
     : arr.slice();
 }
 ```
 
-### Runtime / engine behavior
-- **Recursive version uses O(d) call stack frames** where d = min(input nesting depth, depth parameter). V8 throws `RangeError: Maximum call stack size exceeded` past ~10-15k frames.
-- **V8 does NOT do tail-call optimization.** It was specced in ES2015 but only Safari/JSC actually ships it. Node, Chrome, Firefox all run frame-by-frame. So writing your recursion "tail-style" buys you nothing on the server.
-- **Iterative version uses heap memory** (a JS array as the stack) — heap is much bigger than the call stack. You can flatten a million-deep array safely.
-- `Array.isArray` is preferred over `instanceof Array` (cross-realm safe).
-- `arr.reduce(...).concat(...)` allocates a new array per element → O(n²). Push-loop is O(n).
+Pretty but O(n²) (concat) and stack-bounded.
 
-### Edge cases (interview traps)
-1. **`depth = 0`** — return shallow copy with no flattening. Don't return the input by reference.
-2. **`depth = Infinity`** — full recursive flatten. `depth - 1` against Infinity stays Infinity (no decrement). That's fine; recursion still terminates because eventually you hit non-arrays.
-3. **Negative depth** — native treats as 0. Coerce: `depth = Math.max(0, depth)`.
-4. **Non-integer depth** — native floors it. `flat([], 1.9)` behaves like `flat([], 1)`. Coerce: `depth = Math.floor(depth)`.
-5. **Sparse arrays / holes** — native skips. Skip with `if (i in arr)`.
-6. **Cycles** — input arrays don't usually self-reference, but if they do, recursion stack-overflows. Mention this if asked.
-7. **Top-level non-array argument** — `flat(5, 1)` would crash. Validate or coerce.
-8. **Very deep input + `Infinity`** — the recursive version dies. **You must offer the iterative variant.**
+---
 
-## Brute force approach
-"Run single-level flatten in a loop until no array remains." Works but redoes work — each pass scans the entire current array. O(n × maxDepth) time, painful for `Infinity`. Use it as a stepping-stone in interview if you're stuck, then move on.
+## 7. The unlocking insight
 
-## Optimal approach
-Two solutions side by side:
-- **Recursive** — elegant, mirrors the data shape, but stack-bounded. Use for shallow input.
-- **Iterative with explicit stack** — push `[item, depthRemaining]` pairs. Pop, decide, push children back. Same Big-O; safe for arbitrary depth. **This is what you ship to production.**
+> **Depth control via base case. `depth = 0 → slice`. Iterative `[item, depthRemaining]` stack for safety.**
 
-Both are O(total leaves) time. Recursive is O(d) stack. Iterative is O(n) heap.
+Three properties:
 
-## Solution (JavaScript)
+1. **`depth = 0` shallow copy.**
+2. **Recursive `depth - 1`** per level.
+3. **Iterative pairs `[item, depth]`** for safety.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
-/**
- * Recursive — elegant, but bounded by V8 call stack.
- */
 function flat(arr, depth = 1) {
-  depth = Math.max(0, Math.floor(depth));
-  if (depth === 0) return arr.slice();
+  depth = Math.max(0, Math.floor(depth));                                   // step 1: coerce
+  if (depth === 0) return arr.slice();                                      // step 2: shallow copy
+  return flatRecursive(arr, depth);
+}
 
+function flatRecursive(arr, depth = 1) {
   const out = [];
-  for (let i = 0; i < arr.length; i++) {
-    if (!(i in arr)) continue;          // match native: skip holes
-    const item = arr[i];
-    if (Array.isArray(item)) {
-      // Recursive case — depth budget shrinks
-      const inner = flat(item, depth - 1);
-      for (const x of inner) out.push(x);
+  for (const item of arr) {
+    if (Array.isArray(item) && depth > 0) {
+      for (const x of flatRecursive(item, depth - 1)) out.push(x);          // step 3: recurse
     } else {
-      // Base case
       out.push(item);
     }
   }
   return out;
 }
 
-/**
- * Iterative — production-safe, no call stack growth.
- * Uses an explicit stack of [item, depthRemaining].
- */
+// Iterative for production safety
 function flatIterative(arr, depth = 1) {
   depth = Math.max(0, Math.floor(depth));
+  if (depth === 0) return arr.slice();
+
   const out = [];
-  // Seed: reverse so popping yields left-to-right order
   const stack = [];
-  for (let i = arr.length - 1; i >= 0; i--) {
-    if (i in arr) stack.push([arr[i], depth]);
-  }
+  for (let i = arr.length - 1; i >= 0; i--) stack.push([arr[i], depth]);
   while (stack.length) {
     const [item, d] = stack.pop();
     if (Array.isArray(item) && d > 0) {
-      // Push children back (reverse so output stays left-to-right)
       for (let i = item.length - 1; i >= 0; i--) {
-        if (i in item) stack.push([item[i], d - 1]);
+        stack.push([item[i], d - 1]);
       }
     } else {
       out.push(item);
@@ -107,70 +135,111 @@ function flatIterative(arr, depth = 1) {
 }
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
-Input: `flatIterative([1, [2, [3, [4]]]], 2)`.
+```js
+flat([1, [2, [3]]], 0);                                       // [1, [2, [3]]]  (shallow copy)
+flat([1, [2, [3]]], 1);                                       // [1, 2, [3]]
+flat([1, [2, [3, [4]]]], 2);                                  // [1, 2, 3, [4]]
+flat([1, [2, [3]]], Infinity);                                // [1, 2, 3]
+flat([1, [2]], -1);                                            // [1, [2]] (coerced to 0)
+flat([1, [2]], 1.7);                                           // [1, 2] (floored to 1)
 
-Stack notation: `[item, depthRemaining]`. Top of stack is rightmost.
+// Shallow copy distinct
+const a = [[1, 2]];
+const b = flat(a, 0);
+b !== a;                                                       // true (new array)
+b[0] === a[0];                                                 // true (one level shared)
 
-- Seed (reversed): `stack = [[[2,[3,[4]]], 2], [1, 2]]` ← top
-- Pop `[1, 2]` → not array → `out=[1]`
-- Pop `[[2,[3,[4]]], 2]` → array, d=2 > 0 → push children reversed with d=1
-  - `stack = [[[3,[4]], 1], [2, 1]]` ← top
-- Pop `[2, 1]` → not array → `out=[1, 2]`
-- Pop `[[3,[4]], 1]` → array, d=1 > 0 → push children reversed with d=0
-  - `stack = [[[4], 0], [3, 0]]` ← top
-- Pop `[3, 0]` → not array → `out=[1, 2, 3]`
-- Pop `[[4], 0]` → array BUT d=0 → push as-is → `out=[1, 2, 3, [4]]`
-- Stack empty.
+// Production-safe deep
+const huge = []; let cur = huge;
+for (let i = 0; i < 100_000; i++) { const n = []; cur.push(n); cur = n; }
+flatIterative(huge, Infinity);                                // OK
+// flatRecursive(huge, Infinity);                             // RangeError
+```
 
-Return `[1, 2, 3, [4]]`. Matches `[1, [2, [3, [4]]]].flat(2)`.
+---
 
-The recursive version produces the same output with peak call stack depth of 3 frames; here the JS engine stack stays at 1 frame regardless of input depth.
+## 9. Step-by-step dry run
 
-## Important takeaways
+```
+flat([1, [2, [3]]], 0):
+  coerce: 0.
+  depth === 0 → arr.slice() → [1, [2, [3]]] (new array, one level copy).
 
-**Syntax to memorize**
-- Base case: `!Array.isArray(item) || depth === 0` → push item.
-- Recursive case: `Array.isArray(item) && depth > 0` → recurse with `depth - 1`.
-- Iterative recipe: stack of `[item, depthRemaining]`, reverse children when pushing to maintain order.
-- Coerce depth: `Math.max(0, Math.floor(depth))`.
+flat([1, [2, [3]]], 1):
+  coerce: 1.
+  recurse:
+    item=1: not array → push 1.
+    item=[2,[3]]: array, d=1>0 → recurse with d=0.
+      flatRecursive([2,[3]], 0):
+        item=2: not array → push 2.
+        item=[3]: array but d=0 → push [3].
+        return [2, [3]].
+      for each: push 2, push [3].
+    out = [1, 2, [3]].
 
-**Patterns to reuse**
-- "Recursion with a shrinking depth budget" is the same skeleton as tree DFS with a maxDepth limit, JSON stringify with a recursion guard, retry-with-max-attempts.
-- "Explicit `[node, state]` stack" is the universal recursive-to-iterative conversion. You'll use it for tree DFS, deep clone, AST walks.
-- Reversed-children push trick: enqueue children in reverse order so popping yields them in original order. Same trick in tree iterative DFS.
+flat([1, [2]], -1):
+  coerce: Math.max(0, Math.floor(-1)) = 0.
+  arr.slice() → [1, [2]].
 
-**Common mistakes**
-- Only writing the recursive version and not knowing it'll explode on deep input. Always mention V8's lack of TCO unprompted.
-- Returning `arr` directly when `depth === 0` — caller can mutate your input. Return `arr.slice()`.
-- Using `arr.reduce((a, b) => a.concat(...), [])` — clean but O(n²) due to concat re-allocation.
-- Forgetting to floor / clamp depth. `flat([], -1)` shouldn't recurse forever.
-- Pushing children in forward order in iterative version → output comes out reversed. Mistake-debug: always test with `[1, [2, 3]]` and check whether you get `[1, 2, 3]` or `[1, 3, 2]`.
+flat([1, [2]], 1.7):
+  coerce: floor(1.7) = 1.
+  Recurse with depth 1 → [1, 2].
+```
 
-**Related questions**
-- Single-level flatten (`flat(arr, 1)` — see `flatten-array-simple.md`).
-- Full recursive flatten (`flat(arr, Infinity)` — see `flatten-deeply-nested-array.md`).
-- Generator-based flatten (see `nested-array-generator-*.md`) — lazy, zero intermediate alloc.
-- Polyfill `Array.prototype.flat` (use this exact algorithm but `this`-bound).
+---
 
-## Variants
+## 10. Common confusion + traps
 
-1. **Polyfill on Array.prototype** — Same logic but `function flat(depth = 1) { ... this ... }` and `Array.prototype.flat = flat`. Be defensive: check `if (!Array.prototype.flat)` so you don't clobber native.
+1. **`depth = 0` returns ref** — should be copy.
+2. **Negative depth recurse** — coerce to 0.
+3. **Non-integer depth** — floor (or accept; native floors).
+4. **`Infinity - 1`** — stays Infinity (no warning).
+5. **Recursive on huge** — RangeError.
+6. **Spread output huge** — intermediate alloc.
+7. **`arr.flat`** assumes int-depth; same coercion.
 
-2. **flatMap** — `arr.flatMap(fn)` is `arr.map(fn).flat(1)` but single-pass. Tests whether you can fuse two operations.
+---
 
-3. **Async flatten** — items may be Promises that resolve to arrays. `await` each, then flatten. Tests interaction of recursion with async.
+## 11. Senior follow-ups & variants
 
-4. **Mutate-in-place flatten** — flatten without allocating. Two-pointer trick, messy but interviewers like to push for it once they've seen the clean version.
+### Variant 1 — In-place
+Mutate; rarely useful.
 
-## Revision notes
+### Variant 2 — Generator
+Yield leaves; lazy.
 
-> **flat(arr, depth) — 60 second recap**
-> - Two implementations: recursive (elegant, stack-bounded) and iterative-with-stack (production-safe).
-> - **V8 has no TCO** — for adversarial or unbounded depth, ship the iterative version.
-> - Base case: not-array OR depth ≤ 0 → push. Recursive case: array AND depth > 0 → recurse with `depth - 1`.
-> - Iterative stack frames are `[item, depthRemaining]`. Reverse children on push to keep output order.
-> - Coerce depth: `Math.max(0, Math.floor(depth))`.
-> - Match native: skip holes (`if (i in arr)`), return shallow copy on `depth = 0`.
-> - O(n leaves) time. Space: O(d) call stack OR O(n) heap stack.
+### Variant 3 — Drop predicate
+Combine flat + filter.
+
+### Variant 4 — Polyfill `Array.prototype.flat`
+Install with non-enumerable.
+
+### Variant 5 — Type-preserving
+For typed arrays etc.
+
+---
+
+## 12. How to think aloud
+
+> "Same recursive/iterative pattern as flatten-deeply-nested but explicit depth handling. Spec: coerce depth via `Math.max(0, Math.floor(depth))` — negative → 0, non-integer → floored. `depth === 0` returns `arr.slice()` (shallow copy — new array, one level shared). `depth === Infinity` is the deep case. Recursive: pretty, but call stack = nesting depth (up to depth param); blows on adversarial. Iterative: heap stack of `[item, depthRemaining]` pairs; push reverse for pop-order = forward. Variants: generator yielding leaves lazily (early break); flatMap = map + flat(1); polyfill installs with `Object.defineProperty({enumerable: false})`. Trap: depth=0 returning input ref (should copy); negative depth recursing; non-integer; recursive on huge."
+
+---
+
+## 13. 60-second revision
+
+> - **Depth control:** `Math.max(0, Math.floor(depth))`.
+> - **`depth = 0`** → `arr.slice()` (shallow copy).
+> - **Recursive elegant; iterative safe.**
+> - **Iterative pairs** `[item, depthRemaining]`.
+> - **Negative → 0** (coerce).
+> - **`Infinity` stays Infinity** through `-1`.
+> - **Variants:** generator, polyfill, flatMap.
+> - **Trap:** depth=0 ref-return; negative recurse; stack overflow.
+
+---
+
+**Related:** [flatten-array-simple.md](./flatten-array-simple.md) · [flatten-deeply-nested-array.md](./flatten-deeply-nested-array.md) · [`07-arrays/polyfill-flat.md`](../07-arrays/polyfill-flat.md) · [trampoline-pattern.md](./trampoline-pattern.md)
+
+**Concept primer:** [`concepts/recursion-and-the-call-stack.md`](../../concepts/recursion-and-the-call-stack.md)

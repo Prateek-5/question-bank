@@ -1,187 +1,278 @@
-# Mixin Composition Pattern
+# Mixin composition pattern
 
-## Source / Origin
-- "Real Mixins with JavaScript Classes" (Justin Fagnani, 2015).
-- Asked at: Stripe, Atlassian — design pattern depth questions.
-- Concept reference: `concepts/prototype.md`.
+> **Difficulty:** Medium-Senior   |   **Time:** ~12 min   |   **Prereqs:** [extends-super-implementation.md](./extends-super-implementation.md), [class-to-prototype-desugar.md](./class-to-prototype-desugar.md)
+>
+> **Source:** Justin Fagnani "Real Mixins with JS Classes" (2015). Stripe, Atlassian design-pattern depth.
 
-## Why this question matters in interviews
-"How do you compose behavior across classes without single inheritance?" Languages with multiple inheritance get it for free; JS doesn't. The mixin pattern uses functions that return classes extending a base. Senior bar: you avoid the naive `Object.assign(prototype, mixin)` (loses `super`, breaks `instanceof`) and use the higher-kinded "subclass factory" pattern.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+Compose behavior across classes without single inheritance. The subclass-factory mixin pattern.
+
+**Verification examples**
+
 ```js
-// Subclass-factory mixin
 const Serializable = (Base) => class extends Base {
   toJSON() { return { ...this, __type: this.constructor.name }; }
 };
 
 const Auditable = (Base) => class extends Base {
   constructor(...args) { super(...args); this.createdAt = Date.now(); }
-  audit() { return `created at ${this.createdAt}`; }
 };
 
 class User { constructor(name) { this.name = name; } }
-
 class AuditableUser extends Auditable(Serializable(User)) {}
 
 const u = new AuditableUser('alice');
-u.audit();                       // 'created at ...'
-JSON.stringify(u);               // includes name, createdAt, __type
-u instanceof User;               // true
-u instanceof AuditableUser;      // true
+u.name;                                                                  // 'alice'
+u.createdAt;                                                              // <timestamp>
+JSON.stringify(u);                                                        // includes __type
 ```
 
-### Edge cases / traps
-1. **Don't `Object.assign(Base.prototype, mixin)`.** Loses `super`, breaks `instanceof`, modifies shared prototype.
-2. **Constructor chaining.** Each mixin's constructor must `super(...args)` to pass through.
-3. **Method conflicts.** Last one wins (mixin order matters). Document or rename.
-4. **`instanceof` against the mixin itself** — `u instanceof Auditable` fails because `Auditable` is a function returning a class. Mark with a Symbol or expose `static [Symbol.hasInstance]`.
-5. **TypeScript** has its own mixin pattern (similar shape; uses higher-kinded types).
-6. **Stateful mixins** — adding instance fields requires constructor; otherwise `this.x` is `undefined`.
-7. **Composition order** — `A(B(C))` reads right-to-left; outermost is "most derived."
-8. **Static methods** are inherited via class-to-class extension; no special handling needed.
+**Constraints**
+- Mixin = function `(Base) => class extends Base { ... }`.
+- Chains via composition: `M1(M2(Base))`.
+- Preserves `super` (unlike `Object.assign(prototype, mixin)`).
+- `instanceof` works for each mixin in chain.
 
-## Mental Model
+---
 
-A mixin is a **subclass factory** — a function that takes a base class and returns a subclass with extra behavior:
+## 2. Plain-English restatement
+
+JS doesn't have multiple inheritance. Instead, the "subclass factory" mixin is a function that takes a base class and returns a new class extending it with additional behavior. Compose multiple mixins by nesting calls: `Final extends M1(M2(M3(Base)))`. Preserves `super` calls naturally.
+
+---
+
+## 3. Why this matters in interviews
+
+Design-pattern depth. Avoid naive `Object.assign(prototype, ...)` pitfalls.
+
+---
+
+## 4. Mental model
 
 ```
-   Auditable(Serializable(User))
-   │         │         │
-   │         │         └── concrete base class
-   │         └── returns subclass of User with toJSON
-   └── returns subclass of (Serializable(User)) with audit
-
-   resulting prototype chain:
-     u → AuditableUser.prototype → AnonAuditableClass.prototype → AnonSerializableClass.prototype → User.prototype → Object.prototype
+   Mixin = (Base) => class extends Base { /* additions */ }
+   
+   Compose:
+   class Final extends M1(M2(M3(Base))) {}
+   
+   Chain at runtime:
+   Final ──extends──▶ M1 (anonymous class) ──extends──▶ M2 (anon) ──extends──▶ M3 (anon) ──extends──▶ Base
+   
+   super(...) inside Final goes to M1's constructor.
+   super(...) inside M1 goes to M2's, etc.
+   
+   instanceof works for ALL of them:
+   final instanceof Base       → true
+   final instanceof Final       → true
+   
+   Why NOT Object.assign(Target.prototype, Mixin):
+   - Loses super (no class extension).
+   - Breaks instanceof (Target doesn't extend Mixin).
+   - Class methods are non-enumerable; Object.assign skips them.
 ```
 
-## Why interviewers care
+---
 
-- **Composition over inheritance** — design principle senior signal.
-- **Prototype chain manipulation** without the pitfalls.
-- **Knowing the wrong way** (Object.assign) and the right way (subclass factory).
+## 5. Try it yourself first
 
-## Common confusion
+> **Predict before reading on:**
+> 1. Why is `(Base) => class extends Base` better than `Object.assign(Target.prototype, mixin)`?
+> 2. Does `super(...)` work in mixin constructors?
+> 3. What's the order of execution for `M1(M2(M3(Base)))`?
 
-- **"Object.assign mixin works."** It does for stateless methods but breaks `super`, can't pass constructor args, breaks `instanceof` for the mixin.
-- **"Diamond problem."** JS's linearized chain avoids it; method resolution is left-to-right in `extends`.
-- **"Mixins replace inheritance."** They complement — you still have single inheritance; mixins layer onto it.
-- **"You can't do private state in mixins."** With `#` fields you can.
+---
 
-## Brute force
+## 6. Brute force — walked through
+
+### Wrong attempt 1: `Object.assign(Target.prototype, mixin)`
+Loses super; breaks instanceof; skips non-enumerable class methods.
+
+### Wrong attempt 2: multiple `extends`
+Not supported in JS.
+
+### Wrong attempt 3: separate utility functions
+Loses class identity; can't use instanceof.
+
+---
+
+## 7. The unlocking insight
+
+> **Mixin = function returning a class that extends its `Base` argument. Compose via nesting. Preserves super, instanceof, and method non-enumerability.**
+
+Three properties:
+
+1. **Function returning class** — higher-kinded type.
+2. **Compose by nesting** — `M1(M2(Base))`.
+3. **`super` chain works** — uses class extends.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
-// Object.assign hack — breaks super, instanceof
-Object.assign(User.prototype, {
-  toJSON() { return { ...this }; }
-});
-```
-
-## Optimal approach
-
-Subclass factories: `(Base) => class extends Base { ... }`. Stackable, preserves `super`, supports state via constructor.
-
-## Solution
-
-```js
-// Define
-const Serializable = (Base) => class extends Base {
+const Serializable = (Base) => class extends Base {                     // step 1: subclass factory
   toJSON() { return { ...this, __type: this.constructor.name }; }
 };
+
 const Auditable = (Base) => class extends Base {
-  constructor(...args) { super(...args); this.createdAt = Date.now(); }
+  constructor(...args) {
+    super(...args);                                                      // step 2: preserves super
+    this.createdAt = Date.now();
+  }
   audit() { return `created at ${this.createdAt}`; }
 };
-const Cacheable = (Base) => class extends Base {
-  #cache = new Map();
-  cached(key, fn) {
-    if (this.#cache.has(key)) return this.#cache.get(key);
-    const v = fn(); this.#cache.set(key, v); return v;
+
+const Disposable = (Base) => class extends Base {
+  dispose() {
+    if (this._disposed) return;
+    this._disposed = true;
+    super.dispose?.();                                                   // step 3: optional super
   }
 };
 
-// Compose
-class User { constructor(name) { this.name = name; } }
-class FancyUser extends Cacheable(Auditable(Serializable(User))) {}
+class User {
+  constructor(name) { this.name = name; }
+}
 
-const u = new FancyUser('alice');
-u.name;                          // 'alice'
-u.audit();                       // 'created at ...'
-u.cached('greeting', () => `hi ${u.name}`);
-JSON.stringify(u);               // serializes
-u instanceof User;               // true
-u instanceof FancyUser;          // true
+class AuditableUser extends Auditable(Serializable(Disposable(User))) {} // step 4: compose
 
-// Symbol-based instanceof
-const Serializable = (Base) => {
-  const C = class extends Base { toJSON() { return { ...this }; } };
-  C[Symbol.hasInstance] = (inst) => 'toJSON' in inst;
-  return C;
+const u = new AuditableUser('alice');
+u.name;                                                                   // 'alice'
+u.createdAt;                                                              // <timestamp>
+u.audit();                                                                // 'created at ...'
+u.dispose();                                                              // OK
+JSON.stringify(u);                                                        // {"_disposed":true, "name":"alice", "createdAt":..., "__type":"AuditableUser"}
+
+u instanceof User;                                                        // true
+u instanceof AuditableUser;                                               // true
+```
+
+**Try it yourself**
+
+```js
+// Naive Object.assign — broken
+class Bad {}
+Object.assign(Bad.prototype, { method() { return 'hi'; } });
+new Bad().method();                                                       // 'hi' BUT:
+//  - method is enumerable (vs class method non-enumerable)
+//  - no super support
+//  - new Bad() instanceof <mixin source> → false
+//  - inheritance chains break
+
+// Mixin with constructor-running order
+const M1 = (B) => class extends B {
+  constructor(...a) { super(...a); console.log('M1'); }
 };
-```
-
-## Dry run
-
-```
-class User { constructor(name) { this.name = name; } }
-
-A = Serializable(User):
-  returns class extends User { toJSON() {} }
-B = Auditable(A):
-  returns class extends A { constructor(...args) { super(...args); this.createdAt = ... } audit() {} }
-FancyUser = class extends B {}
-
-new FancyUser('alice'):
-  FancyUser.constructor — default; calls super('alice')
-  B.constructor: super('alice') → A.constructor (none, falls to User) → User.constructor: this.name = 'alice'
-  back to B.constructor: this.createdAt = Date.now()
-  done
-
-u.audit() → B.prototype.audit → exists
-u.toJSON() → A.prototype.toJSON → exists
-u.name → User.constructor set it
-```
-
-## How to think aloud
-
-> "Subclass-factory mixins. Each mixin is `(Base) => class extends Base { ... }`. Compose by nesting: `M1(M2(Concrete))`. Each constructor must `super(...args)`. `instanceof` works for the resulting class and any in its chain. Object.assign is the wrong way — breaks `super`, mutates shared prototype. State via `#` fields inside the mixin. Order: outer = more derived. For `instanceof` against the mixin itself, custom `Symbol.hasInstance`."
-
-## Important takeaways
-
-- **Subclass factory `(Base) => class extends Base {}`** — the correct pattern.
-- **`super(...args)`** required in every mixin constructor.
-- **`Object.assign(proto, mixin)`** breaks `super` and `instanceof`.
-- **Compose by nesting**; outer = derived.
-- **State via `#` fields** or instance fields.
-- **`Symbol.hasInstance`** for `instanceof` against the mixin itself.
-
-## Variants
-
-- **TypeScript higher-kinded mixin** — same shape with type guards.
-- **Decorators (legacy)** — class decorators that wrap and add behavior.
-- **Composition without classes** — pure functions that wrap object instances.
-- **`Reflect.construct`** for dynamic mixin chains.
-
-## Revision notes
-
-```
-mixin = (Base) => class extends Base {
-  constructor(...args) { super(...args); /* init state */ }
-  newMethod() {}
+const M2 = (B) => class extends B {
+  constructor(...a) { super(...a); console.log('M2'); }
 };
+class Base { constructor() { console.log('Base'); } }
+class C extends M1(M2(Base)) {
+  constructor() { super(); console.log('C'); }
+}
+new C();
+// Output: Base, M2, M1, C
+// (super calls propagate up first)
+```
 
-compose: Outer(Inner(Concrete))   // outer = more derived
-  prototype chain: instance → Outer.proto → Inner.proto → Concrete.proto → Object
+---
 
-TRAPS:
-  Object.assign(proto, mixin) → breaks super, instanceof
-  forgot super(...args) → fields undefined
+## 9. Step-by-step dry run
+
+```
+class AuditableUser extends Auditable(Serializable(Disposable(User))) {}
+
+Evaluation:
+  Disposable(User) → anonymous class extends User, adds dispose.
+  Serializable(...) → anonymous class extends previous, adds toJSON.
+  Auditable(...) → anonymous class extends previous, adds constructor + audit.
+  AuditableUser extends ...
+
+Chain:
+  AuditableUser → Auditable(...) → Serializable(...) → Disposable(...) → User → Object.prototype
+
+new AuditableUser('alice'):
+  AuditableUser constructor (default):
+    super('alice')                              ← chains up
+  Auditable constructor (mixin):
+    super('alice')
+  Serializable constructor (default — inherited Base's):
+    super('alice')
+  Disposable constructor (default — inherited):
+    super('alice')
+  User constructor:
+    this.name = 'alice'.
   
-EXTRAS:
-  static [Symbol.hasInstance] for instanceof-against-mixin
-  #private fields work inside mixin
-  composition order matters (last-wins on method conflict)
+  Then back down:
+    Disposable, Serializable: no body work after super.
+    Auditable: this.createdAt = Date.now().
+    AuditableUser: no body work.
+  
+  Result: instance with name, createdAt, prototype chain through all mixins.
+
+u.dispose():
+  Walk chain to Disposable.prototype.dispose. Invoke.
+
+u.toJSON():
+  Walk chain to Serializable.prototype.toJSON. Invoke.
+
+instanceof checks pass for ALL classes in chain.
 ```
+
+---
+
+## 10. Common confusion + traps
+
+1. **`Object.assign(prototype, mixin)`** — loses super, instanceof, enumerability.
+2. **Multiple `extends`** — not allowed in JS.
+3. **Forget super() in mixin constructor** — breaks chain.
+4. **State on prototype** — mixin instance state goes on `this`, not prototype.
+5. **Mixin order matters** — methods can shadow.
+6. **`this.constructor.name`** in mixin — refers to FINAL class, not anonymous mixin class.
+7. **Static methods don't compose** — only instance.
+
+---
+
+## 11. Senior follow-ups & variants
+
+### Variant 1 — Higher-kinded mixin
+TypeScript: `<T extends new(...args:any[])=>any>(Base: T) => class extends Base { ... }`.
+
+### Variant 2 — Mixin with private fields
+Can use class private fields inside mixin body.
+
+### Variant 3 — Static method composition
+Mixins can add static methods; chain via `Object.assign(Class, mixinStatics)` or static factory.
+
+### Variant 4 — Trait-like behavior
+TC39 proposal for trait composition; not standard.
+
+### Variant 5 — Composition over inheritance
+Sometimes plain object composition (delegate methods) is cleaner than mixins.
+
+---
+
+## 12. How to think aloud
+
+> "JS doesn't support multiple inheritance. The 'subclass factory' mixin is the canonical alternative: a function taking a base class and returning a new class extending it. `const M = (Base) => class extends Base { /* additions */ }`. Compose by nesting: `class Final extends M1(M2(M3(Base))) {}`. This preserves `super` (chain works naturally), `instanceof` (each layer is a real class), and method non-enumerability (class semantics). Naive `Object.assign(Target.prototype, mixin)` is WORSE because it loses super support, doesn't extend instanceof, and skips non-enumerable class methods. Order: constructors run bottom-up via super calls (Base → M3 → M2 → M1 → Final). State goes on `this`; methods on the anonymous class's prototype. Trap: Object.assign approach; multiple extends (illegal); forgetting super() in mixin constructor."
+
+---
+
+## 13. 60-second revision
+
+> - **Mixin = `(Base) => class extends Base { ... }`**.
+> - **Compose by nesting:** `M1(M2(Base))`.
+> - **Preserves super, instanceof, non-enumerability** (vs Object.assign).
+> - **Constructor order:** Base → ... → Final (via super chain).
+> - **State on `this`**, methods on anonymous class prototype.
+> - **Static methods don't compose** through subclass factory.
+> - **Trap:** Object.assign approach; multiple extends; forget super().
+
+---
+
+**Related:** [extends-super-implementation.md](./extends-super-implementation.md) · [class-to-prototype-desugar.md](./class-to-prototype-desugar.md) · [method-chaining-builder.md](./method-chaining-builder.md)
+
+**Concept primer:** [`concepts/prototype.md`](../../concepts/prototype.md)

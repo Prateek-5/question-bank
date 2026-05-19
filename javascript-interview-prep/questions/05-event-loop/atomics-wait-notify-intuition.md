@@ -1,196 +1,231 @@
-# `Atomics.wait` / `Atomics.notify` — Cross-Worker Coordination
+# `Atomics.wait` / `Atomics.notify` — cross-worker coordination
 
-## Source / Origin
-- ES2017 `SharedArrayBuffer` + Atomics.
-- Asked at: Cloudflare, Atlassian, AWS, browser-perf-focused roles.
-- Concept reference: `concepts/event-loop.md`, sibling `worker-threads-vs-event-loop.md`.
+> **Difficulty:** Senior   |   **Time:** ~20 min   |   **Prereqs:** [worker-threads-vs-event-loop.md](./worker-threads-vs-event-loop.md), [structured-clone-cost.md](./structured-clone-cost.md)
+>
+> **Source:** ES2017 `SharedArrayBuffer` + Atomics. Cloudflare, Atlassian, browser-perf roles.
 
-## Why this question matters in interviews
-`postMessage` between workers is async and copies/transfers data. For tight coordination — barriers, mutexes, signal-after-write — you need *blocking* primitives on shared memory. `Atomics.wait` lets a worker park on a memory location until another worker `Atomics.notify`s it. Senior bar: you know (1) this only works in workers (not the main thread, which can't block); (2) it requires `SharedArrayBuffer`; (3) modern browsers gate SAB behind cross-origin isolation headers; (4) wait/notify is the building block for mutex/condvar/semaphore.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+How do workers coordinate via shared memory beyond async `postMessage`? Use `Atomics.wait` to park a worker on a memory location; `Atomics.notify` to wake it.
+
+**Verification examples**
+
+| Setup                                              | Behaviour                                              |
+|----------------------------------------------------|---------------------------------------------------------|
+| Worker A `Atomics.wait(view, 0, 0)`                  | parks until value at index 0 changes from 0           |
+| Worker B `Atomics.store(view, 0, 1); Atomics.notify(view, 0, 1)` | wakes worker A                              |
+| Main thread `Atomics.wait`                           | THROWS (main can't block in browser)                   |
+| `Atomics.add(view, 0, 1)`                            | atomic increment                                       |
+| `Atomics.compareExchange`                            | atomic CAS — building block for lock-free algos       |
+
+**Constraints**
+- `Atomics.wait` only works in workers (main thread can't block in browser).
+- Requires `SharedArrayBuffer` + `Int32Array`/`BigInt64Array` view.
+- Browsers gate SAB behind cross-origin-isolation headers.
+- Building block for mutex/condvar/semaphore.
+
+---
+
+## 2. Plain-English restatement
+
+For tight coordination between workers (barriers, mutexes), `postMessage` is too coarse (async, copies). `Atomics.wait` blocks a worker on a memory address until another worker writes there and calls `Atomics.notify`. The blocking primitive for shared memory.
+
+---
+
+## 3. Why this matters in interviews
+
+Tests deep concurrency knowledge. Senior bar: know this is workers-only, requires SAB + cross-origin-isolation, and is the building block for lock-free / blocking-lock data structures.
+
+---
+
+## 4. Mental model
+
+```
+   SharedArrayBuffer + Int32Array view = shared memory.
+   Both workers see the same bytes.
+
+   Worker A:                              Worker B:
+   Atomics.wait(view, 0, 0)               // do work
+   ↑ parks (blocks) while                 Atomics.store(view, 0, 1)
+     view[0] === 0                        Atomics.notify(view, 0, 1)
+                                          ↑ wake 1 waiter on index 0
+   ↓ resumes when:
+     - view[0] != 0 (someone wrote), OR
+     - Atomics.notify hits, OR
+     - timeout
+
+   Used to build:
+   - Mutex (lock/unlock)
+   - Condition variable (wait/signal)
+   - Semaphore
+   - Barrier
+   - Lock-free queues (with Atomics.compareExchange)
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. Can the main thread call `Atomics.wait`?
+> 2. Why use Atomics instead of regular reads/writes on shared memory?
+> 3. Why is SAB gated behind cross-origin-isolation in browsers?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: regular reads/writes on SAB
+Race conditions; reordering by CPU; silent corruption.
+
+### Wrong attempt 2: `postMessage` for tight coordination
+Async + copies; too slow for spin-locks.
+
+### Wrong attempt 3: `Atomics.wait` on main thread
+Throws (browser). Node allows but blocks event loop — disaster.
+
+---
+
+## 7. The unlocking insight
+
+> **Shared memory needs Atomics for safe access. `wait/notify` is the blocking primitive: park a worker on a memory cell; another worker writes + notifies. Only callable from workers (main thread can't block).**
+
+Three properties:
+
+1. **Atomics for safety** — `add`, `load`, `store`, `compareExchange`.
+2. **`wait/notify` for blocking** — coordinate workers without spin.
+3. **Main thread can't `wait`** — would freeze the page.
+
+---
+
+## 8. Solution (annotated)
+
 ```js
 // shared.js
-export const sab = new SharedArrayBuffer(8);              // 8 bytes = 2 × Int32
-export const counter = new Int32Array(sab);               // [counter, flag]
+const sab = new SharedArrayBuffer(8);
+const view = new Int32Array(sab);
 
-// worker A
-import { counter } from './shared.js';
-Atomics.add(counter, 0, 1);                                // counter[0]++  atomic
-Atomics.store(counter, 1, 1);                              // flag = 1
-Atomics.notify(counter, 1, 1);                             // wake 1 waiter on index 1
+// Worker A (producer)
+view[0] = 0;
+// do work
+Atomics.store(view, 0, 1);                                            // step 1: write atomically
+Atomics.notify(view, 0, 1);                                            // step 2: wake 1 waiter
 
-// worker B
-import { counter } from './shared.js';
-Atomics.wait(counter, 1, 0);                               // wait while counter[1] === 0
-// resumes when counter[1] !== 0 OR a notify hits us
-console.log('counter:', Atomics.load(counter, 0));
+// Worker B (consumer)
+Atomics.wait(view, 0, 0);                                              // step 3: block while [0] === 0
+// resumes when notified or value changed
+console.log('woke up; value =', Atomics.load(view, 0));
+
+// Lock-free counter via CAS
+function increment(view, idx) {
+  let cur;
+  do { cur = Atomics.load(view, idx); }
+  while (Atomics.compareExchange(view, idx, cur, cur + 1) !== cur);
+}
+
+// Or simpler — atomic add
+Atomics.add(view, 0, 1);
 ```
 
-### Edge cases / interview traps
-1. **Main thread cannot `Atomics.wait`.** Doing so throws `TypeError`. Use `Atomics.waitAsync` (returns a Promise) on main if available.
-2. **`SharedArrayBuffer` is gated.** Browsers require `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp` headers; introduced after Spectre.
-3. **`wait(view, index, expected, timeout?)`** — if `view[index]` is already `!== expected`, returns `'not-equal'` immediately. Otherwise blocks until notify or timeout.
-4. **`notify(view, index, count?)`** — wakes at most `count` waiters; default = Infinity.
-5. **Spurious wake-ups not specified to occur but always re-check** the condition in a loop.
-6. **Atomic primitives only on `Int8Array | Uint8Array | Int16Array | Uint16Array | Int32Array | Uint32Array | BigInt64Array | BigUint64Array`** views over SAB. Not floats.
-7. **`Atomics.compareExchange`** — the CAS primitive for lock-free algorithms.
-8. **Performance** — atomic ops are slower than plain reads; use only when you need ordering.
-
-## Mental Model
-
-A **shared whiteboard** where workers can both write and "park sleeping at a cell" until something changes:
-
-```
-   SharedArrayBuffer (visible to all workers):
-   +----+----+----+----+
-   | 0  | 0  | 0  | 0  |     (Int32 view)
-   +----+----+----+----+
-
-   Worker B: Atomics.wait(view, 1, 0)
-              ↓
-   parks until view[1] changes OR notify(view, 1, ...)
-
-   Worker A: Atomics.store(view, 1, 42);
-             Atomics.notify(view, 1, 1);
-              ↓
-   B wakes up; reads view[1] === 42; proceeds.
-```
-
-This is the *exact* primitive operating systems use for futex (Linux). It's how mutexes, semaphores, condition variables are built — JS just exposes it directly.
-
-## Why interviewers care
-
-- **Low-level concurrency literacy** — most JS devs never touch Atomics.
-- **CPU/CPU coordination** — the only way to do tight cross-worker handshakes without postMessage overhead.
-- **Awareness of platform gating** — cross-origin isolation, main-thread restriction.
-
-## Common beginner confusion
-
-- **"I can use Atomics.wait on the main thread."** No — only workers.
-- **"SharedArrayBuffer works anywhere."** Gated by COOP/COEP headers in browsers; default not available.
-- **"Atomic = transactional."** Atomic = indivisible single operation. Doesn't compose; for multi-step coordination use `compareExchange` or wait/notify.
-- **"Notify counts must equal wait count."** No — notify wakes *up to* `count` waiters; extras keep waiting.
-- **"Wait is the same as setTimeout."** Wait is *blocking* — the worker thread halts. setTimeout suspends a callback without blocking.
-
-## Brute force approach
+**Mutex sketch:**
 
 ```js
-// Spin-wait — wastes CPU, never yields to event loop
-while (Atomics.load(view, 1) === 0) { /* burn CPU */ }
-```
-
-100% CPU. `Atomics.wait` lets the thread sleep until something changes.
-
-## Optimal approach
-
-`Atomics.wait` in workers to block until a condition is met; `Atomics.notify` from another worker to release. Build mutexes/semaphores on top via `compareExchange`.
-
-## Solution (JavaScript) — barrier and mutex
-
-```js
-// Barrier: N workers all wait at a checkpoint until everyone arrives
-class Barrier {
-  constructor(sab, slot, count) {
-    this.view = new Int32Array(sab);
-    this.slot = slot;
-    this.count = count;
-  }
-  arrive() {
-    const arrived = Atomics.add(this.view, this.slot, 1) + 1;
-    if (arrived === this.count) {
-      Atomics.store(this.view, this.slot, 0);          // reset for next phase
-      Atomics.notify(this.view, this.slot, this.count - 1);
-    } else {
-      while (Atomics.load(this.view, this.slot) !== 0) {
-        Atomics.wait(this.view, this.slot, arrived);
-      }
-    }
+function lock(view, idx) {
+  while (Atomics.compareExchange(view, idx, 0, 1) !== 0) {
+    Atomics.wait(view, idx, 1);                                        // block until unlocked
   }
 }
 
-// Mutex (toy) via compareExchange + wait/notify
-class SharedMutex {
-  constructor(sab, slot) {
-    this.view = new Int32Array(sab);
-    this.slot = slot;
-  }
-  lock() {
-    while (true) {
-      const prev = Atomics.compareExchange(this.view, this.slot, 0, 1);
-      if (prev === 0) return;                                          // got it
-      Atomics.wait(this.view, this.slot, 1);                           // wait while 1
-    }
-  }
-  unlock() {
-    Atomics.store(this.view, this.slot, 0);
-    Atomics.notify(this.view, this.slot, 1);
-  }
-}
-
-// Main thread (no wait) — use waitAsync
-async function waitOnMain(view, idx, expected) {
-  const { async, value } = Atomics.waitAsync(view, idx, expected);
-  if (!async) return value;                                            // already !== expected
-  return value;                                                        // Promise<'ok'|'timed-out'|'not-equal'>
+function unlock(view, idx) {
+  Atomics.store(view, idx, 0);
+  Atomics.notify(view, idx, 1);                                        // wake one waiter
 }
 ```
 
-## Step-by-step dry run
+---
 
-Barrier with 3 workers; one of them arrives last.
-
-```
-t=0   counter = 0
-      worker A: arrive() → atomic add → counter=1 → arrived=1 ≠ 3 → wait while counter !== 0
-      worker B: arrive() → atomic add → counter=2 → arrived=2 ≠ 3 → wait while counter !== 0
-t=50  worker C: arrive() → atomic add → counter=3 → arrived=3 == 3
-                → store counter=0 (reset for next phase)
-                → notify(slot, 2) → wake A and B
-      A's wait returns; A re-checks counter === 0 → exits while loop
-      B's wait returns; B re-checks counter === 0 → exits while loop
-      all 3 proceed past the barrier
-```
-
-## How to think aloud in the interview
-
-> "Atomics.wait blocks a worker on a memory location until either a value change or `Atomics.notify`. Main thread can't `wait` — would block UI. Used to build mutexes (compareExchange to claim; wait on busy; notify on unlock), semaphores, barriers. SharedArrayBuffer is the substrate — gated by COOP/COEP in browsers post-Spectre. For main-thread async wait, `Atomics.waitAsync` returns a Promise. This is the futex primitive — operating-system-grade synchronization, available in JS workers."
-
-## Important takeaways
-
-- **Workers only** for `wait`; main uses `waitAsync`.
-- **`SharedArrayBuffer` required** — gated by COOP/COEP.
-- **Typed array views over SAB** — Int8 to BigUint64.
-- **`compareExchange` for CAS-based algorithms.**
-- **Always re-check the condition** after wait (spurious wakes possible).
-- **Build mutex/semaphore/barrier on top.**
-
-## Variants
-
-- **`waitAsync(view, idx, expected)`** — main-thread version; returns `{async, value}` where `value` is a Promise.
-- **Lock-free queues** — using `compareExchange` for enqueue/dequeue.
-- **Condition variable pattern** — wait + notify with a "predicate" Int32 cell.
-- **Cross-process** — *not* supported; SAB is per-process. Use `MessageChannel` or shared memory at OS level.
-
-## Revision notes
+## 9. Step-by-step dry run
 
 ```
-SharedArrayBuffer + Atomics (worker concurrency):
-  Atomics.wait(view, idx, expected[, timeout]) — block worker
-  Atomics.notify(view, idx, count) — wake up to count waiters
-  Atomics.compareExchange(view, idx, expected, replacement) — CAS
-  Atomics.add/sub/load/store/or/and/xor — atomic ops
+Both workers share view (Int32Array on SAB), index 0 starts at 0.
+
+Worker A:
+  // wait for B to signal
+  Atomics.wait(view, 0, 0);   // PARKS thread; view[0] currently 0 ✓
   
-  TRAPS:
-  - wait only in workers; main uses waitAsync (Promise)
-  - SAB needs COOP/COEP in browsers
-  - re-check predicate after wait (spurious wake)
-  - only integer typed arrays
-  
-  BUILD:
-  - mutex: compareExchange + wait/notify
-  - barrier: counter + reset + notify N
-  - condvar: predicate Int32 + wait + notify
+Worker B:
+  // do work for 100ms
+  Atomics.store(view, 0, 1);   // atomic write
+  Atomics.notify(view, 0, 1);  // wake 1 waiter on index 0
+
+A wakes (notify hit), resumes.
+A reads Atomics.load(view, 0) → 1. Proceeds.
+
+Mutex sequence:
+A: lock(view, 0) → compareExchange(0→1) succeeds; A holds lock.
+B: lock(view, 0) → compareExchange(0→1) fails (already 1).
+B: Atomics.wait(view, 0, 1) → parks.
+A: unlock(view, 0) → store(view, 0, 0); notify → wakes B.
+B: loops, compareExchange(0→1) succeeds; B holds lock.
 ```
+
+---
+
+## 10. Common confusion + traps
+
+1. **`Atomics.wait` on main** — throws (browser); freezes (Node).
+2. **Regular reads on shared memory** — racy; use Atomics.load.
+3. **SAB without cross-origin-iso** — browser blocks.
+4. **`notify` count** — pass `1` to wake one, `Infinity` for all.
+5. **Spin without wait** — burns CPU; use wait/notify.
+6. **Float32Array** — `Atomics` only works on Int32/BigInt64/etc.
+7. **`Atomics.wait` returns string** — `'ok'`, `'not-equal'`, `'timed-out'`.
+
+---
+
+## 11. Senior follow-ups & variants
+
+### Variant 1 — Mutex (above)
+`lock`/`unlock` via `compareExchange` + wait/notify.
+
+### Variant 2 — Condition variable
+Wait on a separate "condition" cell; signal via store + notify.
+
+### Variant 3 — Counting semaphore
+`compareExchange` to decrement; wait if 0.
+
+### Variant 4 — Lock-free queue (SPSC / MPMC)
+`compareExchange` on head/tail pointers. Research-grade complexity.
+
+### Variant 5 — Cross-origin isolation headers
+`Cross-Origin-Opener-Policy: same-origin` + `Cross-Origin-Embedder-Policy: require-corp`. Required for SAB in browsers since Spectre.
+
+### Variant 6 — `Atomics.waitAsync` (newer)
+Non-blocking — returns a Promise. Allows main thread to coordinate without blocking.
+
+---
+
+## 12. How to think aloud
+
+> "For tight coordination between workers, `postMessage` is too coarse — async, copies. `Atomics.wait` parks a worker on a memory address; another worker writes + `Atomics.notify` wakes it. Workers ONLY — main thread can't block (browser throws; Node would freeze event loop). Build mutex with `compareExchange` + wait/notify. Cross-origin isolation headers required in browsers since Spectre. `Atomics.waitAsync` (newer) is the non-blocking Promise-returning variant, usable from main. Trap: regular memory access without Atomics (race); wait on main thread; SAB without iso headers."
+
+---
+
+## 13. 60-second revision
+
+> - **`Atomics.wait(view, idx, expected)`** parks if `view[idx] === expected`.
+> - **`Atomics.notify(view, idx, count)`** wakes `count` waiters.
+> - **Workers only** — main thread `wait` throws (browser) or freezes (Node).
+> - **`SharedArrayBuffer` + Int32Array view** required.
+> - **Browsers gate** SAB behind cross-origin-isolation headers (post-Spectre).
+> - **Building blocks:** mutex, condvar, semaphore, lock-free queues.
+> - **`Atomics.waitAsync`** = non-blocking Promise variant for main thread.
+> - **Trap:** raw reads/writes (race); wait on main; no cross-origin-iso.
+
+---
+
+**Related:** [worker-threads-vs-event-loop.md](./worker-threads-vs-event-loop.md) · [worker-pool-implementation.md](./worker-pool-implementation.md) · [structured-clone-cost.md](./structured-clone-cost.md) · [`10-machine-coding-patterns/async-semaphore.md`](../10-machine-coding-patterns/async-semaphore.md)
+
+**Concept primer:** [`concepts/event-loop.md`](../../concepts/event-loop.md)

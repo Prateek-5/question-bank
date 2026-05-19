@@ -1,45 +1,99 @@
-# Implement `compose` / `pipe` for async functions
+# Async `compose` / `pipe` — chain async functions
 
-## Source
-- Canonical FP machine-coding question (Ramda `R.pipeP`, Redux middleware composition, Express middleware chains).
-- Common at staff-level Node interviews — middleware pipelines, request transformers.
+> **Difficulty:** Medium   |   **Time:** ~20 min   |   **Prereqs:** [function-composition.md](./function-composition.md), [`concepts/promises.md`](../../concepts/promises.md)
+>
+> **Source:** Ramda `R.pipeP`, Koa/Express middleware patterns. Frequent at staff-level Node interviews.
 
-## Why this question matters in interviews
-`pipe`/`compose` is the FP litmus test. The sync version is a one-liner; the async version forces you to combine **`Array.prototype.reduce`**, **promise chaining**, **the `Promise.resolve` seed trick**, and an understanding of why `reduceRight` exists. It also probes whether you understand the **direction** distinction: `pipe(a, b, c)(x) === c(b(a(x)))` (left-to-right reading order) while `compose(a, b, c)(x) === a(b(c(x)))` (math convention). This shows up everywhere in real Node backends: Koa middleware, Apollo `applyMiddleware`, RxJS `pipe`, Express request transforms, ETL pipelines, retry-then-timeout-then-circuit-breaker decorator stacks.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
-```js
-const pipe = (...fns) => (x) =>
-  fns.reduce((acc, fn) => acc.then(fn), Promise.resolve(x));
-
-const compose = (...fns) => (x) =>
-  fns.reduceRight((acc, fn) => acc.then(fn), Promise.resolve(x));
-
-// usage
-const pipeline = pipe(parse, validate, persist, log);
-const result = await pipeline(rawInput);
+**Signature**
+```ts
+function pipeAsync<T>(...fns: Array<(x: T) => T | Promise<T>>): (x: T) => Promise<T>;
+function composeAsync<T>(...fns: Array<(x: T) => T | Promise<T>>): (x: T) => Promise<T>;
 ```
 
-### Runtime / engine behavior
-- `Promise.resolve(x)` is the **seed**: turns the input into a Promise so the chain starts with a thenable. If `x` is already a Promise, `Promise.resolve` is a no-op (it unwraps).
-- Each `.then(fn)` returns a **new Promise**. Synchronous `fn`s work transparently because `.then` boxes their return value into a fulfilled Promise. Async `fn`s work because `.then` unwraps any returned thenable.
-- `reduce` walks left-to-right: `pipe(a, b)(x)` becomes `Promise.resolve(x).then(a).then(b)`. `reduceRight` walks right-to-left: `compose(a, b)(x)` becomes `Promise.resolve(x).then(b).then(a)`.
-- Error propagation: if any `fn` throws or returns a rejected Promise, the chain short-circuits to the first rejection handler. With no `.catch`, it surfaces as an unhandled rejection at the await site.
+**Input / Output examples**
 
-### Edge cases (these are the interview traps)
-1. **Empty pipeline** — `pipe()` must return an identity function: `x => Promise.resolve(x)`. With no `fns`, `reduce` returns the seed unchanged. Good — works for free.
-2. **Synchronous functions mixed with async** — works without special-casing because `.then(fn)` accepts both. Don't wrap sync fns in `Promise.resolve` manually.
-3. **Each `fn` is unary** — `pipe`/`compose` is point-free composition. Each step takes exactly one arg. Multi-arg pipelines need partial application or destructuring at each stage.
-4. **`this` binding** — composed functions lose `this`. If a step is a method, bind it first: `pipe(obj.method.bind(obj), ...)`.
-5. **Error short-circuit** — once a step rejects, all downstream `.then(fn)` are skipped. Add a `.catch` at the end or in the middle for recovery steps.
-6. **Order of reading** — `pipe(a, b, c)` reads naturally L→R ("first a, then b, then c"). `compose(a, b, c)` reads R→L (math: `a ∘ b ∘ c`). State which one when answering — interviewers ask both names.
-7. **Don't use `await` in the reducer body** — `acc.then(fn)` is correct and lazy; `await acc` would force serial execution at compose-time and break the laziness that lets you `pipe(...)` once and call repeatedly.
-8. **Single-arg, single-return rule** — if you need multiple values flowing, pass an object/tuple. This is where pipelines get awkward; many candidates abandon and reach for raw `async/await`. State the trade-off.
+| Setup                                                            | Behaviour                                              |
+|-------------------------------------------------------------------|---------------------------------------------------------|
+| `pipeAsync(parse, enrich, persist)(input)`                        | sequential `.then` chain; awaits each                  |
+| Any step throws                                                   | rejection short-circuits remaining steps              |
+| Mixed sync + async fns                                            | both work; `.then` autoboxes                          |
+| `pipeAsync()(x)`                                                  | identity → `Promise.resolve(x)`                       |
+| Input is already a Promise                                        | `Promise.resolve(x)` unwraps it                       |
 
-## Brute force approach
-"I'll `await` each function manually in a loop." Like:
+**Constraints**
+- Each step unary; returns either value or thenable.
+- `reduce` for pipe (L→R), `reduceRight` for compose (R→L).
+- Seed: `Promise.resolve(x)` — handles "x might be a thenable" for free.
+- Errors short-circuit via standard Promise rejection.
+
+---
+
+## 2. Plain-English restatement
+
+Same idea as sync `pipe`/`compose` but each step may return a Promise. Strung together via `.then`, so the next step waits for the previous step's promise to resolve. Mixed sync/async fns just work because `.then(fn)` auto-wraps a sync return in `Promise.resolve`. If any step rejects, the rest are skipped and the failure surfaces at the final `await`.
+
+---
+
+## 3. Why this matters in interviews
+
+The sync version is a one-liner; the async variant forces you to combine **`Array.prototype.reduce`**, **promise chaining**, the **`Promise.resolve` seed trick**, and an understanding of why direction matters. It shows up everywhere in real Node code: Koa middleware, Apollo request transforms, ETL pipelines, retry-then-timeout-then-circuit-breaker decorator stacks. Senior bar: explain the laziness — `acc.then(fn)` (returned eagerly) vs `await acc; await fn(...)` (forces serial execution at compose-time).
+
+---
+
+## 4. Mental model
+
+A **promise conveyor belt**:
+
+```
+   pipeAsync(parse, enrich, validate, persist)(input):
+
+     Promise.resolve(input)
+            │
+            ▼
+       .then(parse)         resolves to {id:42}
+            │
+            ▼
+       .then(enrich)        resolves to {id:42, ts:...}
+            │
+            ▼
+       .then(validate)      sync; returns object as-is
+            │
+            ▼
+       .then(persist)       resolves to {id:42, ts:..., saved:true}
+            │
+            ▼
+       await → final value
+```
+
+Each `.then(fn)` is a microtask hop. Sync fns slot in naturally because `.then` autoboxes their return.
+
+**On reject:**
+```
+.then(parse) → ok
+.then(enrich) → REJECT (throws / returns rejected)
+.then(validate) ⇢ skipped
+.then(persist)  ⇢ skipped
+.catch / await throws
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. What does `pipeAsync()(42)` return — `42` or `Promise.resolve(42)`?
+> 2. If step 2 throws synchronously, do steps 3 and 4 run?
+> 3. Why use `Promise.resolve(x)` as the seed instead of just `x`?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: `for-of` with `await`
 ```js
 async function pipe(...fns) {
   return async (x) => {
@@ -48,104 +102,185 @@ async function pipe(...fns) {
   };
 }
 ```
-This actually works and is **arguably clearer for async-only pipelines** — interviewers will accept it. The downside is the inner function is now `async`, which adds a microtask hop even when all `fns` are sync. The `reduce` version is the FP-flavored answer and gives you nice points for "I know this is `Array.prototype.reduce` with `Promise.resolve` as the seed." Mention both.
+Works and is arguably clearer. Downside: the inner function is now `async`, which always adds a microtask hop even for sync-only chains. Interviewers accept this, but the `reduce` version earns FP-flavour points.
 
-## Optimal approach
-`reduce` with `Promise.resolve(x)` as the seed and `.then(fn)` as the combiner. O(n) in number of steps. O(1) extra memory (no intermediate array). Each step is a single microtask hop, which is the price of asynchrony.
+### Wrong attempt 2: forget the seed value
+```js
+fns.reduce((acc, fn) => acc.then(fn), Promise.resolve())  // BUG
+```
+First `fn` receives `undefined`, not `x`. Pass `x` to `Promise.resolve(x)`.
 
-## Solution (JavaScript)
+### Wrong attempt 3: `await` inside reducer body
+```js
+fns.reduce(async (acc, fn) => (await acc, fn(await acc)), Promise.resolve(x))
+```
+Forces every reducer step to be async-evaluated at compose-time and breaks laziness. Use `acc.then(fn)` — pure promise composition.
+
+---
+
+## 7. The unlocking insight
+
+> **`reduce` with `Promise.resolve(x)` as seed and `acc.then(fn)` as combiner. Mixed sync/async works because `.then` autoboxes. `reduceRight` for compose.**
+
+Three properties:
+
+1. **`Promise.resolve(x)`** as the seed — unwraps if `x` is already a thenable.
+2. **`acc.then(fn)`** is lazy — builds a single chain that resolves end-to-end.
+3. **Errors short-circuit** via standard Promise rejection — no special handling needed.
+
+The whole implementation is two lines.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
-/**
- * Left-to-right async pipe: pipe(a, b, c)(x) === c(b(a(x))) with promises unwrapped.
- * @param  {...Function} fns  unary functions; each may be sync or return a thenable
- * @returns {(x: any) => Promise<any>}
- */
 function pipeAsync(...fns) {
   return function (x) {
-    return fns.reduce((acc, fn) => acc.then((v) => fn.call(this, v)), Promise.resolve(x));
+    return fns.reduce(                                          // step 1: L→R reduce
+      (acc, fn) => acc.then((v) => fn.call(this, v)),           // step 2: chain via .then
+      Promise.resolve(x),                                        // step 3: seed wraps x
+    );
   };
 }
 
-/**
- * Right-to-left async compose: compose(a, b, c)(x) === a(b(c(x))).
- */
 function composeAsync(...fns) {
   return function (x) {
-    return fns.reduceRight((acc, fn) => acc.then((v) => fn.call(this, v)), Promise.resolve(x));
+    return fns.reduceRight(                                      // R→L reduce
+      (acc, fn) => acc.then((v) => fn.call(this, v)),
+      Promise.resolve(x),
+    );
   };
+}
+
+// Error-recovering variant: each fn is [transform, errorHandler] pair
+function pipeAsyncWithRecovery(...steps) {
+  return (x) =>
+    steps.reduce(
+      (acc, [fn, errFn]) => acc.then(fn, errFn),                // step 4: catch per step
+      Promise.resolve(x),
+    );
 }
 ```
 
-For a version that preserves `this` binding through a method chain on a host object:
-```js
-const pipeBound = (host, ...fns) => (x) =>
-  fns.reduce((acc, fn) => acc.then(fn.bind(host)), Promise.resolve(x));
-```
+**Try it yourself**
 
-## Step-by-step dry run
-
-Input:
 ```js
 const parse    = (s) => JSON.parse(s);
 const enrich   = async (obj) => ({ ...obj, ts: Date.now() });
 const validate = (obj) => { if (!obj.id) throw new Error('no id'); return obj; };
-const persist  = async (obj) => { /* db.save */ return { ...obj, saved: true }; };
+const persist  = async (obj) => ({ ...obj, saved: true });
 
 const handler = pipeAsync(parse, enrich, validate, persist);
+
 const out = await handler('{"id":42,"name":"x"}');
+// { id: 42, name: 'x', ts: 1234567890, saved: true }
+
+// Reject case
+const bad = pipeAsync(parse, enrich, validate, persist);
+try { await bad('{"name":"no-id"}'); } catch (e) { console.error(e.message); }  // "no id"
 ```
 
-Trace:
-- `handler('{"id":42,"name":"x"}')` starts: seed = `Promise.resolve('{"id":42,"name":"x"}')`.
-- `reduce` step 1: `seed.then(parse)` → Promise that resolves to `{id:42, name:'x'}`.
-- step 2: `.then(enrich)` → enrich is async, returns Promise → unwrapped to `{id:42, name:'x', ts: 17... }`.
-- step 3: `.then(validate)` → sync, `id` is truthy, returns object as-is.
-- step 4: `.then(persist)` → returns Promise that resolves to `{id:42, name:'x', ts:..., saved:true}`.
-- `await handler(...)` resolves to the final object.
+---
 
-If step 3 throws (`id` missing): the rejection propagates past `persist` (its `.then` handler is skipped) and surfaces at `await`.
+## 9. Step-by-step dry run
 
-## Important takeaways
+```
+handler('{"id":42}') called:
 
-**Syntax to memorize**
-- `fns.reduce((acc, fn) => acc.then(fn), Promise.resolve(x))` — drill this until you can write it cold.
-- `reduceRight` for `compose`. `reduce` for `pipe`.
-- `Promise.resolve(x)` is the seed — handles "x might already be a promise" for free.
+t=0    seed = Promise.resolve('{"id":42}')
+       reduce step 1: seed.then(parse)
+                       → microtask hop, parse('{"id":42}') = {id:42}
+                       → resolves to {id:42}
 
-**Patterns to reuse**
-- Reduce-over-promises is the same shape as **`asyncReduce`** (a separate problem) and as Redux's `applyMiddleware` (which composes higher-order functions, not values).
-- "Sync interface, async-capable internals" — `pipe` accepts mixed sync/async fns without branching. This is the elegance of `.then` autoboxing.
+       reduce step 2: prev.then(enrich)
+                       → microtask hop, enrich({id:42}) returns Promise
+                       → unwraps to {id:42, ts:1234}
 
-**Common mistakes**
-- Starting with `Promise.resolve()` (no arg) instead of `Promise.resolve(x)` — first `fn` gets `undefined`.
-- Using `await` inside `reduce`'s reducer instead of returning `acc.then(fn)` — works but forces the outer to be `async` and adds a microtask per iteration.
-- Confusing `pipe`/`compose` direction — always state which one you're naming.
-- Forgetting that each `fn` must be unary. Composing `fn(a, b)` doesn't work without partial application.
+       reduce step 3: prev.then(validate)
+                       → microtask hop, validate sync
+                       → returns {id:42, ts:1234}
 
-**Related questions**
-- Synchronous `pipe`/`compose` (same shape, no `.then`).
-- `asyncReduce(arr, fn, init)` — different (reduce over a data array, not a function array).
-- Koa/Express middleware composition (functions are `(ctx, next) => ...` — different signature).
-- Redux `compose` for store enhancers.
+       reduce step 4: prev.then(persist)
+                       → microtask hop, persist returns Promise
+                       → unwraps to {id:42, ts:1234, saved:true}
 
-## Variants
+       await → final value
+```
 
-1. **Error-recovering pipeline** — each step is `[fn, errHandler]`. Build with `.then(fn, errHandler)`. Lets a single step both transform and handle errors from above.
+If `validate` throws `Error('no id')`:
 
-2. **Cancellable pipeline** — pass an `AbortSignal`; each step checks `signal.aborted` and short-circuits. Or wrap the chain so the seed promise can reject externally.
+```
+       reduce step 3: prev.then(validate)
+                       → throws synchronously inside .then handler
+                       → resulting promise REJECTS with Error('no id')
 
-3. **Branching pipe (Either/Result)** — each step returns `{ok: true, value} | {ok: false, error}` and downstream steps short-circuit on error. Avoids exception-based control flow; common in TypeScript-heavy codebases.
+       reduce step 4: prev.then(persist)
+                       → rejected promise.then(persist) → skip handler
+                       → propagate rejection
 
-4. **Parallel fan-out** — `parallelPipe(a, b, c)(x)` runs all three on the same input concurrently and returns `[ra, rb, rc]`. Different semantics — clarify which the interviewer wants.
+       await → throws
+```
 
-## Revision notes
+---
 
-> **async pipe/compose — 45 second recap**
-> - `pipe(...fns)(x) = fns.reduce((acc, fn) => acc.then(fn), Promise.resolve(x))`.
-> - `compose` is the same with `reduceRight`.
-> - `Promise.resolve(x)` seed handles "x might be a thenable" for free.
-> - Mixed sync/async fns just work — `.then(fn)` autoboxes both.
-> - Empty `pipe()` = identity (`Promise.resolve(x)`). Errors short-circuit to the next `.catch`.
-> - Each fn must be unary. State `pipe` vs `compose` direction explicitly.
-> - Trap: `Promise.resolve()` with no arg; using `await` inside reducer body; losing `this`.
+## 10. Common confusion + traps
+
+1. **`Promise.resolve()` (no arg)** — first fn gets `undefined`.
+2. **`await` inside reducer body** — forces async wrapping, kills laziness.
+3. **Confusing pipe vs compose direction** — always state explicitly.
+4. **Multi-arg first fn** — `pipeAsync` is point-free. Pass objects/tuples if you need multi-args.
+5. **`this` lost in chain** — bind methods first or use arrow functions for steps.
+6. **Mixed sync/async**: NOT a problem (`.then` autoboxes). Don't manually wrap sync fns.
+7. **Errors are values** — every step propagates rejection; only `.catch` or pair handlers can recover.
+
+---
+
+## 11. Senior follow-ups & variants
+
+### Variant 1 — Per-step error recovery
+```js
+pipeAsyncWithRecovery(
+  [parse, (e) => ({ raw: '' })],
+  [enrich, null],
+  ...
+)
+```
+Allows one step to both transform and handle errors from above.
+
+### Variant 2 — Cancellable pipeline
+Pass `AbortSignal`; each step checks `signal.aborted`. Or wrap with `Promise.race([chain, abortPromise])`.
+
+### Variant 3 — Branching Either/Result
+Each step returns `{ok: true, value} | {ok: false, error}`. Pipe short-circuits on error without throwing.
+
+### Variant 4 — Parallel fan-out
+`fanOut(a, b, c)(x) === Promise.all([a(x), b(x), c(x)])`. Different semantics — clarify which.
+
+### Variant 5 — Middleware-style (Koa)
+Each fn `(ctx, next)`; chooses when to call next. Allows pre- and post-processing around inner fns.
+
+---
+
+## 12. How to think aloud
+
+> "`fns.reduce((acc, fn) => acc.then(fn), Promise.resolve(x))`. Drill this. `Promise.resolve(x)` as seed handles 'x might be a thenable' for free. Mixed sync/async fns work because `.then` autoboxes both. Empty `pipe()` returns identity. Errors short-circuit via promise rejection — no special handling. `reduceRight` for compose. Trap: `Promise.resolve()` with no arg → first fn gets undefined. Trap: `await` inside reducer body forces eager async and kills laziness. Senior bonus: per-step error handlers via `[fn, errFn]` pairs, or Either/Result for exception-free pipelines."
+
+---
+
+## 13. 60-second revision
+
+> - **`pipeAsync(...fns)(x) = fns.reduce((acc, fn) => acc.then(fn), Promise.resolve(x))`**.
+> - **`composeAsync`** = same with `reduceRight`.
+> - **Seed** is `Promise.resolve(x)` — unwraps if `x` is thenable.
+> - **Mixed sync/async** just works — `.then` autoboxes returns.
+> - **Empty** = identity (Promise.resolve(x)).
+> - **Reject short-circuits**; surfaces at final await.
+> - **Each fn unary** — state pipe vs compose direction.
+> - **Trap:** `Promise.resolve()` (no arg); `await` inside reducer; losing `this`.
+
+---
+
+**Related:** [function-composition.md](./function-composition.md) · [`04-promises/async-reduce.md`](../04-promises/async-reduce.md) · [`04-promises/sequential-vs-parallel-async-map.md`](../04-promises/sequential-vs-parallel-async-map.md) · [retry-with-jitter-and-budget.md](./retry-with-jitter-and-budget.md)
+
+**Concept primer:** [`concepts/promises.md`](../../concepts/promises.md)

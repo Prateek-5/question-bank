@@ -1,102 +1,17 @@
-# Polyfill the `new` Operator (`myNew`)
+# Polyfill the `new` operator
 
-## Source
-- Canonical machine-coding interview problem — asked at Atlassian, Razorpay, Microsoft, Uber.
-- Reference spec: https://tc39.es/ecma262/#sec-new-operator
+> **Difficulty:** Medium-Senior   |   **Time:** ~15 min   |   **Prereqs:** [prototype-chain-inheritance.md](./prototype-chain-inheritance.md), [polyfill-call-apply.md](./polyfill-call-apply.md)
+>
+> **Source:** ECMA-262 §13.3.5. Atlassian, Razorpay, Microsoft, Uber.
 
-## Why this question matters in interviews
-`myNew` is the **definitive prototype-chain interview question**. In ~10 lines you have to demonstrate (1) what `new` actually *does* under the hood, (2) `Object.create(Ctor.prototype)` to wire the prototype chain, (3) `Ctor.apply(obj, args)` to seed instance state, (4) the subtle "if constructor returned an object, use that instead" rule, and (5) familiarity with how `class`, `extends`, and `super` desugar into these mechanics. As a senior backend engineer, you'll use these same building blocks every time you write a factory, DI container, or ORM that hand-constructs instances. A candidate who answers this without referring to `Object.create` and the return-value rule is junior.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### What `new Ctor(...args)` does (the 4-step spec, abridged)
-1. Create a brand-new empty object `obj`.
-2. Set `Object.getPrototypeOf(obj) = Ctor.prototype`. (So `obj instanceof Ctor` becomes true.)
-3. Call `Ctor.apply(obj, args)` — run the constructor body with `this = obj`. Any `this.x = ...` assignments now stick to `obj`.
-4. If the constructor *explicitly returned an object* (or function), return THAT. Otherwise return `obj`.
+`myNew(Ctor, ...args) ≡ new Ctor(...args)`. Replicate the 4-step `[[Construct]]` algorithm.
 
-That's it. `new` is literally those four steps. Nothing magical.
+**Verification examples**
 
-### Syntax to lock in
-```js
-function myNew(Ctor, ...args) {
-  if (typeof Ctor !== 'function') throw new TypeError('Ctor must be a function');
-  const obj = Object.create(Ctor.prototype);          // steps 1 + 2
-  const result = Ctor.apply(obj, args);                // step 3
-  return (result !== null && (typeof result === 'object' || typeof result === 'function'))
-    ? result                                           // step 4: object/function override
-    : obj;
-}
-```
-
-### Runtime / engine behavior
-- `Object.create(proto)` makes a new object with `proto` as its prototype, **without** invoking any constructor. Perfect for step 1+2 because we want to attach the chain *before* the constructor runs (so any `this instanceof Ctor` check inside the constructor returns `true`).
-- `Ctor.apply(obj, args)` runs the function body with `this = obj`. Strict-mode constructors that assign `this.x = ...` populate `obj`.
-- The "return value override" exists so you can implement factories that return a different object (e.g. singletons, frozen instances, proxies). Native `new` honors it; the polyfill must too.
-- **Primitive returns are ignored** — `return 42;` from inside a constructor is dropped; `obj` is returned. `null` is dropped too (because `typeof null === 'object'` but the spec explicitly excludes it).
-
-### Edge cases (interview traps)
-1. **Constructor returns an object → that object wins.** The classic "what does `new Foo()` return?" trap. `function F(){ this.x=1; return {y:2}; }; new F()` is `{y:2}`, NOT `{x:1}`.
-2. **Constructor returns a function → also wins** (functions are objects). Rare but spec-compliant.
-3. **Constructor returns `null` → ignored**, `obj` is returned. `null` is a "non-object" for this purpose.
-4. **Constructor returns a primitive → ignored.** `return 42` ⇒ `obj` returned.
-5. **Arrow function as Ctor → throws** `TypeError: X is not a constructor`. Arrows lack `[[Construct]]`. Your polyfill should reject (`Ctor.prototype === undefined` for arrows).
-6. **`class` constructors require `new`** — calling `MyClass()` without `new` throws. Your polyfill calls them with `apply`, which native engines treat as "not a `new` call" and throw. **Limitation worth mentioning.** Real implementation needs `Reflect.construct(Ctor, args)` for class support.
-7. **`Reflect.construct(Ctor, args, NewTarget)`** is the only way to fully replicate `new`, including subclass scenarios where `new.target` matters. Mention it.
-8. **`new.target`** inside the constructor is `Ctor` when called via `new`. Your `apply` polyfill leaves `new.target === undefined`. Caveat to flag.
-
-## Brute force approach
-"I'll just `return new Ctor(...args)`." That's not a polyfill — it's the operator you're trying to define. If the interviewer allows it (some do, jokingly), point out it doesn't teach anything.
-
-A second wrong path: `Object.create(Ctor)` instead of `Object.create(Ctor.prototype)`. That would make the new object's prototype the *constructor function* itself, not `Ctor.prototype`. Method lookup then walks into `Function.prototype` and fails to find instance methods.
-
-## Optimal approach
-Four lines mapping directly to the four spec steps. Use `Object.create(Ctor.prototype)` to wire the prototype before running the constructor body; use `apply` to bind `this`; check the constructor's return for object/function and honor it. For production-grade `class` support, swap `apply` for `Reflect.construct`.
-
-## Solution (JavaScript)
-
-```js
-/**
- * Polyfill the `new` operator.
- *
- *   myNew(Ctor, ...args)  ≡  new Ctor(...args)
- *
- * Steps (matching the ECMAScript [[Construct]] internal method):
- *   1. Create a fresh object whose prototype is Ctor.prototype.
- *   2. Invoke Ctor with `this = obj`, passing args.
- *   3. If Ctor explicitly returned an object/function, return THAT.
- *   4. Otherwise return obj.
- */
-function myNew(Ctor, ...args) {
-  if (typeof Ctor !== 'function' || !Ctor.prototype) {
-    // Arrow functions have no .prototype and aren't constructors.
-    throw new TypeError(`${Ctor?.name || 'value'} is not a constructor`);
-  }
-
-  // Steps 1 + 2: fresh object whose prototype chain starts at Ctor.prototype.
-  const obj = Object.create(Ctor.prototype);
-
-  // Step 3: run the constructor with our new object as `this`.
-  const result = Ctor.apply(obj, args);
-
-  // Step 4: constructor override rule.
-  // If the function explicitly returned an OBJECT (incl. function),
-  // that becomes the value of `new Ctor(...)`. Otherwise obj wins.
-  const overrode = result !== null && (typeof result === 'object' || typeof result === 'function');
-  return overrode ? result : obj;
-}
-
-/* ── Class-compatible version (bonus): handles `class` and `new.target` ──
-   Use this in production code; engines treat plain `apply` on a class
-   constructor as "not invoked with new" and throw.                       */
-function myNewSpecCompliant(Ctor, ...args) {
-  return Reflect.construct(Ctor, args);
-}
-```
-
-## Step-by-step dry run
-
-### Case 1 — normal constructor
 ```js
 function Person(first, last) {
   this.first = first;
@@ -105,87 +20,253 @@ function Person(first, last) {
 Person.prototype.full = function () { return `${this.first} ${this.last}`; };
 
 const p = myNew(Person, 'Ada', 'Lovelace');
+p.full();                                                                // 'Ada Lovelace'
+p instanceof Person;                                                     // true
 ```
-1. `Ctor = Person`, `args = ['Ada', 'Lovelace']`. Validation passes — `Person` is a function with a `.prototype`.
-2. `obj = Object.create(Person.prototype)` → a fresh object `{}` whose internal `[[Prototype]]` points to `Person.prototype`.
-3. `Person.apply(obj, ['Ada', 'Lovelace'])` runs the body with `this = obj`:
-   - `obj.first = 'Ada'`
-   - `obj.last = 'Lovelace'`
-   - Returns `undefined`.
-4. `result === undefined` → not an object → return `obj`.
-5. `p` is `{first:'Ada', last:'Lovelace'}` with `Person.prototype` as its proto. `p.full()` walks the chain → `'Ada Lovelace'`. `p instanceof Person` → `true`.
 
-### Case 2 — constructor returns an object (override rule)
+| Setup                                              | Behaviour                                              |
+|----------------------------------------------------|---------------------------------------------------------|
+| Normal constructor                                  | obj.[[Proto]] = Ctor.prototype; Ctor.apply(obj, args)  |
+| Constructor returns an object                       | that object wins (override rule)                       |
+| Constructor returns a primitive                     | ignored; obj returned                                  |
+| Constructor returns null                            | ignored; obj returned                                  |
+| Arrow function as Ctor                              | TypeError (no [[Construct]])                           |
+| Class constructor                                   | throws under `apply`; use `Reflect.construct` instead  |
+
+**Constraints**
+- 4 steps: create obj, wire prototype, apply, return-with-override.
+- Override rule: only objects/functions override; null/primitives don't.
+- `Object.create(Ctor.prototype)` — NOT `Object.create(Ctor)`.
+
+---
+
+## 2. Plain-English restatement
+
+`new Ctor(args)` does 4 things: (1) creates fresh object, (2) wires its prototype to `Ctor.prototype`, (3) calls `Ctor` with `this = obj`, (4) returns obj unless the constructor explicitly returned an object/function (then that wins).
+
+---
+
+## 3. Why this matters in interviews
+
+The definitive prototype-chain interview question. Tests `Object.create`, `apply`, return-value override rule, `Reflect.construct`.
+
+---
+
+## 4. Mental model
+
+```
+   `new Ctor(...args)` = [[Construct]] internal:
+   
+   Step 1. obj = {} (fresh object).
+   Step 2. obj.[[Prototype]] = Ctor.prototype.
+   Step 3. result = Ctor.apply(obj, args).
+   Step 4. if result is non-null object/function:
+              return result   ← OVERRIDE rule
+            else:
+              return obj
+   
+   Why Object.create(Ctor.prototype):
+   - Wire the chain BEFORE running constructor.
+   - Constructor body can do `this instanceof Ctor` check correctly.
+   
+   Override rule examples:
+     function F() { this.x=1; return {y:2}; }
+     new F() → {y:2}   ← override (object returned)
+   
+     function G() { this.x=1; return 42; }
+     new G() → {x:1}   ← primitive ignored, obj wins
+   
+     function H() { this.x=1; return null; }
+     new H() → {x:1}   ← null ignored (typeof null is 'object' but spec excludes)
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. What does `new (function(){ return [1,2]; })()` return?
+> 2. What does `new (function(){ this.x=1; return null; })()` return?
+> 3. Why doesn't `myNew` work with class constructors?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: `return new Ctor(...args)`
+Not a polyfill — uses the operator you're defining.
+
+### Wrong attempt 2: `Object.create(Ctor)` instead of `Object.create(Ctor.prototype)`
+Wrong target; methods don't resolve.
+
+### Wrong attempt 3: skip override rule
+Singletons / factories break.
+
+---
+
+## 7. The unlocking insight
+
+> **Four steps: `Object.create(Ctor.prototype)` → `Ctor.apply(obj, args)` → check return type → return override or obj. Override only for non-null object/function. For `class` support: `Reflect.construct(Ctor, args)`.**
+
+Three properties:
+
+1. **`Object.create(Ctor.prototype)`** wires the chain.
+2. **`apply` runs constructor** with `this = obj`.
+3. **Override rule** for objects/functions only.
+
+---
+
+## 8. Solution (annotated)
+
 ```js
+function myNew(Ctor, ...args) {
+  if (typeof Ctor !== 'function' || !Ctor.prototype) {
+    throw new TypeError(`${Ctor?.name || 'value'} is not a constructor`);
+  }
+
+  const obj = Object.create(Ctor.prototype);                            // step 1+2: create + wire proto
+  const result = Ctor.apply(obj, args);                                 // step 3: run constructor
+
+  const overrode = result !== null && (
+    typeof result === 'object' || typeof result === 'function'
+  );                                                                      // step 4: override check
+  return overrode ? result : obj;
+}
+
+// Class-compatible version (production)
+function myNewSpecCompliant(Ctor, ...args) {
+  return Reflect.construct(Ctor, args);
+}
+```
+
+**Try it yourself**
+
+```js
+// Normal constructor
+function Person(first, last) {
+  this.first = first;
+  this.last = last;
+}
+Person.prototype.full = function () { return `${this.first} ${this.last}`; };
+
+const p = myNew(Person, 'Ada', 'Lovelace');
+p.full();                                                                // 'Ada Lovelace'
+p instanceof Person;                                                     // true
+
+// Override rule — singleton pattern
 function Singleton() {
   this.greet = 'hi';
   return { iAmTheSingleton: true };
 }
 const s = myNew(Singleton);
-```
-1. `obj = Object.create(Singleton.prototype)`.
-2. `Singleton.apply(obj)` runs, sets `obj.greet = 'hi'`, returns `{iAmTheSingleton:true}`.
-3. `result` is a non-null object → override rule kicks in → return `{iAmTheSingleton:true}`.
-4. The `obj` we created (with `greet:'hi'`) is **garbage-collected**; `s.greet` is `undefined`. The returned object also does NOT have `Singleton.prototype` on its chain → `s instanceof Singleton === false`.
+s;                                                                       // { iAmTheSingleton: true } — override
+s.greet;                                                                 // undefined (obj garbage-collected)
 
-This is the entire reason factories like `Map`, `Promise`, and many singletons can short-circuit `new`.
-
-### Case 3 — constructor returns a primitive (ignored)
-```js
+// Primitive return ignored
 function Weird() { this.x = 1; return 42; }
 const w = myNew(Weird);
-```
-1. `obj` created with `Weird.prototype`.
-2. Body sets `obj.x = 1`, returns `42`.
-3. `typeof 42 === 'number'` → not object/function → override rule does NOT fire.
-4. Return `obj` ⇒ `w.x === 1`, `w instanceof Weird` true.
+w;                                                                       // { x: 1 } — primitive ignored
 
-### Case 4 — arrow function (rejected)
-```js
+// Arrow rejected
 const Arrow = () => {};
-myNew(Arrow);     // throws TypeError: Arrow is not a constructor
+try { myNew(Arrow); } catch (e) { e.message; }                          // 'Arrow is not a constructor'
 ```
-Validation guard caught it because `Arrow.prototype === undefined`.
 
-## Important takeaways
+---
 
-**Syntax to memorize**
-- The four-step skeleton: `Object.create(Ctor.prototype)` → `Ctor.apply(obj, args)` → check return type → return override or obj.
-- `result !== null && (typeof result === 'object' || typeof result === 'function')` — the exact "is it an object?" check the spec uses.
-- `Reflect.construct(Ctor, args)` — the modern, class-safe equivalent.
+## 9. Step-by-step dry run
 
-**Patterns to reuse**
-- Factories, DI containers, ORMs, IoC frameworks all need to construct instances dynamically. They all use either `new Ctor(...args)`, `Reflect.construct`, or the polyfill above.
-- The "return an object to override" rule is what makes immutable factories work (e.g. `class Point { constructor(){ return Object.freeze(this); } }`).
+```
+const p = myNew(Person, 'Ada', 'Lovelace'):
 
-**Common mistakes**
-- `Object.create(Ctor)` instead of `Object.create(Ctor.prototype)`. Now the chain points at the function, not the prototype object. Methods don't resolve.
-- Returning `obj` unconditionally — misses the override rule.
-- Forgetting the primitive/null filter in the override check — returning `null` is ignored by spec; you'd return `null` instead.
-- Using `new Ctor(...args)` inside the polyfill. Recursive and defeats the point.
-- Trying to polyfill `class` constructors with `apply` — throws "Class constructor cannot be invoked without 'new'". Use `Reflect.construct` for those.
+  Ctor = Person, args = ['Ada', 'Lovelace'].
+  typeof Ctor === 'function' ✓; Person.prototype exists ✓.
+  
+  Step 1+2: obj = Object.create(Person.prototype)
+    obj = {}; obj.[[Proto]] = Person.prototype.
+  
+  Step 3: Person.apply(obj, ['Ada', 'Lovelace'])
+    Run Person body with this = obj:
+      obj.first = 'Ada'
+      obj.last = 'Lovelace'
+    Implicit return undefined.
+    result = undefined.
+  
+  Step 4: typeof undefined === 'undefined' → not object/function.
+    overrode = false.
+    Return obj.
 
-**Why interviewers ask this**
-- It is the *most efficient* way to test the prototype chain, constructor semantics, and a non-obvious return-value rule in one short problem.
+p = { first: 'Ada', last: 'Lovelace' } with Person.prototype as proto.
 
-## Variants
+p.full():
+  Walk p chain → Person.prototype.full found.
+  Invoke with this=p → 'Ada Lovelace'.
 
-1. **Subclass-aware `new`** — `Reflect.construct(Ctor, args, NewTarget)` where `NewTarget` controls which `prototype` is used. Required for correct subclass instantiation. Mention `new.target`.
-2. **`class`-compatible `myNew`** — replace `Ctor.apply(obj, args)` with `Reflect.construct(Ctor, args)`. Show you know the limitation.
-3. **`Object.create` polyfill** — `function fakeCreate(p){ function F(){}; F.prototype=p; return new F(); }`. The original Crockford pattern.
-4. **Implement `instanceof`** — companion problem. Walk `Object.getPrototypeOf(obj)` until you hit `Ctor.prototype` or `null`.
-5. **Why does `new Date()` return a `Date` object but `Date()` returns a string?** Because `Date` checks `new.target`. Demonstrates `new.target`'s role.
+Override case:
+  myNew(Singleton):
+    obj = Object.create(Singleton.prototype).
+    Singleton.apply(obj, []):
+      obj.greet = 'hi'.
+      Return { iAmTheSingleton: true }.
+    result = {iAmTheSingleton: true} (object).
+    overrode = true.
+    Return result (NOT obj).
+  obj is garbage-collected.
+  s.greet is undefined.
+```
 
-## Revision notes
+---
 
-> **myNew — 60 second recap**
-> - Four spec steps: (1) make obj, (2) wire `obj.__proto__ = Ctor.prototype` via `Object.create(Ctor.prototype)`, (3) call `Ctor.apply(obj, args)`, (4) if return value is an object/function use it, else return obj.
-> - `Object.create(Ctor.prototype)` — NOT `Object.create(Ctor)`. Common slip.
-> - Return-value override: only fires for non-null **objects or functions**. `null`/primitives are ignored.
-> - Arrow functions have no `.prototype` → not constructable. Validate up front.
-> - `class` constructors throw under `apply` ("must be invoked with new"). Use `Reflect.construct(Ctor, args)` for class support.
-> - `Reflect.construct(Ctor, args, NewTarget)` is the full-spec way; supports subclass `new.target`.
-> - After `new`, `obj instanceof Ctor` is true because step 2 wired the chain.
-> - This is the foundation of *every* factory, DI container, and ORM in JS.
-> - **Trap:** returning `obj` unconditionally — breaks the singleton/factory override rule.
-> - **Trap:** `Object.create(Ctor)` — wrong target; instance methods stop resolving.
+## 10. Common confusion + traps
+
+1. **`Object.create(Ctor)`** — wrong target; use `Ctor.prototype`.
+2. **Return obj unconditionally** — breaks override rule.
+3. **Forget primitive/null filter** — would return primitives/null.
+4. **Recursive `new Ctor(...args)`** — defeats purpose.
+5. **Apply on class constructor** — "Class constructor cannot be invoked without 'new'"; use `Reflect.construct`.
+6. **Arrow function as Ctor** — no `[[Construct]]`; reject up-front.
+7. **`new.target`** undefined under polyfill; affects subclass behavior.
+
+---
+
+## 11. Senior follow-ups & variants
+
+### Variant 1 — Subclass-aware `new`
+`Reflect.construct(Ctor, args, NewTarget)` — controls `new.target`.
+
+### Variant 2 — `class`-compatible
+Replace `apply` with `Reflect.construct`.
+
+### Variant 3 — `Object.create` polyfill
+`function fakeCreate(p){ function F(){}; F.prototype=p; return new F(); }`.
+
+### Variant 4 — Implement `instanceof`
+Companion polyfill — walk chain looking for `Ctor.prototype`.
+
+### Variant 5 — `new Date()` vs `Date()`
+`Date` checks `new.target` — returns string without `new`, Date object with.
+
+---
+
+## 12. How to think aloud
+
+> "Four spec steps: (1) create fresh obj, (2) `obj.[[Prototype]] = Ctor.prototype` via `Object.create(Ctor.prototype)`, (3) `Ctor.apply(obj, args)` runs constructor body with `this=obj`, (4) if constructor returned a non-null object/function, return THAT (override rule); otherwise return obj. Override only for non-null object/function — null and primitives are ignored. This is how singletons, factories, and the immutable-instance pattern work. Limitations: arrow functions have no `.prototype` → can't be `new`'d; class constructors throw under `apply` ('must be invoked with new'). For full spec fidelity and class support: `Reflect.construct(Ctor, args, NewTarget)`. Trap: `Object.create(Ctor)` instead of `Object.create(Ctor.prototype)`; returning obj unconditionally (misses override); calling `apply` on class constructors."
+
+---
+
+## 13. 60-second revision
+
+> - **4 spec steps:** create obj → wire proto → apply → return-with-override.
+> - **`Object.create(Ctor.prototype)`** — NOT `Object.create(Ctor)`.
+> - **`Ctor.apply(obj, args)`** runs constructor with `this=obj`.
+> - **Override rule:** non-null object/function wins; null/primitive ignored.
+> - **Arrow** → no `[[Construct]]`; reject.
+> - **Class constructors** throw under apply; use `Reflect.construct`.
+> - **`Reflect.construct(Ctor, args, NewTarget)`** is spec-complete.
+> - **Trap:** Object.create(Ctor); unconditional obj return; class via apply.
+
+---
+
+**Related:** [polyfill-bind.md](./polyfill-bind.md) · [polyfill-call-apply.md](./polyfill-call-apply.md) · [prototype-chain-inheritance.md](./prototype-chain-inheritance.md) · [instanceof-polyfill.md](./instanceof-polyfill.md) · [reflect-construct-vs-new.md](./reflect-construct-vs-new.md)
+
+**Concept primer:** [`concepts/prototype.md`](../../concepts/prototype.md)

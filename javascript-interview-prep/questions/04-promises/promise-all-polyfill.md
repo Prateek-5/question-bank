@@ -1,182 +1,420 @@
-# Implement `Promise.all` polyfill
+# Implement `Promise.all(promises)` polyfill — fail-fast fan-out
 
-## Source
-- LeetCode #2724 "Execute Asynchronous Functions in Parallel": https://leetcode.com/problems/execute-asynchronous-functions-in-parallel/
-- Canonical interview problem — appears in Frontend Masters, BFE.dev, Greatfrontend, and every senior frontend/backend round.
+> **Difficulty:** Medium   |   **Time:** ~20 min   |   **Prereqs:** [build-promise-from-scratch.md](./build-promise-from-scratch.md), [`concepts/promises.md`](../../concepts/promises.md)
+>
+> **Source:** [LeetCode 2724 — Execute Asynchronous Functions in Parallel](https://leetcode.com/problems/execute-asynchronous-functions-in-parallel/); BFE.dev; every senior frontend/backend round.
 
-## Why this question matters in interviews
-Re-implementing `Promise.all` is the litmus test for whether you understand the promise state machine. Done right in ~15 lines, it demonstrates: (1) the `Promise` constructor and resolve/reject closure, (2) handling **non-thenables** by wrapping with `Promise.resolve`, (3) preserving **input order** in the results array via the index closure, (4) **fail-fast** behavior — first rejection rejects the outer promise and subsequent settlements are no-ops, (5) the empty-array edge case (resolve immediately with `[]`). Get any of those wrong and the interviewer marks you as "knows the API, doesn't understand the model."
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+**Signature**
+```ts
+function promiseAll<T>(promises: Array<T | PromiseLike<T>>): Promise<T[]>;
+```
+
+**Input / Output examples**
+
+| Input                                                            | Output                                                |
+|------------------------------------------------------------------|--------------------------------------------------------|
+| `promiseAll([sleep(40,'a'), 'b', sleep(20,'c')])`                | resolves with `['a', 'b', 'c']` (input order!) at t≈40 |
+| `promiseAll([sleep(40,'a'), Promise.reject('boom'), sleep(20,'c')])` | rejects with `'boom'` (first reject wins; 'a' and 'c' still run, results discarded) |
+| `promiseAll([])`                                                  | resolves with `[]` **immediately**                     |
+| `promiseAll([Promise.resolve(1), 2, Promise.resolve(3)])`         | resolves with `[1, 2, 3]`                              |
+| `promiseAll([{then(r){r(42)}}])`                                  | resolves with `[42]` (custom thenable wrapped)         |
+
+**Constraints**
+- Resolves with **input-order** array when **all** inputs fulfill.
+- Rejects with the **first** rejection (fail-fast); siblings keep running but their results are discarded.
+- **Empty array → resolve with `[]` immediately.** Otherwise outer hangs forever.
+- Non-promise values pass through via `Promise.resolve` wrap.
+
+---
+
+## 2. Plain-English restatement
+
+Fan out N tasks in parallel. Wait for all to finish; return their results in the same order you passed them in. If any one rejects, reject the whole thing with that error — but the other tasks are *not* cancelled, they just run to completion and their results are silently dropped. Empty array gets `[]` back instantly.
+
+The most-asked promise polyfill in interviews. In ~15 lines you demonstrate the entire async fan-out idiom: outer promise + per-input `.then` + index-based results + remaining counter.
+
+---
+
+## 3. Why this matters in interviews
+
+Re-implementing `Promise.all` is the litmus test for whether you understand the promise state machine. Done right in ~15 lines, it demonstrates: (1) the Promise constructor and resolve/reject closure, (2) handling **non-thenables** by wrapping with `Promise.resolve`, (3) preserving **input order** via the index closure, (4) **fail-fast** — first rejection rejects the outer; subsequent settlements are silent no-ops thanks to the state machine, (5) the empty-array edge case. Get any wrong and the interviewer marks you as "knows the API, doesn't understand the model."
+
+---
+
+## 4. Mental model
+
+The outer Promise distributes its `resolve` and `reject` to N inner promises. Each inner promise's `.then(onFulfill, onReject)` writes into a shared results array at its assigned index. A remaining counter ticks down; when it hits zero, `resolve(results)` fires. Any rejection invokes the outer's `reject` directly — first one wins thanks to the state machine.
+
+```
+   new Promise((resolve, reject) => {
+     const results = new Array(N);
+     let remaining = N;
+     
+     promises.forEach((p, i) => {
+       Promise.resolve(p).then(
+         (v) => { results[i] = v; if (--remaining === 0) resolve(results); },
+         (err) => reject(err),     // fail-fast — first reject wins
+       );
+     });
+   });
+   
+   N tasks fire in parallel.
+   Each writes to results[i] on success.
+   Counter hits 0 → resolve.
+   Any reject → outer rejects; subsequent settle calls are silent no-ops.
+```
+
+**Compared to siblings:**
+
+| Combinator     | Settles when                              | Output                                        |
+|----------------|--------------------------------------------|------------------------------------------------|
+| **`all`**      | **all fulfill OR one rejects**             | array of values OR first rejection            |
+| `allSettled`   | all settle                                 | array of `{status, value/reason}`              |
+| `race`         | first settle (either)                      | first value OR first reason                   |
+| `any`          | first fulfillment OR all rejected          | first value OR `AggregateError`               |
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. What does `promiseAll([])` return — `[]`, `undefined`, or a pending promise?
+> 2. If task #1 rejects at t=10 and task #2 fulfills at t=100, what state is the outer in at t=50? At t=200?
+> 3. Why is `--remaining === 0` race-free in JavaScript without a lock?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: sequential `await`
+
+```js
+async function bruteAll(promises) {
+  const results = [];
+  for (const p of promises) results.push(await p);
+  return results;
+}
+```
+
+**Wrong** — this serializes the work. A 10-task workload would take the *sum* of latencies instead of the *max*. Defeats the entire point of `Promise.all`. Mention only to dismiss.
+
+### Wrong attempt 2: forget the empty-array case
+
 ```js
 function promiseAll(promises) {
   return new Promise((resolve, reject) => {
     const results = new Array(promises.length);
     let remaining = promises.length;
-    if (remaining === 0) return resolve([]);
+    // (no empty check)
     promises.forEach((p, i) => {
       Promise.resolve(p).then(
-        (value) => {
-          results[i] = value;
-          if (--remaining === 0) resolve(results);
-        },
-        reject // fail-fast
+        (v) => { results[i] = v; if (--remaining === 0) resolve(results); },
+        reject
       );
     });
   });
 }
+promiseAll([]);   // BUG: outer pending forever (counter never decrements)
 ```
 
-### Runtime / engine behavior
-- The outer promise's `resolve`/`reject` are closed over by every per-promise `.then`. The promise state machine guarantees **at most one** transition — subsequent `resolve`/`reject` calls are no-ops. This is what makes fail-fast safe even though losing promises keep settling.
-- `Promise.resolve(p)` is the official way to coerce a value (number, thenable, native Promise) into a real Promise. If `p` is already a Promise, it's returned as-is (no extra wrapping).
-- The `.then` callbacks run as **microtasks**. Even if every input is `Promise.resolve(x)`, the outer promise resolves at least one microtask later — not synchronously.
-- `--remaining === 0` is race-free because JS is single-threaded — no two `.then` callbacks run concurrently.
+`promises.length === 0` means the loop doesn't execute → no `.then` callbacks ever run → counter stays at 0 → `resolve` never fires. Always handle this case: `if (n === 0) return resolve([]);`.
 
-### Edge cases (interview traps)
-1. **Empty array** — must resolve with `[]` immediately. Forgetting this leaves the outer promise pending forever (because `remaining` never decrements).
-2. **Non-thenable values** — `Promise.all([1, 2, 3])` resolves with `[1, 2, 3]`. The polyfill must wrap each entry in `Promise.resolve` to handle this uniformly.
-3. **Custom thenables** — `Promise.resolve({ then(r){ r(42); } })` adopts the thenable. The polyfill inherits this for free by using `Promise.resolve(p).then(...)`.
-4. **Input order preserved** — results must be in the **input** order, not the **resolution** order. Use `i` from the closure, not a push counter.
-5. **Fail-fast** — first rejection rejects the outer promise immediately. Later resolutions/rejections are silently dropped. **Other promises keep running** — they are not cancelled (mirrors native behaviour).
-6. **Duplicate entries** — `promiseAll([p, p])` works; each gets its own `.then` and writes to its own index. Same underlying promise, two results positions.
-7. **Synchronous throw in a thenable's `then`** — `Promise.resolve(thenable).then` handles it via the Promise spec; the outer rejects with the thrown value.
-8. **Iterable (not array) input** — native `Promise.all` accepts any iterable. Polyfill above only accepts arrays unless you spread (`[...promises]`). Mention this gap.
-9. **Mutation during iteration** — if `promises` is mutated mid-loop, native `Promise.all` uses the iterator snapshot. Polyfill uses array length; close enough for interview.
-
-## Brute force approach
-Loop sequentially: `for (const p of promises) { results.push(await p); }`. **Wrong** — this serializes the promises, defeating the entire point of `Promise.all`. A 10-task workload would take the *sum* of latencies instead of the *max*. Mention only to dismiss.
-
-## Optimal approach
-Fan out all promises at once. Each writes its result to `results[i]` on fulfillment. A shared `remaining` counter triggers `resolve(results)` when it hits zero. The outer `reject` is passed directly as each `.then`'s rejection handler — first reject wins, subsequent ones are no-ops thanks to the promise state machine.
-
-## Solution (JavaScript)
+### Wrong attempt 3: push to results instead of indexing
 
 ```js
-/**
- * Polyfill of Promise.all.
- * - Resolves with an array of values in INPUT order when all input promises fulfill.
- * - Rejects with the first rejection reason (fail-fast). Other promises keep running.
- * - Empty array resolves with [] immediately.
- * - Non-promise values are passed through (wrapped via Promise.resolve).
- *
- * @template T
- * @param {Array<T | PromiseLike<T>>} promises
- * @returns {Promise<T[]>}
- */
+promises.forEach((p, i) => {
+  Promise.resolve(p).then((v) => {
+    results.push(v);                            // BUG: order = completion order, not input order
+    if (results.length === promises.length) resolve(results);
+  });
+});
+```
+
+Two bugs. (1) Order is now non-deterministic — `[c, b, a]` if `c` finished first. (2) Using `results.length === promises.length` as the completion check fails for sparse arrays (e.g., if you pre-allocated with `new Array(n)`, the indices are "holes" and `length` already equals `n`). Always use `results[i] = v` and a separate counter.
+
+### Wrong attempt 4: forget `Promise.resolve` wrap
+
+```js
+promises.forEach((p, i) => {
+  p.then(...);     // BUG: throws if p is not a Promise
+});
+promiseAll([1, 2, 3]);   // TypeError: p.then is not a function
+```
+
+Non-promise values can be in the input. `Promise.resolve(p)` coerces them (and thenables) into real promises uniformly.
+
+---
+
+## 7. The unlocking insight
+
+> **Outer Promise distributes its `resolve`/`reject` to N inner `.then` calls. Each inner writes to `results[i]` (index-keyed, input-order). A `remaining` counter decrements on each fulfillment; when it hits 0, `resolve(results)`. Any rejection invokes the outer's `reject` directly — first one wins thanks to the state machine, no `settled` flag needed.**
+
+Five mechanics:
+
+1. **Empty array → `resolve([])` immediately.** First check. Without this, the counter never hits zero and the outer hangs forever.
+
+2. **`Promise.resolve(p)` wraps non-promises and thenables.** Lets you treat all inputs uniformly. `Promise.resolve(5)` is a pre-fulfilled promise; its `.then` fires on the next microtask. Native promises pass through unchanged. Thenables (`{then(r){...}}`) are adopted.
+
+3. **Index-keyed results.** `results[i] = v` preserves input order regardless of completion order. The closure captures `i` per iteration.
+
+4. **`--remaining === 0` is race-free** because JS is single-threaded. No two `.then` callbacks run concurrently; the decrement-and-check is a single atomic statement. **State this aloud — senior signal.**
+
+5. **State machine handles "first reject wins."** The outer Promise can transition only once. After `reject(err)` is called, subsequent `resolve(results)` calls are silent no-ops. No `settled` flag needed.
+
+**Siblings keep running.** `Promise.all` does NOT cancel the other tasks when one rejects. Their underlying work — HTTP requests, DB queries, file reads — runs to completion. The results are just discarded. For real cancellation, wrap inputs with `AbortController`.
+
+---
+
+## 8. Solution (annotated)
+
+```js
 function promiseAll(promises) {
   return new Promise((resolve, reject) => {
-    if (!Array.isArray(promises)) {
+    if (!Array.isArray(promises)) {                              // step 1: validate input shape
       return reject(new TypeError('promiseAll expects an array'));
     }
     const n = promises.length;
-    if (n === 0) return resolve([]);
+    if (n === 0) return resolve([]);                              // step 2: empty array edge case
 
-    const results = new Array(n);
-    let remaining = n;
+    const results = new Array(n);                                 // step 3: pre-allocate, index-keyed
+    let remaining = n;                                            // step 4: counter
 
     for (let i = 0; i < n; i++) {
-      // Promise.resolve handles: native Promise, thenable, plain value, sync throw inside thenable.then
-      Promise.resolve(promises[i]).then(
-        (value) => {
-          results[i] = value;
-          // Once remaining hits 0, fire. Subsequent calls (none, in practice) would be no-ops anyway.
-          if (--remaining === 0) resolve(results);
+      Promise.resolve(promises[i]).then(                          // step 5: wrap with Promise.resolve
+        (value) => {                                                //         (handles non-thenables + thenables)
+          results[i] = value;                                       //         write at INPUT INDEX, not push
+          if (--remaining === 0) resolve(results);                 // step 6: counter race-free in single-thread JS
         },
-        (reason) => {
-          // First rejection rejects the outer; subsequent settlements no-op via state machine.
-          reject(reason);
+        (reason) => {                                              // step 7: fail-fast
+          reject(reason);                                           //         state machine ensures one-settle
         }
       );
     }
   });
 }
 
-// ----- LeetCode signature: input is array of () => Promise -----
+// LeetCode signature: input is Array<() => Promise>
 function promiseAllLC(functions) {
-  return promiseAll(functions.map((f) => {
-    try { return f(); } catch (e) { return Promise.reject(e); }
-  }));
+  return promiseAll(
+    functions.map((f) => {
+      try { return f(); } catch (e) { return Promise.reject(e); }
+    })
+  );
 }
 ```
 
-## Step-by-step dry run
+**Try it yourself**
+
+```js
+const sleep = (ms, v) => new Promise((r) => setTimeout(() => r(v), ms));
+
+await promiseAll([sleep(40, 'a'), 'b', sleep(20, 'c')]);
+// ['a', 'b', 'c']  (input order, NOT [c, b, a])
+
+await promiseAll([]);
+// []  (resolves immediately)
+
+try {
+  await promiseAll([sleep(40, 'a'), Promise.reject('boom'), sleep(20, 'c')]);
+} catch (e) {
+  console.log(e);   // 'boom' — 'a' and 'c' still ran, results discarded
+}
+
+await promiseAll([Promise.resolve(1), 2, Promise.resolve(3)]);
+// [1, 2, 3]  (non-promises coerced)
+```
+
+---
+
+## 9. Step-by-step dry run
 
 Input:
+
 ```js
 const sleep = (ms, v) => new Promise((r) => setTimeout(() => r(v), ms));
 promiseAll([sleep(40, 'a'), 'b', sleep(20, 'c')]).then(console.log);
 ```
 
-Trace:
-- `t=0`: Outer Promise constructed. `n=3`, `results=[empty,empty,empty]`, `remaining=3`.
-- Loop iteration `i=0`: `Promise.resolve(sleep(40,'a'))` returns the original sleep promise. `.then` registers callbacks; pending.
-- Loop `i=1`: `Promise.resolve('b')` returns a fulfilled promise with value `'b'`. `.then` schedules its fulfillment callback as a microtask.
-- Loop `i=2`: `Promise.resolve(sleep(20,'c'))` registers `.then`. Pending.
-- Microtask drain: callback for `'b'` runs → `results[1]='b'`, `remaining=2`.
-- `t=20`: timer fires → `sleep(20,'c')` resolves. Microtask: `results[2]='c'`, `remaining=1`.
-- `t=40`: timer fires → `sleep(40,'a')` resolves. Microtask: `results[0]='a'`, `remaining=0` → `resolve(['a','b','c'])`.
-- `.then(console.log)` microtask → prints `['a','b','c']`.
+Values-first trace (fulfillment path):
+
+| Time (ms) | Event                                                | `results`         | `remaining` |
+|-----------|------------------------------------------------------|--------------------|-------------|
+| 0         | outer constructed; loop registers 3 `.then` handlers | `[_, _, _]`        | 3           |
+| 0+µ       | `'b'` already fulfilled (Promise.resolve), microtask | `[_, 'b', _]`      | 2           |
+| 20        | `sleep(20, 'c')` fulfills                            | `[_, 'b', 'c']`    | 1           |
+| 40        | `sleep(40, 'a')` fulfills                            | `['a', 'b', 'c']`  | 0 → resolve |
+| 40+µ      | outer's `.then(console.log)` fires                   |                    |             |
+
+Output: `['a', 'b', 'c']` at t≈40. **Input order**, not completion order.
 
 Rejection trace:
+
 ```js
 promiseAll([sleep(40, 'a'), Promise.reject(new Error('boom')), sleep(20, 'c')])
-  .catch(e => console.log(e.message));
+  .catch((e) => console.log(e.message));
 ```
-- `i=0`: pending. `i=1`: `Promise.resolve(rejectedP)` returns the same rejected promise. `.then` schedules rejection handler. `i=2`: pending.
-- Microtask drain: rejection callback for index 1 runs → `reject(Error('boom'))`. Outer rejects.
-- `t=20`: 'c' fulfills → results[2]='c', remaining=2. But the outer is already rejected — `--remaining === 0` will never be checked since it doesn't matter; even if it were, `resolve` after `reject` is a no-op.
-- `t=40`: 'a' fulfills similarly. No-op.
-- `.catch` microtask → prints `'boom'`.
 
-Note: the 'a' and 'c' work happens anyway — `Promise.all` does **not** cancel siblings. If those were HTTP requests, the responses arrive and are ignored.
+| Time | Event                                       | Outer state         | Output |
+|------|----------------------------------------------|----------------------|---------|
+| 0    | 3 `.then` handlers registered                 | PENDING              | —       |
+| 0+µ  | `Promise.reject(...)` already rejected; rejection handler fires | PENDING → REJECTED   | (queue cb) |
+| 0+2µ | outer's `.catch` microtask                    | REJECTED             | `boom`  |
+| 20   | `sleep(20, 'c')` fulfills; `results[2]='c'`; decrement to 1 but no resolve | REJECTED (locked) | (no-op) |
+| 40   | `sleep(40, 'a')` fulfills; `results[0]='a'`; decrement to 0 but no resolve | REJECTED | (no-op) |
 
-## Important takeaways
+The 'a' and 'c' work happens — `Promise.all` does NOT cancel siblings. If those were HTTP requests, the responses arrive (using bandwidth) and are ignored.
 
-**Syntax to memorize**
-- `new Promise((resolve, reject) => { ... })` outer.
-- `Promise.resolve(promises[i]).then(onFulfilled, onRejected)` — handles all input types.
-- Empty array → `resolve([])` early.
-- `if (--remaining === 0) resolve(results);` — the counter pattern.
+---
 
-**Patterns to reuse**
-- The "outer promise + N inner `.then`s writing to a results array by index + counter" pattern is exactly what `Promise.allSettled` uses (with different per-entry mapping) and what `asyncPool` collects results with.
-- "Promise state machine guarantees one transition" is the same insight that makes `once(fn)` and idempotent resolvers work.
+## 10. Common confusion + traps
 
-**Common mistakes**
-- Pushing into `results` instead of `results[i] = value` — destroys input order.
-- Awaiting in a `for` loop — serializes the work.
-- Forgetting the empty-array case — outer hangs forever.
-- Not wrapping with `Promise.resolve` — breaks on non-promise inputs.
-- Using `results.length === promises.length` as completion check — fails because `results[i] = undefined` doesn't increment length on sparse arrays.
+1. **`await` in a `for` loop** — serializes the work. Defeats `Promise.all`'s purpose entirely.
 
-**Related questions**
-- `Promise.race` polyfill (next file).
-- `Promise.allSettled` polyfill (next-next).
-- `Promise.any` polyfill — resolves with first fulfillment; rejects with `AggregateError` only if **all** reject.
+2. **`results.push(v)` instead of `results[i] = v`** — destroys input order.
 
-## Variants
+3. **Empty array hangs forever.** Always `if (n === 0) return resolve([])` first.
 
-1. **`Promise.any` polyfill** — resolves on first fulfillment; rejects with `AggregateError([reasons])` only if every input rejects. Mirror image of `Promise.all`.
+4. **Forgetting `Promise.resolve` wrap** — breaks for non-promise inputs (literal numbers, strings, thenables).
 
-2. **Iterable input** — replace `for (let i=0...)` with a `for...of` and a manual index counter, or `Array.from(iter)` upfront. Native `Promise.all` accepts iterables.
+5. **Using `results.length === promises.length` as completion check** — fails when results array was pre-allocated (sparse). Use a separate counter.
 
-3. **Concurrency-limited `Promise.all`** — combine with the asyncPool pattern: cap in-flight to N. Useful when fanning out to a rate-limited API.
+6. **Trying to cancel siblings on reject** — `Promise.all` doesn't. For cancellation, you need `AbortController` integration on the inputs themselves.
 
-4. **Object form** — `promiseAllObject({ a: p1, b: p2 })` resolves to `{ a: v1, b: v2 }`. Trivial extension; very nice in practice.
+7. **Iterable vs array** — native `Promise.all` accepts any iterable. Polyfill above accepts only arrays. Mention the gap; fix with `Array.from(iterable)`.
 
-## Revision notes
+8. **Mutating `promises` during iteration** — native uses an iterator snapshot. Polyfill uses array length at call time; behavior is similar but not identical. Edge case rarely matters.
 
-> **Promise.all polyfill — 60 second recap**
-> - Outer `new Promise((resolve, reject) => ...)`.
-> - For each input: `Promise.resolve(p).then(v => { results[i] = v; if (--remaining===0) resolve(results); }, reject);`.
-> - **Empty array** → `resolve([])` immediately (else hangs).
-> - Wrap each input in `Promise.resolve` — handles plain values, thenables, native promises.
-> - Preserve input order via `results[i]` (closure-captured index).
-> - **Fail-fast**: first reject rejects the outer; siblings keep running but their results are discarded.
-> - Promise state machine guarantees one settle — subsequent resolve/reject calls are no-ops.
-> - `--remaining === 0` is race-free (single-threaded JS).
-> - Family: `allSettled` (same skeleton, per-entry wrapping), `race` (first settle wins), `any` (first fulfillment wins).
-> - **Trap:** pushing into results instead of indexing → wrong order. Forgetting empty case → infinite hang.
+9. **Synchronous throw in a thenable's `then` method** — handled correctly because `Promise.resolve(thenable).then(...)` catches the throw and routes it to the rejection handler.
+
+10. **Duplicate entries** — `promiseAll([p, p])` works; each `.then` is independent, each writes to its own index. Same promise, two result positions.
+
+---
+
+## 11. Senior follow-ups & variants
+
+### Variant 1 — `Promise.allSettled` (never rejects)
+
+Wrap each input's outcome in a descriptor:
+
+```js
+function promiseAllSettled(promises) {
+  return promiseAll(
+    promises.map((p) =>
+      Promise.resolve(p).then(
+        (value) => ({ status: 'fulfilled', value }),
+        (reason) => ({ status: 'rejected', reason })
+      )
+    )
+  );
+}
+```
+
+Elegant composition: every input maps to a guaranteed-fulfilled descriptor, then `all` over them. See [promise-allsettled-polyfill.md](./promise-allsettled-polyfill.md).
+
+### Variant 2 — `Promise.any` (first fulfillment wins)
+
+Mirror image: count *rejections*, resolve on first fulfillment:
+
+```js
+function promiseAny(promises) {
+  return new Promise((resolve, reject) => {
+    const arr = Array.from(promises);
+    if (arr.length === 0) return reject(new AggregateError([], 'All rejected'));
+    const errors = new Array(arr.length);
+    let pending = arr.length;
+    arr.forEach((p, i) => {
+      Promise.resolve(p).then(resolve, (e) => {
+        errors[i] = e;
+        if (--pending === 0) reject(new AggregateError(errors, 'All rejected'));
+      });
+    });
+  });
+}
+```
+
+See [promise-any-polyfill.md](./promise-any-polyfill.md).
+
+### Variant 3 — Object form (named results)
+
+`promiseAllObject({ a: p1, b: p2 })` resolves to `{ a: v1, b: v2 }`. Trivial extension; very nice in practice:
+
+```js
+async function promiseAllObject(obj) {
+  const keys = Object.keys(obj);
+  const values = await promiseAll(keys.map((k) => obj[k]));
+  return Object.fromEntries(keys.map((k, i) => [k, values[i]]));
+}
+```
+
+### Variant 4 — Iterable input (mirror native)
+
+```js
+function promiseAll(iterable) {
+  return new Promise((resolve, reject) => {
+    const arr = Array.from(iterable);
+    if (arr.length === 0) return resolve([]);
+    const results = new Array(arr.length);
+    let remaining = arr.length;
+    arr.forEach((p, i) => {
+      Promise.resolve(p).then(
+        (v) => { results[i] = v; if (--remaining === 0) resolve(results); },
+        reject
+      );
+    });
+  });
+}
+```
+
+`Array.from(iterable)` materializes any iterable upfront. Cleaner than dual-mode handling.
+
+### Variant 5 — `Promise.all` with concurrency limit
+
+Combine with `asyncPool` (see [promise-pool.md](./promise-pool.md)) for "fan out to a rate-limited API." `Promise.all` runs all in parallel; `asyncPool` bounds in-flight count.
+
+### Variant 6 — Composed cancellation
+
+For real cancellation of siblings when one rejects:
+
+```js
+async function promiseAllCancelable(promiseFactories) {
+  const ac = new AbortController();
+  try {
+    return await promiseAll(promiseFactories.map((f) => f(ac.signal)));
+  } catch (err) {
+    ac.abort();
+    throw err;
+  }
+}
+```
+
+Each input is now a factory `(signal) => Promise`. On rejection, abort the signal — all siblings can cancel their work if they honor it.
+
+---
+
+## 12. How to think aloud in the interview
+
+> "Outer `new Promise((resolve, reject) => ...)`. Pre-allocate `results = new Array(n)` and `remaining = n`. Empty array → `resolve([])` immediately, otherwise the counter never hits zero. Loop: `Promise.resolve(promises[i]).then(value => { results[i] = value; if (--remaining === 0) resolve(results); }, reject);`. Use the index `i` from the closure to preserve input order — never push. `Promise.resolve` wraps non-promises and thenables uniformly. Fail-fast: pass `reject` as the second `.then` handler — first rejection wins; the state machine ensures subsequent calls are no-ops. JS is single-threaded so `--remaining` is race-free. Siblings keep running on rejection — for true cancellation, combine with AbortController."
+
+---
+
+## 13. 60-second revision
+
+> - **Pattern:** outer Promise + per-input `.then(onFulfill, reject)` + index-keyed results + remaining counter.
+> - **Empty array → `resolve([])` immediately.** Or it hangs.
+> - **Index-keyed results** (`results[i] = v`), not `push` — preserves input order.
+> - **`Promise.resolve(p)`** to coerce non-promises and thenables.
+> - **Fail-fast:** pass `reject` directly; state machine handles first-wins.
+> - **JS single-thread** makes `--remaining` race-free — no lock needed.
+> - **Siblings keep running on reject** — not cancelled. Wrap with AbortController for that.
+> - **Family:** `all` (fail-fast), `allSettled` (wait-all, never reject), `race` (first either), `any` (first fulfillment).
+> - **Trap:** `await` in loop (sequential); `push` instead of index; missing empty case; no `Promise.resolve` wrap.
+
+---
+
+**Related:** [promise-race-polyfill.md](./promise-race-polyfill.md) · [promise-allsettled-polyfill.md](./promise-allsettled-polyfill.md) · [promise-any-polyfill.md](./promise-any-polyfill.md) · [promise-pool.md](./promise-pool.md) · [build-promise-from-scratch.md](./build-promise-from-scratch.md)
+
+**Concept primer:** [`concepts/promises.md`](../../concepts/promises.md)

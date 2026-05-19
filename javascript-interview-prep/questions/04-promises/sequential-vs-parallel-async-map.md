@@ -1,61 +1,160 @@
-# `asyncMap` — sequential vs parallel implementations
+# `asyncMap` — sequential vs parallel vs bounded-parallel
 
-## Source
-- Bread-and-butter senior backend interview question — every Node.js role tests it.
-- Real bug source: misusing `for...of await` when parallel is meant, or `Promise.all` when sequential is required.
-- Variants on BFE.dev and the Effective TypeScript section on `Promise.all`.
+> **Difficulty:** Easy-Medium   |   **Time:** ~10 min   |   **Prereqs:** [promise-all-polyfill.md](./promise-all-polyfill.md), [promise-pool.md](./promise-pool.md)
+>
+> **Source:** Bread-and-butter senior backend interview question.
 
-## Why this question matters in interviews
+---
+
+## 1. Problem statement
+
+**Signatures**
+```ts
+function asyncMapSeq<T, U>(arr: T[], fn: (x: T, i: number) => Promise<U>): Promise<U[]>;
+function asyncMapPar<T, U>(arr: T[], fn: (x: T, i: number) => Promise<U>): Promise<U[]>;
+function asyncMapBounded<T, U>(arr: T[], fn: (x: T, i: number) => Promise<U>, concurrency: number): Promise<U[]>;
+```
+
+**Input / Output examples**
+
+| Setup                                                    | Sequential time | Parallel time | Bounded(2) time |
+|----------------------------------------------------------|------------------|---------------|------------------|
+| Three items, latencies [100, 50, 200]                    | ~350 ms (Σ)      | ~200 ms (max) | ~250 ms          |
+| `forEach(async fn)`                                       | **doesn't await — returns undefined** | n/a | n/a |
+| Order of results                                          | input order      | input order   | input order      |
+| One rejects                                              | aborts at throw  | fail-fast     | fail-fast        |
+
+**Constraints**
+- All three preserve **input order** in results.
+- Sequential: total time = sum of latencies.
+- Parallel: total time = max latency; memory = O(N) pending promises.
+- Bounded: total time bounded by `ceil(N/k) × per-item-max`; memory = O(k).
+- `forEach(async fn)` is **broken** — `forEach` doesn't await.
+
+---
+
+## 2. Plain-English restatement
+
+You have an array of items and an async function to apply to each. There are three valid implementations: **sequential** (wait for each before starting the next), **parallel** (fire all at once, await all), and **bounded parallel** (fire `k` at a time). The interview is testing which one you reach for by default — and whether you know that `forEach(async fn)` is broken.
+
+---
+
+## 3. Why this matters in interviews
+
 This question is a **trap** that interviewers use to separate juniors from seniors. Juniors write `arr.forEach(async ...)` and don't notice it doesn't await. Mids write `for (const x of arr) await fn(x)` everywhere — correct, but unnecessarily slow. Seniors **pick the right pattern based on constraints**: sequential when calls have ordering or rate-limit dependencies, parallel when they're independent, bounded-parallel when memory or downstream load is a concern. The discussion of *which* to use is more important than the code itself.
 
-## Concepts involved
+---
 
-### Syntax to lock in
+## 4. Mental model
+
+```
+   Sequential — wait for each before next
+   ──────────────────────────────────────
+   t=0 ▶ fn(a) ─── awaits ────▶ result a
+                                   ▶ fn(b) ─── awaits ──▶ result b
+                                                            ▶ fn(c)
+   total time = Σ latencies
+
+   Parallel — fire all, await all
+   ──────────────────────────────
+   t=0 ▶ fn(a), fn(b), fn(c)   (all running)
+                                    └▶ Promise.all
+   total time = max(latency)
+   memory: O(N) pending promises
+
+   Bounded parallel — k workers, shared cursor
+   ───────────────────────────────────────────
+   t=0 ▶ worker 1: fn(a) → fn(c) → ...
+        ▶ worker 2: fn(b) → fn(d) → ...
+   total time ≈ ceil(N/k) × per-item
+   memory: O(k)
+```
+
+**Default mental discipline:** parallel when items are independent; sequential when ordering matters or downstream is rate-limited; bounded when N is large.
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. `await arr.forEach(async (x) => await fn(x))` — does this wait for the async work? What does it return?
+> 2. If your downstream API allows 5 concurrent connections, what shape do you reach for?
+> 3. With latencies `[100, 50, 200]`, what's the wall time for each variant?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: `arr.forEach(async fn)`
+
 ```js
-// SEQUENTIAL — wait for each before next
-async function asyncMapSeq(arr, fn) {
+async function asyncMap(arr, fn) {
   const out = [];
-  for (const item of arr) {
-    out.push(await fn(item));
-  }
-  return out;
-}
-
-// PARALLEL — fire all, await all
-async function asyncMapPar(arr, fn) {
-  return Promise.all(arr.map(fn));
+  arr.forEach(async (item) => {
+    out.push(await fn(item));    // BUG: forEach doesn't await
+  });
+  return out;                    // BUG: returns empty array immediately
 }
 ```
 
-### Runtime / engine behavior
-- **Sequential**: each `await` yields control to the event loop, but the next iteration only starts after the current promise settles. Total time ≈ sum of latencies.
-- **Parallel**: `arr.map(fn)` fires all `fn(item)` calls immediately, creating N pending promises. `Promise.all` aggregates. Total time ≈ max of latencies.
-- **`forEach(async ...)` is the bug** — `forEach` doesn't await the async callbacks; the outer function returns before any of them complete. Returns `undefined` regardless.
-- Parallel allocates **all N promise objects at once** — if N is huge (e.g., 100k DB rows), this can OOM or hammer the downstream.
+**Classic junior bug.** `forEach` doesn't await its callbacks; the outer function returns *before* any of them complete. `out` is empty (or partially filled, depending on timing). Even if you call `forEach((x, i) => out[i] = await fn(x))`, you've created N detached promises with no synchronization. Use `for...of` or `Promise.all + .map`.
 
-### Edge cases (interview traps)
-1. **Order preservation** — both versions preserve input order. `Promise.all` resolves with results indexed by input position.
-2. **Fail-fast** — `Promise.all` rejects on the first rejection. Sequential aborts at the first throw (the `await` re-throws). For "best effort", use `Promise.allSettled`.
-3. **Memory pressure** — parallel loads all results in memory simultaneously. Sequential lets each result be discarded if not retained.
-4. **Rate limits / connection pools** — parallel fires N HTTP requests at once; you'll exhaust the keep-alive pool or trip API rate limits. Use **bounded parallel** (concurrency limit).
-5. **Side effects** — sequential guarantees ordering of side effects (writes to a file in order). Parallel does not.
-6. **Errors mid-batch** — sequential stops; parallel keeps running pending tasks but won't return their results. For cleanup, attach `.catch` to each or use `allSettled`.
-7. **`forEach` returning `undefined`** — common bug. Use `for...of` for sequential.
-
-## Brute force approach
-**For sequential**, brute force *is* the answer — `for...of` + `await`. No clever tricks needed.
-
-**For parallel**, brute force `for...of` with `await` is the **wrong** answer when calls are independent. The naive parallel attempt of `arr.forEach(async fn)` is also wrong because `forEach` ignores promises.
-
-## Optimal approach
-- **Sequential** when: order matters, throttling required, downstream can't handle parallel.
-- **Parallel** when: items are independent, N is bounded, and you accept fail-fast (or use `allSettled`).
-- **Bounded parallel** when: N is large or downstream load is a concern. Implement with a counter + worker loop, or use `p-limit`-style helper.
-
-## Solution (JavaScript)
+### Wrong attempt 2: sequential when independent
 
 ```js
-// Sequential
+async function slowMap(arr, fn) {
+  const out = [];
+  for (const x of arr) out.push(await fn(x));
+  return out;
+}
+
+const fetched = await slowMap(urls, fetch);   // 10 URLs × 200ms = 2 SECONDS total
+```
+
+Works, but **serializes independent work**. If `urls.length === 10` and each fetch is 200ms, you wait 2 seconds. With parallel, it's 200ms. Junior signal.
+
+### Wrong attempt 3: unbounded parallel on huge arrays
+
+```js
+await Promise.all(million_items.map(fetch));   // BUG: 1M concurrent fetches
+```
+
+Exhausts the HTTP connection pool, trips API rate limits, OOMs from holding 1M pending promises. Bound the concurrency.
+
+---
+
+## 7. The unlocking insight
+
+> **Pick by constraint: sequential when order matters or downstream is rate-limited; parallel when items are independent and N is bounded; bounded-parallel when N is large or downstream load is a concern. All three preserve input order via indexed write.**
+
+The three shapes:
+
+**Sequential (`for...of` + `await`)**
+- Use when: order of side effects matters, or each call depends on the previous result, or downstream can't handle parallel.
+- Pattern: `for (let i = 0; i < arr.length; i++) out.push(await fn(arr[i], i));`.
+- Time: Σ latencies.
+- Memory: O(1) extra.
+
+**Parallel (`Promise.all + arr.map`)**
+- Use when: items are independent, N is small, and you accept fail-fast.
+- Pattern: `await Promise.all(arr.map((x, i) => fn(x, i)));`.
+- Time: max latency.
+- Memory: O(N) pending promises.
+
+**Bounded parallel (k workers, shared cursor)**
+- Use when: N is large or downstream has concurrency limits.
+- Pattern: `k` worker coroutines sharing a cursor. See [promise-pool.md](./promise-pool.md) for the full breakdown.
+- Time: bounded by `ceil(N/k) × per-item-max`.
+- Memory: O(k).
+
+The key mental discipline: **parallel by default for independent work**, but reach for bounded when downstream load matters.
+
+---
+
+## 8. Solution (annotated)
+
+```js
+// Sequential — order of side effects guaranteed
 async function asyncMapSeq(arr, fn) {
   const out = [];
   for (let i = 0; i < arr.length; i++) {
@@ -64,96 +163,212 @@ async function asyncMapSeq(arr, fn) {
   return out;
 }
 
-// Parallel
+// Parallel — fastest for independent work, watch memory
 async function asyncMapPar(arr, fn) {
   return Promise.all(arr.map((item, i) => fn(item, i)));
 }
 
-// Bounded parallel (concurrency-limited)
+// Bounded parallel — k workers + shared cursor
 async function asyncMapBounded(arr, fn, concurrency = 5) {
   const results = new Array(arr.length);
   let cursor = 0;
 
   async function worker() {
     while (cursor < arr.length) {
-      const i = cursor++;
+      const i = cursor++;                  // capture index BEFORE await
       results[i] = await fn(arr[i], i);
     }
   }
 
-  const workers = Array.from({ length: Math.min(concurrency, arr.length) }, worker);
+  const workers = Array.from(
+    { length: Math.min(concurrency, arr.length) },
+    worker
+  );
   await Promise.all(workers);
   return results;
 }
 ```
 
-The bounded version spins `concurrency` workers, each pulling the next index off a shared `cursor`. When `cursor` reaches `arr.length`, workers exit naturally. Order-preserving via positional `results[i]` write.
+**Try it yourself**
 
-## Step-by-step dry run
-
-Setup:
 ```js
-const sleepReturn = (ms, val) => new Promise(r => setTimeout(() => r(val), ms));
+const sleep = (ms, v) => new Promise((r) => setTimeout(() => r(v), ms));
+const fn = (ms) => sleep(ms, ms);
 const items = [100, 50, 200];
-const fn = (ms) => sleepReturn(ms, ms);
+
+console.time('seq');
+await asyncMapSeq(items, fn);
+console.timeEnd('seq');         // ~350ms (sum)
+
+console.time('par');
+await asyncMapPar(items, fn);
+console.timeEnd('par');         // ~200ms (max)
+
+console.time('bounded');
+await asyncMapBounded(items, fn, 2);
+console.timeEnd('bounded');     // ~250ms
 ```
 
-**Sequential** (`asyncMapSeq(items, fn)`):
-- t=0: start. iter 0: `await fn(100)` → blocks until t=100.
-- t=100: `out=[100]`. iter 1: `await fn(50)` → blocks until t=150.
-- t=150: `out=[100,50]`. iter 2: `await fn(200)` → blocks until t=350.
-- t=350: return `[100, 50, 200]`. **Total time ≈ 350ms (sum)**.
+---
 
-**Parallel** (`asyncMapPar(items, fn)`):
-- t=0: `arr.map(fn)` fires three promises: p1=fn(100), p2=fn(50), p3=fn(200). All running.
-- t=50: p2 settles with 50.
-- t=100: p1 settles with 100.
-- t=200: p3 settles. `Promise.all` resolves with `[100, 50, 200]` (input order).
-- **Total time ≈ 200ms (max)**.
+## 9. Step-by-step dry run
 
-**Bounded parallel** (`asyncMapBounded(items, fn, 2)`):
-- t=0: 2 workers start. W1 picks i=0 (fn(100)). W2 picks i=1 (fn(50)).
-- t=50: W2 done with results[1]=50. W2 picks i=2 (fn(200)).
-- t=100: W1 done with results[0]=100. cursor=3, W1 exits.
-- t=250: W2 done with results[2]=200. exits.
-- Return `[100, 50, 200]`. **Total time ≈ 250ms**.
+Items: `[100, 50, 200]` (ms latencies). `fn = (ms) => sleep(ms, ms)`.
 
-## Important takeaways
+**Sequential trace:**
 
-**Syntax to memorize**
-- Sequential: `for...of` with `await` (NOT `forEach`).
-- Parallel: `Promise.all(arr.map(fn))`.
-- Bounded: cursor + workers pattern, `Promise.all(workers)` at the end.
+| Time | Event                                       | `out`           |
+|------|---------------------------------------------|------------------|
+| 0    | iter 0: `await fn(100)` starts              | `[]`             |
+| 100  | result `100`; `out=[100]`; iter 1: `await fn(50)` starts | `[100]` |
+| 150  | result `50`; `out=[100, 50]`; iter 2: `await fn(200)` starts | `[100, 50]` |
+| 350  | result `200`; `out=[100, 50, 200]`; return | `[100, 50, 200]` |
 
-**Patterns to reuse**
-- "Cursor + N workers" is the universal **concurrency-limited pipeline** — same shape used in `priority-async-queue.md`, web crawlers, file batch uploaders.
-- `Promise.all + .map` is the simplest "fan-out / fan-in" idiom.
+**Total: ~350ms (Σ).**
 
-**Common mistakes**
-- `arr.forEach(async fn)` — `forEach` doesn't await. Returns undefined; race conditions galore.
-- Sequential when parallel is wanted — slow. Junior signal.
-- Parallel with no concurrency cap on huge arrays — OOM or rate-limit breach. Senior anti-pattern.
-- `Promise.all` when you need partial results — use `allSettled` and inspect each.
-- Mutating shared state inside parallel `fn` — race conditions. Order of side effects is non-deterministic.
+**Parallel trace:**
 
-**Related questions**
-- `asyncFilter`, `asyncReduce` (same family)
-- `priority-async-queue.md` (concurrency-limited with priorities)
-- `Promise.all` vs `Promise.allSettled` semantics
+| Time | Event                                        | Pending promises |
+|------|----------------------------------------------|-------------------|
+| 0    | `arr.map(fn)` fires all three; p1, p2, p3 pending | 3            |
+| 50   | p2 settles with 50                            | 2                 |
+| 100  | p1 settles with 100                           | 1                 |
+| 200  | p3 settles with 200; Promise.all resolves with [100, 50, 200] (input order) | 0 |
 
-## Variants
+**Total: ~200ms (max).**
 
-1. **Async map with timeout per item** — wrap each `fn(item)` in `Promise.race([fn(item), timeout])`. Discuss what timeout means: skip, throw, default value.
-2. **Bounded parallel with retries** — combine `asyncMapBounded` with `retry-with-backoff.md`.
-3. **Streaming async map** — yield results as they complete (not in order). Use `for await...of` over a generator that yields settled promises. Different semantics from `Promise.all`.
-4. **AbortController-aware** — accept a signal, abort in-flight tasks if signal is aborted. See `fetch-with-abort.md`.
+**Bounded(2) trace:**
 
-## Revision notes
+| Time | W1 state         | W2 state       | `cursor` | `results`          |
+|------|------------------|-----------------|-----------|---------------------|
+| 0    | start fn(100)    | start fn(50)   | 2         | `[_, _, _]`         |
+| 50   | still running    | done; start fn(200) | 3   | `[_, 50, _]`        |
+| 100  | done; cursor>=3, exit | running    | 3         | `[100, 50, _]`      |
+| 250  | exited           | done; exit      | 3         | `[100, 50, 200]`    |
 
-> **asyncMap — 60 second recap**
-> - **Sequential**: `for...of` + `await`. Time = Σ latencies. Order of side effects guaranteed.
-> - **Parallel**: `Promise.all(arr.map(fn))`. Time = max latency. Memory = O(N) pending promises.
-> - **Bounded**: cursor + N workers + `Promise.all(workers)`. Best of both worlds.
-> - **forEach(async ...) is the bug** — doesn't await.
-> - Pick based on: ordering needs, rate limits, memory, fail-fast tolerance.
-> - **Trap:** parallel-by-default on large arrays exhausts pools and rate limits.
+**Total: ~250ms.**
+
+---
+
+## 10. Common confusion + traps
+
+1. **`arr.forEach(async fn)`** — doesn't await. The outer function returns before any async work finishes. Classic junior bug.
+
+2. **Sequential when parallel is wanted.** Slow. Junior signal — interviewer expects you to spot the parallelism opportunity.
+
+3. **Unbounded parallel on huge arrays.** OOM, connection pool exhaustion, rate-limit breach. Senior anti-pattern. Add bounded concurrency.
+
+4. **`Promise.all` when you need partial results.** First reject loses everyone's results. Use `Promise.allSettled` and filter.
+
+5. **Mutating shared state inside parallel `fn`.** Order of side effects is non-deterministic. Don't rely on it.
+
+6. **Capturing `cursor` inside the await.** `results[cursor++]` reads `cursor` *after* the increment. Always `const i = cursor++;` first.
+
+7. **Not preserving input order in bounded.** `results.push(...)` gives completion order. Use indexed write into pre-allocated array.
+
+8. **`for await...of` confusion.** That's for async iterables — different concept. For an array of promises, use `for...of` with `await`.
+
+---
+
+## 11. Senior follow-ups & variants
+
+### Variant 1 — Per-item timeout
+
+```js
+const timeLimit = (p, ms) => Promise.race([
+  p,
+  new Promise((_, rej) => setTimeout(() => rej(new Error('item timeout')), ms)),
+]);
+
+async function asyncMapWithTimeout(arr, fn, perItemMs) {
+  return Promise.all(arr.map((x, i) => timeLimit(fn(x, i), perItemMs)));
+}
+```
+
+Compose with `timeLimit`. Per-item deadline.
+
+### Variant 2 — Bounded + per-item retry
+
+```js
+async function asyncMapResilient(arr, fn, { concurrency = 5, retries = 3 } = {}) {
+  return asyncMapBounded(
+    arr,
+    (x, i) => retryWithBackoff(() => fn(x, i), { retries }),
+    concurrency,
+  );
+}
+```
+
+Combine bounded concurrency with per-item retry. Production shape for fan-out to flaky downstream.
+
+### Variant 3 — Streaming async map
+
+For unbounded input (e.g., paginated API), use an async generator:
+
+```js
+async function* asyncMapStream(asyncSource, fn, concurrency) {
+  // Pull from source, fan-out via cursor + workers, yield results
+}
+```
+
+Memory bounded by `concurrency` regardless of source size.
+
+### Variant 4 — AbortSignal-aware
+
+```js
+async function asyncMapBoundedCancellable(arr, fn, concurrency, signal) {
+  // ... worker loop ...
+  async function worker() {
+    while (cursor < arr.length) {
+      if (signal?.aborted) throw signal.reason;
+      const i = cursor++;
+      results[i] = await fn(arr[i], i, { signal });
+    }
+  }
+}
+```
+
+External cancellation cleans up in-flight work.
+
+### Variant 5 — Streaming results (out of order)
+
+When you want results as soon as they arrive (not in input order):
+
+```js
+async function* asyncMapAsTheyArrive(arr, fn) {
+  const pending = arr.map((x, i) => fn(x, i).then((v) => ({ i, v })));
+  while (pending.length) {
+    const { i, v } = await Promise.race(pending);
+    pending.splice(pending.findIndex((p) => p === /* matching */), 1);
+    yield { index: i, value: v };
+  }
+}
+```
+
+Different semantics from `Promise.all`. Useful for "first response to stream UI."
+
+---
+
+## 12. How to think aloud in the interview
+
+> "Three valid shapes. **Sequential**: `for...of` + `await`. Use when order of side effects matters or downstream is rate-limited. Time = sum. **Parallel**: `Promise.all(arr.map(fn))`. Use when items are independent and N is bounded. Time = max. Watch for unbounded N — OOM and rate-limit breach. **Bounded parallel**: `k` workers + shared cursor. Use when N is large or downstream needs concurrency control. Time = roughly N/k. **The classic junior bug**: `arr.forEach(async fn)` — forEach doesn't await. **The default mental discipline**: parallel for independent work; bounded when downstream load matters. All three preserve input order via indexed write or input-order iteration."
+
+---
+
+## 13. 60-second revision
+
+> - **Sequential:** `for...of` + `await`. Time = Σ. Memory O(1). Use for order, rate limits.
+> - **Parallel:** `Promise.all(arr.map(fn))`. Time = max. Memory O(N) pending. Use for independent, small N.
+> - **Bounded:** k workers + shared cursor. Time ≈ N/k × per-item. Memory O(k). Use for large N or rate limits.
+> - **`forEach(async fn)` is broken** — doesn't await.
+> - **All preserve input order** via indexed write or input-order iteration.
+> - **Capture `idx = cursor++` BEFORE `await`** in bounded.
+> - **Fail-fast:** `Promise.all` rejects on first; for partial-success, use `Promise.allSettled` and filter.
+> - **Family:** `asyncFilter`, `asyncReduce`, `priority-async-queue`.
+> - **Trap:** `forEach(async)`, sequential by default, unbounded parallel on huge arrays.
+
+---
+
+**Related:** [promise-all-polyfill.md](./promise-all-polyfill.md) · [promise-pool.md](./promise-pool.md) · [async-filter.md](./async-filter.md) · [async-reduce.md](./async-reduce.md) · [retry-with-backoff.md](./retry-with-backoff.md)
+
+**Concept primer:** [`concepts/promises.md`](../../concepts/promises.md)

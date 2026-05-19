@@ -1,198 +1,259 @@
-# Implement `compose` and `pipe`
+# Implement `compose` and `pipe` — function composition
 
-## Source
-- Canonical machine-coding interview problem (LeetCode #2629 "Function Composition", BFE.dev, redux/ramda source).
-- LeetCode reference: https://leetcode.com/problems/function-composition/
+> **Difficulty:** Easy-Medium   |   **Time:** ~15 min   |   **Prereqs:** [`concepts/closures.md`](../../concepts/closures.md), [curry.md](./curry.md)
+>
+> **Source:** [LeetCode 2629 — Function Composition](https://leetcode.com/problems/function-composition/). Redux `compose`, Ramda `R.pipe`, RxJS `pipe`.
 
-## Why this question matters in interviews
-Function composition is the canonical "do you actually understand higher-order functions" question. It's short, it has a single elegant answer (`reduceRight`), and it's the entry point to a whole family of follow-ups: pipe, async pipe, middleware chains, transducers. Backend engineers see composition daily: Express middleware (`app.use`), Redux middleware, Koa's `compose`, RxJS operators, GraphQL resolver pipelines, AWS Lambda layers. The interview answer needs to nail two things: (1) the **direction** — `compose(f,g,h)(x) = f(g(h(x)))`, applied right-to-left, vs `pipe` which is left-to-right; (2) the **reduce mechanic** — `reduceRight` for compose, `reduce` for pipe. A senior bonus is the async variant using `reduce` over a chained promise.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+**Signature**
+```ts
+function compose<T>(...fns: Array<(x: T) => T>): (x: T) => T;   // right-to-left
+function pipe<T>(...fns: Array<(x: T) => T>): (x: T) => T;       // left-to-right
+```
+
+**Input / Output examples**
+
+| Input                                | Behaviour                                 |
+|--------------------------------------|--------------------------------------------|
+| `compose(f, g, h)(x)`                | `f(g(h(x)))` — rightmost runs first       |
+| `pipe(f, g, h)(x)`                   | `h(g(f(x)))` — leftmost runs first        |
+| `compose()(x)` / `pipe()(x)`         | identity → returns `x`                    |
+| `compose(f)(x)`                      | `f(x)` — single fn applied                |
+| `pipe(add1, dbl, neg)(3)`            | `neg(dbl(add1(3))) = neg(8) = -8`        |
+| `compose(add1, dbl, neg)(3)`         | `add1(dbl(neg(3))) = add1(-6) = -5`      |
+
+**Constraints**
+- Each fn is unary (point-free composition).
+- Empty list → identity (`x => x`).
+- `compose` uses `reduceRight`; `pipe` uses `reduce`.
+- Direction is the #1 trap — interviewers will ask both names.
+
+---
+
+## 2. Plain-English restatement
+
+Take a list of functions and string them together so the output of one becomes the input of the next. `pipe(a, b, c)(x)` means "run `a` on `x`, then `b` on that, then `c` on that" — left-to-right reading order. `compose(a, b, c)(x)` is the math convention: `a(b(c(x)))` — rightmost runs first. Same engine, opposite direction.
+
+---
+
+## 3. Why this matters in interviews
+
+`compose`/`pipe` is the FP litmus test. The sync version is a one-liner; the async variant unlocks middleware-style code that powers Redux, Koa, Express, RxJS, Apollo. Interviewers probe whether you understand the **direction** distinction and whether you can implement the async version via `reduce` over a chained Promise. As a backend engineer you'll meet composition daily in middleware factories and request-transform pipelines.
+
+---
+
+## 4. Mental model
+
+A **conveyor belt of unary functions**:
+
+```
+   pipe(add1, dbl, neg)(3):
+   ┌─────┐    ┌─────┐    ┌─────┐
+   │ +1  │───▶│ ×2  │───▶│ neg │
+   └─────┘    └─────┘    └─────┘
+       3          4          8         -8
+       ↑ input  ↑ acc      ↑ acc      ↑ result
+
+   compose(add1, dbl, neg)(3):
+   ┌─────┐    ┌─────┐    ┌─────┐
+   │ +1  │◀───│ ×2  │◀───│ neg │
+   └─────┘    └─────┘    └─────┘
+       -5          -6        -3         3
+       ↑ result ↑ acc       ↑ acc     ↑ input
+```
+
+**Mnemonic:** **compose** like math — `(f ∘ g)(x) = f(g(x))`, **right-to-left** → `reduceRight`. **pipe** like a unix pipeline — `cat | grep | wc`, **left-to-right** → `reduce`.
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. What does `compose()(42)` return? `pipe()(42)`?
+> 2. With `add1, dbl, neg` and input `3`, which one gives `-5` and which gives `-8`?
+> 3. Can you compose async functions? Where does the implementation break?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: hand-rolled recursion
 ```js
-const compose = (...fns) => (x) => fns.reduceRight((acc, fn) => fn(acc), x);
-const pipe    = (...fns) => (x) => fns.reduce     ((acc, fn) => fn(acc), x);
+const compose = (f, ...rest) => rest.length === 0 ? f : (x) => f(compose(...rest)(x));
+```
+Works but reinvents `reduceRight`. Use the built-in.
 
+### Wrong attempt 2: `reduce` for `compose`
+```js
+const compose = (...fns) => (x) => fns.reduce((acc, fn) => fn(acc), x);   // BUG
+```
+This is `pipe`. Direction reversed — interviewer pounces.
+
+### Wrong attempt 3: ignore empty case
+```js
+const compose = (...fns) => (x) => fns.reduceRight((acc, fn) => fn(acc));   // BUG: no seed
+```
+`compose()(x)` throws because `reduceRight` on empty array with no seed errors. Always pass `x` as seed.
+
+---
+
+## 7. The unlocking insight
+
+> **`fns.reduceRight((acc, fn) => fn(acc), x)` for compose. `fns.reduce(...)` for pipe. Same engine, opposite direction. Empty array + initial value = identity for free.**
+
+Three properties:
+
+1. **Direction:** compose = right-to-left (`reduceRight`); pipe = left-to-right (`reduce`).
+2. **Empty = identity:** `reduce(_, seed)` on `[]` returns `seed` unchanged.
+3. **Async variant:** swap value-passing for promise-chaining: `reduce((p, fn) => p.then(fn), Promise.resolve(x))`.
+
+---
+
+## 8. Solution (annotated)
+
+```js
+const compose = (...fns) => (x) =>
+  fns.reduceRight((acc, fn) => fn(acc), x);                    // step 1: right-to-left
+
+const pipe = (...fns) => (x) =>
+  fns.reduce((acc, fn) => fn(acc), x);                          // step 2: left-to-right
+
+// Async variant — fns may return promises
+const pipeAsync = (...fns) => (x) =>
+  fns.reduce((p, fn) => p.then(fn), Promise.resolve(x));       // step 3: chain via .then
+
+const composeAsync = (...fns) => (x) =>
+  fns.reduceRight((p, fn) => p.then(fn), Promise.resolve(x));
+
+// Multi-arg first call (if the rightmost/leftmost fn is variadic)
+function composeMulti(...fns) {
+  if (fns.length === 0) return (x) => x;
+  return function (...args) {
+    return fns.reduceRight((acc, fn, i) => {
+      return i === fns.length - 1 ? fn.apply(this, args) : fn.call(this, acc);
+    }, undefined);
+  };
+}
+```
+
+**Try it yourself**
+
+```js
 const add1 = (x) => x + 1;
 const dbl  = (x) => x * 2;
 const neg  = (x) => -x;
 
-compose(add1, dbl, neg)(3); // add1(dbl(neg(3))) = add1(dbl(-3)) = add1(-6) = -5
-pipe   (add1, dbl, neg)(3); // neg(dbl(add1(3))) = neg(dbl(4))  = neg(8)  = -8
+compose(add1, dbl, neg)(3);  // -5
+pipe   (add1, dbl, neg)(3);  // -8
+
+// Async — sequential request enrichment
+const handler = pipeAsync(
+  (body) => JSON.parse(body),
+  async (obj) => ({ ...obj, ts: Date.now() }),
+  (obj) => { if (!obj.id) throw new Error('no id'); return obj; },
+  async (obj) => ({ ...obj, saved: true }),
+);
+const result = await handler('{"id":42}');
 ```
 
-### Runtime / engine behavior
-- `compose(f, g, h)` returns a function `x => f(g(h(x)))`. Right-to-left because math notation `(f∘g)(x) = f(g(x))`.
-- `pipe(f, g, h)` returns `x => h(g(f(x)))`. Left-to-right, reading-order — friendlier for most JS code.
-- `reduce(fn, init)` walks left→right, accumulator starts as `init`. `reduceRight` walks right→left.
-- Both compose and pipe with **zero functions** should return the identity function (`x => x`). Test it.
-- Both with **one function** should be equivalent to that function — but the wrapper still invokes `reduce`, which handles it correctly.
+---
 
-### Edge cases (these are the interview traps)
-1. **Direction confusion** — every candidate gets this wrong once. Memorize: **compose = compose like math = right-to-left**. Pipe = pipeline = left-to-right.
-2. **Variadic first function** — by convention, only the **first** function in the chain (rightmost for compose, leftmost for pipe) accepts multiple args. Subsequent functions take one arg (the previous result). Implement accordingly.
-3. **Empty input** — `compose()(x)` must return `x` (identity). `reduceRight` with no functions and an initial value gives back the initial value — works for free.
-4. **`this` binding** — typically not preserved in compose. The composed functions are usually pure or pre-bound. Don't over-engineer.
-5. **Async functions** — if any `fn` returns a promise, the standard sync compose breaks. Use `composeAsync` that chains `.then`. Show this — it's a senior must.
-6. **Throwing functions** — exceptions propagate normally through the reduce chain. No special handling needed unless asked.
-7. **Memory / call stack** — `reduceRight` builds the chain via iteration, not recursion, so no stack-depth issues. Calling `f(g(h(x)))` does create N stack frames, but that's normal call-stack usage.
-8. **Argument arity for the first call** — `compose(f, g, h)(a, b, c)` — should `a, b, c` all go to `h`? Convention: yes. Implement with `(...x) => fns.reduceRight((acc, fn) => fn(acc), fns[fns.length-1](...x))` if you want to preserve. Or, simpler: peel the rightmost function as the seed.
+## 9. Step-by-step dry run
 
-## Brute force approach
-Hand-roll a recursive helper: `compose(f, g, h)(x) = f(compose(g, h)(x))`. Works, but you've reinvented `reduceRight`. Skip it.
-
-## Optimal approach
-`fns.reduceRight((acc, fn) => fn(acc), x)`. Two lines including the wrapper. The cleanest line of code in this entire bucket.
-
-For multi-arg input to the innermost function:
-```js
-const compose = (...fns) => (...args) =>
-  fns.reduceRight((acc, fn, i) =>
-    i === fns.length - 1 ? fn(...args) : fn(acc),
-    undefined
-  );
 ```
-Or peel the rightmost function:
+compose(add1, dbl, neg)(3):
+  fns = [add1, dbl, neg]
+  reduceRight starts at idx=2 with seed=3
+
+  idx=2  fn=neg  acc=3   → neg(3)  = -3   ⇒ acc=-3
+  idx=1  fn=dbl  acc=-3  → dbl(-3) = -6   ⇒ acc=-6
+  idx=0  fn=add1 acc=-6  → add1(-6)= -5   ⇒ acc=-5
+  return -5
+
+pipe(add1, dbl, neg)(3):
+  reduce starts at idx=0 with seed=3
+
+  idx=0  fn=add1 acc=3   → add1(3) = 4    ⇒ acc=4
+  idx=1  fn=dbl  acc=4   → dbl(4)  = 8    ⇒ acc=8
+  idx=2  fn=neg  acc=8   → neg(8)  = -8   ⇒ acc=-8
+  return -8
+```
+
+Async pipe with `parse → enrich → validate → persist`:
+
+```
+seed = Promise.resolve('{"id":42}')
+.then(parse)    → resolves to {id:42}
+.then(enrich)   → enrich is async → resolves to {id:42, ts:...}
+.then(validate) → sync, id truthy → returns object
+.then(persist)  → async → resolves to {id:42, ts:..., saved:true}
+
+await handler(...)  ⇒ {id:42, ts:..., saved:true}
+```
+
+If `validate` throws, `.then(persist)` is skipped, rejection surfaces at `await`.
+
+---
+
+## 10. Common confusion + traps
+
+1. **Reversed direction** — compose with `reduce` (gives pipe) or pipe with `reduceRight` (gives compose).
+2. **Empty pipeline** — forgetting the seed (`reduce` without initial value throws on `[]`).
+3. **Multi-arg expectation** — `compose(f, g)(a, b)` — only first call gets multi-args; intermediate fns are unary.
+4. **`this` binding lost** — composed functions are usually pure; bind methods first if needed.
+5. **Async fns in sync `pipe`** — second fn receives a Promise, not the resolved value. Use `pipeAsync`.
+6. **`Promise.resolve()` without arg** — first fn gets `undefined`. Always pass `x`.
+7. **`await` inside reducer body** — forces outer to be async; lazier to return `p.then(fn)`.
+
+---
+
+## 11. Senior follow-ups & variants
+
+### Variant 1 — Middleware compose (Koa onion model)
+Each fn takes `(ctx, next)` and chooses whether/when to call `next`. Allows pre- and post-processing:
 ```js
-const compose = (...fns) => {
-  if (fns.length === 0) return (x) => x;
-  const [last, ...rest] = [...fns].reverse();
-  return (...args) => rest.reduceRight((acc, fn) => fn(acc), last(...args)).
-  // wait — reverse + reduceRight is confusing. Easier:
+const compose = (mws) => (ctx) => {
+  const dispatch = (i) => i === mws.length ? Promise.resolve() : Promise.resolve(mws[i](ctx, () => dispatch(i+1)));
+  return dispatch(0);
 };
 ```
-Stick with the simple version unless interviewer asks.
+Used in Koa, Apollo, custom request pipelines.
 
-## Solution (JavaScript)
+### Variant 2 — Either/Result pipe
+Each step returns `{ok: true, value} | {ok: false, error}`; pipe short-circuits on error. Avoids exception-based control flow.
 
-```js
-/**
- * compose(f, g, h)(x) === f(g(h(x)))
- * Right-to-left composition. Returns identity for zero functions.
- */
-function compose(...fns) {
-  if (fns.length === 0) return (x) => x;
-  return function (...args) {
-    return fns.reduceRight((acc, fn, idx) => {
-      // The rightmost function receives the original args; all others get acc.
-      if (idx === fns.length - 1) return fn.apply(this, args);
-      return fn.call(this, acc);
-    }, undefined);
-  };
-}
+### Variant 3 — Cancellable pipe
+Pass `AbortSignal`; each step checks `signal.aborted` and short-circuits.
 
-/**
- * pipe(f, g, h)(x) === h(g(f(x)))
- * Left-to-right composition.
- */
-function pipe(...fns) {
-  if (fns.length === 0) return (x) => x;
-  return function (...args) {
-    return fns.reduce((acc, fn, idx) => {
-      if (idx === 0) return fn.apply(this, args);
-      return fn.call(this, acc);
-    }, undefined);
-  };
-}
+### Variant 4 — Transducers (Ramda/Clojure)
+Compose-able reducer transformers: `compose(map(double), filter(even))` builds a single-pass reducer.
 
-/**
- * Async pipe — each fn may return a promise; chains via await.
- * pipeAsync(f, g, h)(x) === await h(await g(await f(x)))
- */
-function pipeAsync(...fns) {
-  return function (...args) {
-    return fns.reduce(
-      (p, fn, idx) => p.then((acc) => (idx === 0 ? fn.apply(this, args) : fn.call(this, acc))),
-      Promise.resolve()
-    );
-  };
-}
-```
+### Variant 5 — Parallel fan-out
+`fanOut(a, b, c)(x) = Promise.all([a(x), b(x), c(x)])`. Different semantics — clarify which.
 
-If the LeetCode problem only needs single-arg, the canonical one-liner is enough:
+---
 
-```js
-const compose = (...fns) => (x) => fns.reduceRight((acc, fn) => fn(acc), x);
-const pipe    = (...fns) => (x) => fns.reduce     ((acc, fn) => fn(acc), x);
-```
+## 12. How to think aloud
 
-## Step-by-step dry run
+> "Reduce over an array of unary fns. `compose` = `reduceRight` (math convention, right-to-left). `pipe` = `reduce` (left-to-right reading order). Empty list = identity, falls out of `reduce` with a seed for free. Async variant swaps value-passing for `acc.then(fn)` with `Promise.resolve(x)` as the seed — handles mixed sync/async transparently because `.then` autoboxes. Direction is the #1 trap; I'll state which one I'm naming. Middleware compose (Koa) is the senior follow-up — fns take `(ctx, next)` instead of value-passing."
 
-Input:
-```js
-const add1 = (x) => x + 1;
-const dbl  = (x) => x * 2;
-const neg  = (x) => -x;
+---
 
-const c = compose(add1, dbl, neg);
-const p = pipe   (add1, dbl, neg);
-c(3); p(3);
-```
+## 13. 60-second revision
 
-Trace `c(3)`:
-- `fns = [add1, dbl, neg]`. `reduceRight` iterates from index 2 → 0.
-- idx=2, `fn = neg`, `acc` initially `undefined`. We're at the rightmost → `fn(...args) = neg(3) = -3`. acc = -3.
-- idx=1, `fn = dbl`. `fn(acc) = dbl(-3) = -6`. acc = -6.
-- idx=0, `fn = add1`. `fn(acc) = add1(-6) = -5`. acc = -5.
-- Return `-5`.
+> - **`compose(f,g,h)(x) === f(g(h(x)))`** → `fns.reduceRight((acc, fn) => fn(acc), x)`.
+> - **`pipe(f,g,h)(x) === h(g(f(x)))`** → `fns.reduce(...)`.
+> - **Empty list → identity** (seed `x` survives an empty reduce).
+> - **Async:** `fns.reduce((p, fn) => p.then(fn), Promise.resolve(x))`.
+> - **Each fn unary;** state direction explicitly.
+> - **Middleware compose** = continuation-passing (Koa), not value-passing.
+> - **Trap:** reversed direction; missing seed; `await` inside reducer body.
 
-Trace `p(3)`:
-- `fns = [add1, dbl, neg]`. `reduce` iterates 0 → 2.
-- idx=0, `fn = add1`. Leftmost → `fn(...args) = add1(3) = 4`. acc = 4.
-- idx=1, `fn = dbl`. `dbl(4) = 8`. acc = 8.
-- idx=2, `fn = neg`. `neg(8) = -8`. acc = -8.
-- Return `-8`.
+---
 
-Async trace — `pipeAsync(loadUser, fetchPosts, summarize)(userId)`:
-- Initial `p = Promise.resolve()`.
-- idx=0: `p.then(() => loadUser(userId))` → promise of user.
-- idx=1: `.then(user => fetchPosts(user))` → promise of posts.
-- idx=2: `.then(posts => summarize(posts))` → promise of summary.
-- Each `.then` chains the next call to the prior resolution. Errors propagate via `.catch` like normal promise chains.
+**Related:** [async-compose-pipe.md](./async-compose-pipe.md) · [curry.md](./curry.md) · [bind-polyfill.md](./bind-polyfill.md) · [`04-promises/async-reduce.md`](../04-promises/async-reduce.md)
 
-## Important takeaways
-
-**Syntax to memorize**
-- `compose = (...fns) => (x) => fns.reduceRight((acc, fn) => fn(acc), x)`.
-- `pipe    = (...fns) => (x) => fns.reduce     ((acc, fn) => fn(acc), x)`.
-- Both: zero functions → identity; one function → that function applied.
-
-**Direction mnemonic**
-- **Compose** like math: `(f ∘ g)(x) = f(g(x))` — **right side runs first**. So `reduceRight`.
-- **Pipe** like a unix pipeline: `cat | grep | wc` — left runs first, output flows right. So `reduce`.
-
-**Patterns to reuse**
-- `reduce` over an array of functions is the same engine that powers: Redux middleware, Koa middleware (with continuation passing instead of value passing), Express handler chains (with `next()`), RxJS `pipe`, Ramda `R.pipe`.
-- The async variant — `fns.reduce((p, fn) => p.then(fn), Promise.resolve())` — is the standard "chain N async tasks sequentially" pattern. Worth memorizing on its own.
-
-**Common mistakes**
-- Reversing the direction (writing pipe when interviewer asked for compose, and vice versa).
-- Using `reduce` for compose and getting the order backwards.
-- Returning the wrong identity for empty input.
-- Forgetting that `reduce`/`reduceRight` need a sensible initial value when the array is empty.
-
-**Related questions**
-- Redux's `applyMiddleware` — uses compose internally.
-- Express middleware chain — onion model, uses `next()` instead of return values.
-- Transducers — compose, but for transformations of a reducer.
-
-## Variants
-
-1. **`pipeAsync` / `composeAsync`** — handle promises in the chain. Use `reduce` over `Promise.resolve()` and chain `.then`. Errors short-circuit via promise rejection.
-
-2. **Middleware-style compose (onion / Koa)** — each function takes `(arg, next)` and decides whether to call `next`. Allows pre- and post-processing around the inner functions. This is the more interesting senior follow-up: `compose([m1, m2, m3])(arg)` → `m1(arg, () => m2(arg, () => m3(arg, () => {})))`.
-
-3. **Curried compose** — `compose` that itself is curried so `compose(f)(g)(h)(x)` works. Rarely useful in practice; mention briefly.
-
-4. **Transducers (Ramda / Clojure style)** — compose-able reducer transformers. `compose(map(double), filter(even))` produces a single-pass reducer over an iterable. Senior bonus topic.
-
-## Revision notes
-
-> **compose / pipe — 60 second recap**
-> - `compose(f,g,h)(x) === f(g(h(x)))` → **reduceRight**.
-> - `pipe(f,g,h)(x) === h(g(f(x)))` → **reduce**.
-> - Empty → identity. One fn → that fn.
-> - Async: `reduce((p, fn) => p.then(fn), Promise.resolve())`.
-> - **Trap:** reversing direction. Compose = mathematical right-to-left.
-> - Middleware (Koa/Express) is composition with continuation-passing, not value-passing.
+**Concept primer:** [`concepts/closures.md`](../../concepts/closures.md), [`concepts/promises.md`](../../concepts/promises.md)

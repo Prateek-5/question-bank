@@ -1,75 +1,109 @@
-# Node.js Event Loop Phases (libuv internals)
+# Node.js Event Loop — six libuv phases
 
-## Source
-- codedamn: https://codedamn.com/news/nodejs/event-loop-role
-- Node official docs: https://nodejs.org/en/learn/asynchronous-work/event-loop-timers-and-nexttick
+> **Difficulty:** Senior   |   **Time:** ~20 min   |   **Prereqs:** [event-loop-concurrency.md](./event-loop-concurrency.md), [`concepts/event-loop.md`](../../concepts/event-loop.md)
+>
+> **Source:** Node docs, libuv source. Every staff-level Node round.
 
-## Why this question matters in interviews
-Senior backend roles drill on this directly. The interviewer wants to hear the **six libuv phases by name in order**, what kind of callback each one runs, and where `process.nextTick` and the microtask queue fit *in between* (they're not phases). If you can also explain WHY `setImmediate` beats `setTimeout(0)` inside an I/O callback but is non-deterministic from main, you've signaled deep Node literacy. This shows up in every staff-level system-design discussion when latency budgets and "what blocks the loop" come up.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### The 6 libuv phases (in order, each iteration)
+Name the 6 libuv phases in order, what each runs, where `process.nextTick` + microtask queues fit (not phases — interleaved), and why `setImmediate` deterministically beats `setTimeout(0)` inside an I/O callback.
+
+**Verification examples**
+
+| Question                                                            | Answer                                          |
+|---------------------------------------------------------------------|--------------------------------------------------|
+| Name the 6 libuv phases in order                                     | timers → pending → idle/prepare → poll → check → close |
+| What runs in poll?                                                    | I/O callbacks (fs, net); blocks here when nothing else pending |
+| What runs in check?                                                   | `setImmediate` callbacks                         |
+| Where does nextTick run?                                              | Between every callback (NOT a phase)             |
+| `UV_THREADPOOL_SIZE` default?                                         | 4                                                |
+
+**Constraints**
+- 6 phases, in order, per iteration.
+- nextTick + microtask drain between every callback.
+- Only `poll` blocks; other phases run callbacks and move on.
+- `setImmediate` deterministically beats `setTimeout(0)` inside I/O cb.
+
+---
+
+## 2. Plain-English restatement
+
+The Node event loop is a state machine with 6 phases. On each iteration, it visits each phase in order. The interesting one is **poll**, which is where I/O callbacks run AND where the loop blocks waiting for new events. Between every individual callback in every phase, the `nextTick` and microtask queues drain to empty — they're not phases themselves, they're interleaved.
+
+---
+
+## 3. Why this matters in interviews
+
+Every senior Node interview asks this directly. Bonus points for naming the phase-by-phase behavior and the I/O-callback determinism rule. Shows up in system-design when latency budgets and "what blocks the loop" come up.
+
+---
+
+## 4. Mental model
+
 ```
    ┌───────────────────────────┐
-   │   1. timers                │  setTimeout / setInterval callbacks whose
-   │                            │  deadline has passed
+   │ 1. timers                  │  setTimeout/setInterval whose deadline passed
    ├───────────────────────────┤
-   │   2. pending callbacks     │  deferred system-level errors (TCP errors,
-   │                            │  some ECONNREFUSED retries)
+   │ 2. pending callbacks       │  deferred system errors (rare)
    ├───────────────────────────┤
-   │   3. idle, prepare         │  libuv internal — almost never user-visible
+   │ 3. idle, prepare           │  internal libuv (almost never user-visible)
    ├───────────────────────────┤
-   │   4. poll                  │  retrieve new I/O events; execute I/O
-   │                            │  callbacks; block here when nothing else
-   │                            │  is pending (waiting for new events)
+   │ 4. poll                    │  I/O callbacks; BLOCKS here for new events
    ├───────────────────────────┤
-   │   5. check                 │  setImmediate callbacks
+   │ 5. check                   │  setImmediate callbacks
    ├───────────────────────────┤
-   │   6. close callbacks       │  socket.on('close'), etc.
-   └───────────────────────────┘
-            │
-            ▼  (loop back to phase 1)
+   │ 6. close callbacks         │  socket.on('close'), etc.
+   └────────┬──────────────────┘
+            │ loop back to phase 1
+            ▼
+
+   Between EVERY callback in EVERY phase:
+     drain process.nextTick → drain microtask queue
+
+   poll is the only blocking phase. It waits for new I/O if nothing else pending.
 ```
 
-**Between every single callback in every phase**, Node runs:
-- `process.nextTick` queue → drain to empty
-- microtask queue (Promise jobs, `queueMicrotask`) → drain to empty
+---
 
-These two queues are **NOT phases**. They're interleaved.
+## 5. Try it yourself first
 
-### What each phase actually contains
-1. **timers** — only timers whose `target time <= now` are run. The phase runs at most up to a per-iteration limit, then exits. Order is by deadline, ties broken by registration order.
-2. **pending callbacks** — rare. libuv uses this for operations that couldn't be queued in `poll` (e.g., a TCP socket reporting `ECONNREFUSED` from a previous tick).
-3. **idle, prepare** — internal. You'll never put code here directly.
-4. **poll** — **the most important phase**. It:
-   - Computes how long to block waiting for new I/O (the "poll timeout").
-   - Calls into the kernel (epoll / kqueue / IOCP) to grab ready events.
-   - Runs the I/O callbacks until either the queue is empty or a hard limit is reached.
-   - If nothing else is pending (no timers due, no immediates, no closes), it BLOCKS here waiting for new events.
-5. **check** — runs all queued `setImmediate` callbacks. This phase exists precisely so you can schedule "run me right after I/O" work.
-6. **close callbacks** — emits `'close'` events for destroyed handles (sockets, streams).
+> **Predict before reading on:**
+> 1. List the 6 phases in order.
+> 2. Why is `setImmediate` after `setTimeout(0)` inside an I/O callback non-deterministic? (Trick — it's actually deterministic the OTHER way.)
+> 3. Why does long sync work in an I/O callback block all other I/O?
 
-### Edge cases (interview traps)
-1. **`setImmediate` vs `setTimeout(0)` from main module** — non-deterministic. The loop may start in timers (firing the 0ms timer first) or arrive at timers after their deadline hasn't quite hit (firing setImmediate first via check).
-2. **`setImmediate` vs `setTimeout(0)` inside an I/O callback** — deterministic. After poll, the loop *always* goes to check before looping back to timers. So `setImmediate` runs first.
-3. **Microtasks drain between every callback** — not just at phase boundaries. So `setTimeout(fn1)` and `setTimeout(fn2)` both due in the same timers phase: `fn1` runs, microtasks/nextTicks drain, THEN `fn2` runs.
-4. **`process.nextTick` runs before microtasks** — even before `Promise.resolve().then`.
-5. **Recursive `process.nextTick` starves I/O** — because nextTick drains to empty before the next phase, an infinite recursive nextTick prevents the loop from ever entering the poll phase. Same risk with microtasks but less severe.
-6. **Long sync code in any callback blocks the loop**. Always.
-7. **`UV_THREADPOOL_SIZE`** — defaults to 4. fs/dns/crypto use this pool. Tune for CPU-heavy crypto workloads.
-8. **`process.exit()` vs natural exit** — natural exit happens when the loop has zero pending handles. `unref`'d timers and sockets don't count.
+---
 
-## Brute force approach
-"Node has an event loop." Too vague. You must name phases, explain poll's special role (it's the only phase that blocks), and place nextTick + microtasks in the interleaving model.
+## 6. Brute force — walked through
 
-## Optimal approach
-Memorize the six phase names in order. Memorize what each runs. Memorize that nextTick + microtasks drain between every callback. Be able to draw the diagram from scratch in 30 seconds.
+### Wrong attempt 1: "Node has an event loop"
+Too vague.
 
-## Solution (JavaScript)
+### Wrong attempt 2: list only 3-4 phases
+Six. Idle/prepare is rarely user-visible but exists.
+
+### Wrong attempt 3: "microtasks drain at end of each iteration"
+No — drain between every callback (Node 11+).
+
+---
+
+## 7. The unlocking insight
+
+> **Six phases in fixed order. Each phase has its own callback queue. The loop visits in order; between every callback in every phase, drain nextTick + microtask. Poll is the only blocking phase. From I/O cb (poll), `check` (setImmediate) deterministically follows.**
+
+Three properties:
+
+1. **Six phases, fixed order**: timers, pending, idle/prepare, poll, check, close.
+2. **NT + MQ drain between every callback** (not just at phase boundaries).
+3. **Poll blocks** waiting for I/O; everything else runs and moves on.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
-// Demonstration: each phase in action.
 const fs = require('node:fs');
 
 // Phase 1: timers
@@ -78,15 +112,15 @@ setTimeout(() => console.log('[timers] setTimeout(0)'), 0);
 // Phase 5: check
 setImmediate(() => console.log('[check] setImmediate'));
 
-// Between-phase: nextTick + microtasks
-process.nextTick(() => console.log('[between] process.nextTick'));
-Promise.resolve().then(() => console.log('[between] microtask (promise)'));
+// Between-phase queues
+process.nextTick(() => console.log('[between] nextTick'));            // step 1
+Promise.resolve().then(() => console.log('[between] microtask'));     // step 2
 
-// Phase 4: poll — this fs callback lands here
+// Phase 4: poll
 fs.readFile(__filename, () => {
   console.log('[poll] fs.readFile callback');
 
-  // From inside an I/O callback, ordering becomes deterministic.
+  // From inside I/O cb, ordering is DETERMINISTIC
   setTimeout(() => console.log('  [timers]  inner setTimeout(0)'), 0);
   setImmediate(() => console.log('  [check]   inner setImmediate'));
   process.nextTick(() => console.log('  [between] inner nextTick'));
@@ -94,95 +128,117 @@ fs.readFile(__filename, () => {
 });
 
 console.log('sync end');
-```
 
-```js
-// Expected output (Node, sync part):
+// Output (Node):
 // sync end
-// [between] process.nextTick
-// [between] microtask (promise)
-// [timers] setTimeout(0)            ← order with setImmediate may flip
-// [check] setImmediate              ← from main module
+// [between] nextTick                  ← drained first
+// [between] microtask                 ← MQ drain
+// [timers] setTimeout(0)              ← order with setImmediate may flip
+// [check] setImmediate                ← from main module = racy
 // [poll] fs.readFile callback
 //   [between] inner nextTick
 //   [between] inner microtask
-//   [check]   inner setImmediate    ← DETERMINISTIC: check follows poll
-//   [timers]  inner setTimeout(0)   ← runs on next loop iteration
+//   [check]   inner setImmediate      ← DETERMINISTIC: check follows poll
+//   [timers]  inner setTimeout(0)     ← next iteration
 ```
 
-## Step-by-step dry run
+---
 
-Trace the script line by line. State per tick: `CS = call stack`, `NT = nextTick`, `MQ = microtask`, `Timers / Poll / Check` = libuv phase queues.
+## 9. Step-by-step dry run
 
-| Step | CS action | NT | MQ | Timers | Poll | Check |
-|------|-----------|----|----|--------|------|-------|
-| 1 | register `setTimeout` cb T | — | — | `[T@0]` | — | — |
-| 2 | register `setImmediate` cb I | — | — | `[T@0]` | — | `[I]` |
-| 3 | `process.nextTick` enqueue N | `[N]` | — | `[T@0]` | — | `[I]` |
-| 4 | `.then` enqueue M | `[N]` | `[M]` | `[T@0]` | — | `[I]` |
-| 5 | `fs.readFile` dispatches to libuv thread pool; cb F registered for poll | `[N]` | `[M]` | `[T@0]` | (pending) | `[I]` |
-| 6 | `console.log('sync end')` runs | `[N]` | `[M]` | `[T@0]` | (pending) | `[I]` |
-| 7 | sync stack empty → drain NT → run N → log `nextTick` | — | `[M]` | `[T@0]` | (pending) | `[I]` |
-| 8 | drain MQ → run M → log `microtask` | — | — | `[T@0]` | (pending) | `[I]` |
-| 9 | enter timers phase → T's deadline (0ms) has passed → run T → log `setTimeout(0)` | — | — | — | (pending) | `[I]` |
-| 10 | drain NT (empty), MQ (empty) | — | — | — | (pending) | `[I]` |
-| 11 | pending / idle/prepare phases — no work | — | — | — | (pending) | `[I]` |
-| 12 | enter poll phase → fs not done yet → block waiting (or skip if timeout) | — | — | — | (pending) | `[I]` |
-| 13 | skip poll (immediates pending) → enter check → run I → log `setImmediate` | — | — | — | (pending) | — |
-| 14 | drain NT, MQ | — | — | — | (pending) | — |
-| 15 | close phase — nothing | — | — | — | (pending) | — |
-| 16 | new iteration → timers (nothing) → poll: fs.readFile completes → run F → log `fs.readFile callback` | — | — | — | — | — |
-| 17 | F schedules inner T2, I2, N2, M2 | `[N2]` | `[M2]` | `[T2@0]` | — | `[I2]` |
-| 18 | F returns → drain NT → log `inner nextTick` | — | `[M2]` | `[T2@0]` | — | `[I2]` |
-| 19 | drain MQ → log `inner microtask` | — | — | `[T2@0]` | — | `[I2]` |
-| 20 | poll's queue empty → move to check → run I2 → log `inner setImmediate` | — | — | `[T2@0]` | — | — |
-| 21 | next iteration → timers → run T2 → log `inner setTimeout(0)` | — | — | — | — | — |
+```
+Trace the fs.readFile dispatch:
 
-Note step 20 / 21: inside an I/O callback, **check ALWAYS runs before the next timers phase**, so `setImmediate` beats `setTimeout(0)` deterministically.
+Sync execution:
+  register cb_T (timers), cb_I (check), cb_N (NT), cb_M (MQ).
+  fs.readFile → libuv thread pool starts read.
+  log 'sync end'.
 
-## Important takeaways
+Sync done; drain NT → cb_N → log 'nextTick'. NT=[].
+Drain MQ → cb_M → log 'microtask'. MQ=[].
 
-**Memorize this exact order**
-> timers → pending callbacks → idle/prepare → poll → check → close
+Iteration 1:
+  timers phase: cb_T deadline passed → run → log 'setTimeout(0)'.
+  drain NT, MQ (empty).
+  pending/idle/prepare: nothing.
+  poll: fs not done yet → block until fs completes OR timeout.
+  check: empty wait... actually we have cb_I queued. Wait — check phase fires AFTER poll.
+  Reorder: in iteration 1, poll is still waiting; loop blocks here UNTIL fs done OR
+           UNTIL non-zero timeout. With setImmediate queued, poll has a max wait of 0.
 
-**Memorize what each runs**
-- timers: `setTimeout` / `setInterval`
-- poll: I/O callbacks (fs, net) + blocks here
-- check: `setImmediate`
-- close: `'close'` event handlers
+  Skip poll wait (immediates pending) → check phase → run cb_I → log 'setImmediate'.
+  drain NT, MQ. close phase: nothing.
 
-**Memorize the interleave rule**
-- After EVERY callback: drain `process.nextTick` to empty, then drain microtasks to empty.
+Iteration 2:
+  timers: nothing.
+  poll: fs.readFile finally done → run fs callback (cb_F).
+    log '[poll] fs.readFile callback'.
+    inside cb_F: schedule cb_T2 (timers), cb_I2 (check), cb_N2 (NT), cb_M2 (MQ).
+  cb_F returns.
+  drain NT → cb_N2 → log 'inner nextTick'.
+  drain MQ → cb_M2 → log 'inner microtask'.
+  poll queue empty (cb_F was its only callback) → check phase → run cb_I2 → log 'inner immediate'.
 
-**The two priorities you must know**
-1. `process.nextTick` > microtasks > any libuv phase callback.
-2. Inside an I/O cb: `setImmediate` > `setTimeout(0)` (deterministic). From main: non-deterministic.
+Iteration 3:
+  timers: cb_T2 deadline passed → run → log 'inner setTimeout(0)'.
 
-**Common mistakes**
-- Listing only 3-4 phases. There are six. Idle/prepare is rarely user-visible but exists.
-- Saying microtasks drain only "at the end" — they drain between every single callback.
-- Treating `process.nextTick` as a microtask — it's not. It's its own queue with higher priority.
-- Forgetting that poll blocks. It's the only phase that does.
+Output:
+  sync end, nextTick, microtask, setTimeout(0), setImmediate,
+  fs.readFile callback, inner nextTick, inner microtask, inner immediate, inner setTimeout(0).
+```
 
-## Variants
+---
 
-1. **"Why might `setTimeout(fn, 1)` fire later than 1ms?"** — Because the timer phase only runs when the loop reaches it; if poll is blocked waiting on I/O for 50ms, the timer fires at 50ms+.
+## 10. Common confusion + traps
 
-2. **"How would you measure event loop lag?"** — schedule a `setImmediate`, record `process.hrtime()`, compare to expected. Or use `perf_hooks.monitorEventLoopDelay()`.
+1. **Only 3-4 phases** — there are 6.
+2. **Microtasks drain "at end"** — no, between every callback.
+3. **`nextTick` as microtask** — no, own queue.
+4. **`poll` doesn't block** — it does, when nothing else pending.
+5. **`setTimeout(1)` fires after exactly 1ms** — minimum, not exact; depends on phase reach.
+6. **`UV_THREADPOOL_SIZE` for sockets** — no, sockets use kernel epoll/kqueue; pool is for fs/dns/crypto.
+7. **Long sync in I/O cb is fine** — blocks all other I/O for that duration.
 
-3. **"How does `worker_threads` relate to the event loop?"** — each worker has its own V8 isolate AND its own libuv loop. They communicate via `MessageChannel` (which queues messages onto the receiver's loop).
+---
 
-4. **"What if my fs callback runs CPU-heavy work?"** — it blocks the poll phase. Move it to a worker thread or break into chunks with `setImmediate`.
+## 11. Senior follow-ups & variants
 
-## Revision notes
+### Variant 1 — Why might `setTimeout(fn, 1)` fire later than 1ms?
+Phase reach. If poll blocks for 50ms, timer fires at 50ms+.
 
-> **nodejs-event-loop-phases — 60 second recap**
+### Variant 2 — Measure event loop lag
+`perf_hooks.monitorEventLoopDelay()` or schedule `setImmediate` and measure delta.
+
+### Variant 3 — `worker_threads` and the loop
+Each worker has its own V8 isolate + libuv loop. Communicate via `MessageChannel`.
+
+### Variant 4 — CPU-heavy fs callback
+Blocks poll phase. Move to worker thread or chunk with `setImmediate`.
+
+### Variant 5 — `process.exit()` vs natural exit
+Natural exit when loop has zero pending handles. `unref`'d handles don't count.
+
+---
+
+## 12. How to think aloud
+
+> "Six phases in fixed order: timers, pending, idle/prepare, poll, check, close. Between every callback in every phase, drain nextTick THEN microtasks. Poll is the only blocking phase — waits for new I/O when nothing else is pending. `setTimeout(0)` runs in timers; `setImmediate` runs in check. From main: setImmediate vs setTimeout(0) is racy; from inside an I/O callback (poll), check follows deterministically so setImmediate wins. libuv thread pool (size 4, `UV_THREADPOOL_SIZE`) backs fs/dns/crypto; sockets use kernel epoll/kqueue. Trap: listing only 3-4 phases; treating nextTick as microtask; assuming poll never blocks."
+
+---
+
+## 13. 60-second revision
+
 > - **6 phases:** timers → pending → idle/prepare → poll → check → close.
-> - Each phase has its own queue; the loop visits in order, iteration after iteration.
-> - **Between every callback:** drain `process.nextTick`, then drain microtasks.
-> - **poll** is the only blocking phase; it waits for new I/O events.
-> - **timers** = `setTimeout/setInterval`. **check** = `setImmediate`. **close** = `'close'` events.
-> - From an I/O callback: `setImmediate` > `setTimeout(0)` (deterministic). From main: non-deterministic.
-> - libuv's thread pool (default size 4, `UV_THREADPOOL_SIZE`) backs fs/dns/crypto.
-> - **Trap:** recursive `process.nextTick` starves the entire loop (including I/O).
-> - **Trap:** long sync work in any callback blocks every phase.
+> - **Each callback** in each phase, drain NT + MQ between.
+> - **poll** is the only blocking phase.
+> - **`setTimeout/setInterval`** → timers; **`setImmediate`** → check; **`'close'`** → close.
+> - **Inside I/O cb:** setImmediate > setTimeout(0) deterministic.
+> - **libuv thread pool** (4, `UV_THREADPOOL_SIZE`) for fs/dns/crypto.
+> - **Sockets** use kernel epoll/kqueue (no pool).
+> - **Trap:** only 3-4 phases; nextTick as microtask; poll never blocks; long sync in cb blocks loop.
+
+---
+
+**Related:** [event-loop-concurrency.md](./event-loop-concurrency.md) · [microtask-macrotask-order.md](./microtask-macrotask-order.md) · [nexttick-vs-setimmediate.md](./nexttick-vs-setimmediate.md) · [setimmediate-vs-settimeout-in-io.md](./setimmediate-vs-settimeout-in-io.md)
+
+**Concept primer:** [`concepts/event-loop.md`](../../concepts/event-loop.md)

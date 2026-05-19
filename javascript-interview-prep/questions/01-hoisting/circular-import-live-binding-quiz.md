@@ -1,16 +1,17 @@
-# Circular Import — Live Binding Quiz
+# Circular ESM import — live binding quiz
 
-## Source / Origin
-- ES Modules spec; classic Node interop bug.
-- Asked at: Stripe, Cloudflare, Razorpay, anywhere with non-trivial module graphs.
-- Concept reference: `concepts/hoisting.md`, sibling `es-module-live-bindings.md`, `import-vs-require-hoisting.md`.
+> **Difficulty:** Senior   |   **Time:** ~15 min   |   **Prereqs:** [es-module-live-bindings.md](./es-module-live-bindings.md), [import-vs-require-hoisting.md](./import-vs-require-hoisting.md)
+>
+> **Source:** Classic Node ESM interop bug. Stripe, Cloudflare, Razorpay.
 
-## Why this question matters in interviews
-"A imports B; B imports A. Predict the output." This is the canonical ESM gotcha. Different from CJS: ESM uses *live bindings* and a *2-phase load* (link before eval), so circular imports work surprisingly often — but with traps around TDZ and "used before initialized." Senior bar: you can predict the order, identify which binding is `undefined` in the cycle, and propose the fix (refactor or lazy access).
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+A imports B; B imports A. Predict the output.
+
+**Verification examples**
+
 ```js
 // a.mjs
 import { b } from './b.mjs';
@@ -18,230 +19,236 @@ export const a = 'a-value';
 console.log('a sees b =', b);
 
 // b.mjs
-import { a } from './a.mjs';
+import { a } from './b.mjs';
 export const b = 'b-value';
 console.log('b sees a =', a);
 
-// Output (Node ESM):
-//   b sees a = undefined        ← a not yet initialized
+// node a.mjs output:
+//   b sees a = undefined        ← a const not yet initialized
 //   a sees b = 'b-value'
 ```
 
-### Edge cases / interview traps
-1. **ESM 2-phase load**: (1) link all imports across the graph (resolve dependencies, allocate bindings); (2) evaluate modules in order.
-2. **Bindings are LIVE.** When the importer reads `a`, it's reading the live cell. If at that moment `a` is not yet initialized, you see `undefined` (or TDZ throw for `let`/`const`).
-3. **The entry point determines order.** If you `node a.mjs`: a is parsed first; a imports b; b is parsed; b imports a (already parsed, no re-parse); b evaluates first → sees `a` not yet assigned → `undefined`; then a evaluates.
-4. **`const`/`let` exports throw on TDZ access**, not return undefined. `var` would return undefined.
-5. **`export default`** under a cycle is sometimes seen as undefined too if accessed before the defining module evaluates.
-6. **CJS cycles** behave differently — `require` returns whatever `module.exports` looked like at the moment, which is often `{}` (the empty initial export).
-7. **Bundlers** sometimes break cycles by inlining; behavior changes between dev and prod.
-8. **Fix patterns**: lazy access (function-level instead of top-level), restructure to remove the cycle, or use `import()` dynamically.
+| Setup                                        | Behaviour                                              |
+|----------------------------------------------|---------------------------------------------------------|
+| Both `const` exports                          | importer reads → live binding; before init = TDZ throw / undefined |
+| `var` export                                  | reads as `undefined` if accessed before assignment    |
+| CJS circular cycle                            | `require` returns `module.exports` snapshot — often `{}` |
+| Bundler in dev vs prod                         | may behave differently                                 |
+| Cyclic class `extends`                         | ReferenceError at extends evaluation                  |
 
-## Mental Model
+**Constraints**
+- ESM uses 2-phase load: link (resolve, allocate bindings) → evaluate (run modules in order).
+- Bindings are LIVE — reads always see current cell.
+- Entry-point determines evaluation order.
+- CJS circular = snapshot of partial `module.exports` (often empty).
 
-ESM module loading is **graph construction then sequential evaluation**:
+---
 
-```
-   Phase 1 — LINK:
-     parse all modules in the dep graph
-     allocate binding slots for every imported name
-     all bindings start in TDZ (or hold undefined for `var`/`function` decls)
+## 2. Plain-English restatement
 
-   Phase 2 — EVALUATE (depth-first, post-order on first encounter):
-     run each module's body
-     when an export statement is reached, the binding leaves TDZ
-     importers can read it (live)
+ESM parses the entire graph first, allocates binding cells, then evaluates modules depth-first. If module B reads `a` from A before A's evaluation completes, the live binding is still `<uninitialized>` — for `const`/`let`, that's a TDZ throw or `undefined` depending on engine; for `var`, just `undefined`. CJS handles cycles differently — `require` returns whatever `module.exports` looked like at the moment.
 
-   With a cycle:
-     A imports B, B imports A
-     start at entry → link both → eval order depends on traversal
-     whichever evaluates SECOND can see the FIRST's exports
-     whichever evaluates FIRST sees the SECOND's exports as TDZ (or undefined)
-```
+---
+
+## 3. Why this matters in interviews
+
+Tests ESM 2-phase load + live-binding mechanics + CJS interop awareness.
+
+---
+
+## 4. Mental model
 
 ```
-   entry: a.mjs
-   parse a → discovers import b
-   parse b → discovers import a (already parsed, skip)
-   evaluation order: b first (deepest unfinished), then a
+   ESM 2-phase load (per module graph):
    
-   b's body runs:
-     console.log(a)   → a is in TDZ → ReferenceError (for `const`/`let`)
-                       or undefined (for `var`/`function`)
+   Phase 1 — LINK (parse all, allocate cells, hoist imports):
+     parse a.mjs → discover import './b.mjs'
+       parse b.mjs → discover import './a.mjs' (already parsed)
+     allocate binding cells: a.a, b.b (both uninitialized)
+     wire importers to point at exporter's cells (LIVE).
    
-   a's body runs:
-     console.log(b)   → b is now fully exported → prints 'b-value'
+   Phase 2 — EVALUATE (depth-first, post-order):
+     evaluate b.mjs first (deepest in cycle)
+       reads a → cell is <uninitialized> → see undefined OR TDZ throw
+       assigns b's exports
+     evaluate a.mjs
+       reads b → already initialized → sees 'b-value'
+       assigns a's exports
+
+   CJS circular:
+     require('./b') runs b.cjs from top.
+     b.cjs hits require('./a') → a already being loaded → returns CURRENT module.exports.
+     Often that's {} (initial empty object).
+     b sees a as {} regardless of what a eventually exports.
 ```
 
-## Why interviewers care
+---
 
-- **Module-graph mental model** — separates senior from mid.
-- **Live binding awareness** — the entire reason ESM cycles work better than CJS.
-- **Debugging skill** — circular-import bugs manifest as `undefined` reads.
+## 5. Try it yourself first
 
-## Common beginner confusion
+> **Predict before reading on:**
+> 1. With ESM and `node a.mjs`, which module's body runs first?
+> 2. What does b see when it reads `a` before a's body completes?
+> 3. How does the same cycle behave in CJS?
 
-- **"Cycles are illegal."** Both ESM and CJS allow them — they may just produce surprises.
-- **"`const` exports always have values."** Not before their module evaluates.
-- **"Refactoring to a single file fixes it."** Often the right answer, but sometimes shared utilities legitimately need the cycle.
-- **"Bundlers treat cycles identically."** No — Webpack 5, Rollup, esbuild each have edge cases.
+---
 
-## Brute force approach
+## 6. Brute force — walked through
 
-Rip the cycle by inlining one module's contents into the other. Loses modularity.
+### Wrong attempt 1: "ESM cycles always crash"
+Often work — depends on whether bindings are accessed before initialization.
 
-## Optimal approach
+### Wrong attempt 2: "ESM and CJS handle cycles the same"
+Different. ESM live bindings; CJS snapshot.
 
-Two viable paths:
+### Wrong attempt 3: "Bundler behavior is consistent"
+Bundlers can inline; dev vs prod may differ.
 
-1. **Lazy access** — call the imported value only inside a function body (not at top level). By the time the function runs, the cycle has resolved.
-2. **Restructure** — extract the shared piece into a third module that neither cycles back.
+---
+
+## 7. The unlocking insight
+
+> **ESM links all bindings before any evaluation. Reads in cycle see live cell — if cell not yet initialized, undefined (var) or TDZ (let/const). CJS returns partial `module.exports` snapshot. Fix: refactor to remove cycle, lazy access (function-level), or dynamic `import()`.**
+
+Three properties:
+
+1. **2-phase ESM load** — link before evaluate.
+2. **Live bindings** — reads always see current state.
+3. **CJS cycle returns snapshot** — different mechanics.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
 // a.mjs
-import * as B from './b.mjs';
-export const a = 'a-value';
-export function useB() { return B.b; }     // lazy — works fine
+import { b } from './b.mjs';                                          // step 1: hoisted; linked
+export const a = 'a-value';                                            // step 2: initialized at exec line
+console.log('a sees b =', b);                                          // live read
 
 // b.mjs
+import { a } from './a.mjs';                                          // step 3: linked
+export const b = 'b-value';
+console.log('b sees a =', a);                                          // reads BEFORE a is initialized
+
+// Run: node a.mjs
+// Output:
+//   b sees a = undefined         ← cell <uninitialized> at this moment
+//   a sees b = 'b-value'
+
+// Fix: lazy access via function
+// b.mjs (fixed)
 import * as A from './a.mjs';
 export const b = 'b-value';
-export function useA() { return A.a; }     // lazy — works fine
+console.log('b sees a (lazy) =', () => A.a);                          // function returns live cell value LATER
 ```
 
-## Solution (JavaScript)
+**Try it yourself**
 
 ```js
-// Diagnose: log binding state at module-eval time
-// Common fix: extract shared
-// shared.mjs
-export const CONFIG = { url: 'http://x' };
+// CJS cycle behavior (different)
+// a.cjs
+const b = require('./b.cjs');
+console.log('a sees b =', b);
+module.exports.a = 'a-value';
 
-// a.mjs
-import { CONFIG } from './shared.mjs';
-export const a = `a:${CONFIG.url}`;
+// b.cjs
+const a = require('./a.cjs');   // a is in progress; returns current module.exports = {}
+console.log('b sees a =', a);    // {} (empty)
+module.exports.b = 'b-value';
 
-// b.mjs
-import { CONFIG } from './shared.mjs';
-export const b = `b:${CONFIG.url}`;
-
-// No cycle; no surprises.
+// node a.cjs output:
+//   b sees a = {}                  ← snapshot of a's empty initial exports
+//   a sees b = { b: 'b-value' }
 ```
 
-```js
-// If a cycle is necessary, use namespace + lazy access
-// circular-graph-of-types.mjs
-import * as Node from './node.mjs';
-export const Edge = {
-  describe(edge) { return `${edge.from} → ${edge.to}`; },
-  fromNodes(a, b) { return Node.Node.makeEdge(a, b); },   // lazy access
-};
+---
 
-// node.mjs
-import * as Edge from './circular-graph-of-types.mjs';
-export const Node = {
-  makeEdge(a, b) { return { from: a, to: b }; },
-  edgeDescribe: (e) => Edge.Edge.describe(e),             // lazy access
-};
-```
-
-## Step-by-step dry run
-
-```js
-// a.mjs
-import { b } from './b.mjs';
-console.log('a body:', b);
-export const a = 1;
-```
-
-```js
-// b.mjs
-import { a } from './a.mjs';
-console.log('b body:', a);
-export const b = 2;
-```
-
-Run `node a.mjs`:
+## 9. Step-by-step dry run
 
 ```
+Entry: node a.mjs
+
 LINK phase:
-  parse a.mjs → imports {b from './b.mjs'}
-  parse b.mjs → imports {a from './a.mjs'}
-  bindings allocated:
-    a's binding (in a.mjs)  : TDZ
-    b's binding (in b.mjs)  : TDZ
+  parse a.mjs:
+    found import { b } from './b.mjs'
+    parse b.mjs:
+      found import { a } from './a.mjs' (already in progress)
+  Allocate cells:
+    a.mjs.a → <uninitialized>
+    b.mjs.b → <uninitialized>
+  Wire:
+    b.mjs's local `a` reference → points at a.mjs.a cell
+    a.mjs's local `b` reference → points at b.mjs.b cell
 
-EVALUATE phase (depth-first, but a's deps must finish first):
-  ENTRY=a → a imports b → eval b first
-  b.mjs body:
-    line 1: import (already linked)
-    line 2: console.log('b body:', a)
-              → look up `a` in a.mjs's bindings → still TDZ
-              → throws ReferenceError (since `const`)
-  (a.mjs never runs)
+EVALUATE phase (depth-first post-order):
+  Evaluate b.mjs first:
+    Read a from a.mjs.a cell → cell still <uninitialized> → undefined
+    console.log('b sees a =', undefined) → 'b sees a = undefined'
+    Assign b.mjs.b = 'b-value'. Cell initialized.
+  Evaluate a.mjs:
+    Read b from b.mjs.b cell → 'b-value'
+    console.log('a sees b =', 'b-value') → 'a sees b = b-value'
+    Assign a.mjs.a = 'a-value'. Cell initialized.
 
 Output:
-  ReferenceError: Cannot access 'a' before initialization
+  b sees a = undefined
+  a sees b = b-value
 ```
 
-If `a` were `var` or `function`:
+---
 
-```js
-// a.mjs
-import { b } from './b.mjs';
-console.log('a body:', b);
-var a = 1;
-export { a };
-```
+## 10. Common confusion + traps
 
-```
-LINK: a binding holds `undefined` (var, hoisted)
-EVAL:
-  b's body: console.log('b body:', a) → reads a-binding → undefined → prints "b body: undefined"
-  b finishes (b = 2 now in binding)
-  a's body: console.log('a body:', b) → reads b-binding → 2 → prints "a body: 2"
-  a = 1
-```
+1. **"ESM cycles always crash"** — often work, just see partial state.
+2. **CJS = ESM cycle behavior** — different.
+3. **"Live bindings copy on read"** — they're cells; reads always current.
+4. **Cyclic class `extends`** → ReferenceError.
+5. **Bundler may inline** → cycle disappears in dev vs prod.
+6. **Top-level await + cycle** → silent deadlock.
+7. **`undefined` for `var` export, TDZ for `let`/`const`** — engine-dependent emit.
 
-## How to think aloud in the interview
+---
 
-> "Cycles work in ESM because of 2-phase loading: link, then evaluate. Bindings allocated at link time, populated at evaluate time. The module that evaluates *second* sees the first's exports. The first one sees the second's TDZ or `undefined`. With `const` or `let`, that's a ReferenceError. With `var` or function declarations, it's `undefined`. Fix: lazy access (function-level), or restructure to extract shared deps into a third module."
+## 11. Senior follow-ups & variants
 
-## Important takeaways
+### Variant 1 — Fix patterns
+Refactor to remove cycle; lazy access via function-level; dynamic `import()`.
 
-- **ESM 2-phase load**: link allocates bindings, evaluate fills them.
-- **Bindings are LIVE** — second-evaluated module sees first's exports.
-- **`const`/`let` in cycle → TDZ ReferenceError** if read too early.
-- **`var`/`function` → `undefined`** if read too early.
-- **Fix patterns**: (1) lazy access inside function bodies; (2) extract shared module; (3) dynamic `import()` for true lateness.
-- **CJS cycles differ** — `require()` returns whatever `module.exports` was at the time (often `{}`).
+### Variant 2 — Cyclic `extends`
+`class A extends B {} class B extends A {}` → ReferenceError at extends evaluation.
 
-## Variants
+### Variant 3 — Bundler behavior
+Rollup tree-shakes; Webpack handles cycles. Dev vs prod can differ.
 
-- **CJS cycle** — `module.exports = {}` initially; first-encounter caller sees empty object; later mutations land but bindings already captured snapshot.
-- **Bundler-resolved cycle** — Webpack 5 has runtime helpers; Rollup may inline; esbuild may bail.
-- **Worker-thread separate evaluation** — each worker re-evaluates from scratch; cycles re-encountered there too.
-- **`import()` dynamic** — defers binding to call time; useful for breaking cycles.
+### Variant 4 — TLA cycle deadlock
+Top-level await + cycle → process hangs (see top-level-await-modules).
 
-## Revision notes
+### Variant 5 — CJS interop
+`import x from 'cjs-pkg'` — Node returns `module.exports`; named imports may not be statically analyzable.
 
-```
-ESM cycle:
-  LINK: parse all, allocate binding slots (TDZ or undefined)
-  EVAL: depth-first, post-order; second-eval sees first's exports
-  
-  RESULTS:
-    const/let read before init in cycle → ReferenceError (TDZ)
-    var/function read before init in cycle → undefined
-    second-eval module always sees first-eval module's bindings populated
-  
-  FIX:
-    - lazy access (read inside a function body, not at top level)
-    - extract shared module (no cycle)
-    - dynamic await import()
-  
-CJS cycle:
-  require() returns whatever module.exports IS at the moment
-  often empty object {} → caller gets partial export
-  no TDZ; just confusing behavior
-```
+---
+
+## 12. How to think aloud
+
+> "ESM has a 2-phase load. Phase 1 LINK: parse the entire graph, allocate binding cells, wire importers to exporter cells. Phase 2 EVALUATE: run modules depth-first, post-order. With a cycle A↔B, entry point determines order. If entry is A, A imports B, so B evaluates first; B reads `a` from a's cell which is still `<uninitialized>` → undefined (for var) or TDZ throw (for let/const at access). Bindings are LIVE — they're cells, not copies. CJS handles cycles differently: `require` returns whatever `module.exports` is RIGHT NOW (often `{}`). Fix patterns: refactor cycle out, lazy access (function-level read), dynamic `import()`. Cyclic class `extends` always throws. Trap: assuming ESM and CJS cycle behavior is the same."
+
+---
+
+## 13. 60-second revision
+
+> - **ESM 2-phase load:** LINK (parse + allocate cells) → EVALUATE (post-order).
+> - **Bindings are LIVE cells** — reads always current.
+> - **Cycle:** entry determines order; deepest evaluates first; sees other's `<uninitialized>` cell.
+> - **`const`/`let` exports:** TDZ throw or undefined depending on engine emit.
+> - **`var` exports:** `undefined` if read before assignment.
+> - **CJS cycle:** `require` returns partial `module.exports` snapshot (often `{}`).
+> - **Cyclic class `extends`** → ReferenceError.
+> - **Fix:** refactor, lazy function-level access, dynamic `import()`.
+> - **Trap:** assuming ESM = CJS cycle behavior; TLA cycle deadlock.
+
+---
+
+**Related:** [es-module-live-bindings.md](./es-module-live-bindings.md) · [import-vs-require-hoisting.md](./import-vs-require-hoisting.md) · [`04-promises/top-level-await-deadlock-quiz.md`](../04-promises/top-level-await-deadlock-quiz.md) · [class-hoisting.md](./class-hoisting.md)
+
+**Concept primer:** [`concepts/hoisting.md`](../../concepts/hoisting.md)

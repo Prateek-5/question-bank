@@ -1,53 +1,135 @@
-# Build a Readable stream with `push(chunk)` / `push(null)`
+# Readable stream — `push(chunk)` / `push(null)`
 
-## Source
-- codedamn "Stream Readable Push Lab": https://codedamn.com/problem/hCvvVJhuO-Y_a1SxA6P2y
-- Canonical Node.js docs: `stream.Readable`, "Implementing a Readable stream."
+> **Difficulty:** Medium-Senior   |   **Time:** ~15 min   |   **Prereqs:** [`concepts/streams.md`](../../concepts/streams.md), [backpressure-demo.md](./backpressure-demo.md)
+>
+> **Source:** Node `stream.Readable`. codedamn lab.
 
-## Why this question matters in interviews
-Most candidates can *consume* a stream but freeze when asked to *produce* one. Building a Readable is the cleanest test of whether you understand the engine: chunks live in an internal buffer; `_read(size)` is called by Node when that buffer drops below `highWaterMark`; `push(chunk)` enqueues; `push(null)` signals EOF. Backend engineers hit this when wrapping a non-stream source (paginated API, DB cursor, message queue) as a stream so it can plug into existing pipelines. It's also a perfect stepping stone to async iterators.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### The pull model
-A Readable is **pull-based** in paused mode, **push-based** in flowing mode. Either way:
-- Node calls `_read(size)` when it wants more data.
-- You call `this.push(chunk)` zero or more times to add data.
-- You call `this.push(null)` exactly once when there is no more data ever.
-- If `push()` returns `false`, stop pushing — the consumer is full. Node will call `_read` again when it's ready.
+Build a custom `Readable` by subclassing. Implement `_read(size)` to push chunks; `push(null)` for EOF.
 
-### Modes
-- **Paused (default):** consumer must call `.read()` or attach `for await ... of`.
-- **Flowing:** triggered by attaching a `.on('data')` listener or by `.resume()`. Data is pushed at the consumer; you can't slow it down except via backpressure.
-- **objectMode:** `push` accepts any JS value (not just Buffer/string). `highWaterMark` counts *objects*, not bytes.
+**Verification examples**
 
-### `Readable.from(iterable)` — the shortcut
-For most "wrap an iterable as a stream" cases you don't write `_read` at all:
 ```js
 const { Readable } = require('node:stream');
-Readable.from(asyncGenerator());     // turns any (async)iterable into a Readable
+
+class RangeStream extends Readable {
+  constructor(start, end) {
+    super({ objectMode: true, highWaterMark: 4 });
+    this.cursor = start;
+    this.end = end;
+  }
+  _read() {
+    while (this.cursor <= this.end) {
+      if (!this.push(this.cursor++)) return;                              // respect backpressure
+    }
+    this.push(null);                                                       // EOF
+  }
+}
+
+for await (const n of new RangeStream(1, 5)) console.log(n);              // 1, 2, 3, 4, 5
 ```
-But interviewers want you to demonstrate the lower-level skill first.
 
-### Encoding gotcha
-By default chunks are Buffers. `stream.setEncoding('utf8')` switches to strings. In `objectMode` neither applies.
+**Constraints**
+- Subclass `Readable`; implement `_read(size)`.
+- `push(chunk)` enqueues; returns `false` → stop pushing (backpressure).
+- `push(null)` exactly once for EOF.
+- `destroy(err)` for error propagation.
+- Modern shortcut: `Readable.from(iterable)`.
 
-## Brute force approach
-"I'll just emit `'data'` events myself with `new EventEmitter`." That builds a fake stream that doesn't honor backpressure, doesn't integrate with `pipe`/`pipeline`, doesn't support `for await ... of`, and ignores `highWaterMark`. Reject this — the whole point is to compose with the stream ecosystem.
+---
 
-## Optimal approach
-Subclass `Readable` (or pass `read` in the options bag). Maintain internal state (a counter, an iterator, a connection cursor). In `_read`, produce one or more chunks via `this.push`, and stop when `push` returns `false`. When the source is exhausted, call `this.push(null)`.
+## 2. Plain-English restatement
 
-## Solution (JavaScript)
+A Readable is pull-based — Node calls `_read(size)` when buffer is low. You call `this.push(chunk)` until the buffer fills (`push` returns `false`). Call `this.push(null)` once when source is exhausted.
+
+---
+
+## 3. Why this matters in interviews
+
+Tests producer-side stream knowledge. Real backend: wrap DB cursor, paginated API, message queue as a stream.
+
+---
+
+## 4. Mental model
+
+```
+   class extends Readable:
+     constructor() {
+       super({ objectMode, highWaterMark });
+       // internal state (cursor, source, etc.)
+     }
+     _read(size) {
+       // Called by Node when internal buffer < highWaterMark.
+       // Push chunks until buffer full OR source exhausted.
+       while (haveMore && this.push(nextChunk));
+       if (sourceExhausted) this.push(null);
+     }
+   }
+
+   push(chunk):
+     - Adds chunk to internal buffer.
+     - Returns false when buffer ≥ highWaterMark (consumer's buffer full).
+     - STOP pushing on false; Node will call _read again later.
+
+   push(null):
+     - EOF. Exactly once. Subsequent reads receive done.
+
+   destroy(err):
+     - Propagate error to consumer; emit 'error'; tear down.
+
+   Modes:
+     - Paused (default): consumer calls .read() or for await.
+     - Flowing: 'data' listener attached or .resume() called.
+     - objectMode: any JS value; highWaterMark = entry count.
+
+   Shortcut: Readable.from(iterable | asyncIterable)
+     - Auto-implements; no _read override needed.
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. What does `push(null)` do?
+> 2. What happens if `push()` returns `false` but you keep pushing?
+> 3. When would you NOT use `Readable.from()`?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: emit 'data' manually via EventEmitter
+Doesn't honor backpressure; doesn't integrate with pipe/pipeline.
+
+### Wrong attempt 2: forget `push(null)`
+Consumer hangs forever waiting for EOF.
+
+### Wrong attempt 3: ignore push return value
+Memory bloat — buffer overflows highWaterMark.
+
+---
+
+## 7. The unlocking insight
+
+> **Subclass Readable; override `_read(size)`. Loop pushing chunks; stop on `push() === false`. `push(null)` once for EOF. `destroy(err)` for errors. Modern shortcut: `Readable.from(asyncGen)`.**
+
+Three properties:
+
+1. **`_read` is the pull hook** — Node calls when ready.
+2. **`push` returns false** → stop pushing (backpressure).
+3. **`push(null)`** = EOF, exactly once.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
-'use strict';
 const { Readable } = require('node:stream');
 
-/**
- * A Readable that emits integers from `start` to `end` (inclusive).
- * Demonstrates: _read, push(chunk), push(null), backpressure, objectMode.
- */
 class RangeStream extends Readable {
   constructor(start, end, opts = {}) {
     super({ objectMode: true, highWaterMark: 4, ...opts });
@@ -56,112 +138,159 @@ class RangeStream extends Readable {
   }
 
   _read(/* size */) {
-    // Produce in a loop, but BAIL OUT when push returns false (backpressure).
-    while (this.cursor <= this.end) {
-      const value = this.cursor++;
-      const canContinue = this.push(value);
-      if (!canContinue) return;        // consumer's buffer is full → stop
+    while (this.cursor <= this.end) {                                    // step 1: push loop
+      const v = this.cursor++;
+      if (!this.push(v)) return;                                         // step 2: backpressure
     }
-    this.push(null);                   // EOF — call exactly once
+    this.push(null);                                                     // step 3: EOF
   }
 }
 
-// Async source variant — wrap a paginated API as a Readable.
+// Async source wrapped as Readable
 class PagedApiStream extends Readable {
   constructor(fetchPage, opts = {}) {
     super({ objectMode: true, ...opts });
-    this.fetchPage = fetchPage;        // async (cursor) => { items, nextCursor }
+    this.fetchPage = fetchPage;
     this.nextCursor = null;
     this.busy = false;
   }
 
   async _read() {
-    if (this.busy) return;             // _read can be called re-entrantly
+    if (this.busy) return;                                                // step 4: reentrancy guard
     this.busy = true;
     try {
       const { items, nextCursor } = await this.fetchPage(this.nextCursor);
       for (const item of items) {
-        if (!this.push(item)) break;   // honor backpressure
+        if (!this.push(item)) break;
       }
       this.nextCursor = nextCursor;
-      if (!nextCursor) this.push(null); // last page → EOF
+      if (!nextCursor) this.push(null);
     } catch (err) {
-      this.destroy(err);               // propagate to consumer
+      this.destroy(err);                                                  // step 5: error propagation
     } finally {
       this.busy = false;
     }
   }
 }
 
-// Consume with the modern async-iterator idiom.
+// Consume
 (async () => {
   const rs = new RangeStream(1, 5);
-  for await (const n of rs) console.log(n);  // 1, 2, 3, 4, 5
+  for await (const n of rs) console.log(n);                               // 1, 2, 3, 4, 5
 })();
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
-`new RangeStream(1, 10)` with `highWaterMark: 4` consumed by `for await ... of`.
+```js
+// Modern shortcut: Readable.from
+const { Readable } = require('node:stream');
+const stream = Readable.from(async function* () {
+  for (let i = 1; i <= 5; i++) yield i;
+}());
 
-| Step | Event | State |
-| --- | --- | --- |
-| 1 | Iterator starts, Node calls `_read()` | cursor=1, buffer=[] |
-| 2 | Loop: push(1) → true. push(2) → true. push(3) → true. push(4) → false | cursor=5, buffer=[1,2,3,4]. We `return`. |
-| 3 | Consumer awaits 1 → buffer drops to 3 items | Node calls `_read()` again. |
-| 4 | Loop: push(5) → true... push(8) → false | cursor=9, buffer fills. |
-| 5 | Consumer drains | `_read` called. |
-| 6 | push(9), push(10), then `push(null)` | EOF signaled. |
-| 7 | `for await` loop exits | Stream emits `'end'`, auto-destroys. |
+for await (const x of stream) console.log(x);                             // 1..5
+// No _read override needed.
 
-**Why `if (!canContinue) return;` matters:** without it, in flowing mode the stream pushes the entire range into memory before the consumer reads anything — exactly the OOM streams are meant to prevent.
+// Error propagation
+class FlakyStream extends Readable {
+  constructor() { super({ objectMode: true }); this.count = 0; }
+  _read() {
+    if (this.count > 3) return this.destroy(new Error('boom'));
+    this.push(this.count++);
+  }
+}
+try {
+  for await (const x of new FlakyStream()) console.log(x);
+} catch (err) {
+  console.log('error:', err.message);                                     // 'error: boom'
+}
+```
 
-**Without `push(null)`:** the consumer hangs forever waiting for EOF. Common bug.
+---
 
-## Important takeaways
+## 9. Step-by-step dry run
 
-**Syntax to memorize**
-- `super({ objectMode, highWaterMark })` in the constructor — set these once.
-- `_read(size)` — Node-internal; `size` is the *hint* of how many bytes/objects it wants. You may push more or less.
-- `this.push(chunk)` returns `false` → STOP pushing.
-- `this.push(null)` → EOF, exactly once.
-- `this.destroy(err)` → propagate an error and tear down.
+```
+new RangeStream(1, 10), highWaterMark 4, consumed by for await:
 
-**Patterns to reuse**
-- Wrapping a DB cursor (`pg`'s `Cursor`, `mongodb`'s `cursor.next()`) as a Readable — same shape as `PagedApiStream`.
-- Wrapping `kafka`/`sqs` consumers as object-mode Readables → plug into a `pipeline` with a parse Transform and a DB-write Writable.
-- For most cases just use `Readable.from(asyncGenerator())` — but know the manual version for the cases where you need fine control (e.g. preflight handshake).
+Iteration start → Node calls _read():
+  cursor=1: push(1) → true. cursor=2.
+  push(2) → true. cursor=3.
+  push(3) → true. cursor=4.
+  push(4) → false (buffer at HWM 4). Return.
+  state: cursor=5, buffer=[1,2,3,4].
 
-**Common mistakes**
-- Forgetting `push(null)` → consumer hangs.
-- Calling `push(null)` more than once → throws.
-- Ignoring `push()`'s return value → memory bloat (you're now a brute-force EventEmitter).
-- Doing async work inside `_read` without a reentrancy guard → `_read` can be called again before your previous fetch resolved, leading to duplicate work.
-- Throwing from `_read` instead of `this.destroy(err)` → uncaught exception.
-- Using `objectMode: true` for byte data — defeats internal optimization.
+Consumer awaits → drains 1 → buffer=[2,3,4].
+Buffer drops below HWM → Node calls _read() again.
+  push(5) → true. cursor=6.
+  push(6) → true. cursor=7.
+  push(7) → true. cursor=8.
+  push(8) → false. Return.
+  state: cursor=9.
 
-**Related**
-- `writable-stream-implementation.md` — the other side of the pipe.
-- `async-iterator-pagination.md` — same pagination pattern, without subclassing.
-- `stream-pipeline-lab.md` — how to plug your Readable into a chain.
+Consumer drains. _read called.
+  push(9), push(10), then push(null) (EOF).
+  state: cursor=11.
 
-## Variants
+Consumer drains. for await sees done. Stream emits 'end', auto-destroys.
 
-1. **Async generator → Readable (one-liner)** — show `Readable.from(async function*() { yield 1; yield 2; }())`. Same behavior with one line of code. Interviewer might ask: "When would you NOT use `Readable.from`?" Answer: when you need to react to internal events (`'pause'`, `'resume'`) or pre-buffer state before yielding.
+Without push(null): consumer hangs forever.
+Without checking push return: memory blows up past HWM.
+```
 
-2. **Rate-limited Readable** — emit at most N items per second. Use `setTimeout` inside `_read`, but be careful to not block — push what you have, then schedule the next batch.
+---
 
-3. **Resumable Readable** — accept a `startCursor` so consumers can restart after a crash. Common pattern for log-tailing or event-replay streams.
+## 10. Common confusion + traps
 
-## Revision notes
+1. **Forget `push(null)`** — consumer hangs.
+2. **`push(null)` twice** — throws.
+3. **Ignore `push()` return** — memory bloat.
+4. **Re-entrant `_read`** with async work → duplicate work; use busy flag.
+5. **Throw in `_read`** instead of `destroy(err)` — uncaught.
+6. **`objectMode: true` for bytes** — defeats optimization.
+7. **`Readable.from` everywhere** — fine, but loses control over `'pause'`/`'resume'` events if needed.
 
-> **Readable from scratch — 60 second recap**
-> - Subclass `Readable`, set `{ objectMode, highWaterMark }` in `super()`.
-> - Override `_read(size)`; Node calls it when buffer dips below HWM.
-> - `this.push(chunk)` enqueues; returns `false` → STOP pushing.
-> - `this.push(null)` exactly once = EOF. Forgetting it = consumer hangs forever.
-> - `this.destroy(err)` to propagate failure.
-> - Modern shortcut: `Readable.from(iterable | asyncIterable)`.
-> - Consume with `for await (const x of stream)` — handles end + error implicitly.
-> - Trap: re-entrant `_read` calls during async fetch → use a `busy` flag.
-> - Trap: ignoring push's return value → loses backpressure.
+---
+
+## 11. Senior follow-ups & variants
+
+### Variant 1 — `Readable.from(asyncGenerator())`
+One-liner; same behavior.
+
+### Variant 2 — Rate-limited Readable
+`setTimeout` in `_read`; carefully don't block.
+
+### Variant 3 — Resumable Readable
+Accept `startCursor`; reconnect after crash.
+
+### Variant 4 — Object mode vs byte
+Choose based on consumer needs.
+
+### Variant 5 — Multiple Readables piped/merged
+`merge`/`zip` Readables for stream composition.
+
+---
+
+## 12. How to think aloud
+
+> "Subclass Readable; override `_read(size)`. Node calls `_read` when its internal buffer drops below `highWaterMark`. Push chunks via `this.push(chunk)`; `push` returns `false` when consumer's buffer is full — STOP pushing and return; Node calls `_read` again later. `push(null)` exactly once signals EOF. `destroy(err)` for errors. For async sources, guard against re-entrant `_read` with a `busy` flag (Node may call `_read` again before your previous fetch resolves). Modern shortcut: `Readable.from(iterable | asyncIterable)` handles everything — no `_read` override needed. Use the manual form when you need finer control (preflight handshake, custom backpressure logic, reacting to `'pause'`/`'resume'` events). Trap: forgetting push(null) (consumer hangs); ignoring push() return (memory bloat); throwing instead of destroy(); objectMode for byte data."
+
+---
+
+## 13. 60-second revision
+
+> - **Subclass `Readable`; override `_read(size)`.**
+> - **`this.push(chunk)`** enqueues; returns false → STOP.
+> - **`this.push(null)`** = EOF; exactly once.
+> - **`this.destroy(err)`** propagates error.
+> - **Async `_read`** needs reentrancy guard (`busy` flag).
+> - **Modern shortcut:** `Readable.from(iterable | asyncIterable)`.
+> - **Object mode:** any JS value; HWM = entry count.
+> - **Trap:** forget push(null) hangs consumer; ignore push return → bloat; re-entrant fetch.
+
+---
+
+**Related:** [writable-stream-implementation.md](./writable-stream-implementation.md) · [backpressure-demo.md](./backpressure-demo.md) · [async-iterator-pagination.md](./async-iterator-pagination.md) · [stream-pipeline-lab.md](./stream-pipeline-lab.md)
+
+**Concept primer:** [`concepts/streams.md`](../../concepts/streams.md)

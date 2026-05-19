@@ -1,113 +1,19 @@
-# Async iterator over a paginated API (`Symbol.asyncIterator` + `for await`)
+# Async iterator — paginated API via `Symbol.asyncIterator`
 
-## Source
-- Canonical Node.js / TC39 pattern (used by AWS SDK v3 paginators, MongoDB cursors, Kafka consumers).
-- LeetCode-style follow-up to "Generate Fibonacci Sequence" but I/O-bound.
+> **Difficulty:** Senior   |   **Time:** ~15 min   |   **Prereqs:** [custom-iterator.md](./custom-iterator.md), [fibonacci-generator.md](./fibonacci-generator.md)
+>
+> **Source:** AWS SDK v3, MongoDB cursors, Kafka consumers. Canonical Node async-iteration question.
 
-## Why this question matters in interviews
-This is THE async-iteration question for backend engineers. Every modern Node service touches a paginated source: S3 `ListObjectsV2`, DynamoDB `Scan`, Github API `?page=`, internal REST endpoints with `nextCursor`. The interview test: "Wrap a paginated REST API so the consumer can write `for await (const item of api) { ... }` without thinking about pages." Done right, the answer demonstrates: (a) `Symbol.asyncIterator` + `next()` returning a Promise, (b) lazy fetching — pages are pulled on demand, not pre-loaded, (c) memory stays O(pageSize), (d) clean integration with `Readable.from(...)` and `pipeline`. Bonus points for `AbortSignal` and error propagation.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### The async-iterator protocol
-Just like sync, but `next()` returns a Promise of `{ value, done }`.
-```js
-const asyncIter = {
-  async next() { return { value: x, done: false }; }
-};
-const asyncIterable = {
-  [Symbol.asyncIterator]() { return asyncIter; }
-};
-for await (const x of asyncIterable) { /* awaits each next() */ }
-```
+Wrap a cursor-paginated API as an async iterable. Consumer uses `for await...of`. Pages fetched lazily; memory O(pageSize).
 
-### `for await ... of` desugar
-```js
-for await (const x of obj) { body }
-// equivalent to:
-const it = obj[Symbol.asyncIterator]();
-while (true) {
-  const { value, done } = await it.next();
-  if (done) break;
-  body;
-}
-```
-Crucially, `await it.next()` means each iteration pauses for I/O — perfect for paginated fetches.
-
-### `async function*` — the sugar
-You almost never write `Symbol.asyncIterator` by hand any more. Use an async generator:
-```js
-async function* paginate(url) {
-  let cursor = null;
-  do {
-    const { items, nextCursor } = await fetchPage(url, cursor);
-    for (const item of items) yield item;
-    cursor = nextCursor;
-  } while (cursor);
-}
-for await (const item of paginate('https://api.example.com')) { /* ... */ }
-```
-This is what the AWS SDK v3 generates for every paginated operation.
-
-### Node streams as async iterables
-Every `Readable` in Node 12+ is already an async iterable. That's why `for await (const chunk of fs.createReadStream(...))` works. Conversely, `Readable.from(asyncGenerator())` converts your async generator into a full Node stream — so it plugs into `pipeline`.
-
-### Errors propagate through `await`
-If the API call throws, the `await` inside the generator rejects, which bubbles out of `for await` as a normal exception. Use try/catch around the loop.
-
-### Cancellation with `AbortSignal`
-Pass `signal` into your `fetch` call. The consumer can abort, which rejects the in-flight `await`, which bubbles out as `AbortError`.
-
-## Brute force approach
-Loop and `push` all pages into an array, then iterate the array. Defeats the entire point — for a 1M-item dataset you OOM. Also blocks the consumer until *every* page is fetched, instead of overlapping consumption with the next fetch.
-
-## Optimal approach
-Implement `[Symbol.asyncIterator]()` returning an object whose `next()` fetches the next page lazily and serves items from a local buffer. Or — cleaner — use `async function*` and `yield` items one at a time. Both have identical semantics; the async generator is 8 lines, the manual class is 30.
-
-## Solution (JavaScript)
+**Verification examples**
 
 ```js
-'use strict';
-
-/**
- * Wrap a cursor-paginated API as an async iterable.
- * Items are fetched one page at a time, on demand. Memory: O(pageSize).
- *
- * @param {(cursor: string|null, signal?: AbortSignal) => Promise<{items: T[], nextCursor: string|null}>} fetchPage
- * @param {{ signal?: AbortSignal }} [opts]
- * @returns {AsyncIterable<T>}
- */
-function paginate(fetchPage, { signal } = {}) {
-  return {
-    [Symbol.asyncIterator]() {
-      let buffer = [];
-      let cursor = null;
-      let done = false;
-
-      return {
-        async next() {
-          while (buffer.length === 0 && !done) {
-            signal?.throwIfAborted();
-            const page = await fetchPage(cursor, signal);
-            buffer = page.items;
-            cursor = page.nextCursor;
-            if (!cursor) done = true;
-          }
-          if (buffer.length === 0) return { value: undefined, done: true };
-          return { value: buffer.shift(), done: false };
-        },
-        async return(value) {        // called on `break` / `throw` in for-await
-          done = true;
-          buffer = [];
-          return { value, done: true };
-        },
-      };
-    },
-  };
-}
-
-// Generator equivalent — same semantics, 1/4 the code.
-async function* paginateGen(fetchPage, { signal } = {}) {
+async function* paginate(fetchPage, { signal } = {}) {
   let cursor = null;
   do {
     signal?.throwIfAborted();
@@ -117,112 +23,255 @@ async function* paginateGen(fetchPage, { signal } = {}) {
   } while (cursor);
 }
 
-// ---- Demo with a fake paginated API ---------------------------------------
-async function fakeApi(cursor /* , signal */) {
-  const pages = {
-    null: { items: [1, 2, 3], nextCursor: 'p2' },
-    p2:   { items: [4, 5, 6], nextCursor: 'p3' },
-    p3:   { items: [7, 8, 9], nextCursor: null  },
-  };
-  await new Promise((r) => setTimeout(r, 20));   // simulate latency
-  return pages[cursor ?? 'null'];
+for await (const item of paginate(api)) {
+  console.log(item);
+  if (item === 5) break;                                                  // generator cleanup runs
+}
+```
+
+**Constraints**
+- `[Symbol.asyncIterator]()` returns iterator whose `next()` returns Promise.
+- `async function*` is the cleanest implementation.
+- Pages fetched on demand — memory O(pageSize).
+- Thread `AbortSignal` through fetch.
+
+---
+
+## 2. Plain-English restatement
+
+`for await...of` lets consumers iterate one item at a time, awaiting each `next()`. Wrap a paginated API so callers don't think about pages. Backpressure for free — next page fetches when consumer is ready.
+
+---
+
+## 3. Why this matters in interviews
+
+THE async-iteration question for backend. Every modern Node service touches paginated sources.
+
+---
+
+## 4. Mental model
+
+```
+   Async iterable: obj[Symbol.asyncIterator]() returns async iterator.
+   Async iterator: next() returns Promise<{value, done}>.
+   
+   `for await (const x of obj) body`:
+     it = obj[Symbol.asyncIterator]()
+     while (true):
+       {value, done} = await it.next()
+       if done break
+       body with value
+   
+   async function* paginate(fetchPage):
+     let cursor = null;
+     do {
+       const page = await fetchPage(cursor);
+       for (const item of page.items) yield item;
+       cursor = page.nextCursor;
+     } while (cursor);
+   
+   Memory: O(pageSize) — only one page in memory at a time.
+   Backpressure: consumer's await throttles next fetch.
+   
+   Error propagation:
+     fetchPage rejects → await throws → for await sees rejection.
+   
+   Cancellation:
+     pass signal to fetchPage.
+     consumer break → for await calls iterator.return() → finally runs in generator.
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. Is `Symbol.asyncIterator` different from `Symbol.iterator`?
+> 2. Does `for await` await each `next()`?
+> 3. What happens to in-flight fetch on consumer `break`?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: preload all pages
+OOM on large datasets.
+
+### Wrong attempt 2: manual class with `[Symbol.asyncIterator]`
+Works but verbose; `async function*` is 8 lines.
+
+### Wrong attempt 3: ignore AbortSignal
+Long-running fetches can't be cancelled.
+
+---
+
+## 7. The unlocking insight
+
+> **`async function*` + `for await...of` = lazy paginated iteration. Each `await fetchPage` is one network call; `yield item` emits items one at a time. Memory O(pageSize). Pass `AbortSignal` for cancellation.**
+
+Three properties:
+
+1. **`async function*`** = clean implementation.
+2. **`for await` awaits each `next()`** — natural backpressure.
+3. **Errors propagate** via promise rejection.
+
+---
+
+## 8. Solution (annotated)
+
+```js
+async function* paginate(fetchPage, { signal } = {}) {                  // step 1: async generator
+  let cursor = null;
+  do {
+    signal?.throwIfAborted();                                            // step 2: abort check
+    const { items, nextCursor } = await fetchPage(cursor, signal);       // step 3: lazy fetch
+    for (const item of items) yield item;                                 // step 4: yield one-by-one
+    cursor = nextCursor;
+  } while (cursor);
 }
 
-(async () => {
-  const ac = new AbortController();
-  setTimeout(() => ac.abort(new Error('timeout')), 1000);
+// Use
+const ac = new AbortController();
+setTimeout(() => ac.abort(new Error('timeout')), 5000);
 
-  try {
-    for await (const item of paginateGen(fakeApi, { signal: ac.signal })) {
-      console.log(item);            // 1, 2, 3, 4, 5, 6, 7, 8, 9
-      if (item === 5) break;        // consumer can bail early — generator cleanup runs
-    }
-  } catch (err) {
-    if (err.name === 'AbortError') console.log('cancelled');
-    else throw err;
+try {
+  for await (const item of paginate(fetchPage, { signal: ac.signal })) {
+    console.log(item);
+    if (item === stopValue) break;                                        // step 5: cleanup auto
   }
-})();
+} catch (err) {
+  if (err.name === 'AbortError') console.log('cancelled');
+  else throw err;
+}
 
-// Bonus: plug into a Node pipeline.
+// Plug into Node pipeline
 const { Readable } = require('node:stream');
 const { pipeline } = require('node:stream/promises');
-const { Writable } = require('node:stream');
 
 await pipeline(
-  Readable.from(paginateGen(fakeApi)),    // async iterable → Node Readable
-  new Writable({
-    objectMode: true,
-    write(item, _enc, cb) { console.log('got', item); cb(); },
-  }),
+  Readable.from(paginate(fetchPage)),                                    // async iterable → stream
+  transformStream,
+  writableSink,
 );
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
-`for await (const item of paginateGen(fakeApi))` — fake API has 3 pages of 3 items.
+```js
+// Fake API
+async function fakeApi(cursor) {
+  const pages = {
+    null: { items: [1, 2, 3], nextCursor: 'p2' },
+    p2:   { items: [4, 5, 6], nextCursor: 'p3' },
+    p3:   { items: [7, 8, 9], nextCursor: null },
+  };
+  await new Promise((r) => setTimeout(r, 100));
+  return pages[cursor ?? 'null'];
+}
 
-| Tick | Generator state | Network | Consumer sees |
-| --- | --- | --- | --- |
-| 1 | enters body, cursor=null, awaits `fetchPage(null)` | request page 1 | — |
-| 2 | resolves `{ items:[1,2,3], next:'p2' }`. Loops over items, yields 1 | — | 1 |
-| 3 | next iter pull → yields 2 | — | 2 |
-| 4 | next iter pull → yields 3 | — | 3 |
-| 5 | for-loop done, outer do-while continues. cursor='p2', awaits next page | request page 2 | — |
-| 6 | yields 4, 5, 6 | — | 4, 5, 6 |
-| 7 | cursor='p3', awaits next page | request page 3 | — |
-| 8 | yields 7, 8, 9 | — | 7, 8, 9 |
-| 9 | cursor=null → loop exits → generator returns | — | done |
+for await (const item of paginate(fakeApi)) {
+  console.log(item);                                                      // 1, 2, 3, 4, 5, 6, 7, 8, 9
+}
+// 3 network calls total; one page (3 items) in memory at a time.
 
-**Critical:** only 1 page (3 items) sits in memory at a time. Network calls are interleaved with consumption. If the consumer is slow, the next fetch is held back.
+// Aggregation
+let total = 0;
+for await (const order of paginate(fetchOrders)) {
+  total += order.amount;
+}
+// Streaming reduce; memory O(1).
+```
 
-**If consumer `break`s on item 5:** the `for await` loop calls `return()` on the generator. The generator runs any `try/finally` and terminates. No 3rd page is fetched — bandwidth saved.
+---
 
-**If abort fires after item 5:** the in-flight `fetchPage(p2)` rejects with `AbortError`, the generator rejects, the `for await` rejects → caught by our try/catch.
+## 9. Step-by-step dry run
 
-## Important takeaways
+```
+for await (const item of paginate(fakeApi)):
 
-**Syntax to memorize**
-- `[Symbol.asyncIterator]()` — note the lowercase `asyncIterator`, not `AsyncIterator`.
-- `async function*` — combine the two modifiers in this exact order.
-- `for await (const x of obj)` — only valid inside async functions (or top-level await in ESM).
-- `Readable.from(asyncIterable)` — instant bridge to Node streams.
+t=0    Enter generator body. cursor=null. await fetchPage(null) → suspended.
+t=100  fetchPage resolves {items:[1,2,3], nextCursor:'p2'}.
+       for-loop: yield 1.
+       Consumer receives 1, processes, awaits next.
+       yield 2. yield 3. inner loop done.
+       cursor='p2'. await fetchPage('p2') → suspended.
+t=200  resolves {items:[4,5,6], nextCursor:'p3'}.
+       yield 4, 5, 6.
+       cursor='p3'. await fetchPage('p3') → suspended.
+t=300  resolves {items:[7,8,9], nextCursor:null}.
+       yield 7, 8, 9.
+       cursor=null. do-while exits. Generator returns.
+       for await sees done.
 
-**Patterns to reuse**
-- Wrapping any cursor source: DynamoDB `Scan`, MongoDB `find()`, Postgres cursor, Kafka consumer, GitHub/Linear/Notion REST pagination.
-- Streaming aggregations: `for await (const row of paginate(api)) { agg.add(row); }` — process unbounded data in O(1) memory.
-- Bridging async-iter ↔ Node streams via `Readable.from` and `for await` directly on streams.
+Memory: at most ONE page (3 items) at a time.
+Network: 3 calls total, sequenced.
 
-**Common mistakes**
-- Pre-fetching all pages into an array — defeats laziness, OOMs on large datasets.
-- Returning `done: true` *with* a non-null value — `for await ... of` ignores it. Only `.return()`-style callers see it.
-- Forgetting `return()` cleanup — if the consumer breaks, you may keep fetching pages in the background. With `async function*` this is automatic (the generator gets `return()` for free); with manual classes you have to write it.
-- Mixing in microtasks: `for await` awaits each iteration, so a slow consumer naturally throttles the source. Don't `Promise.all` the body unless you want unbounded concurrency.
-- Forgetting that errors inside `next()` reject the for-await loop — wrap in try/catch.
-- Not threading `AbortSignal` through to the underlying fetch — abort doesn't cancel an in-flight network call without it.
+Consumer break (e.g., at item 5):
+  for await calls iterator.return() on generator.
+  Generator's try/finally (if any) runs.
+  In-flight await fetchPage rejects with AbortError (if signal threaded).
+  Subsequent pages NOT fetched. Bandwidth saved.
 
-**Related**
-- `fibonacci-generator.md` — the sync cousin (`function*`).
-- `custom-iterator.md` — the underlying iterator protocol.
-- `readable-stream-push.md` — Node streams ARE async iterables; you can also produce them from an async generator.
-- `stream-pipeline-lab.md` — wire a paginated source into a transform/sink chain.
+Abort scenario:
+  ac.abort() at t=150 (while fetching p2).
+  fetchPage(p2) rejects with AbortError.
+  await throws → generator rejects.
+  for await receives rejection. catch handles.
+```
 
-## Variants
+---
 
-1. **Concurrent pagination (controlled prefetch)** — instead of strict "fetch next page on demand," prefetch the next page while the consumer drains the current. Useful when network latency > consumption time. Implement with a small queue + a semaphore. Watch out: abort semantics get harder.
+## 10. Common confusion + traps
 
-2. **`.toArray()` / `.take(n)` helpers** — TC39 has Iterator Helpers stable in 2025; AsyncIterator Helpers are stage-3 (`AsyncIterator.prototype.toArray`, `.take`, `.map`, etc). Mention this if asked "how would you make this chainable?" — runtime-dependent but landing soon.
+1. **Preload all pages** — OOM.
+2. **`Symbol.iterator` vs `Symbol.asyncIterator`** — different protocols.
+3. **`done: true` with value** — ignored.
+4. **Forget `.return()` cleanup** — manual class only; async generator handles automatically.
+5. **No AbortSignal threading** — abort doesn't cancel in-flight fetch.
+6. **`Promise.all` inside loop** — unbounded concurrency; defeats backpressure.
+7. **Mix sync and async iter** — different protocols; can't share.
 
-3. **Resumable pagination** — accept a `startCursor` so the iterator can resume after a crash. Combine with checkpoint-after-batch in your consumer for at-least-once processing semantics.
+---
 
-## Revision notes
+## 11. Senior follow-ups & variants
 
-> **async iterator pagination — 60 second recap**
-> - Protocol: `[Symbol.asyncIterator]()` returns iter whose `next()` returns `Promise<{value, done}>`.
-> - Sugar: `async function*` — yields one item at a time, `await` inside is allowed.
-> - `for await (const x of asyncIterable)` consumes; one-at-a-time backpressure for free.
-> - Memory: O(pageSize), not O(totalItems). Pages are pulled on demand.
-> - Node streams ARE async iterables — and `Readable.from(asyncIterable)` works in reverse.
-> - Errors thrown inside the generator reject the `for await`; catch with try/catch.
-> - Pass `AbortSignal` through to fetch + `signal?.throwIfAborted()` inside the loop.
-> - Consumer `break` → `.return()` runs → generator's `try/finally` cleans up.
-> - Trap: pre-loading all pages. Trap: forgetting to thread `signal`. Trap: ignoring early-exit cleanup.
+### Variant 1 — Prefetching with concurrency
+Maintain a queue; fetch next page in background while consumer drains current.
+
+### Variant 2 — Async iterator helpers (TC39 stage-3)
+`AsyncIterator.prototype.toArray()`, `.take(n)`, `.map`.
+
+### Variant 3 — Resumable pagination
+Accept `startCursor` for resume after crash.
+
+### Variant 4 — `Readable.from(asyncIterable)`
+Bridge to Node stream pipeline.
+
+### Variant 5 — Node streams ARE async iterables
+`for await (const chunk of fs.createReadStream(...))` works.
+
+---
+
+## 12. How to think aloud
+
+> "Async iteration protocol: `[Symbol.asyncIterator]()` returns iter whose `next()` returns `Promise<{value, done}>`. `for await (const x of obj)` awaits each `next()` — natural backpressure (slow consumer throttles fetches). Sugar: `async function*` — `await` inside is allowed; `yield` emits items. For pagination: loop fetching pages with cursor, yield items one-by-one, exit when nextCursor is null. Memory O(pageSize); 100k items × 100/page = 100 fetches sequenced. Pass `AbortSignal` to fetch so consumer can cancel — `for await` then receives AbortError. Consumer `break` automatically calls `.return()` on async generator → `try/finally` cleanup runs. Node streams ARE async iterables (since v12) and `Readable.from(asyncIterable)` bridges back. Trap: preloading pages (OOM); forgetting AbortSignal; Promise.all inside loop (unbounded concurrency); confusing sync vs async iterator protocols."
+
+---
+
+## 13. 60-second revision
+
+> - **`async function*`** + `for await...of` = lazy pagination.
+> - **`Symbol.asyncIterator`** (separate from `Symbol.iterator`).
+> - **`next()` returns `Promise<{value, done}>`**.
+> - **Memory O(pageSize)** — one page at a time.
+> - **Backpressure free** — consumer's await throttles fetches.
+> - **`AbortSignal` thread-through** for cancellation.
+> - **Consumer `break`** auto-calls `.return()` → cleanup.
+> - **Node streams ARE async iterables;** `Readable.from(asyncIterable)` bridges.
+> - **Trap:** preload pages; no signal; Promise.all (unbounded).
+
+---
+
+**Related:** [custom-iterator.md](./custom-iterator.md) · [fibonacci-generator.md](./fibonacci-generator.md) · [callback-api-to-async-iterator.md](./callback-api-to-async-iterator.md) · [fetch-response-async-iter.md](./fetch-response-async-iter.md) · [readable-stream-push.md](./readable-stream-push.md)
+
+**Concept primer:** [`concepts/streams.md`](../../concepts/streams.md), [`concepts/promises.md`](../../concepts/promises.md)

@@ -1,103 +1,129 @@
-# Implement a MinHeap / Priority Queue
+# MinHeap / Priority Queue — array-backed binary heap
 
-## Source
-- Canonical data-structures interview problem (LeetCode #703, #215, #1046; Hackerrank "Priority Queue").
-- Backbone of many practical algorithms: Dijkstra, A*, K-way merge, top-K, async task schedulers, rate limiters.
+> **Difficulty:** Medium   |   **Time:** ~25 min   |   **Prereqs:** [`concepts/recursion.md`](../../concepts/recursion.md), [circular-buffer.md](./circular-buffer.md)
+>
+> **Source:** [LeetCode 703](https://leetcode.com/problems/kth-largest-element-in-a-stream/), [215](https://leetcode.com/problems/kth-largest-element-in-an-array/), [1046](https://leetcode.com/problems/last-stone-weight/). Backbone of Dijkstra, A*, top-K, K-way merge, async schedulers.
 
-## Why this question matters in interviews
-JS doesn't ship a priority queue. Every time you see "process tasks in priority order," "find the K largest," "schedule the soonest deadline," "merge K sorted streams" — you need one. The 50-line array-backed binary heap is the canonical answer. Implementing it tests **array-as-tree indexing math** (`parent = (i-1)>>1`, `children = 2i+1, 2i+2`), **sift up / sift down**, **the difference between O(log n) push/pop and O(n log n) sort-based fakes**, and the realization that "priority queue" is just an interface — the heap is one implementation. Backend interviewers reach for this when probing whether you can build the engine room of an async queue, a rate limiter with delayed slots, or a real scheduler.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
-```js
-class MinHeap {
-  constructor() { this.heap = []; }
-
-  push(item) {
-    this.heap.push(item);
-    this._siftUp(this.heap.length - 1);
-  }
-
-  pop() {
-    if (this.heap.length === 0) return undefined;
-    const top = this.heap[0];
-    const last = this.heap.pop();
-    if (this.heap.length) {
-      this.heap[0] = last;
-      this._siftDown(0);
-    }
-    return top;
-  }
-
-  peek() { return this.heap[0]; }
-  get size() { return this.heap.length; }
-
-  _siftUp(i) {
-    while (i > 0) {
-      const p = (i - 1) >> 1;
-      if (this.heap[p] <= this.heap[i]) break;
-      [this.heap[p], this.heap[i]] = [this.heap[i], this.heap[p]];
-      i = p;
-    }
-  }
-
-  _siftDown(i) {
-    const n = this.heap.length;
-    while (true) {
-      const l = 2 * i + 1, r = 2 * i + 2;
-      let smallest = i;
-      if (l < n && this.heap[l] < this.heap[smallest]) smallest = l;
-      if (r < n && this.heap[r] < this.heap[smallest]) smallest = r;
-      if (smallest === i) break;
-      [this.heap[i], this.heap[smallest]] = [this.heap[smallest], this.heap[i]];
-      i = smallest;
-    }
-  }
+**Signature**
+```ts
+class PriorityQueue<T> {
+  constructor(compare?: (a: T, b: T) => number);
+  push(item: T): void;
+  pop(): T | undefined;
+  peek(): T | undefined;
+  size: number;
 }
 ```
 
-### Runtime / engine behavior
-- A binary heap is an **array** with implicit tree structure. For node at index `i`: parent is `(i-1) >> 1`, left child is `2i+1`, right child is `2i+2`. No pointers, no allocations per node — just an array.
-- **Heap invariant** (min-heap): every parent ≤ both children. The root is the minimum. The heap is **not sorted** — only the root is guaranteed minimum.
-- `push` appends at the end (O(1)) then sifts up (O(log n)). `pop` removes root, moves last element to root (O(1)), then sifts down (O(log n)).
-- `peek` is O(1) — just `heap[0]`.
-- Sifting is bitwise-fast: `(i - 1) >> 1` is integer division by 2. Faster and clearer than `Math.floor((i-1)/2)`.
-- Heap construction from an array (heapify) is O(n) using bottom-up sift-down — better than n push calls (O(n log n)). Worth mentioning.
+**Input / Output examples**
 
-### Edge cases (these are the interview traps)
-1. **Empty heap pop** — return `undefined`, don't throw (unless interviewer specifies). The `peek()` of an empty heap is also undefined.
-2. **Single element** — `pop()` of a 1-element heap should return that element and leave the heap empty. The "move last to root, sift down" path doesn't apply — check `if (heap.length)` after the pop.
-3. **Duplicate priorities** — heap doesn't guarantee order among equals. If you need FIFO among same-priority items, store an insertion counter as a tiebreaker (e.g., `[priority, seq, item]`).
-4. **Object items with separate priority** — store `{priority, item}` pairs. Compare on `.priority` (custom comparator).
-5. **Custom comparator** — generalize to a max-heap or sort by an arbitrary key. Pass a `compare(a, b)` function: negative if a should come first. This is the production-shape API.
-6. **Mutation during iteration** — if you push/pop while iterating, you corrupt the structure. Treat the heap as opaque; don't expose `.heap` for direct manipulation.
-7. **`pop` then `push` (replace top)** — common in K-way merge. Doing it as one operation saves one sift (replace + single sift down). Real libs expose `replace(item)`.
-8. **Numeric NaN comparison** — `NaN < anything` is `false`. NaN in the heap breaks the invariant silently. Reject NaN or validate in `push`.
-9. **`Math.floor((i-1)/2)` vs `(i-1) >> 1`** — both work for non-negative indices. Bitshift is idiomatic and faster.
+| Setup                                            | Behaviour                                              |
+|--------------------------------------------------|---------------------------------------------------------|
+| `push(5); push(2); push(8); push(1); push(3)`    | min at root: `1`                                       |
+| `pop()` 5 times                                  | `1, 2, 3, 5, 8` (sorted)                               |
+| `peek()`                                          | min without removal                                    |
+| Custom compare `(a,b) => b - a`                   | max-heap                                               |
+| Pop on empty                                      | `undefined`, no throw                                  |
+| `heapify(arr)`                                    | O(n) bottom-up build, faster than n pushes (O(n log n))|
 
-## Brute force approach
-"I'll keep a sorted array; `push` does `splice` at the right position (O(n)), `pop` removes the first (O(n) due to shift)." Correct but slow. For an interview, mention this as the baseline and reach for the heap.
+**Constraints**
+- O(log n) push, O(log n) pop, O(1) peek.
+- Array indexing: parent `(i-1) >> 1`, children `2i+1` / `2i+2`.
+- Heap invariant: every parent comes before both children per comparator.
+- **Not sorted** — only root is guaranteed minimum.
 
-Or: "I'll push without sorting and re-sort on every pop." That's O(n log n) per pop. Useless for any non-trivial workload. The whole point of the heap is amortized O(log n) per op.
+---
 
-Don't try to be clever with a sorted linked list — same time complexity, more allocations.
+## 2. Plain-English restatement
 
-## Optimal approach
-Array-backed binary heap with sift-up on push and sift-down on pop. O(log n) per op, O(1) peek. Single array, no pointer chasing — cache-friendly and GC-friendly.
+A priority queue: items go in any order, come out in priority order. JS has no built-in, so you build one with an **array used as an implicit binary tree**. The root is the highest-priority item. Push adds at the end and "sifts up" until the heap property is restored. Pop swaps root with last, removes last, then "sifts down" from the root.
 
-## Solution (JavaScript)
+---
+
+## 3. Why this matters in interviews
+
+Every "K largest," "top by priority," "soonest deadline," "merge K streams" problem needs one. The 50-line implementation tests **array-as-tree indexing**, **sift up/down**, **the difference between O(log n) heap and O(n log n) sort-based fakes**. Backend uses: async-task schedulers, rate limiters with delayed slots, K-way merge in ETL.
+
+---
+
+## 4. Mental model
+
+```
+   Array as implicit binary tree:
+   index:  0   1   2   3   4   5   6
+   value: [1, 2, 8, 5, 3, _, _]
+
+       1               ← root (index 0): the min
+      / \
+     2   8             ← indices 1, 2
+    / \
+   5   3               ← indices 3, 4
+
+   For node i:
+     parent = (i - 1) >> 1
+     left   = 2i + 1
+     right  = 2i + 2
+
+   Heap invariant: parent ≤ both children (min-heap)
+   ✗ NOT sorted — only root is guaranteed.
+
+   push(0):
+     append → [1, 2, 8, 5, 3, 0]
+     sift up from i=5:
+       parent=(5-1)>>1=2 → heap[2]=8 > 0 → swap → [1, 2, 0, 5, 3, 8]
+       i=2, parent=0 → heap[0]=1 > 0 → swap → [0, 2, 1, 5, 3, 8]
+
+   pop():
+     top=0, last=8 → put 8 at root, sift down → [1, 2, 8, 5, 3]
+     children of 0: 2, 8. min(0)=2 → swap root with 2 → [1, 8, 2, 5, 3]
+     ...
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. After `push(5); push(2); push(8); push(1)`, what is `peek()`?
+> 2. Why use `(i - 1) >> 1` instead of `Math.floor((i - 1) / 2)`?
+> 3. How is heapify(n elements) O(n) when n pushes is O(n log n)?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: sorted array
+`push` does `splice` at the right position — O(n). `pop` removes first — O(n) due to shift. Baseline; immediately upgrade.
+
+### Wrong attempt 2: push unsorted, sort on pop
+O(n log n) per pop. Useless beyond toy workloads.
+
+### Wrong attempt 3: linked list
+Same time complexity as sorted array, more allocations. Worse cache behaviour.
+
+---
+
+## 7. The unlocking insight
+
+> **Array-backed binary heap. `push` appends + sifts up; `pop` swaps root with last + sifts down. O(log n) each. Sifting is a single while-loop comparing parent vs child or self vs smaller child.**
+
+Three properties:
+
+1. **Implicit tree in array** — no pointers, cache-friendly.
+2. **Sift-up on push** — bubble new item toward root.
+3. **Sift-down on pop** — drop replacement toward leaves.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
-/**
- * Binary heap-backed priority queue. Custom comparator for min/max/object-keyed.
- * @template T
- */
 class PriorityQueue {
-  /**
-   * @param {(a: T, b: T) => number} [compare]  negative => a precedes b
-   */
-  constructor(compare = (a, b) => a - b) {
+  constructor(compare = (a, b) => a - b) {                          // step 1: default min-heap
     this.heap = [];
     this.compare = compare;
   }
@@ -106,7 +132,7 @@ class PriorityQueue {
   peek() { return this.heap[0]; }
 
   push(item) {
-    this.heap.push(item);
+    this.heap.push(item);                                            // step 2: append
     this._siftUp(this.heap.length - 1);
   }
 
@@ -115,14 +141,13 @@ class PriorityQueue {
     const top = this.heap[0];
     const last = this.heap.pop();
     if (this.heap.length > 0) {
-      this.heap[0] = last;
+      this.heap[0] = last;                                            // step 3: move last to root
       this._siftDown(0);
     }
     return top;
   }
 
-  /** O(n) heapify from an array — faster than n pushes. */
-  static heapify(items, compare) {
+  static heapify(items, compare) {                                    // step 4: O(n) build
     const pq = new PriorityQueue(compare);
     pq.heap = items.slice();
     for (let i = (pq.heap.length >> 1) - 1; i >= 0; i--) pq._siftDown(i);
@@ -132,9 +157,9 @@ class PriorityQueue {
   _siftUp(i) {
     const h = this.heap, cmp = this.compare;
     while (i > 0) {
-      const p = (i - 1) >> 1;
-      if (cmp(h[i], h[p]) >= 0) break;
-      [h[i], h[p]] = [h[p], h[i]];
+      const p = (i - 1) >> 1;                                         // parent index
+      if (cmp(h[i], h[p]) >= 0) break;                                // heap restored
+      [h[i], h[p]] = [h[p], h[i]];                                    // swap
       i = p;
     }
   }
@@ -146,14 +171,14 @@ class PriorityQueue {
       let smallest = i;
       if (l < n && cmp(h[l], h[smallest]) < 0) smallest = l;
       if (r < n && cmp(h[r], h[smallest]) < 0) smallest = r;
-      if (smallest === i) break;
+      if (smallest === i) break;                                      // heap restored
       [h[i], h[smallest]] = [h[smallest], h[i]];
       i = smallest;
     }
   }
 }
 
-// MinHeap with a `priority` field on items, FIFO tiebreaker:
+// Tiebreaker for FIFO-among-equals
 let seq = 0;
 const pq = new PriorityQueue((a, b) => a.priority - b.priority || a.seq - b.seq);
 pq.push({ priority: 2, seq: seq++, payload: 'a' });
@@ -162,84 +187,121 @@ pq.push({ priority: 2, seq: seq++, payload: 'c' });
 // pop order: b (pri 1), a (pri 2 seq 0), c (pri 2 seq 2)
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
-Input:
 ```js
-const pq = new PriorityQueue();   // default min-heap on numbers
-pq.push(5);
-pq.push(2);
-pq.push(8);
-pq.push(1);
-pq.push(3);
+const pq = new PriorityQueue();
+[5, 2, 8, 1, 3].forEach(x => pq.push(x));
+while (pq.size) console.log(pq.pop());      // 1, 2, 3, 5, 8
+
+// Max-heap
+const maxPq = new PriorityQueue((a, b) => b - a);
+[5, 2, 8].forEach(x => maxPq.push(x));
+maxPq.pop();                                 // 8
+
+// O(n) heapify
+const fast = PriorityQueue.heapify([5, 2, 8, 1, 3]);
+fast.peek();                                 // 1
 ```
 
-Heap state evolution:
-- push 5: heap=[5]. siftUp(0): i=0, exit.
-- push 2: heap=[5,2]. siftUp(1): p=0, cmp(2,5)<0 → swap → heap=[2,5]. i=0, exit.
-- push 8: heap=[2,5,8]. siftUp(2): p=0, cmp(8,2)>=0 → break.
-- push 1: heap=[2,5,8,1]. siftUp(3): p=1, cmp(1,5)<0 → swap → heap=[2,1,8,5]. i=1, p=0, cmp(1,2)<0 → swap → heap=[1,2,8,5]. i=0, exit.
-- push 3: heap=[1,2,8,5,3]. siftUp(4): p=1, cmp(3,2)>=0 → break.
+---
 
-`pop()` sequence:
-- pop: top=1. last=3 (heap.pop). heap=[3,2,8,5] (length 4). siftDown(0): l=1(2), r=2(8). smallest=1. swap heap[0]/heap[1] → [2,3,8,5]. i=1, l=3(5), r=4(oob). smallest=1 still (3 < 5). break. Returns 1.
-- pop: top=2. last=5. heap=[5,3,8] (3 elems). siftDown(0): l=1(3), r=2(8). smallest=1. swap → [3,5,8]. i=1, l=3 oob. break. Returns 2.
-- pop: top=3. last=8. heap=[8,5]. siftDown(0): l=1(5), r=2(oob). smallest=1 (5<8). swap → [5,8]. i=1, l=3 oob. break. Returns 3.
-- pop: top=5. last=8. heap=[]. push 8 back as root? No — `heap.pop` returned 8 (the last), and after that `heap.length === 0` so we skip the sift step entirely. Returns 5.
+## 9. Step-by-step dry run
 
-Wait — recheck the last pop: heap=[5,8]. top=5. last=heap.pop() → last=8, heap=[5]. heap.length=1>0, so heap[0]=8, siftDown(0). l=1 oob. break. Returns 5. Then pop again: top=8. last=heap.pop()=8, heap=[]. heap.length=0 → skip. Returns 8.
+```
+Push sequence [5, 2, 8, 1, 3]:
 
-Final pop order: 1, 2, 3, 5, 8 — sorted, as expected.
+push(5): heap=[5]                    siftUp(0): exit
+push(2): heap=[5, 2]                 siftUp(1): p=0, 2<5 → swap → [2, 5]
+push(8): heap=[2, 5, 8]              siftUp(2): p=0, 8≥2 → break
+push(1): heap=[2, 5, 8, 1]           siftUp(3): p=1, 1<5 → swap → [2, 1, 8, 5]
+                                                  i=1, p=0, 1<2 → swap → [1, 2, 8, 5]
+push(3): heap=[1, 2, 8, 5, 3]        siftUp(4): p=1, 3≥2 → break
 
-## Important takeaways
+State: [1, 2, 8, 5, 3]
+   1
+  / \
+ 2   8
+/ \
+5  3
 
-**Syntax to memorize**
-- Array indexing: parent `(i-1)>>1`, children `2i+1`, `2i+2`.
-- `push` = append + sift up. `pop` = swap root with last, pop last, sift down.
-- Sift up: while parent > self, swap and move up.
-- Sift down: while smaller child exists, swap with smaller child and move down.
-- Custom comparator: negative if `a` should come out first.
+Pop sequence:
 
-**Patterns to reuse**
-- Array-as-implicit-tree generalizes to: segment trees, Fenwick trees (BIT), k-ary heaps.
-- "Pop is swap-and-sift-down" pattern is the heart of `heapify` and heapsort.
-- Pair-with-tiebreaker (sequence counter) is the FIFO-among-equals trick — same idea is used in lodash, Linux kernel run-queues, etc.
+pop(): top=1. last=3 → heap=[3, 2, 8, 5]. siftDown(0):
+       l=1(2), r=2(8). smallest=1 (2<3). swap → [2, 3, 8, 5]
+       i=1, l=3(5), r=4 oob. smallest=1 (3<5). break.  → returns 1
 
-**Common mistakes**
-- Confusing min-heap and max-heap when copying from another language's docs. Pick a direction and stay consistent.
-- Off-by-one in children: `2i+1`, `2i+2`, not `2i` and `2i+1`. (The latter is correct for 1-indexed arrays — used in CLRS textbook; JS is 0-indexed.)
-- Not handling empty heap on pop. Don't crash; return undefined.
-- Pushing one-at-a-time when you have a batch — use `heapify` (O(n)) instead of n pushes (O(n log n)).
-- Mutating items inside the heap (e.g., changing `.priority` of an item in place). Heap invariant breaks silently. To "decrease key," remove and re-insert, or use a position map.
+pop(): top=2. last=5 → heap=[5, 3, 8]. siftDown(0):
+       l=1(3), r=2(8). smallest=1 (3<5). swap → [3, 5, 8]
+       i=1, l=3 oob. break.  → returns 2
 
-**Related questions**
-- Heapsort (heapify + n pops).
-- Top-K elements (heap of size K, evict min, keep K largest).
-- K-way merge (heap of one element per stream).
-- Dijkstra / A* (priority queue keyed by tentative distance).
-- AsyncQueue with priority (this heap is the engine).
-- Rate limiter with delayed slot release.
+pop(): top=3. last=8 → heap=[8, 5]. siftDown(0):
+       l=1(5), r=2 oob. smallest=1 (5<8). swap → [5, 8]
+       i=1, l=3 oob. break.  → returns 3
 
-## Variants
+pop(): top=5. last=8 → heap=[8]. heap.length>0 → 8 at root, siftDown(0):
+       l=1 oob. break.  → returns 5
 
-1. **Max-heap** — negate the comparator: `(a, b) => b - a`. Same data structure, reverse order.
+pop(): top=8. heap.length===0 after pop → skip siftDown. → returns 8
 
-2. **Indexed / decrease-key heap** — maintain a Map<item, index>. On `update(item, newPriority)`, look up the index and sift up or down depending on direction. O(log n). Used by Dijkstra to avoid re-inserting nodes.
+Order: 1, 2, 3, 5, 8 (sorted output).
+```
 
-3. **K-ary heap** — each node has K children instead of 2. Sift down does K comparisons per level but fewer levels. Faster for `push`-heavy workloads when K is tuned to cache line size.
+---
 
-4. **Pairing heap / Fibonacci heap** — O(1) amortized `decrease-key`. Theoretically better for Dijkstra, but constants are awful — binary heap wins in practice.
+## 10. Common confusion + traps
 
-5. **Bounded heap (top-K)** — fixed max size. On `push` past capacity, compare with root (min in max-heap) and replace. O(log K) per op regardless of input size.
+1. **Confusing min-heap and max-heap** when porting from another language. State the comparator.
+2. **Off-by-one in child indices** — `2i+1` / `2i+2` for 0-indexed; `2i` / `2i+1` for CLRS 1-indexed.
+3. **No empty-heap guard on pop** — return undefined, don't crash.
+4. **n pushes when you have a batch** — use `heapify` (O(n)) instead.
+5. **Mutating priority of an item already in heap** — silently breaks invariant. Use decrease-key indexed heap.
+6. **NaN comparisons** — `NaN < anything` is false; silently breaks invariant.
+7. **Duplicate priorities order undefined** — pair with `seq` counter for FIFO-among-equals.
 
-## Revision notes
+---
 
-> **MinHeap / PQ — 90 second recap**
-> - Array-backed binary tree. Parent `(i-1)>>1`, children `2i+1`, `2i+2`.
-> - `push`: append, sift up. `pop`: take root, move last to root, sift down. O(log n).
-> - `peek`: O(1).
-> - Custom comparator: `(a, b) => negative if a precedes b`.
-> - `heapify(arr)`: bottom-up sift-down, O(n). Faster than n pushes.
-> - FIFO-among-equals: pair with insertion counter as tiebreaker.
-> - Trap: empty-heap pop (return undefined), off-by-one in child indices, mutating priorities in place (use decrease-key indexed heap).
-> - Backbone of: top-K, K-way merge, Dijkstra/A*, rate limiter delayed slots, async queue priorities, scheduler.
+## 11. Senior follow-ups & variants
+
+### Variant 1 — Max-heap
+Negate comparator: `(a, b) => b - a`. Same DS, reversed order.
+
+### Variant 2 — Indexed / decrease-key heap
+`Map<item, index>`; `update(item, newPriority)` looks up and sifts up or down. O(log n). Used by Dijkstra.
+
+### Variant 3 — K-ary heap
+K children per node. K=4 reduces tree height; better for cache. Used in some real-world schedulers.
+
+### Variant 4 — Pairing / Fibonacci heap
+O(1) amortized decrease-key — theoretically better for Dijkstra; constants too bad in practice.
+
+### Variant 5 — Bounded heap (top-K)
+Fixed max size. On `push` past capacity, compare with root and replace. O(log K) regardless of input.
+
+### Variant 6 — `replace(item)` (pop+push fused)
+Replace top in one sift-down. Used in K-way merge.
+
+---
+
+## 12. How to think aloud
+
+> "Array-backed binary heap. Parent `(i-1)>>1`, children `2i+1`, `2i+2`. Heap invariant: parent ≤ children (min-heap). `push`: append, sift up (swap with parent while smaller). `pop`: take root, move last to root, sift down (swap with smaller child). O(log n) each, O(1) peek. Custom comparator for max-heap or object-priority. `heapify(arr)` is O(n) bottom-up sift-down — beats n pushes (O(n log n)). FIFO-among-equals: pair priority with insertion counter. Backbone of: Dijkstra, A*, top-K, K-way merge, scheduler. Trap: mutating priority in place — use decrease-key indexed heap. Trap: empty pop crash. Trap: n pushes when batch."
+
+---
+
+## 13. 60-second revision
+
+> - **Array-backed binary heap.** Parent `(i-1)>>1`, children `2i+1`, `2i+2`.
+> - **`push`** = append + sift up. **`pop`** = swap root with last, sift down. O(log n).
+> - **`peek`** = O(1) (heap[0]).
+> - **Custom comparator** for max-heap, object-priority, ties via insertion counter.
+> - **`heapify`** = bottom-up sift-down, O(n).
+> - **Decrease-key indexed heap** for Dijkstra.
+> - **Family:** top-K, K-way merge, A*, async scheduler, rate-limiter delayed slots.
+> - **Trap:** off-by-one children; empty pop; mutate priority in place; NaN.
+
+---
+
+**Related:** [trie.md](./trie.md) · [lru-cache.md](./lru-cache.md) · [`04-promises/priority-async-queue.md`](../04-promises/priority-async-queue.md) · [scheduler-idle-callback.md](./scheduler-idle-callback.md)
+
+**Concept primer:** [`concepts/recursion.md`](../../concepts/recursion.md), [`concepts/arrays.md`](../../concepts/arrays.md)

@@ -1,21 +1,118 @@
-# Generate all permutations of an array
+# Generate all permutations
 
-## Source
-- Canonical recursion / backtracking interview problem.
-- LeetCode #46 "Permutations": https://leetcode.com/problems/permutations/
-- LeetCode #47 "Permutations II" (with duplicates) is the natural follow-up: https://leetcode.com/problems/permutations-ii/
+> **Difficulty:** Medium   |   **Time:** ~12 min   |   **Prereqs:** [backtracking-template.md](./backtracking-template.md)
+>
+> **Source:** LeetCode #46.
 
-## Why this question matters in interviews
-Permutations is the **first true backtracking problem** every senior candidate is expected to nail in under 15 minutes. It tests three things at once: **recursion with branching**, **state restoration** (the "undo" step that turns a brute-force tree walk into backtracking), and **awareness that n! grows catastrophically** (n=12 already produces 479M permutations). Backend interviewers like it because the same skeleton powers permutation-based test-input generation, scheduling search, configuration enumeration, and brute-force constraint solvers. If you can't write the backtracking template for permutations, you can't write it for N-queens, sudoku, or word-search either — interviewers know this.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+Generate all `n!` permutations of an array. Backtracking with `used[]` or swap-in-place.
 
-Two canonical solutions. Memorize both.
+**Verification examples**
 
 ```js
-// (A) Pick-and-recurse with a used[] flag set
+permutations([1, 2, 3]);
+// [[1,2,3], [1,3,2], [2,1,3], [2,3,1], [3,1,2], [3,2,1]]
+
+permutations([1]);                       // [[1]]
+permutations([]);                        // [[]]
+permutations([1, 2]);                    // [[1,2], [2,1]]
+```
+
+**Constraints**
+- Output count: n!.
+- Backtracking template: choose, explore, unchoose.
+- Snapshot copy `[...current]` per complete.
+- Duplicates variant (LeetCode #47): sort + skip equal-prev when prev unused.
+
+---
+
+## 2. Plain-English restatement
+
+For each position, pick any unused element; recurse for remaining positions; unchoose. Snapshot at complete.
+
+---
+
+## 3. Why this matters in interviews
+
+First true backtracking. Tests: recursion + branching, state restoration, awareness n! grows fast.
+
+---
+
+## 4. Mental model
+
+```
+   used[] approach:
+     for each position:
+       try each unused element
+       choose it (used[i] = true, current.push)
+       recurse
+       unchoose (current.pop, used[i] = false)
+   
+   Snapshot when current.length === nums.length.
+   
+   Swap-in-place approach (O(1) extra space beyond output):
+     def perm(arr, start):
+       if start == n: push [...arr]
+       for i in start..n-1:
+         swap arr[start], arr[i]
+         perm(arr, start+1)
+         swap back
+   
+   With duplicates (LeetCode #47):
+     sort first.
+     skip i if nums[i] === nums[i-1] && !used[i-1].
+   
+   Complexity:
+     n! permutations × O(n) per snapshot = O(n × n!).
+     n=12: 479M perms; pushing arrays is the bottleneck.
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. Why snapshot copy?
+> 2. Swap vs used[] tradeoff?
+> 3. Duplicate handling logic?
+
+---
+
+## 6. Brute force — walked through
+
+```js
+// Push live state — all entries become final state
+function buggy(nums) {
+  const out = []; const cur = [];
+  function bt() {
+    if (cur.length === nums.length) { out.push(cur); return; }  // live!
+    // ...
+  }
+}
+// All entries in out point to same array → all []
+```
+
+---
+
+## 7. The unlocking insight
+
+> **`used[]` + push/pop with `[...current]` snapshot. Swap-in-place is O(1) extra. Duplicates: sort + skip dupes.**
+
+Three properties:
+
+1. **Backtrack template** choose/explore/unchoose.
+2. **Snapshot copy** at complete.
+3. **`used[]` or swap** for state.
+
+---
+
+## 8. Solution (annotated)
+
+```js
+// (A) Pick-and-recurse with used[]
 function permutations(nums) {
   const result = [];
   const current = [];
@@ -23,186 +120,182 @@ function permutations(nums) {
 
   function backtrack() {
     if (current.length === nums.length) {
-      result.push([...current]);          // snapshot, not the live array
+      result.push([...current]);                                           // step 1: snapshot
       return;
     }
     for (let i = 0; i < nums.length; i++) {
-      if (used[i]) continue;
-      used[i] = true;                     // choose
-      current.push(nums[i]);
-      backtrack();                        // explore
-      current.pop();                      // un-choose (the backtracking step)
-      used[i] = false;
+      if (used[i]) continue;                                                // step 2: skip used
+      used[i] = true; current.push(nums[i]);                                // step 3: choose
+      backtrack();
+      current.pop(); used[i] = false;                                       // step 4: unchoose
     }
   }
-
   backtrack();
   return result;
 }
 
-// (B) Swap-based in-place — generates permutations of nums[start..end]
+// (B) Swap-in-place — O(1) extra beyond output
 function permutationsSwap(nums) {
   const result = [];
-  const a = nums.slice();
-
-  function backtrack(start) {
-    if (start === a.length) {
-      result.push(a.slice());
-      return;
-    }
-    for (let i = start; i < a.length; i++) {
-      [a[start], a[i]] = [a[i], a[start]];   // swap into position
-      backtrack(start + 1);
-      [a[start], a[i]] = [a[i], a[start]];   // swap back (restore)
+  function bt(start) {
+    if (start === nums.length) { result.push([...nums]); return; }
+    for (let i = start; i < nums.length; i++) {
+      [nums[start], nums[i]] = [nums[i], nums[start]];                     // step 5: swap in
+      bt(start + 1);
+      [nums[start], nums[i]] = [nums[i], nums[start]];                     // step 6: swap back
     }
   }
-
-  backtrack(0);
+  bt(0);
   return result;
 }
-```
 
-### Runtime / engine behavior
-- **Output size is `n!`** — fixed by the problem. Time is `O(n * n!)` because each of the n! results is a length-n array we copy out. You can't beat n! — interviewers test whether you *acknowledge* this rather than try.
-- **Call-stack depth is `O(n)`** — only n nested frames at any moment, not n!. V8's default stack is ~10–15k frames, so recursion depth is never the bottleneck here; memory of the result array is.
-- **Auxiliary memory:** `current` is `O(n)`, `used` is `O(n)`, output is `O(n * n!)`. The latter dominates.
-- **`result.push([...current])`** — the spread copy is mandatory. `result.push(current)` pushes the same live reference n! times; by the time recursion unwinds, every entry is `[]`. Classic interview bug.
-- **Swap variant skips the `used[]` array** — it implicitly tracks "what's left to place" via the array suffix `a[start..end]`. Lower constant memory, but it mutates the input order during recursion (restored on backtrack).
-
-### Edge cases
-1. **Empty input** — `[]` has exactly one permutation, the empty permutation `[[]]`. Many candidates return `[]`. Wrong.
-2. **Single element** — `[1]` returns `[[1]]`.
-3. **Duplicates** — `[1, 1, 2]` produces 6 results but only 3 *distinct* permutations. To deduplicate, sort first and skip `if (i > start && a[i] === a[i-1] && !used[i-1])` (LeetCode #47).
-4. **n!! catastrophe** — at n=10, you get 3.6M results; n=12 gives 479M (likely OOM in Node). Cap `n <= 8` in any real test.
-5. **Reference aliasing** — `result.push(current)` instead of a copy is the #1 bug. Always snapshot.
-6. **Output order is implementation-defined** — pick-and-recurse yields lexicographic if input is sorted; swap-based yields a different order. Don't assume.
-7. **Immutability of input** — pick-and-recurse leaves `nums` untouched. Swap-based mutates a copy, but if you forget `.slice()`, you mutate the caller's array.
-
-## Brute force approach
-"Generate all length-n strings over the alphabet `nums` (n^n combinations) and filter to those with no duplicates." For n=8 that's 16M candidates filtered down to 40K — 400x wasted work. Not acceptable in interview; mention only to dismiss.
-
-## Optimal approach
-Backtracking. Build one permutation incrementally; on each recursive call, try every unused element at the next position. The `used[]`/swap trick prunes the search to exactly n! leaves. There is no asymptotically faster algorithm — n! results require n! work. Optimization here means **constant-factor** wins: swap variant avoids the `used[]` array and produces in-place generation.
-
-## Solution (JavaScript)
-
-```js
-/**
- * Returns every permutation of `nums` as a fresh array.
- * Time: O(n * n!) — n! results, each of length n.
- * Space: O(n * n!) for output, O(n) call stack.
- */
-function permutations(nums) {
+// With duplicates (LeetCode #47)
+function permutationsUnique(nums) {
+  nums = [...nums].sort((a, b) => a - b);
   const result = [];
   const current = [];
   const used = new Array(nums.length).fill(false);
 
-  function backtrack() {
-    if (current.length === nums.length) {
-      result.push([...current]);
-      return;
-    }
+  function bt() {
+    if (current.length === nums.length) { result.push([...current]); return; }
     for (let i = 0; i < nums.length; i++) {
       if (used[i]) continue;
-      used[i] = true;
-      current.push(nums[i]);
-      backtrack();
-      current.pop();
-      used[i] = false;
+      if (i > 0 && nums[i] === nums[i - 1] && !used[i - 1]) continue;     // step 7: dedup
+      used[i] = true; current.push(nums[i]);
+      bt();
+      current.pop(); used[i] = false;
     }
   }
-
-  backtrack();
+  bt();
   return result;
-}
-
-/**
- * Generator variant — yields permutations one at a time.
- * Critical when n! would OOM but you only need to scan results.
- */
-function* permutationsLazy(nums) {
-  const a = nums.slice();
-  function* go(start) {
-    if (start === a.length) {
-      yield a.slice();
-      return;
-    }
-    for (let i = start; i < a.length; i++) {
-      [a[start], a[i]] = [a[i], a[start]];
-      yield* go(start + 1);
-      [a[start], a[i]] = [a[i], a[start]];
-    }
-  }
-  yield* go(0);
 }
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
-Input: `permutations([1, 2, 3])`.
+```js
+permutations([1, 2, 3]).length;                               // 6
+permutations([1]).length;                                      // 1
+permutations([]).length;                                       // 1 (one empty perm)
 
-State stack (`current`, `used`):
-- `[]`, `[F,F,F]` → try i=0
-  - `[1]`, `[T,F,F]` → try i=1
-    - `[1,2]`, `[T,T,F]` → try i=2
-      - `[1,2,3]`, `[T,T,T]` → leaf → push `[1,2,3]`
-    - pop → `[1]`, `[T,F,F]`
-    - try i=2
-      - `[1,3]`, `[T,F,T]` → try i=1
-        - `[1,3,2]`, `[T,T,T]` → leaf → push `[1,3,2]`
-  - pop → `[]`, `[F,F,F]` → try i=1
-  - `[2]`, `[F,T,F]` → ...produces `[2,1,3]`, `[2,3,1]`
-  - ...produces `[3,1,2]`, `[3,2,1]`
+permutationsUnique([1, 1, 2]);                                // [[1,1,2], [1,2,1], [2,1,1]]   (3 not 6)
 
-Final: `[[1,2,3], [1,3,2], [2,1,3], [2,3,1], [3,1,2], [3,2,1]]` — exactly 3! = 6 results.
+// Iterative via next-permutation
+function nextPermutation(nums) {
+  let i = nums.length - 2;
+  while (i >= 0 && nums[i] >= nums[i + 1]) i--;
+  if (i < 0) { nums.reverse(); return false; }
+  let j = nums.length - 1;
+  while (nums[j] <= nums[i]) j--;
+  [nums[i], nums[j]] = [nums[j], nums[i]];
+  nums.splice(i + 1, nums.length - i - 1, ...nums.slice(i + 1).reverse());
+  return true;
+}
 
-The key mental model: the recursion tree is n levels deep, branching by "how many unused remain" at each level (n, n-1, n-2, ..., 1). Product = n!. The `pop()`/`used[i]=false` lines are what reset state so a sibling branch starts clean.
+function permutationsIter(nums) {
+  const sorted = [...nums].sort((a, b) => a - b);
+  const out = [[...sorted]];
+  while (nextPermutation(sorted)) out.push([...sorted]);
+  return out;
+}
+```
 
-## Important takeaways
+---
 
-**Syntax to memorize**
-- `result.push([...current])` — **snapshot**, never push the live array.
-- `used[]` flag flip pattern: set true → recurse → set false. Always paired.
-- Swap variant: `[a[i], a[j]] = [a[j], a[i]]` twice — once to choose, once to restore.
-- Base case: `current.length === nums.length`, not `nums.length === 0`.
+## 9. Step-by-step dry run
 
-**Patterns to reuse**
-- The "choose / explore / un-choose" triplet is **the backtracking template**. It's the same skeleton for: subsets (power set), combinations, N-queens, sudoku, word-search-in-grid, generate-parentheses. Lock this template in once and you have 5 problems for free.
-- `used[]` flag-set pattern works any time you can't mutate input. Swap pattern works when you can.
+```
+permutations([1, 2, 3]):
 
-**Common mistakes**
-- Pushing `current` instead of `[...current]` → all entries become `[]`.
-- Forgetting `used[i] = false` after the recursive call → only one permutation emitted.
-- Trying to memoize permutations — there's nothing to memoize. Every leaf is unique. Memoization is for **counting** permutations, not generating them.
-- Using `nums.splice(i, 1)` then `nums.unshift` — works but mutates input and is O(n) per call; pessimal constant factor.
-- Returning permutations for n > 10 in production. Interviewers will ask "what if n = 20?" Answer: "I'd switch to lazy generation (yield) and likely reframe the problem — n=20 is 2.4 quintillion permutations; the user doesn't want a list."
+bt(): cur=[]
+  i=0 (1): used[0]=T, cur=[1]
+    bt(): cur=[1]
+      i=1 (2): cur=[1,2]
+        bt(): cur=[1,2]
+          i=2 (3): cur=[1,2,3] → push [1,2,3]. pop.
+        pop=2. used[1]=F.
+      i=2 (3): cur=[1,3]
+        bt(): cur=[1,3]
+          i=1 (2): cur=[1,3,2] → push. pop.
+        pop=3. used[2]=F.
+    pop=1. used[0]=F.
+  i=1 (2): similar → [2,1,3], [2,3,1].
+  i=2 (3): similar → [3,1,2], [3,2,1].
 
-**Related questions**
-- Power set / all subsets (`09-recursion/power-set.md`)
-- Combinations (n choose k)
-- Generate parentheses (`09-recursion/generate-parentheses.md`)
-- N-queens, sudoku solver, word search
+Result: 6 permutations.
 
-## Variants
+Swap variant for [1,2,3]:
+  bt(0): swap(0,0). bt(1): swap(1,1). bt(2): push [1,2,3].
+    swap(1,2). bt(2): push [1,3,2]. swap back.
+  swap(0,1). [2,1,3]. bt(1): swap(1,1). bt(2): push [2,1,3].
+    swap(1,2). bt(2): push [2,3,1]. swap back.
+  swap back (0,1). [1,2,3].
+  swap(0,2). [3,2,1]. ... continues.
 
-1. **Permutations II (with duplicates)** — sort input, skip `if (i > 0 && nums[i] === nums[i-1] && !used[i-1])`. The `!used[i-1]` check ensures duplicates only fire in their canonical "left-most first" order, eliminating duplicate output without a `Set`.
+With duplicates [1,1,2]:
+  sorted: [1,1,2].
+  i=0 (first 1): used[0]=T. recurse.
+    i=0 used. i=1 (second 1): NO prev-skip needed (i>0 and same as prev BUT used[0]=T → skip-condition `!used[i-1]` is false → DO use). 
+    Actually re-read: skip if `nums[i]===nums[i-1] && !used[i-1]`. !used[0]=false → don't skip. Use.
+    Continue.
+  Back at outer i=1: nums[1]===nums[0] and !used[0]=true → SKIP.
+    (Already covered above branch.)
+  i=2 (2): proceed.
+```
 
-2. **k-permutations (P(n, k))** — change the base case to `current.length === k` to stop early. Output size: `n! / (n-k)!`.
+---
 
-3. **Next permutation in lexicographic order (LC #31)** — O(n) iterative algorithm: find longest non-increasing suffix, swap pivot with smallest greater in suffix, reverse suffix. Important because it lets you iterate permutations in O(n) per step rather than O(n!) total memory.
+## 10. Common confusion + traps
 
-4. **Streaming with generator** — return `function*` that `yield`s each permutation. Caller can `break` out of `for...of` after finding the first valid one — saves memory when search space is huge but answer is shallow.
+1. **Push live state** — all entries point to final.
+2. **Forget unchoose** — exponential explosion.
+3. **`used` reset** missed.
+4. **Sort + dedup skip condition** — `!used[i-1]` not `used[i-1]`.
+5. **Swap missed undo** — state corrupt.
+6. **n! grows fast** — 12! = 479M; 15! crashes.
+7. **`for..of`** without index — need index for used/swap.
 
-## Revision notes
+---
 
-> **permutations — 60 second recap**
-> - Output size **n!** — `n=10` is 3.6M, `n=12` is 479M (OOM risk).
-> - Backtracking template: **choose → explore → un-choose**.
-> - Two solutions:
->   - (A) `used[]` flag set + `current[]` builder (clean, non-mutating).
->   - (B) Swap-based in-place — lower constant memory, mutates a copy.
-> - **Trap 1:** `result.push(current)` instead of `[...current]` → all entries empty.
-> - **Trap 2:** forgetting to un-set `used[i]` → emits only one perm.
-> - Time `O(n · n!)`, stack `O(n)`, output dominates space.
-> - For huge n: switch to generator (`function*` + `yield`) — lazy emission.
-> - Duplicates → sort + skip rule (LC #47). Next-perm → O(n) iterative.
+## 11. Senior follow-ups & variants
+
+### Variant 1 — Duplicates (LeetCode #47)
+Sort + skip equal-prev when prev unused.
+
+### Variant 2 — K-th permutation directly
+Factorial number system; O(n²).
+
+### Variant 3 — Next permutation
+Lexicographic next; iterative O(n).
+
+### Variant 4 — Random permutation
+Fisher-Yates shuffle O(n).
+
+### Variant 5 — Heap's algorithm
+Single swap per perm; classic.
+
+---
+
+## 12. How to think aloud
+
+> "Permutations: backtrack template with `used[]` flag set. For each position 0..n-1: try every unused element; mark used; push to current; recurse; pop; unmark. Snapshot copy `[...current]` when `current.length === nums.length`. Swap-in-place variant uses O(1) extra space beyond output: swap `nums[start]` with each `nums[i]` for i ≥ start, recurse with start+1, swap back. With duplicates (LeetCode #47): sort first, skip if `nums[i] === nums[i-1] && !used[i-1]` — this skips choosing duplicate-of-prev when prev wasn't used in the current path (avoids generating the same permutation twice). Time: O(n × n!) — n! permutations, O(n) per snapshot/push. n=12 produces 479M; n=15 crashes. Variants: k-th permutation directly via factorial number system O(n²); next-permutation lexicographic O(n); Fisher-Yates random shuffle O(n); Heap's algorithm one-swap-per-perm. Trap: push live state (all entries become final); forget unchoose (explosion); skip-condition `!used[i-1]` not `used[i-1]` (subtle dedup bug)."
+
+---
+
+## 13. 60-second revision
+
+> - **Backtrack with `used[]`** or swap-in-place.
+> - **Choose/explore/unchoose.**
+> - **Snapshot `[...current]`** at complete.
+> - **Dedup:** sort + skip `nums[i]===nums[i-1] && !used[i-1]`.
+> - **Swap variant** O(1) extra space.
+> - **n! grows fast** — n=12 = 479M.
+> - **Next-permutation** lexicographic iter.
+> - **Fisher-Yates** for random.
+> - **Trap:** live snapshot; no unchoose; skip-condition subtle.
+
+---
+
+**Related:** [backtracking-template.md](./backtracking-template.md) · [power-set.md](./power-set.md) · [generate-parentheses.md](./generate-parentheses.md)
+
+**Concept primer:** [`concepts/recursion-and-the-call-stack.md`](../../concepts/recursion-and-the-call-stack.md)

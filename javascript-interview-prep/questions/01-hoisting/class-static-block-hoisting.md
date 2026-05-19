@@ -1,224 +1,274 @@
-# Class Static Blocks — Initialization Order & Hoisting
+# Class static blocks — initialization order & hoisting
 
-## Source / Origin
-- ES2022 (`static { ... }` blocks).
-- Asked at: Stripe, Atlassian, anywhere modern-JS knowledge is graded.
-- Concept reference: `concepts/hoisting.md`, `concepts/prototype.md`.
+> **Difficulty:** Medium-Senior   |   **Time:** ~10 min   |   **Prereqs:** [class-hoisting.md](./class-hoisting.md)
+>
+> **Source:** ES2022 (`static { ... }` blocks). Stripe, Atlassian, modern-JS-graded interviews.
 
-## Why this question matters in interviews
-Static blocks let a class run *imperative initialization code* once, in declaration order, with access to private members. They're a *new* construct (2022); senior interviews use them to test whether you've kept up with modern JS. Subtler: static blocks interact with hoisting and class-evaluation order in non-obvious ways. Get this right and you signal "I read the spec recently."
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+`static { ... }` blocks run once at class definition time, in source order. They have access to private members and `this` (the class).
+
+**Verification examples**
+
 ```js
 class Config {
   static URL = 'http://x.com';
   static defaults;
 
-  static {                              // runs once, at class definition time
+  static {                                                              // runs at class eval
     Config.defaults = { url: Config.URL, retries: 3 };
   }
-
-  // Multiple static blocks allowed; run in source order
-  static {
+  static {                                                              // second block
     Config.defaults.timeout = 5000;
   }
 }
-console.log(Config.defaults);            // {url, retries: 3, timeout: 5000}
+console.log(Config.defaults);                                           // {url, retries: 3, timeout: 5000}
 ```
 
-### Edge cases / interview traps
-1. **Run once, at class evaluation time.** Like a constructor for the class object.
-2. **Multiple blocks, in source order.** Each runs in its own (block-scoped) `this` referring to the class.
-3. **Access to private members** — `static { #x = 1 }` is allowed; useful for "friend" patterns.
-4. **`this` in a static block** = the class itself (constructor function).
-5. **TDZ for fields above.** Within a static block, fields *declared above* are accessible; fields *declared below* are TDZ.
-6. **Class itself is in TDZ at the moment of evaluating the block.** Don't reference `Config` (the binding) before it's bound — but you usually use `this` inside.
-7. **Cannot use `await`** in a static block; it's synchronous.
-8. **Order vs inheritance**: a derived class's static block runs *after* the base class is fully evaluated.
+**Verification table**
 
-## Mental Model
+| Setup                                              | Behaviour                                              |
+|----------------------------------------------------|---------------------------------------------------------|
+| Multiple static blocks                              | run in source order at class eval time                |
+| Access private static `#x`                          | allowed; useful for "friend" patterns                  |
+| `this` inside static block                          | the class constructor                                   |
+| Field above static block                            | accessible                                              |
+| Field below static block                            | TDZ — throws                                            |
+| `await` in static block                             | NOT allowed (synchronous only)                          |
+| Derived class static block                          | runs after base class fully evaluated                  |
 
-A class evaluation is a **mini-script**:
+**Constraints**
+- Runs once, synchronously, at class evaluation time.
+- Multiple blocks in source order.
+- Access to private members.
+- `this` = class constructor.
+- Fields below are TDZ.
+
+---
+
+## 2. Plain-English restatement
+
+A `static { ... }` block runs once when the class is defined — like a constructor for the class object itself. You can run imperative initialization code with access to private members. Multiple blocks execute in source order, interleaved with field initializers.
+
+---
+
+## 3. Why this matters in interviews
+
+ES2022 feature. Senior bar: know it exists, when it runs, interaction with hoisting + TDZ.
+
+---
+
+## 4. Mental model
 
 ```
+   Class evaluation order (top-to-bottom in source):
+   
    class Foo {
-     static a = 1;            // step 1: define static field a
-     static b = a + 1;        // step 2: define b, can read a
-     static { ... }           // step 3: run static block
-     static c = something();  // step 4: define c after the block
+     static A = computeA();          // field 1: A = computeA()
+     static {                         // static block 1
+       Foo.B = doSomething(Foo.A);   // can access A above
+       // Foo.C is TDZ here (declared later)
+     }
+     static C = 42;                   // field 2: C = 42 (TDZ ended)
+     static {                         // static block 2
+       Foo.D = Foo.A + Foo.C;        // both accessible now
+     }
    }
+   
+   ALL of this runs ONCE at the `class Foo {}` declaration line.
+   
+   `this` inside static block = Foo (the constructor).
+   Can access private members: `static #x = 1; static { console.log(Foo.#x); }`.
+   
+   Cannot use `await` (synchronous only).
+   Derived: child's static block runs AFTER base class fully evaluated.
 ```
 
-```
-   evaluation order:
-     1. evaluate base class (if extends)
-     2. define class binding in TDZ
-     3. in source order, evaluate each class element:
-          a. static field with initializer
-          b. static block { ... }
-          c. instance fields don't run yet — they run per `new`
-     4. class binding leaves TDZ; available externally
-```
+---
 
-## Why interviewers care
+## 5. Try it yourself first
 
-- **Spec currency** — senior candidates know ES2022 features.
-- **Initialization order** awareness.
-- **Private member friendliness** — static blocks unlock the "expose private to a sibling helper" pattern.
+> **Predict before reading on:**
+> 1. When does a static block run?
+> 2. Can you access a field declared BELOW the static block from inside it?
+> 3. Can you `await` inside a static block?
 
-## Common beginner confusion
+---
 
-- **"Static block runs on every instantiation."** No — once, at class evaluation.
-- **"`this` in static block is `undefined`."** No — it's the class.
-- **"`await` works."** It doesn't — synchronous only.
-- **"Can call instance methods."** No — instances don't exist yet.
-- **"Fields below are visible."** No — TDZ.
+## 6. Brute force — walked through
 
-## Brute force approach
+### Wrong attempt 1: "static block runs per instance"
+Wrong — runs ONCE at class evaluation.
+
+### Wrong attempt 2: "all fields available everywhere"
+Fields below the static block are TDZ.
+
+### Wrong attempt 3: "await works in static block"
+Synchronous only.
+
+---
+
+## 7. The unlocking insight
+
+> **Static blocks run ONCE at class evaluation time, in source order, interleaved with field initializers. `this` = class. Access private members. Fields below = TDZ. No await. Derived class blocks run after base.**
+
+Three properties:
+
+1. **Runs once at class eval** — like a class-object constructor.
+2. **Source order interleaving** with field initializers.
+3. **Private member access** — useful for friend patterns.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
-// Pre-ES2022 alternative — IIFE outside the class
 class Config {
-  static URL = 'http://x.com';
+  static URL = 'http://x.com';                                          // step 1: field init
+  static defaults;                                                      // step 2: declared, undefined
+
+  static {                                                              // step 3: first static block
+    Config.defaults = { url: Config.URL, retries: 3 };                  // accesses URL (above)
+  }
+
+  static {                                                              // step 4: second static block
+    Config.defaults.timeout = 5000;                                     // augment defaults
+  }
 }
-(function init() {
-  Config.defaults = { url: Config.URL, retries: 3 };
-})();
-```
 
-Works, but pollutes module scope and can't see private members.
+console.log(Config.defaults);
+// { url: 'http://x.com', retries: 3, timeout: 5000 }
 
-## Optimal approach
-
-A `static { ... }` block inside the class body. Source-ordered, can see private and prior fields, runs once.
-
-## Solution (JavaScript)
-
-```js
-class Cache {
-  static #defaultTTL = 60_000;          // private static field
-  static instances;
+// Private "friend" pattern
+class Secret {
+  static #pwd = 'sec';
 
   static {
-    Cache.instances = new Map();
-    Cache.installDefaultLogger();
+    // Allows another class to access private — write to a module-scoped var
+    revealedPwd = Secret.#pwd;
   }
-
-  static installDefaultLogger() {
-    console.log(`Cache module loaded; ttl=${Cache.#defaultTTL}ms`);
-  }
-
-  static get(name) {
-    if (!Cache.instances.has(name)) Cache.instances.set(name, new Cache(name));
-    return Cache.instances.get(name);
-  }
-
-  #name;
-  constructor(name) { this.#name = name; }
 }
 
-// Static block at evaluation:
-//   Cache.instances = new Map(); installDefaultLogger runs
-// Later:
-Cache.get('user-cache');               // new instance pushed to map
+let revealedPwd;
+// After class evaluation: revealedPwd === 'sec'
 ```
 
-The "friend access" pattern — expose a class's private to a sibling:
+**Try it yourself**
 
 ```js
-let getPrivate;
-class Vault {
-  #secret = 'sekret';
+// TDZ for fields below
+class Demo {
+  static A = 1;
   static {
-    getPrivate = (v) => v.#secret;     // captures private accessor
+    console.log(Demo.A);                                                 // 1
+    try { console.log(Demo.B); } catch (e) { console.log(e.message); }   // undefined (declared via field below, but cell exists)
+    // Note: static fields hoisted as declared but uninitialized;
+    //       reading below the declaration line in this block sees undefined.
+  }
+  static B = 2;
+  static {
+    console.log(Demo.B);                                                 // 2
   }
 }
-// outside the class
-console.log(getPrivate(new Vault()));  // 'sekret'
-```
 
-## Step-by-step dry run
-
-```js
-class A {
-  static x = 1;
-  static y = A.x + 1;
-  static { A.z = A.x + A.y; }
-  static w = A.z + 1;
+// Derived class static order
+class Base {
+  static {
+    console.log('Base static');
+  }
 }
-console.log(A.x, A.y, A.z, A.w);       // 1, 2, 3, 4
-```
-
-```
-evaluate class A:
-  step 1: A binding enters TDZ
-  step 2: in source order
-    x: A.x = 1
-    y: A.y = A.x + 1 = 2
-    static block: A.z = A.x + A.y = 1 + 2 = 3
-    w: A.w = A.z + 1 = 3 + 1 = 4
-  step 3: A binding leaves TDZ
-
-console.log(A.x, A.y, A.z, A.w):
-  1, 2, 3, 4
-```
-
-Trap version:
-
-```js
-class B {
-  static y = B.x + 1;     // B.x doesn't exist yet → NaN (undefined + 1)
-  static x = 1;
-  static { B.late = B.x + B.y; }
+class Child extends Base {
+  static {
+    console.log('Child static');
+  }
 }
-console.log(B.x, B.y, B.late);         // 1, NaN, NaN
+// Output:
+//   Base static     ← base evaluated first
+//   Child static
 ```
 
-## How to think aloud in the interview
+---
 
-> "Static block runs once at class evaluation, in source order, with `this` = the class. Can see private members and prior static fields. Useful for: complex one-time init that can't fit in a field initializer; exposing private accessors to friend modules. No `await`. TDZ rules apply for forward references. Multiple blocks run in source order, each as its own block scope."
-
-## Important takeaways
-
-- **Runs once, at class evaluation.**
-- **Source order.** Multiple blocks allowed.
-- **`this` = the class.**
-- **Can see private members and prior fields.**
-- **No `await`** (synchronous).
-- **TDZ rules**: backward references OK, forward = error.
-- **Friend pattern**: capture a closure over a private accessor.
-
-## Variants
-
-- **Decorator-driven init** — decorators (also ES2022/2023) can register the class; static block runs after decorators apply.
-- **Inheritance** — base class fully evaluated before subclass; subclass static block can see inherited statics.
-- **Mix with `Symbol.for`** — register the class globally during static init.
-- **No async** — for async init at module level, use top-level await outside the class.
-
-## Revision notes
+## 9. Step-by-step dry run
 
 ```
-class C {
-  static a = ...;
-  static b = ...;
-  static { ... }       // runs ONCE, at class definition; this = C
-  static c = ...;
-}
+class Foo definition reached at execution:
 
-Order:
-  base class (if extends) → fields/blocks in source order
-  fields ABOVE the block are accessible
-  fields BELOW are TDZ
-  
-Constraints:
-  - no await
-  - this = class
-  - multiple blocks OK; run in source order
-  - can read/write private static fields
-  
-Patterns:
-  - complex one-time init
-  - friend access: let helper; static { helper = (x) => x.#priv; }
+CLASS EVALUATION (top to bottom):
+  1. Evaluate `static A = computeA()` → Foo.A = ...
+  2. Run first static block { Foo.B = ... } 
+     - Foo.A accessible.
+     - this === Foo.
+  3. Evaluate `static C = 42` → Foo.C = 42
+  4. Run second static block { Foo.D = Foo.A + Foo.C }
+     - All three (A, B, C) accessible now.
+
+After class definition: Foo.A, Foo.B, Foo.C, Foo.D all set.
+
+Derived class:
+  class Child extends Base {
+    static { ... }
+  }
+  Evaluation:
+    Base evaluated first (all fields + static blocks).
+    Then Child's class body — fields and static blocks in order.
 ```
+
+---
+
+## 10. Common confusion + traps
+
+1. **Runs per instance** — no, once at class eval.
+2. **All fields accessible everywhere** — fields below are TDZ.
+3. **`await` works** — synchronous only.
+4. **Static blocks can be empty** — yes; useful for side-effect markers.
+5. **Multiple blocks combined** — no, each independent in source order.
+6. **`this` is undefined in static block** — `this` is the class.
+7. **Cannot access private from static block** — they CAN.
+
+---
+
+## 11. Senior follow-ups & variants
+
+### Variant 1 — Friend pattern
+Expose private to module via static block: `static { friendVar = Secret.#field }`.
+
+### Variant 2 — Singleton init
+`static { if (!instance) instance = new this() }` for lazy singleton.
+
+### Variant 3 — Symbol-keyed fields
+Static block can compute Symbol-keyed property keys.
+
+### Variant 4 — Field-then-block-then-field
+TDZ semantics: forward references throw if not yet initialized.
+
+### Variant 5 — Inheritance order
+Child class fields/blocks run AFTER base class fully evaluated.
+
+---
+
+## 12. How to think aloud
+
+> "Static block runs ONCE at class evaluation time, in source order, interleaved with field initializers. Like a constructor for the class object itself. `this` is the class constructor. Can access private members — useful for friend patterns where you expose a private to a module-scoped variable. Multiple blocks allowed; run in order. Cannot use `await` (synchronous only). Fields declared BELOW a static block are TDZ — accessing throws. Derived class: child's static block runs AFTER base class fully evaluated. Trap: thinking it runs per instance; forward field access without TDZ awareness."
+
+---
+
+## 13. 60-second revision
+
+> - **`static { ... }` runs ONCE** at class evaluation.
+> - **Source order** with field initializers.
+> - **`this`** = class constructor.
+> - **Access private members** — `static #x; static { Foo.#x }`.
+> - **No `await`** (synchronous only).
+> - **Fields below are TDZ.**
+> - **Multiple blocks** allowed; each runs in order.
+> - **Inheritance:** base fully evaluated before child's blocks.
+> - **Trap:** "runs per instance"; await; field below TDZ.
+
+---
+
+**Related:** [class-hoisting.md](./class-hoisting.md) · [tdz-let-const.md](./tdz-let-const.md) · [`03-prototype/private-class-fields.md`](../03-prototype/private-class-fields.md)
+
+**Concept primer:** [`concepts/hoisting.md`](../../concepts/hoisting.md)

@@ -1,159 +1,269 @@
-# Implement `once(fn)` — return-value caching
+# Implement `once(fn)` — invoke at most once, cache the result
 
-## Source
-- Canonical machine-coding warm-up (lodash `_.once`, Underscore, BFE.dev, codedamn frontend rounds).
-- Related to LeetCode #2666 "Allow One Function Call."
+> **Difficulty:** Easy   |   **Time:** ~10 min   |   **Prereqs:** [`concepts/closures.md`](../../concepts/closures.md), [`02-closures/once-with-cached-return.md`](../02-closures/once-with-cached-return.md)
+>
+> **Source:** lodash `_.once`, Underscore, [LeetCode 2666 — Allow One Function Call](https://leetcode.com/problems/allow-one-function-call/).
 
-## Why this question matters in interviews
-`once` is the smallest useful closure problem an interviewer can ask. It clocks in at ~5 lines but probes **closure over mutable state**, **`this`/`arguments` forwarding**, **return-value caching**, and an understanding of how `once` relates to the broader family — throttle, debounce, memoize. Senior interviewers like it because the obvious answer (`let called = false`) is correct, but the follow-ups — "what if `fn` is async?", "what about errors?", "what's the relationship to throttle?" — separate juniors from staff-level candidates. As a backend engineer you'll hit `once` in real systems: idempotent boot routines, lazy singletons, one-shot signal handlers, "show this dialog once," and module-init guards in Node servers.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+**Signature**
+```ts
+function once<F extends (...args: any[]) => any>(fn: F): F & { reset(): void };
+```
+
+**Input / Output examples**
+
+| Setup                                                | Behaviour                                              |
+|------------------------------------------------------|---------------------------------------------------------|
+| `init = once(fn); init(); init();`                   | `fn` called once; second call returns cached result    |
+| `fn` returns `undefined`                             | second call returns cached `undefined` (not re-run)    |
+| `fn` throws                                          | choose: rethrow + mark called, OR rollback + retry     |
+| `init.reset()` then `init()`                         | `fn` runs again (re-armed)                             |
+| `obj.boot = once(obj.boot); obj.boot()`              | `this` forwarded correctly                             |
+
+**Constraints**
+- Cache the **result** (including `undefined`/`null`/`0`/`""`).
+- Gate on a boolean flag, not on the cached value.
+- Forward `this` + args via `.apply`.
+- Decide error policy: mark-called-and-rethrow vs rollback.
+
+---
+
+## 2. Plain-English restatement
+
+Wrap a function so it runs at most one time. After the first call, every subsequent call returns the cached result without re-running. Use it for one-shot init routines, lazy singletons, "show this dialog once" flags, module-init guards, idempotent boot.
+
+---
+
+## 3. Why this matters in interviews
+
+`once` is the smallest closure problem with depth. The boolean+slot pattern looks trivial until follow-ups: "what if `fn` throws?", "what if `fn` is async?", "what's the relationship to throttle?" These separate juniors from staff candidates. As a backend engineer you'll see `once` for lazy DB pool init, singleton metric clients, one-shot signal handlers, idempotent migration runners.
+
+---
+
+## 4. Mental model
+
+A **fuse**: triggers once, then conducts the cached value forever.
+
+```
+   first call:
+   ┌──────────────────────────────┐
+   │ called=false                 │
+   │ run fn(args) → result        │
+   │ called=true, cache result    │
+   │ return result                │
+   └──────────────────────────────┘
+
+   subsequent calls:
+   ┌──────────────────────────────┐
+   │ called=true                  │
+   │ return cached result         │  ← O(1) hot path: one boolean read
+   │ (fn never invoked again)     │
+   └──────────────────────────────┘
+```
+
+Family relationship: **`once(fn) === throttle(fn, Infinity, {leading: true, trailing: false})`**.
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. If `fn` returns `undefined`, will the second call invoke `fn` again? (Hint: depends on what you gate on.)
+> 2. If `fn` throws on the first call, should the second call retry or rethrow the cached error?
+> 3. Why use `fn.apply(this, args)` instead of `fn(...args)`?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: gate on cached value
 ```js
-const init = once(expensiveBoot);
-init();  // runs expensiveBoot, caches result
-init();  // returns cached result; expensiveBoot NOT invoked again
-
 function once(fn) {
-  let called = false;
   let result;
   return function (...args) {
-    if (called) return result;
-    called = true;
+    if (result !== undefined) return result;        // BUG
     result = fn.apply(this, args);
     return result;
   };
 }
 ```
+If `fn` returns `undefined`, every call re-invokes. Gate on a boolean flag, not on the value.
 
-### Runtime / engine behavior
-- The boolean `called` and the cached `result` live in the closure scope of the outer function. They survive between calls because the returned function retains a reference to that scope.
-- `fn.apply(this, args)` forwards both `this` and arguments — the same forwarding pattern as `debounce`/`throttle`.
-- Once `called` flips to `true`, the closure permanently shortcuts. The `fn` reference can be **nulled out** after the first call to free its heap retention (lodash does this).
-- Hot path after first call is `if (called) return result` — a single boolean read and a return. Cheaper than a memoize Map lookup.
+### Wrong attempt 2: set called BEFORE running fn (no rollback)
+```js
+called = true;
+result = fn(...);    // throws → called stays true, future calls return undefined
+```
+Silently swallows the error on subsequent calls. Either: rollback on throw, or document that "first call's error is permanent."
 
-### Edge cases (these are the interview traps)
-1. **What does `fn` returning `undefined` mean?** — `result` stays `undefined`, but `called` is `true`. Subsequent calls return `undefined`, which is correct. Don't gate on `result == null`.
-2. **What if `fn` throws on first call?** — naive impl sets `called = true` first, then throws → next call returns stale `undefined` silently. Better: set `called = true` **only after** `fn` returns successfully. Or expose both: "permanently failed" vs "not-yet-called."
-3. **Async `fn`** — if `fn` returns a Promise, caching the Promise is what you want (concurrent callers share the in-flight Promise). Caching the resolved value would require `await`-ing inside, which changes the signature to async.
-4. **`this` binding** — `fn.apply(this, args)`. If you forget, method-style usage like `obj.boot = once(obj.boot)` loses `this`.
-5. **Reset?** — interviewers will ask: "expose `.reset()` so testing can re-arm it." Easy add: clear `called` and `result`.
-6. **`new`-ability** — if `fn` is a constructor, `once` will not behave as a constructor. Out of scope for the common case; mention if asked.
-7. **Memory** — after the first call, you can `fn = null` inside the closure to release the original function. Useful when `fn` holds large captured state (config, db handles).
-8. **Relationship to throttle** — `once(fn)` is mathematically `throttle(fn, { leading: true, trailing: false, wait: Infinity })`. State the equivalence — interviewers love it.
+### Wrong attempt 3: set called AFTER running fn (re-entrant infinite loop)
+```js
+result = fn.apply(this, args);    // if fn re-invokes the wrapper, recurses forever
+called = true;
+```
+If `fn` itself calls the wrapper (re-entrant), it loops. Set called BEFORE — accept the trade-off.
 
-## Brute force approach
-"I'll use a counter and check `count === 0`." Works but conflates a flag with a counter — you've introduced state you don't need. Drop. The boolean is canonical.
+---
 
-Another wrong path: "I'll set `fn = () => result` after the first call." This would re-bind `fn` inside the closure, but you'd lose the original arity / name and it doesn't simplify anything. The boolean-flag version is what interviewers expect.
+## 7. The unlocking insight
 
-## Optimal approach
-Closure over a single boolean + cached return value. O(1) memory, O(1) per call (after first). The first call pays the cost of `fn`; every call after is a boolean check and a return.
+> **Closure over a boolean flag + cached result. Gate the hot path on the flag, not on the value. Forward `this` + args via `.apply`. Pick an error policy (rethrow vs rollback) and document it.**
 
-## Solution (JavaScript)
+Three properties:
+
+1. **Boolean flag** as sentinel — handles `undefined`/`null`/`0`/`""` correctly.
+2. **`.apply(this, args)`** preserves method-style use.
+3. **Error policy:** set `called = true` first, then in `catch` either rollback (`called = false; throw`) or commit (`throw` only). Document the choice.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
-/**
- * Returns a function that invokes `fn` at most once. Subsequent calls return
- * the cached result of the first invocation.
- *
- * @param {Function} fn
- * @returns {Function & { reset: () => void }}
- */
 function once(fn) {
-  let called = false;
+  let called = false;                                            // step 1: closure-scoped flag
   let result;
 
   function onced(...args) {
-    if (called) return result;
-    // Set called BEFORE fn runs so re-entrant calls (fn calls onced)
-    // don't infinitely recurse. Trade-off: a throw still marks it as called.
-    called = true;
+    if (called) return result;                                   // step 2: hot path, gate on flag
+
+    called = true;                                                // step 3: set BEFORE to block re-entry
     try {
-      result = fn.apply(this, args);
+      result = fn.apply(this, args);                              // step 4: forward this + args
     } catch (err) {
-      // Roll back so the next call can retry. Pick one policy and document it.
-      called = false;
+      called = false;                                             // step 5: rollback so caller can retry
       throw err;
     }
     return result;
   }
 
-  onced.reset = () => {
-    called = false;
-    result = undefined;
-  };
+  onced.reset = () => { called = false; result = undefined; };   // step 6: re-arm for tests
 
   return onced;
 }
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
-Input:
 ```js
 let counter = 0;
-const init = once(() => {
-  counter++;
-  return { id: counter, time: Date.now() };
-});
+const init = once(() => { counter++; return { id: counter, time: Date.now() }; });
 
 const a = init();
 const b = init();
 const c = init();
-console.log(a === b, b === c, counter);
+console.log(a === b, b === c, counter);   // true true 1
+
+init.reset();
+const d = init();
+console.log(d === a, counter);             // false 2
 ```
 
-Trace:
-- Call 1 (`init()`): `called=false` → enter. Set `called=true`. Run `fn`: `counter=1`, returns `{id:1, time:T}`. Store in `result`. Return `result`. `a = {id:1, time:T}`.
-- Call 2 (`init()`): `called=true` → return cached `result`. `b === a` (same reference).
-- Call 3 (`init()`): same. `c === a`.
-- `counter` is still `1`. `fn` ran exactly once.
+Async usage — cache the **Promise** so concurrent callers share the in-flight call:
 
-Output: `true true 1`.
+```js
+const fetchConfig = once(() => fetch('/config.json').then(r => r.json()));
+const [a, b] = await Promise.all([fetchConfig(), fetchConfig()]);  // 1 network call
+console.log(a === b);   // true (same resolved object)
+```
 
-If `init.reset()` is called between 2 and 3, call 3 re-runs `fn`, `counter` becomes 2, and `c !== a`.
+---
 
-## Important takeaways
+## 9. Step-by-step dry run
 
-**Syntax to memorize**
-- `let called = false, result;` in outer scope. Never inside the returned function.
-- `if (called) return result;` as the first line of the wrapper — the hot path.
-- `fn.apply(this, args)` for forwarding.
+```
+let counter = 0
+const init = once(() => { counter++; return { id: counter } })
 
-**Patterns to reuse**
-- The "closure over a boolean + cached value" pattern is the skeleton of: `memoize` (Map instead of single slot), `lazy(getter)` (no args), `singleton(factory)` (DI containers).
-- `once(fn) === throttle(fn, Infinity, { leading: true, trailing: false })`. State this equivalence in the interview — it shows you see the family.
+call init():    called=false → enter branch
+                set called=true
+                run fn → counter=1, return {id:1}
+                cache result={id:1}
+                return {id:1}
+                state: called=true, result={id:1}, counter=1
 
-**Common mistakes**
-- Forgetting `this` forwarding (breaks `obj.method = once(obj.method)`).
-- Setting `called = true` **after** `fn.apply` — re-entrant calls from inside `fn` will loop forever.
-- Gating on `result != null` instead of `called`. Fails when `fn` legitimately returns `null`/`undefined`/`0`/`""`.
-- Returning the cached `result` even when `fn` threw — caller never sees the error on subsequent calls.
+call init():    called=true → return cached {id:1}
+                state unchanged; counter=1
 
-**Related questions**
-- `memoize(fn)` — same shape, Map-keyed by args.
-- `lazy(getter)` — zero-arg variant.
-- `throttle(fn, wait, { leading, trailing })` — `once` is the `wait=Infinity` case.
-- Singleton in DI container.
+call init():    called=true → return cached {id:1}
+                state unchanged; counter=1
 
-## Variants
+call init.reset():
+                called=false, result=undefined
+                counter unchanged
 
-1. **`onceAsync(fn)`** — `fn` returns a Promise. Cache the Promise itself so concurrent callers all `await` the same in-flight call. If you cache the resolved value instead, the second concurrent caller would re-invoke `fn` before the first settles.
+call init():    called=false → enter branch
+                set called=true
+                run fn → counter=2, return {id:2}
+                cache result={id:2}
+                state: called=true, result={id:2}, counter=2
+```
 
-2. **`onceWithReset(fn)`** — expose `.reset()` (shown above). Useful for tests and circuit-breaker style "after cooldown, try again."
+---
 
-3. **`onceOrThrow(fn)`** — instead of returning the cached value, throw on second call. Used for one-shot tokens (CSRF, single-use callbacks, "you can only consume this stream once").
+## 10. Common confusion + traps
 
-4. **N-times variant — `times(fn, n)`** — generalize: invoke `fn` at most `n` times, return cached `result` after. Same shape with a counter.
+1. **Gating on `result != null`** — fails when `fn` legitimately returns `null`/`undefined`/`0`/`""`.
+2. **Forgetting `this` forwarding** — breaks `obj.method = once(obj.method)`.
+3. **Setting flag after fn runs** — re-entrant infinite loop.
+4. **Setting flag before fn runs, no rollback** — first throw poisons future calls.
+5. **Async: caching the resolved value** — second concurrent caller re-invokes `fn` before first settles. Cache the Promise.
+6. **Forgetting `.reset()`** — interviewer asks "how do you test this?"; no escape hatch.
+7. **Memory** — closed-over `fn` retains its captured state forever; null it out after first call if it holds large data.
 
-## Revision notes
+---
 
-> **once — 30 second recap**
-> - Closure over `called` flag + cached `result`.
-> - First call: run `fn.apply(this, args)`, cache result, set flag. Subsequent: return cached.
-> - Forward `this` + args; gate on the flag, not on `result`.
-> - Same family as throttle (`once == throttle{leading, !trailing, wait: Infinity}`), memoize (single-slot Map), lazy.
-> - Trap: setting `called=true` after `fn` runs → re-entrant infinite loop. Or before → throw leaves it permanently broken.
-> - Expose `.reset()` for tests.
+## 11. Senior follow-ups & variants
+
+### Variant 1 — `onceAsync(fn)`
+Cache the in-flight Promise so concurrent callers share it. On reject, evict so the next call retries.
+```js
+function onceAsync(fn) {
+  let promise = null;
+  return (...args) => {
+    if (promise) return promise;
+    promise = Promise.resolve().then(() => fn.apply(this, args)).catch((e) => { promise = null; throw e; });
+    return promise;
+  };
+}
+```
+
+### Variant 2 — `onceOrThrow(fn)`
+Throw on second call instead of returning cached value. For one-shot tokens (CSRF, single-use callbacks, "stream may only be consumed once").
+
+### Variant 3 — N-times variant `times(fn, n)`
+Generalize: invoke at most `n` times, then cache. Counter instead of boolean.
+
+### Variant 4 — Memory release
+After first call, `fn = null` inside the closure to release the original function's captured state.
+
+### Variant 5 — Relationship to throttle family
+`once(fn) === throttle(fn, Infinity, {leading: true, trailing: false})`. State this — it's the link.
+
+---
+
+## 12. How to think aloud
+
+> "Closure over `called` flag + cached `result`. Hot path: `if (called) return result`. First call: set `called = true` first (to block re-entry), then run `fn.apply(this, args)`; on throw, rollback `called = false` so caller can retry. Gate on the flag, not on the value — handles `fn → undefined`. Async variant caches the Promise so concurrent callers share in-flight call. Family: `once === throttle(_, Infinity, {leading, !trailing})`, same shape as memoize (single-slot), lazy. Trap: setting `called = true` after `fn` runs → re-entrant infinite loop."
+
+---
+
+## 13. 60-second revision
+
+> - **Closure over `called` (boolean) + `result`.**
+> - **Hot path:** `if (called) return result`.
+> - **Set `called = true` BEFORE running** to block re-entry; rollback in catch.
+> - **`fn.apply(this, args)`** for method-style use.
+> - **Gate on the flag, not on the value** — handles cached `undefined`/`0`/`""`.
+> - **Async:** cache the Promise (dedupe in-flight); evict on reject.
+> - **Family:** `once === throttle{leading, !trailing, wait=Infinity}`; memoize (single-slot); lazy.
+> - **Trap:** gating on result; missing `.apply`; re-entrant loop.
+
+---
+
+**Related:** [`02-closures/once-with-cached-return.md`](../02-closures/once-with-cached-return.md) · [`02-closures/allow-one-function-call.md`](../02-closures/allow-one-function-call.md) · [memoize.md](./memoize.md) · [throttle.md](./throttle.md) · [`04-promises/async-memoize.md`](../04-promises/async-memoize.md)
+
+**Concept primer:** [`concepts/closures.md`](../../concepts/closures.md)

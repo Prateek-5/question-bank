@@ -1,170 +1,264 @@
-## Source
-- codedamn "Node.js Stream Pipeline Lab": https://codedamn.com/problem/ru5OH8OPupFFpOY0AGoMD
-- Canonical Node.js docs pattern (`stream.pipeline` / `node:zlib` / `node:fs`).
-
 # Build a file-transfer pipeline (Readable → gzip Transform → Writable)
 
-## Why this question matters in interviews
-This is the most common "do you actually understand Node streams" question for backend engineers. The naive answer is `src.pipe(gzip).pipe(dest)` — which is wrong in production because errors on any step leak the other handles and the file descriptors stay open. Interviewers want to see you reach for **`stream.pipeline`** (callback or `promises` form) which propagates errors and auto-destroys every stream in the chain. It also tests whether you know that **gzip is a Transform stream** (Readable+Writable in one), that backpressure flows end-to-end through `pipe`/`pipeline`, and that file I/O in Node is stream-first.
+> **Difficulty:** Medium   |   **Time:** ~10 min   |   **Prereqs:** [readable-stream-push.md](./readable-stream-push.md), [writable-stream-implementation.md](./writable-stream-implementation.md)
+>
+> **Source:** Node `stream/promises#pipeline`. codedamn lab.
 
-## Concepts involved
+---
 
-### The four stream types — mental model
-| Type | Direction | Override | Real example |
-| --- | --- | --- | --- |
-| Readable | source / out | `_read(size)` | `fs.createReadStream`, HTTP request body |
-| Writable | sink / in | `_write(chunk, enc, cb)` | `fs.createWriteStream`, HTTP response |
-| Duplex | both, independent | `_read` + `_write` | TCP socket |
-| Transform | both, in→out mapped | `_transform(chunk, enc, cb)` | `zlib.createGzip`, crypto cipher |
+## 1. Problem statement
 
-### `pipeline` vs `pipe` — why `pipeline` wins
-```js
-// BAD — old style: leaks on error
-src.pipe(gzip).pipe(dest);
-// If `dest` errors, `src` and `gzip` are NOT destroyed → FD leak.
+Compose three streams: read file → gzip → write file. Use `pipeline` (not `pipe`) for error propagation.
 
-// GOOD — pipeline auto-destroys all on error
-const { pipeline } = require('node:stream');
-pipeline(src, gzip, dest, (err) => { /* one error callback */ });
-
-// BEST — promise form for async/await
-const { pipeline } = require('node:stream/promises');
-await pipeline(src, gzip, dest);
-```
-
-### Backpressure (the #1 backend concept)
-- **Definition (plain words):** "Downstream consumer signals 'I'm full, slow down'; the producer must pause until drained."
-- **Mechanically:** `writable.write(chunk)` returns `false` when its internal buffer crosses `highWaterMark`. The producer should stop pushing until the writable emits `'drain'`.
-- `pipe`/`pipeline` does this automatically — that's the whole point of streams. If you manually shuttle data with `on('data')` + `dest.write`, **you** have to handle backpressure.
-
-### `highWaterMark`
-- Default 16 KiB (16384 bytes) for byte streams.
-- Default 16 *objects* when `objectMode: true`.
-- It's a threshold, not a hard cap — `.write()` accepts the chunk and returns `false` to ask you to pause.
-
-## Brute force approach
-Read entire file into a Buffer with `fs.readFileSync`, gzip it with `zlib.gzipSync`, then write with `fs.writeFileSync`. Works for 1 MB files. For 5 GB files it OOMs the process. Also blocks the event loop the entire time. Streams exist precisely to avoid this.
-
-## Optimal approach
-Compose three streams with `stream/promises#pipeline`:
-1. `fs.createReadStream(srcPath)` — Readable, chunked file read.
-2. `zlib.createGzip()` — Transform that compresses chunks in place.
-3. `fs.createWriteStream(destPath)` — Writable, chunked file write.
-
-Memory stays at ~`highWaterMark × 2` regardless of file size. Errors anywhere collapse the whole chain cleanly. Bonus: an `AbortSignal` can cancel mid-flight.
-
-## Solution (JavaScript)
+**Verification examples**
 
 ```js
-'use strict';
 const fs = require('node:fs');
 const zlib = require('node:zlib');
 const { pipeline } = require('node:stream/promises');
 
-/**
- * Compress a file using a streaming pipeline.
- * Memory footprint stays O(highWaterMark), not O(fileSize).
- * @param {string} src  path to plain file
- * @param {string} dst  path to .gz output
- * @param {AbortSignal} [signal]  optional cancellation signal
- */
-async function gzipFile(src, dst, signal) {
+await pipeline(
+  fs.createReadStream('big.log'),                                       // source
+  zlib.createGzip(),                                                    // transform
+  fs.createWriteStream('big.log.gz'),                                   // sink
+);
+```
+
+**Constraints**
+- Use `pipeline` (callback or promise form), NOT `pipe`.
+- `pipeline` auto-destroys all streams on error.
+- Backpressure flows end-to-end through the chain.
+- For huge files, never `fs.readFileSync + gzipSync`.
+
+---
+
+## 2. Plain-English restatement
+
+Compose stream stages with `stream/promises#pipeline`. It wires `pipe` between consecutive stages, listens for errors on every stream, and on the first error destroys all the others. Backpressure propagates automatically.
+
+---
+
+## 3. Why this matters in interviews
+
+The most common "do you understand Node streams" question. Naive `src.pipe(gzip).pipe(dest)` leaks file descriptors on error.
+
+---
+
+## 4. Mental model
+
+```
+   Four stream types:
+   - Readable   _read(size)               fs.createReadStream
+   - Writable   _write(chunk, enc, cb)    fs.createWriteStream
+   - Duplex     _read + _write            TCP socket
+   - Transform  _transform(chunk, enc, cb) zlib.createGzip
+   
+   pipeline(...streams):
+     1. Wires pipe() between consecutive streams.
+     2. Listens for 'error' on EVERY stream.
+     3. On first error → destroys all streams.
+     4. Resolves/rejects the promise once.
+   
+   pipe vs pipeline:
+     src.pipe(t).pipe(dst):
+       Wires data forwarding.
+       On error: only ONE stream destroyed; others leak fds.
+       Bad for production.
+     
+     pipeline(src, t, dst):
+       All errors caught.
+       All streams destroyed on error.
+       Use this.
+   
+   Backpressure (built-in):
+     dst.write() returns false → pipe pauses src.
+     dst emits 'drain' → pipe resumes src.
+     End-to-end through Transform.
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. Why is `pipeline` better than chained `pipe()`?
+> 2. Why is `fs.readFileSync + gzipSync` bad for 5GB files?
+> 3. What happens to upstream streams when downstream errors with `pipe`?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: `fs.readFileSync('big.log')`
+Loads entire file into memory; OOM on large.
+
+### Wrong attempt 2: `src.pipe(gzip).pipe(dst)`
+On error, only one stream destroyed; others leak fds.
+
+### Wrong attempt 3: missing error handler
+Uncaught error event crashes process.
+
+---
+
+## 7. The unlocking insight
+
+> **Use `stream/promises#pipeline` to compose stages. Auto-destroys all streams on error. Backpressure flows end-to-end. Default `highWaterMark` is 16 KB byte / 16 objects.**
+
+Three properties:
+
+1. **`pipeline` handles errors** — not `pipe`.
+2. **Backpressure end-to-end** through Transform.
+3. **Promise form** for async/await.
+
+---
+
+## 8. Solution (annotated)
+
+```js
+const fs = require('node:fs');
+const zlib = require('node:zlib');
+const { pipeline } = require('node:stream/promises');
+
+async function gzipFile(srcPath, destPath) {
   await pipeline(
-    fs.createReadStream(src),         // Readable — emits Buffer chunks
-    zlib.createGzip({ level: 6 }),    // Transform — gzip each chunk
-    fs.createWriteStream(dst),        // Writable — flushes to disk
-    { signal },                       // pipeline destroys all on abort
+    fs.createReadStream(srcPath),                                        // step 1: source
+    zlib.createGzip(),                                                   // step 2: transform
+    fs.createWriteStream(destPath),                                      // step 3: sink
   );
 }
 
 // Usage
-(async () => {
-  const ac = new AbortController();
-  setTimeout(() => ac.abort(), 30_000);     // 30s hard cap
-  try {
-    await gzipFile('./big.log', './big.log.gz', ac.signal);
-    console.log('done');
-  } catch (err) {
-    // err.code === 'ABORT_ERR' if aborted; otherwise underlying I/O error
-    console.error('pipeline failed:', err.code, err.message);
-  }
-})();
+try {
+  await gzipFile('big.log', 'big.log.gz');
+  console.log('done');
+} catch (err) {
+  console.error('failed:', err);                                         // any stage's error
+}
 ```
 
-Modern async-iterator equivalent (when you need a custom transform inline):
-```js
-const { pipeline } = require('node:stream/promises');
-const { Readable } = require('node:stream');
+**Try it yourself**
 
+```js
+// AbortSignal support (Node 16+)
+const ac = new AbortController();
+setTimeout(() => ac.abort(), 5000);
+
+try {
+  await pipeline(src, gzip, dst, { signal: ac.signal });
+} catch (err) {
+  if (err.name === 'AbortError') console.log('cancelled');
+}
+
+// Async iterable as source
+const { Readable } = require('node:stream');
 await pipeline(
-  fs.createReadStream(src),
-  async function* (source) {                 // async generator = Transform
-    for await (const chunk of source) {
-      yield chunk.toString().toUpperCase();
-    }
+  Readable.from(async function* () {
+    for (let i = 0; i < 1000; i++) yield `line ${i}\n`;
+  }()),
+  zlib.createGzip(),
+  fs.createWriteStream('out.gz'),
+);
+
+// Async function as transform
+await pipeline(
+  fs.createReadStream('input.log'),
+  async function* (source) {
+    for await (const chunk of source) yield chunk.toString().toUpperCase();
   },
-  fs.createWriteStream(dst),
+  fs.createWriteStream('output.log'),
 );
 ```
 
-## Step-by-step dry run
+---
 
-Suppose `big.log` is 64 KiB, `highWaterMark` is 16 KiB.
+## 9. Step-by-step dry run
 
-| Tick | Readable buffer | Gzip buffer | Writable buffer | Action |
-| --- | --- | --- | --- | --- |
-| 1 | 16 KiB pushed | empty | empty | Readable hits HWM, pauses `_read`. |
-| 2 | 16 KiB consumed by gzip | 16 KiB raw in, ~5 KiB compressed out | empty | Gzip emits compressed chunk to dest. |
-| 3 | another 16 KiB pushed | flushing | 5 KiB queued | `dest.write()` returns `true` (under HWM). |
-| ... | ... | ... | ... | Cycle repeats until EOF. |
-| N | EOF (`push(null)`) | flush + `end` | drain + `finish` | `pipeline` resolves. |
+```
+pipeline(src, gzip, dst):
 
-If `dest` errors at tick 3 (disk full):
-- `pipeline` calls `destroy(err)` on **all three** streams.
-- The Readable closes its FD. The Gzip releases its native gzip context.
-- The promise rejects with the original `EIO` / `ENOSPC` error.
+Setup:
+  Wire src.pipe(gzip), gzip.pipe(dst).
+  Attach 'error' handler to all three.
 
-With raw `pipe`, only `dest` would close — the Readable would sit open until GC, leaking the FD.
+Data flow:
+  src reads 16KB chunk → pushes to gzip.
+  gzip._transform compresses → pushes to dst.
+  dst._write writes to disk → calls cb() when fsync done.
+  Continues until src emits 'end'.
+  gzip.end() → flushes final compressed chunk.
+  dst.end() → flushes to disk → emits 'finish'.
+  pipeline promise resolves.
 
-## Important takeaways
+Backpressure:
+  dst.write() returns false (disk slow).
+  pipe pauses gzip → pauses src.
+  dst emits 'drain' → resume gzip → resume src.
 
-**Syntax to memorize**
-- `const { pipeline } = require('node:stream/promises')` — always reach for the promise form in 2026.
-- Stream constructors are factories: `fs.createReadStream`, `fs.createWriteStream`, `zlib.createGzip`, `crypto.createCipheriv`. None take `new`.
-- An `async function*` is automatically a valid `Transform` inside `pipeline` — no `Transform` subclass needed.
+Error scenario:
+  zlib hits invalid data → emits 'error'.
+  pipeline destroys src + gzip + dst.
+  All file descriptors closed.
+  pipeline promise rejects with zlib's error.
 
-**Patterns to reuse**
-- Encrypt-at-rest: `read → cipher → write`.
-- Log shipping: `read → newline-split Transform → JSON.parse Transform → batch Writable`.
-- HTTP proxy with compression: `req → gzip → res`.
+vs naive src.pipe(gzip).pipe(dst):
+  zlib errors → 'error' on gzip only.
+  src not destroyed → keeps reading → fd leak.
+  dst not destroyed → fd leak.
+  Promise never resolves; consumer hangs.
+```
 
-**Common mistakes**
-- Using `.pipe()` with no error listener — uncaught `error` emits crash the process.
-- Forgetting `await` on `pipeline(...)` — the function returns but the pipeline is still running, and exceptions become unhandled rejections.
-- Treating gzip as Writable-only. It's a Transform — it has both ends.
-- Setting `highWaterMark: 1` "for safety". You just made the loop 16384× slower.
+---
 
-**Related**
-- `stream-pipeline-error-handling.md` — what to do *when* it fails.
-- `readable-stream-push.md` — building a Readable from scratch.
-- `writable-stream-implementation.md` — building a Writable with backpressure.
+## 10. Common confusion + traps
 
-## Variants
+1. **`fs.readFileSync`** — OOM on large files.
+2. **`pipe` instead of `pipeline`** — fd leaks on error.
+3. **Missing error handler** — uncaught 'error' crashes process.
+4. **`highWaterMark` ignored** — accept default; tune only if needed.
+5. **Mix sync + async transform** — pick one; async function* is modern.
+6. **AbortSignal not threaded** — abort doesn't cancel mid-stream.
+7. **Multiple `pipeline` on same stream** — only one consumer per Readable.
 
-1. **Add encryption** — slot `crypto.createCipheriv('aes-256-gcm', key, iv)` between gzip and write. Now you have an at-rest-encrypted compressed file. Show that Transform streams compose linearly.
+---
 
-2. **HTTP upload streaming** — replace `fs.createReadStream` with `req` (an `IncomingMessage`, which is a Readable) and `fs.createWriteStream` with an S3 multipart-upload Writable. The pipeline shape is identical; only the endpoints change.
+## 11. Senior follow-ups & variants
 
-3. **Tee / multi-sink** — gzip the file *and* compute its SHA-256 in parallel. Requires `PassThrough` plus two separate pipelines reading from a shared source, or a custom Transform that updates a hash while passing the chunk through.
+### Variant 1 — AbortSignal cancellation
+`pipeline(..., { signal: ac.signal })`. Abort destroys all streams.
 
-## Revision notes
+### Variant 2 — Async function as Transform
+`pipeline(src, async function*(source) { for await (...) yield x }, dst)`.
 
-> **stream pipeline — 60 second recap**
-> - Four types: Readable / Writable / Duplex / Transform.
-> - Always use `pipeline` (callback or `node:stream/promises`) — never raw `.pipe()` in prod.
-> - `pipeline` auto-destroys every stream on error → no FD leaks.
-> - Backpressure: downstream returns `false` from `write()`, producer pauses until `'drain'`. `pipe`/`pipeline` handles this for you.
-> - `highWaterMark` default = 16 KiB bytes / 16 objects (`objectMode: true`).
-> - Async generator (`async function*`) is a drop-in Transform inside `pipeline`.
-> - `AbortSignal` cancels the whole chain.
-> - Trap: forgetting `await` on `pipeline` → silent failure.
+### Variant 3 — Multiple Transforms
+`pipeline(src, parse, filter, format, dst)` for ETL.
+
+### Variant 4 — HTTP request body → file
+`pipeline(req, fs.createWriteStream(uploadPath))`.
+
+### Variant 5 — Browser equivalent
+Web Streams: `readableStream.pipeThrough(transform).pipeTo(writableStream)`.
+
+---
+
+## 12. How to think aloud
+
+> "Compose stream stages with `stream/promises#pipeline`. Three stages: `fs.createReadStream` (Readable) → `zlib.createGzip()` (Transform) → `fs.createWriteStream` (Writable). `pipeline` does FOUR things: wires `pipe` between stages, attaches `'error'` handler to every stream, destroys all streams on first error, resolves/rejects promise once. Naive `src.pipe(t).pipe(dst)` leaks file descriptors on error — only one stream destroyed; others keep reading and writing. Backpressure flows END-TO-END through Transform automatically. For huge files NEVER use `readFileSync + gzipSync` — OOMs. AbortSignal support (Node 16+): `pipeline(..., { signal })`. Async iterables: `Readable.from(asyncGen)` to wrap. Async function as transform: `pipeline(src, async function*(source) { ... }, dst)`. Web equivalent: `pipeThrough` + `pipeTo`. Trap: pipe vs pipeline; readFileSync for large; missing error handler; multiple consumers on one Readable."
+
+---
+
+## 13. 60-second revision
+
+> - **`stream/promises#pipeline(src, ...transforms, dst)`** — modern composition.
+> - **Auto-destroys all streams** on first error.
+> - **Backpressure end-to-end** through Transform.
+> - **`AbortSignal`** via `{ signal }` option.
+> - **Async iterables** via `Readable.from(asyncGen)`.
+> - **Async transform** via `async function*(source) { ... }`.
+> - **Browser:** `readable.pipeThrough(t).pipeTo(writable)`.
+> - **Trap:** pipe vs pipeline; readFileSync OOM; missing error handler.
+
+---
+
+**Related:** [readable-stream-push.md](./readable-stream-push.md) · [writable-stream-implementation.md](./writable-stream-implementation.md) · [stream-pipeline-error-handling.md](./stream-pipeline-error-handling.md) · [pipeline-error-propagation.md](./pipeline-error-propagation.md) · [transform-line-parser.md](./transform-line-parser.md)
+
+**Concept primer:** [`concepts/streams.md`](../../concepts/streams.md)

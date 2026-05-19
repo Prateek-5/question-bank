@@ -1,158 +1,255 @@
 # `Array.groupBy` and Partition
 
-## Source / Origin
-- ES2024 `Object.groupBy` / `Map.groupBy`; lodash `groupBy` / `partition`.
-- Asked at: Stripe, Razorpay, Atlassian (data-shape questions).
-- Concept reference: `concepts/arrays.md`.
+> **Difficulty:** Foundation   |   **Time:** ~8 min   |   **Prereqs:** [polyfill-reduce.md](./polyfill-reduce.md), [`08-maps-sets/group-by.md`](../08-maps-sets/group-by.md)
+>
+> **Source:** ES2024 `Object.groupBy` / `Map.groupBy`. Lodash. Stripe, Razorpay, Atlassian.
 
-## Why this question matters in interviews
-"Group these orders by status." 90% of data wrangling. Senior bar: you know the modern `Object.groupBy` / `Map.groupBy`, the polyfill, and the partition variant (group into exactly two buckets).
+---
 
-## Concepts involved
+## 1. Problem statement
+
+Group array items by a key function (multi-bucket) or split into two via predicate.
+
+**Verification examples**
 
 ```js
 // ES2024
-Object.groupBy([1,2,3,4], n => n % 2 ? 'odd' : 'even');
-// { odd: [1,3], even: [2,4] }
+Object.groupBy([1, 2, 3, 4], n => n % 2 ? 'odd' : 'even');
+// { odd: [1, 3], even: [2, 4] }
 
-Map.groupBy([1,2,3,4], n => n % 2 ? 'odd' : 'even');
-// Map(2) { 'odd' => [1,3], 'even' => [2,4] }
+Map.groupBy([1, 2, 3, 4], n => n % 2 ? 'odd' : 'even');
+// Map(2) { 'odd' => [1, 3], 'even' => [2, 4] }
 
-// Polyfill (manual)
+// Partition
+partition([1, 2, 3, 4], x => x % 2 === 0);
+// [[2, 4], [1, 3]]
+```
+
+**Constraints**
+- `Object.groupBy` requires string/symbol keys (coerced).
+- `Map.groupBy` allows any key.
+- Insertion order preserved within bucket.
+- Partition returns exactly two buckets `[truthy, falsy]`.
+
+---
+
+## 2. Plain-English restatement
+
+`groupBy(arr, fn)` returns object/Map keyed by `fn(item)`, values are arrays of items. `partition(arr, pred)` returns `[truthy, falsy]` — binary split.
+
+---
+
+## 3. Why this matters in interviews
+
+"Group these orders by status." 90% of data wrangling. Senior bar: know ES2024 native, the polyfill, the partition variant.
+
+---
+
+## 4. Mental model
+
+```
+   Object.groupBy(arr, fn):
+     Coerces fn(item) → string/symbol.
+     Returns plain object: { k: [items], ... }.
+     null-prototype (no inherited properties).
+   
+   Map.groupBy(arr, fn):
+     Allows ANY key (including object refs).
+     Returns Map<key, items[]>.
+   
+   Both preserve insertion order within each bucket.
+   
+   Polyfill (single pass):
+     for each item:
+       k = fn(item)
+       (acc[k] ??= []).push(item)
+   
+   Partition (binary):
+     for each item:
+       (pred(item) ? truthy : falsy).push(item)
+     Return [truthy, falsy].
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. Difference between `Object.groupBy` and `Map.groupBy`?
+> 2. Order preservation in buckets?
+> 3. Polyfill via reduce?
+
+---
+
+## 6. Brute force — walked through
+
+```js
+arr.reduce((acc, x) => {
+  const k = fn(x);
+  acc[k] = acc[k] || [];
+  acc[k].push(x);
+  return acc;
+}, {});
+```
+
+Works. Subtle: `Object.create(null)` avoids prototype pollution risk if `fn` returns 'constructor' / '__proto__'.
+
+---
+
+## 7. The unlocking insight
+
+> **One pass, `(acc[k] ??= []).push(item)`. ES2024: Object.groupBy / Map.groupBy. Partition = binary groupBy.**
+
+Three properties:
+
+1. **One pass** — O(n).
+2. **`acc[k] ??= []`** — short-circuit init.
+3. **Map for non-string keys**.
+
+---
+
+## 8. Solution (annotated)
+
+```js
+// Polyfill: groupBy → object (string keys)
 function groupBy(arr, fn) {
-  const out = Object.create(null);
-  for (const x of arr) {
-    const k = fn(x);
-    (out[k] ??= []).push(x);
+  const out = Object.create(null);                                       // step 1: no prototype
+  for (const item of arr) {
+    const k = fn(item);                                                  // step 2: derive key
+    (out[k] ??= []).push(item);                                          // step 3: init+push
   }
   return out;
 }
 
-// Partition (binary split)
-function partition(arr, predicate) {
-  const truthy = [], falsy = [];
-  for (const x of arr) (predicate(x) ? truthy : falsy).push(x);
+// Polyfill: Map version (any key)
+function groupByMap(arr, fn) {
+  const out = new Map();
+  for (const item of arr) {
+    const k = fn(item);
+    if (!out.has(k)) out.set(k, []);
+    out.get(k).push(item);
+  }
+  return out;
+}
+
+// Partition — binary split
+function partition(arr, pred) {
+  const truthy = [];
+  const falsy = [];
+  for (const item of arr) {
+    (pred(item) ? truthy : falsy).push(item);                            // step 4: ternary push
+  }
   return [truthy, falsy];
 }
 ```
 
-### Edge cases / traps
-1. **`Object.groupBy` requires string/symbol keys.** Non-strings get coerced. For object keys use `Map.groupBy`.
-2. **Polyfill with plain `{}`** has `__proto__` collision risk. Use `Object.create(null)`.
-3. **Sort within groups** is a separate step.
-4. **Multi-group**: a single item can be in many buckets — needs different shape (Array of buckets).
-5. **Browser support** — modern only; ship with polyfill for older targets.
-6. **`Map.groupBy`** preserves insertion order of group keys.
-
-## Mental Model
-
-```
-   [a, b, c, d, e]  --fn-->  k1, k2, k1, k3, k2
-                                  ↓
-                            { k1: [a, c], k2: [b, e], k3: [d] }
-```
-
-## Why interviewers care
-
-- **Idiomatic data shaping.**
-- **Modern API awareness** (ES2024).
-- **Polyfill skill.**
-
-## Common confusion
-
-- **"`groupBy` returns array of groups."** It returns an object/Map keyed by group.
-- **"`Object.groupBy` accepts objects as keys."** No — coerces to string. Use Map.
-- **"Reduce is the same."** Yes, but verbose:
-  ```js
-  arr.reduce((acc, x) => { (acc[fn(x)] ??= []).push(x); return acc; }, Object.create(null));
-  ```
-
-## Solution
+**Try it yourself**
 
 ```js
-// Group orders by status
-const groups = Object.groupBy(orders, o => o.status);
-// { paid: [...], pending: [...], cancelled: [...] }
+// Native ES2024 (Node 21+, modern browsers)
+const orders = [
+  {id:1, status:'paid'}, {id:2, status:'pending'}, {id:3, status:'paid'}
+];
 
-// Partition into eligible/ineligible
-const [eligible, ineligible] = partition(users, u => u.age >= 18);
+Object.groupBy(orders, o => o.status);
+// { paid: [{id:1,...}, {id:3,...}], pending: [{id:2,...}] }
 
-// Map.groupBy with object key (e.g., date object)
-const byDay = Map.groupBy(events, e => new Date(e.ts).toDateString());
+// Map.groupBy with non-string keys
+const events = [{ts: '2024-01-01', kind: 'A'}, ...];
+const byMonth = Map.groupBy(events, e => new Date(e.ts).getMonth());
+byMonth.get(0);  // January
 
-// Multi-key group (composite)
-const byStatusAndCountry = Object.groupBy(orders, o => `${o.status}|${o.country}`);
+// Polyfill
+groupBy([1, 2, 3, 4], n => n % 2 ? 'odd' : 'even');
+// { odd: [1, 3], even: [2, 4] }
 
-// Top-N per group
-function topNPerGroup(arr, groupFn, sortFn, n) {
-  const groups = Object.groupBy(arr, groupFn);
-  for (const k in groups) groups[k] = groups[k].sort(sortFn).slice(0, n);
-  return groups;
-}
+partition([1, 2, 3, 4, 5], x => x > 2);
+// [[3, 4, 5], [1, 2]]
 
-// Polyfill for older runtimes
-if (!Object.groupBy) {
-  Object.groupBy = (arr, fn) => {
-    const out = Object.create(null);
-    for (const x of arr) {
-      const k = fn(x);
-      (out[k] ??= []).push(x);
-    }
-    return out;
-  };
-}
+// Combined: groupBy then transform
+const summary = Object.fromEntries(
+  Object.entries(groupBy(orders, o => o.status))
+    .map(([k, v]) => [k, v.length])
+);
+// { paid: 2, pending: 1 }
 ```
 
-## Dry run
+---
 
-```js
-const items = [{ t: 'a', n: 1 }, { t: 'b', n: 2 }, { t: 'a', n: 3 }];
-
-Object.groupBy(items, i => i.t)
-// { a: [{t:'a',n:1}, {t:'a',n:3}], b: [{t:'b',n:2}] }
-
-partition(items, i => i.n > 1)
-// [[{t:'b',n:2},{t:'a',n:3}], [{t:'a',n:1}]]
-```
-
-## How to think aloud
-
-> "ES2024 gives Object.groupBy and Map.groupBy. Object.groupBy stringifies keys; Map.groupBy keeps them as-is — use Map for object keys. Polyfill with reduce or for-loop. Partition is the binary version. Multi-group needs a different shape; composite key with a separator works for naive cases. For older runtimes I'd polyfill."
-
-## Important takeaways
-
-- **`Object.groupBy(arr, fn)`** — string keys.
-- **`Map.groupBy(arr, fn)`** — object keys, preserves order.
-- **Polyfill** with reduce or for-loop.
-- **`partition(arr, pred)`** for binary split.
-- **`Object.create(null)`** to avoid `__proto__` collision.
-- **Composite key** with delimiter for multi-field grouping.
-
-## Variants
-
-- **Streaming groupBy** — async iterator; flush per group when key changes (sorted input).
-- **Counting (not collecting)** — `Object.fromEntries(arr.map(...))` for histogram.
-- **`groupByKey` (deprecated)** — older Stage 2 name.
-
-## Revision notes
+## 9. Step-by-step dry run
 
 ```
-ES2024:
-  Object.groupBy(arr, fn) → {key: arr[]}   (string keys)
-  Map.groupBy(arr, fn)   → Map<key, arr[]> (any key)
+groupBy([1,2,3,4], n => n%2?'odd':'even'):
+  out = null-proto {}.
+  item=1: k='odd'. out['odd'] ??= [] → []. push 1 → ['odd':[1]].
+  item=2: k='even'. out['even'] ??= [] → []. push 2 → {'odd':[1], 'even':[2]}.
+  item=3: k='odd'. out['odd'] exists → push 3 → ['odd':[1,3]].
+  item=4: k='even'. push 4 → ['even':[2,4]].
+  Return {odd:[1,3], even:[2,4]}.
 
-polyfill:
-  arr.reduce((acc, x) => ((acc[fn(x)] ??= []).push(x), acc), Object.create(null))
+Insertion order preserved: 'odd' bucket sees 1 before 3; 'even' sees 2 before 4.
+Object key order: 'odd' appears before 'even' (first occurrence wins).
 
-partition (binary):
-  function partition(arr, pred) {
-    const t=[], f=[]
-    for x of arr: (pred(x) ? t : f).push(x)
-    return [t, f]
-  }
-
-TRAPS:
-  - Object key coercion (use Map for object keys)
-  - {} has __proto__ collision; use Object.create(null)
-  - multi-group needs different shape
+partition([1,2,3,4], x=>x%2===0):
+  item=1: pred false → falsy.push(1) → [[], [1]].
+  item=2: pred true → truthy.push(2) → [[2], [1]].
+  item=3: false → falsy → [[2], [1,3]].
+  item=4: true → truthy → [[2,4], [1,3]].
+  Return [[2,4], [1,3]].
 ```
+
+---
+
+## 10. Common confusion + traps
+
+1. **`Object.groupBy` coerces keys to string** — non-string lost detail.
+2. **Prototype pollution** — `fn` returns `'__proto__'` → bug. Use `Object.create(null)` or Map.
+3. **`acc[k] = acc[k] || []`** — fine, but `??=` cleaner.
+4. **Partition return shape** — `[truthy, falsy]` standard; lodash returns same.
+5. **In-place mutation** — groupBy doesn't mutate input.
+6. **Stable order within bucket** — preserved; relies on for-of iteration.
+7. **`reduce` polyfill** — works; for-of clearer.
+
+---
+
+## 11. Senior follow-ups & variants
+
+### Variant 1 — Multi-key groupBy
+Composite key: `${a}|${b}` (or array key with Map).
+
+### Variant 2 — Aggregated groupBy (sum, count)
+Avoid building arrays — fold in-place.
+
+### Variant 3 — `groupBy` returning Map for non-string keys
+ES2024 `Map.groupBy`.
+
+### Variant 4 — Lazy groupBy
+Generator yielding `[key, items[]]` after each new key first seen.
+
+### Variant 5 — SQL analogy
+GROUP BY with HAVING — filter post-group.
+
+---
+
+## 12. How to think aloud
+
+> "groupBy is the core data-shape primitive — 90% of wrangling reduces to 'group by key, transform per group'. ES2024 ships `Object.groupBy(arr, fn)` (string keys, coerced) and `Map.groupBy(arr, fn)` (any key including object refs). Polyfill: single pass, `(out[k] ??= []).push(item)`. Use `Object.create(null)` to avoid `__proto__` key pollution. Map version for non-string keys. Partition is the binary special case: `[truthy, falsy]`. Both preserve insertion order within buckets. Variants: multi-key (composite or Map with array key); aggregated (count/sum in-place — don't build arrays); SQL HAVING (filter buckets post-group). Trap: prototype pollution; `Object.groupBy` coercing non-string keys; expecting Map ordering with Object keys."
+
+---
+
+## 13. 60-second revision
+
+> - **ES2024:** `Object.groupBy` (string keys), `Map.groupBy` (any key).
+> - **Polyfill:** `(out[k] ??= []).push(item)` in one pass.
+> - **`Object.create(null)`** to avoid prototype pollution.
+> - **Partition:** binary `[truthy, falsy]`.
+> - **Order preserved** within bucket.
+> - **Aggregated variant** — fold instead of pushing.
+> - **SQL analogy** — GROUP BY + HAVING.
+> - **Trap:** `__proto__` pollution; string-coerce keys; mutate input.
+
+---
+
+**Related:** [polyfill-reduce.md](./polyfill-reduce.md) · [polyfill-filter.md](./polyfill-filter.md) · [`08-maps-sets/group-by.md`](../08-maps-sets/group-by.md) · [`08-maps-sets/multiset-counter.md`](../08-maps-sets/multiset-counter.md)
+
+**Concept primer:** [`concepts/arrays.md`](../../concepts/arrays.md)

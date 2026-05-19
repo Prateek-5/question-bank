@@ -1,179 +1,253 @@
 # `hasOwnProperty` vs `in` vs `Object.hasOwn`
 
-## Source
-- Canonical "do you understand chain vs own?" question (every JS fundamentals round, MDN docs, ESLint `no-prototype-builtins` rule).
-- MDN references:
-  - https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/hasOwn
-  - https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/in
+> **Difficulty:** Easy-Medium   |   **Time:** ~10 min   |   **Prereqs:** [prototype-chain-inheritance.md](./prototype-chain-inheritance.md)
+>
+> **Source:** Every JS fundamentals round. ESLint `no-prototype-builtins`.
 
-## Why this question matters in interviews
-Three operators that look interchangeable but each traverse a different slice of the property space. Junior candidates use them at random; seniors know exactly when each one matters. The killer follow-up — "what happens with `Object.create(null)`?" — exposes whether the candidate understands that `hasOwnProperty` lives on `Object.prototype` and is therefore unreachable when the chain doesn't include `Object.prototype`. Backend engineers hit this every time they build a dictionary-style cache, parse untrusted JSON, or handle `__proto__` keys safely.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+Three operators that traverse different slices of the property space. When to use which?
+
+**Verification examples**
+
+```js
+const proto = { a: 1 };
+const child = Object.create(proto);
+child.b = 2;
+
+'a' in child;                       // true  (chain walk)
+'b' in child;                       // true  (own)
+'toString' in child;                // true  (inherited from Object.prototype)
+
+child.hasOwnProperty('a');          // false (inherited)
+child.hasOwnProperty('b');          // true  (own)
+
+Object.hasOwn(child, 'a');          // false (own only)
+Object.hasOwn(child, 'b');          // true
+
+// Dictionary trap
+const dict = Object.create(null);
+dict.x = 1;
+dict.hasOwnProperty;                 // undefined (no chain to Object.prototype!)
+Object.hasOwn(dict, 'x');           // true (static method works)
+'x' in dict;                         // true (operator, not method)
+```
+
+**Constraints**
+- `in` walks chain (includes inherited + non-enumerable).
+- `hasOwnProperty` = own properties (susceptible to shadowing + missing on `Object.create(null)`).
+- `Object.hasOwn` (ES2022) = own only, immune to shadowing.
+
+---
+
+## 2. Plain-English restatement
+
+`in` asks "is this key anywhere on the chain?" (true for `'toString' in {}`). `hasOwnProperty` and `Object.hasOwn` ask "is this an OWN property?" Difference: `hasOwnProperty` is a method on `Object.prototype` (can be shadowed/missing); `Object.hasOwn` is a static method (immune).
+
+---
+
+## 3. Why this matters in interviews
+
+Tests chain vs own understanding. Killer follow-up: `Object.create(null)` breaks `hasOwnProperty`.
+
+---
+
+## 4. Mental model
+
+```
+   `'key' in obj`      — operator. WALKS chain. Includes non-enumerable inherited.
+   obj.hasOwnProperty('k') — method. OWN ONLY. Susceptible to shadow/missing.
+   Object.hasOwn(obj, 'k') — static. OWN ONLY. SAFE against shadow/missing.
+   
+   Chain example:
+   child = Object.create({a:1});
+   child.b = 2;
+   
+   'a' in child       → true (proto has a)
+   'b' in child       → true (own)
+   'toString' in child → true (Object.prototype has it)
+   child.hasOwnProperty('a') → false (inherited)
+   child.hasOwnProperty('b') → true
+   
+   Dictionary trap:
+   dict = Object.create(null);  // no chain to Object.prototype!
+   dict.hasOwnProperty           → undefined
+   dict.hasOwnProperty('x')      → TypeError
+   Object.hasOwn(dict, 'x')      → works
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. Does `'toString' in {}` return `true` or `false`?
+> 2. What happens with `Object.create(null).hasOwnProperty('x')`?
+> 3. Why is `Object.hasOwn` safer than `obj.hasOwnProperty`?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: `obj[key] !== undefined`
+Walks chain, doesn't distinguish explicit `undefined`, broken for falsy values.
+
+### Wrong attempt 2: always use `hasOwnProperty`
+Breaks on `Object.create(null)` and shadowed names.
+
+### Wrong attempt 3: only `in`
+Includes inherited; not always what you want.
+
+---
+
+## 7. The unlocking insight
+
+> **`in` for "anywhere on chain". `Object.hasOwn(obj, key)` for "own only" (safe). `obj.hasOwnProperty(key)` is legacy — fails on null-proto dicts and shadowed names. Three operators, three different questions.**
+
+Three properties:
+
+1. **`in`** = chain walk.
+2. **`hasOwn`** = own (modern, safe).
+3. **`hasOwnProperty`** = own (legacy, fragile).
+
+---
+
+## 8. Solution (annotated)
+
 ```js
 const obj = { a: 1 };
 const child = Object.create(obj);
 child.b = 2;
 
-'a' in child;                          // true  — chain walk
-'b' in child;                          // true  — own
-'toString' in child;                   // true  — inherited from Object.prototype
+// CHAIN walk
+'a' in child;                                                            // true (inherited)
+'b' in child;                                                            // true (own)
+'toString' in child;                                                     // true (Object.prototype)
 
-child.hasOwnProperty('a');             // false — inherited, not own
-child.hasOwnProperty('b');             // true
-child.hasOwnProperty('toString');      // false — own only
+// OWN only — legacy method
+child.hasOwnProperty('a');                                               // false
+child.hasOwnProperty('b');                                               // true
 
-Object.hasOwn(child, 'a');             // false — own only (modern, ES2022)
-Object.hasOwn(child, 'b');             // true
+// OWN only — modern, safe static
+Object.hasOwn(child, 'a');                                               // false
+Object.hasOwn(child, 'b');                                               // true
 
-// Dictionary object — chain is null
+// Dictionary trap
 const dict = Object.create(null);
 dict.x = 1;
-dict.hasOwnProperty;                   // undefined — no chain to Object.prototype!
-dict.hasOwnProperty('x');              // TypeError: dict.hasOwnProperty is not a function
-Object.hasOwn(dict, 'x');              // true — works because it's a static method
-'x' in dict;                           // true — operator, not method
+try { dict.hasOwnProperty('x'); } catch (e) { console.log(e.message); }  // TypeError
+Object.hasOwn(dict, 'x');                                                 // true (safe)
+'x' in dict;                                                              // true (operator)
+
+// Shadowing trap
+const bad = { hasOwnProperty: false };
+try { bad.hasOwnProperty('x'); } catch (e) { console.log(e.message); }   // TypeError
+Object.hasOwn(bad, 'x');                                                  // false (safe)
 ```
 
-### Runtime / engine behavior
-- **`'key' in obj`** — operator. Walks the **entire prototype chain**. Returns `true` if the key exists anywhere. Includes non-enumerable properties (`'toString' in {}` → true).
-- **`obj.hasOwnProperty(key)`** — method inherited from `Object.prototype`. Checks **own properties only** (no chain walk). Susceptible to being shadowed (`{ hasOwnProperty: 'oops' }.hasOwnProperty('x')` throws). Susceptible to being unreachable (`Object.create(null)` doesn't inherit it).
-- **`Object.hasOwn(obj, key)`** — ES2022 static method. Same semantics as `hasOwnProperty` but **immune to shadowing and unreachable chains** because it doesn't go through the instance. The modern replacement; ESLint's `no-prototype-builtins` rule recommends it.
-- All three include both enumerable and non-enumerable own properties. None of them check inherited non-enumerables for `Object.hasOwn` / `hasOwnProperty`.
-
-### Edge cases (these are the interview traps)
-1. **`Object.create(null)` breaks `hasOwnProperty.call`** — workaround: `Object.prototype.hasOwnProperty.call(dict, 'x')`. Or just `Object.hasOwn(dict, 'x')`.
-2. **Shadowed `hasOwnProperty`** — `const obj = { hasOwnProperty: false }; obj.hasOwnProperty('x')` throws because `false` isn't a function. ESLint's `no-prototype-builtins` catches this; use `Object.hasOwn` to avoid it entirely.
-3. **`in` catches inherited symbols too** — `'toString' in {}` is `true` because `toString` lives on `Object.prototype`.
-4. **`in` works on arrays for indices** — `0 in [1,2,3]` is `true`; `5 in [1,2,3]` is `false`. Useful for detecting holes: `1 in [1, , 3]` is `false`.
-5. **`undefined` values vs missing keys** — `obj.foo === undefined` doesn't distinguish "key is `undefined`" from "key doesn't exist." `'foo' in obj` does.
-6. **Array sparse holes** — `[,,].hasOwnProperty(0)` is `false`; `0 in [,,]` is `false`. Both correctly identify sparseness. `for...in` skips them. `array.forEach` skips them. `array.map` preserves them (returns sparse array).
-7. **Inherited getters** — `'length' in fn` is `true` even though `length` is inherited from `Function.prototype` (a non-enumerable getter). `in` doesn't care about enumerability.
-8. **Proxy traps** — a `Proxy` can intercept `in` via the `has` trap and `hasOwn` queries via `getOwnPropertyDescriptor` trap. Worth mentioning if asked about meta-programming.
-
-## Brute force approach
-"Use `obj[key] !== undefined`." Three bugs at once: (a) doesn't distinguish missing from explicit `undefined`, (b) walks the chain (so `obj.toString !== undefined` is `true`), (c) returns `false` for keys with falsy values that you actually want. Drop it.
-
-## Optimal approach
-- **Want "is this key anywhere, including inherited and non-enumerable?"** → `'key' in obj`.
-- **Want "is this key an own property, safely?"** → `Object.hasOwn(obj, key)` (ES2022) or `Object.prototype.hasOwnProperty.call(obj, key)` (older).
-- **Avoid** `obj.hasOwnProperty(key)` — fragile across shadowing and dictionary objects.
-
-## Solution (JavaScript)
+**Try it yourself**
 
 ```js
-/**
- * Demonstrate the three operators and their differences.
- * Plus a safe "is own property?" helper.
- */
+// Distinguish missing from undefined
+const obj = { foo: undefined };
+obj.foo === undefined;                                                    // true
+'foo' in obj;                                                             // true (key exists)
+Object.hasOwn(obj, 'foo');                                                 // true
 
-function isOwn(obj, key) {
-  // The bulletproof version — ES2022 static method, no shadowing risk.
-  if (typeof Object.hasOwn === 'function') return Object.hasOwn(obj, key);
-  return Object.prototype.hasOwnProperty.call(obj, key);
+// Sparse array
+const arr = [,,];
+0 in arr;                                                                  // false (hole)
+arr.hasOwnProperty(0);                                                     // false
+
+// Safe dictionary iteration
+for (const key of Object.keys(dict)) {
+  console.log(key, dict[key]);
 }
-
-// ---- Demonstration ----
-
-const animal = { eats: true };
-const rabbit = Object.create(animal);
-rabbit.jumps = true;
-
-console.log('jumps' in rabbit);                       // true (own)
-console.log('eats' in rabbit);                        // true (inherited)
-console.log('toString' in rabbit);                    // true (Object.prototype)
-
-console.log(isOwn(rabbit, 'jumps'));                  // true
-console.log(isOwn(rabbit, 'eats'));                   // false (inherited)
-console.log(isOwn(rabbit, 'toString'));               // false
-
-// Dictionary safety
-const dict = Object.create(null);
-dict['__proto__'] = 'safe';   // not a getter trap on a null-proto object
-console.log(isOwn(dict, '__proto__'));                // true
-console.log('__proto__' in dict);                     // true
-
-// Sparse array detection
-const sparse = [1, , 3];
-console.log(1 in sparse);                             // false (hole)
-console.log(0 in sparse);                             // true
-console.log(isOwn(sparse, 'length'));                 // true (length is own)
+// Object.keys is safe — own enumerable only, doesn't walk chain
 ```
 
-## Step-by-step dry run
+---
 
-Input:
-```js
-const parent = { p: 1 };
-const child  = Object.create(parent);
-child.c = 2;
+## 9. Step-by-step dry run
 
-const dict = Object.create(null);
-dict.d = 3;
+```
+'a' in child:
+  Walk child's chain: child own? no. proto own? YES. Return true.
 
-'p' in child;                                   // (1)
-child.hasOwnProperty('p');                      // (2)
-Object.hasOwn(child, 'p');                      // (3)
-'toString' in child;                            // (4)
-child.hasOwnProperty('toString');               // (5)
-dict.hasOwnProperty('d');                       // (6)
-Object.hasOwn(dict, 'd');                       // (7)
+child.hasOwnProperty('a'):
+  Method on Object.prototype.
+  Walk: child own? no. proto own? no. Object.prototype own? YES → hasOwnProperty.
+  Invoke with this=child, args=['a']:
+    Check if child has own 'a' → no.
+    Return false.
+
+dict.hasOwnProperty('x') where dict = Object.create(null):
+  Walk: dict own? no. dict.__proto__ === null → end of chain.
+  Property hasOwnProperty undefined.
+  dict.hasOwnProperty is undefined.
+  undefined('x') → TypeError.
+
+Object.hasOwn(dict, 'x'):
+  Static method on Object. Always available.
+  Check if dict has own 'x' → yes.
+  Return true.
 ```
 
-Trace:
-- (1) `'p' in child` — walks chain: `child` own keys → no `p` → climb → `parent` own → has `p` → returns `true`.
-- (2) `child.hasOwnProperty('p')` — looks up `hasOwnProperty` (inherited from `Object.prototype`), then calls it with `this = child`. Checks `child`'s OWN keys for `'p'` → not found → returns `false`.
-- (3) `Object.hasOwn(child, 'p')` — same as (2) but called as a static. Returns `false`.
-- (4) `'toString' in child` — walks chain → child → parent → `Object.prototype` → has `toString` → returns `true`.
-- (5) `child.hasOwnProperty('toString')` — checks child's OWN keys → not found → returns `false`. Correctly reports "inherited, not own."
-- (6) `dict.hasOwnProperty('d')` — lookup `dict.hasOwnProperty` walks dict's chain → `null` immediately → not found → returns `undefined` → `undefined('d')` → **TypeError**: not a function. This is the headline gotcha.
-- (7) `Object.hasOwn(dict, 'd')` — static method, doesn't touch `dict`'s chain to find itself. Checks `dict`'s own keys → has `'d'` → `true`. Works perfectly.
+---
 
-The dict examples are why `Object.hasOwn` exists.
+## 10. Common confusion + traps
 
-## Important takeaways
+1. **`obj[key] !== undefined`** — broken for explicit undefined + falsy.
+2. **Shadowed `hasOwnProperty`** — `{ hasOwnProperty: false }.hasOwnProperty('x')` throws.
+3. **`Object.create(null)` + hasOwnProperty** — missing method.
+4. **`'toString' in {}`** — true (inherited, non-enumerable).
+5. **`in` for arrays** — index check; `0 in [1,2]` is true, holes are false.
+6. **`for...in` walks chain** — includes inherited enumerable; use `Object.keys`.
+7. **Proxy `has` trap** — intercepts `in`.
 
-**Syntax to memorize**
-- `'key' in obj` — chain walk, includes non-enumerable. Operator, not method.
-- `Object.hasOwn(obj, key)` — own only, immune to shadowing. ES2022+.
-- `Object.prototype.hasOwnProperty.call(obj, key)` — own only, pre-ES2022 safe form.
-- Plain `obj.hasOwnProperty(key)` — fragile. Avoid (ESLint `no-prototype-builtins`).
+---
 
-**Patterns to reuse**
-- **`Object.create(null)` for safe dictionaries** — no prototype pollution risk, no `__proto__` setter trap. Pair with `Object.hasOwn` for lookups.
-- **`'key' in obj` for hole detection** in sparse arrays — `for (let i = 0; i < arr.length; i++) if (!(i in arr)) skipHole();`.
-- **Distinguishing missing vs explicit-undefined**: `'key' in obj` is the only correct test.
+## 11. Senior follow-ups & variants
 
-**Common mistakes**
-- Using `obj[key] !== undefined` to check existence — fails for keys with `undefined` values, walks the chain.
-- Calling `dict.hasOwnProperty(...)` on a `Object.create(null)` dict — TypeError.
-- Trusting `obj.hasOwnProperty(...)` when `obj` came from untrusted input — `{ hasOwnProperty: 'evil' }` breaks it.
-- Forgetting that `in` includes inherited and non-enumerable — `'toString' in {}` surprises candidates who thought `in` was "own only."
+### Variant 1 — `Object.prototype.hasOwnProperty.call(dict, k)`
+Works on null-proto dicts; verbose.
 
-**Related questions**
-- "What does `for...in` iterate?" → own + inherited **enumerable** keys. Pair with `Object.hasOwn` to filter to own.
-- "How do you safely access properties on parsed JSON?" → `Object.hasOwn(parsed, key)` plus guard against `__proto__` keys (older Node versions interpret `__proto__` in JSON specially in some contexts).
-- "What's the safest way to clone a plain object?" → `structuredClone` or `Object.assign(Object.create(null), src)` for safe-dict shape.
+### Variant 2 — ESLint `no-prototype-builtins`
+Recommends `Object.hasOwn` over `obj.hasOwnProperty`.
 
-## Variants
+### Variant 3 — Sparse array detection
+`1 in [1,,3]` → false; perfect for hole detection.
 
-1. **`__proto__` pollution defense** — "Walk a JSON-parsed object and reject any keys named `__proto__`, `constructor`, or `prototype`." Use `Object.hasOwn` to enumerate own keys safely.
+### Variant 4 — `Object.keys` / `Object.entries`
+Own enumerable; doesn't walk chain.
 
-2. **`for...in` vs `Object.keys`** — "Why does `for...in` show inherited keys but `Object.keys` doesn't?" Because `Object.keys` is "own + enumerable"; `for...in` is "own + inherited + enumerable." Filter via `if (Object.hasOwn(obj, key))`.
+### Variant 5 — Proxy `has` trap
+Can intercept `in` operator for meta-programming.
 
-3. **Property descriptor inspection** — "How would you list ALL own properties, including non-enumerable and symbols?" `Reflect.ownKeys(obj)` (returns string + symbol keys, enumerable + non-enumerable). Strictly own — no chain walk.
+---
 
-## Revision notes
+## 12. How to think aloud
 
-> **hasOwnProperty / in / Object.hasOwn — 60 second recap**
-> - `'k' in obj` — chain walk, includes non-enumerable. Operator.
-> - `Object.hasOwn(obj, k)` — own only, safe. ES2022. **Use this.**
-> - `obj.hasOwnProperty(k)` — own only but fragile (shadowable, breaks on `Object.create(null)`).
-> - `Object.prototype.hasOwnProperty.call(obj, k)` — older safe form.
-> - **Trap:** `Object.create(null)` has no chain to `Object.prototype` → `dict.hasOwnProperty` is `undefined` → TypeError.
-> - **Trap:** `{ hasOwnProperty: 'x' }.hasOwnProperty('y')` throws (shadowed by non-function).
-> - **Trap:** `obj[key] !== undefined` doesn't distinguish missing from explicit-undefined and walks the chain.
-> - `'i' in arr` correctly detects sparse-array holes; `forEach`/`map` skip holes.
-> - ESLint rule: `no-prototype-builtins` enforces `Object.hasOwn` over the instance method.
+> "Three operators, three different questions. `'key' in obj` is an OPERATOR that walks the entire prototype chain — includes inherited and non-enumerable. So `'toString' in {}` is true. `obj.hasOwnProperty(key)` is a METHOD inherited from `Object.prototype` — checks OWN properties only, but susceptible to two problems: (1) can be shadowed by a property of the same name, (2) missing entirely on `Object.create(null)` dictionaries. `Object.hasOwn(obj, key)` is the ES2022 STATIC method — same own-only semantics but safe against shadowing and unreachable chains. ESLint's `no-prototype-builtins` rule recommends `Object.hasOwn` over `obj.hasOwnProperty`. Use `in` for 'is this key anywhere?'. Use `Object.hasOwn` for 'is this an own property?'. Distinguish missing from undefined via `in` or `hasOwn` (not `obj[key] !== undefined`). Trap: shadowed hasOwnProperty; null-proto dict; for...in walking chain."
+
+---
+
+## 13. 60-second revision
+
+> - **`'key' in obj`** = chain walk (includes inherited + non-enumerable).
+> - **`Object.hasOwn(obj, key)`** = own only (modern, safe).
+> - **`obj.hasOwnProperty(key)`** = own only (legacy, can shadow/missing).
+> - **`Object.create(null).hasOwnProperty`** = undefined → TypeError.
+> - **`in` for arrays:** index check; `1 in [1,,3]` is false (hole).
+> - **`for...in`** walks chain; use `Object.keys` for own enumerable.
+> - **`obj[key] !== undefined`** — broken for explicit undefined.
+> - **ESLint `no-prototype-builtins`** recommends Object.hasOwn.
+> - **Trap:** shadowed; null-proto dict; for...in chain walk.
+
+---
+
+**Related:** [prototype-chain-inheritance.md](./prototype-chain-inheritance.md) · [defineproperty-vs-assignment.md](./defineproperty-vs-assignment.md) · [object-create-polyfill.md](./object-create-polyfill.md)
+
+**Concept primer:** [`concepts/prototype.md`](../../concepts/prototype.md)

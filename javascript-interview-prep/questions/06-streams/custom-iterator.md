@@ -1,98 +1,153 @@
-# Build a custom iterator (`Symbol.iterator`, `next()`, `done`)
+# Custom iterator — `Symbol.iterator`, `next()`, lazy chains
 
-## Source
-- codedamn "JavaScript Iterator Lab": https://codedamn.com/problem/LxpOdwQJevoLk9XxtlD1p
-- Canonical ECMAScript spec: Iterator and Iterable protocols.
+> **Difficulty:** Medium   |   **Time:** ~15 min   |   **Prereqs:** [fibonacci-generator.md](./fibonacci-generator.md), [`03-prototype/symbol-iterator-on-class.md`](../03-prototype/symbol-iterator-on-class.md)
+>
+> **Source:** ECMAScript Iterator and Iterable protocols. codedamn iterator lab.
 
-## Why this question matters in interviews
-Iterators are the substrate of every modern JS feature: `for ... of`, spread `[...x]`, destructuring `[a, b] = x`, `Promise.all`, `Map`/`Set` construction, generators, async generators, even Node streams (`for await`). When an interviewer asks "make this object iterable," they're checking whether you understand the **protocol** behind all that syntax sugar. Senior backend engineers will write custom iterators when wrapping a paginated API, a linked list, a tree traversal, or a DB cursor — anywhere "produce values on demand" is the right mental model. Bonus: implementing iterator chaining (map/filter as iterators) is the foundation of TC39 Iterator Helpers (stable in 2025+).
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### The two protocols
-**Iterator protocol** — an object with a `.next()` method that returns `{ value, done }`.
-```js
-const iter = {
-  next() { return { value: 42, done: false }; }
-};
-```
-**Iterable protocol** — an object with a `[Symbol.iterator]()` method that returns an iterator.
-```js
-const iterable = {
-  [Symbol.iterator]() { return iter; }
-};
-for (const v of iterable) { /* ... */ }
-```
+Build a custom iterable with `Symbol.iterator`. Bonus: lazy `map`/`filter`/`take` chain without intermediate arrays.
 
-### Built-ins that are iterable
-`Array`, `String`, `Map`, `Set`, `TypedArray`, `arguments`, `NodeList`. Plain objects are **not** — you have to add `[Symbol.iterator]` yourself.
-
-### What `for ... of` actually does
-```js
-for (const x of obj) { body }
-// equivalent to:
-const it = obj[Symbol.iterator]();
-while (true) {
-  const { value, done } = it.next();
-  if (done) break;
-  const x = value;
-  body;
-}
-```
-
-### Iterator helpers (TC39 stage-4, stable in 2025+)
-Iterators now have `.map`, `.filter`, `.take`, `.drop`, `.reduce`, `.toArray`. So `range(1, 100).filter(x => x % 2).take(5).toArray()` works on any iterator without intermediate arrays. Worth mentioning.
-
-### Lazy evaluation
-The big advantage over arrays: an iterator computes one value at a time. Memory is O(1), and you can iterate over an *infinite* sequence safely as long as you stop pulling.
-
-### Iterator can be self-iterable
-A common pattern: an iterator's `[Symbol.iterator]()` returns `this`. That makes it usable in `for ... of` *and* re-consumable from the saved iterator state.
-
-## Brute force approach
-"I'll just put the values in an array." Fine for 10 items. For 10 million items, or for an infinite sequence, you OOM the process. Also defeats the purpose if the data is generated lazily (DB cursor, paginated API).
-
-## Optimal approach
-Define `[Symbol.iterator]()` returning an object with `next()`. Encapsulate state in closure variables or in a class. For composability, make the iterator self-iterable. For chaining (map/filter), each operation returns a new lazy iterator that wraps the previous one.
-
-## Solution (JavaScript)
+**Verification examples**
 
 ```js
-'use strict';
-
-/**
- * Build a lazy, chainable iterator over an integer range.
- * Demonstrates Symbol.iterator + lazy map/filter/take that compose without
- * allocating intermediate arrays.
- */
-function range(start, end, step = 1) {
-  return makeIterable(function* () {
-    for (let i = start; i < end; i += step) yield i;
-  });
+function range(start, end) {
+  return { [Symbol.iterator]() {
+    let i = start;
+    return { next() { return i < end ? {value: i++, done: false} : {value: undefined, done: true} } };
+  }};
 }
 
-/**
- * Wrap a generator-fn (or any factory returning an iterator) into a
- * chainable iterable with .map / .filter / .take / .toArray.
- */
+for (const n of range(1, 4)) console.log(n);                              // 1, 2, 3
+[...range(1, 4)];                                                         // [1, 2, 3]
+const [a, b] = range(10, 13);                                             // a=10, b=11
+```
+
+**Constraints**
+- Two protocols: **iterable** (has `[Symbol.iterator]()`), **iterator** (has `next()` returning `{value, done}`).
+- Self-iterable iterator: `[Symbol.iterator]() { return this; }`.
+- Lazy chains: each operator wraps the previous — no intermediate arrays.
+- `return()` hook for cleanup on early termination.
+
+---
+
+## 2. Plain-English restatement
+
+JS's iteration protocol underlies `for...of`, spread, destructuring, `Promise.all`, `Map`/`Set` construction. **Iterable**: has `[Symbol.iterator]()` returning an iterator. **Iterator**: has `next()` returning `{value, done}`. Generators auto-implement both.
+
+---
+
+## 3. Why this matters in interviews
+
+Tests well-known symbols + protocol + lazy chaining. Iterator helpers (TC39 stage-4) build on this.
+
+---
+
+## 4. Mental model
+
+```
+   Iterable: { [Symbol.iterator](): Iterator }
+   Iterator: { next(): {value, done} }
+
+   for...of obj:
+     it = obj[Symbol.iterator]()
+     while (true):
+       {value, done} = it.next()
+       if done break
+       body with value
+
+   Self-iterable iterator:
+     iterator.[Symbol.iterator] = function() { return this }
+     ← lets you pass the iterator directly to for...of
+
+   Lazy chain (map/filter/take):
+     Each op returns NEW iterable wrapping previous.
+     Nothing executes until consumer pulls.
+     Memory O(1); safe over infinite sources.
+
+   return(v) hook:
+     Called when consumer break's or throw's mid-iteration.
+     Release file handles, DB cursors, etc.
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. What's the difference between iterable and iterator?
+> 2. When is `return()` called on an iterator?
+> 3. Why is `range(0, Infinity).filter(...).map(...).take(5)` safe?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: store in array
+O(n) memory; can't iterate infinite source.
+
+### Wrong attempt 2: string key `"iterator"`
+`for...of` won't find it; must be `Symbol.iterator`.
+
+### Wrong attempt 3: return `{value, done: true}` with real value
+`for...of` ignores value when done.
+
+---
+
+## 7. The unlocking insight
+
+> **Iterable returns iterator. Iterator's `next()` returns `{value, done}`. Lazy chains wrap previous iterables — no intermediate arrays. Use generators for cleanest implementation.**
+
+Three properties:
+
+1. **Two protocols** — iterable + iterator.
+2. **Self-iterable trick** — iterator's `[Symbol.iterator]()` returns `this`.
+3. **Lazy wrapping** — composable without materialization.
+
+---
+
+## 8. Solution (annotated)
+
+```js
+// Manual iterator
+class LinkedList {
+  constructor(head) { this.head = head; }
+  [Symbol.iterator]() {                                                  // step 1: iterable
+    let node = this.head;
+    return {                                                              // step 2: iterator
+      next() {
+        if (!node) return {value: undefined, done: true};
+        const v = node.value;
+        node = node.next;
+        return {value: v, done: false};
+      },
+      [Symbol.iterator]() { return this; },                               // step 3: self-iterable
+      return(v) {                                                          // step 4: cleanup hook
+        node = null;
+        return {value: v, done: true};
+      },
+    };
+  }
+}
+
+// Lazy chainable iterables
 function makeIterable(factory) {
   return {
     [Symbol.iterator]() { return factory(); },
-
     map(fn) {
       const self = this;
       return makeIterable(function* () {
         for (const x of self) yield fn(x);
       });
     },
-
     filter(pred) {
       const self = this;
       return makeIterable(function* () {
         for (const x of self) if (pred(x)) yield x;
       });
     },
-
     take(n) {
       const self = this;
       return makeIterable(function* () {
@@ -103,112 +158,129 @@ function makeIterable(factory) {
         }
       });
     },
-
     toArray() { return [...this]; },
   };
 }
 
-// Manual (no-generator) iterator — show you can do it without `function*`.
-class LinkedListIterable {
-  constructor(head) { this.head = head; }
-  [Symbol.iterator]() {
-    let node = this.head;
-    return {
-      next() {
-        if (!node) return { value: undefined, done: true };
-        const value = node.value;
-        node = node.next;
-        return { value, done: false };
-      },
-      [Symbol.iterator]() { return this; },     // self-iterable
-      return(value) {                            // called when consumer bails early
-        node = null;                             // release reference
-        return { value, done: true };
-      },
-    };
-  }
+function range(start, end, step = 1) {
+  return makeIterable(function* () {
+    for (let i = start; i < end; i += step) yield i;
+  });
 }
 
-// Demo
-const result = range(0, Infinity)              // INFINITE source — safe because lazy
+// Infinite + chain = safe
+range(0, Infinity)
   .filter((n) => n % 2 === 0)
   .map((n) => n * n)
   .take(5)
-  .toArray();
-console.log(result);  // [0, 4, 16, 36, 64]
-
-const list = new LinkedListIterable({ value: 'a', next: { value: 'b', next: null } });
-for (const v of list) console.log(v);   // 'a', 'b'
+  .toArray();                                                              // [0, 4, 16, 36, 64]
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
-`range(0, Infinity).filter(n => n % 2 === 0).map(n => n * n).take(5).toArray()`
+```js
+// for...of with break runs return() automatically
+const list = new LinkedList({value:'a', next:{value:'b', next:{value:'c', next:null}}});
+for (const v of list) {
+  console.log(v);
+  if (v === 'b') break;                                                   // return() called → node=null released
+}
 
-The chain creates 4 nested iterables. **Nothing executes** until `toArray` triggers `[...this]`, which calls `Symbol.iterator` on the outermost (`take`).
+// Iterator helpers (TC39 stage-4, 2025+)
+function* nats() { let n = 0; while (true) yield n++; }
+nats().take(5).filter(x => x % 2).map(x => x * 10).toArray();             // [10, 30] (when available)
+```
 
-| Pull # | take.next() asks map | map.next() asks filter | filter.next() asks range | yields |
-| --- | --- | --- | --- | --- |
-| 1 | requests next | requests next | yields 0 → pred(0)=true → forwards 0 | map → 0 → take yields 0 |
-| 2 | requests next | requests next | yields 1 → pred=false; yields 2 → pred=true | map → 4 → take yields 4 |
-| 3 | ... | ... | yields 3 (skip) → yields 4 | map → 16 |
-| 4 | ... | ... | yields 5 (skip) → yields 6 | map → 36 |
-| 5 | ... | ... | yields 7 (skip) → yields 8 | map → 64 |
-| 6 | take's counter hits 5 → `return` | — | — | done |
+---
 
-**Key observation:** we never materialized the infinite range. We pulled exactly 10 items from `range` (the odd numbers got rejected, the even numbers got squared), produced 5 results, and stopped. Memory: O(1). This is the entire point of iterators.
+## 9. Step-by-step dry run
 
-Manual iterator (no generator) — `for (const v of list)`:
-1. `for...of` calls `list[Symbol.iterator]()` → returns `{ next, return, [Symbol.iterator]: this }`.
-2. `next()` → `{ value: 'a', done: false }`. `node` advances.
-3. `next()` → `{ value: 'b', done: false }`. `node` advances to null.
-4. `next()` → `{ value: undefined, done: true }`. Loop exits.
+```
+range(0, Infinity).filter(n => n%2 === 0).map(n => n*n).take(5).toArray()
 
-If the consumer `break`s early, `for...of` calls `return()` on the iterator — that's where you release references. Forgetting `return` = subtle memory leak.
+Build phase (NO execution):
+  range = wraps factory* yielding 0..Infinity.
+  .filter wraps range.
+  .map wraps filter.
+  .take wraps map.
+  .toArray triggers [...this] on take.
 
-## Important takeaways
+Execution (pull-driven):
+  Iteration 1:
+    take.next() → asks map.next() → asks filter.next() → asks range.next() → yields 0.
+    filter: 0 % 2 === 0 → yields 0 to map.
+    map: 0 * 0 = 0 → yields 0 to take.
+    take: counter 0 < 5 → yields 0.
+    result: [0].
+  
+  Iteration 2:
+    range.next() → 1.
+    filter: 1 % 2 ≠ 0 → skip. range.next() → 2.
+    filter: yield 2 to map.
+    map: 4 → take → yields 4.
+    result: [0, 4].
+  
+  ... continues. range yields 0,1,2,3,4,5,6,7,8. filter passes evens. map squares. take stops at 5.
+  
+  After 5 takes: take returns done. Iteration ends.
+  result: [0, 4, 16, 36, 64].
 
-**Syntax to memorize**
-- Iterable: `obj[Symbol.iterator]() { return iterator; }`
-- Iterator: `{ next() { return { value, done }; } }`
-- Self-iterable iterator: also include `[Symbol.iterator]() { return this; }` — lets you pass the iterator itself to `for ... of`.
-- `Symbol.iterator` is the well-known symbol — you can't use a string key.
+Memory: O(1). Only one value flows through pipeline at a time.
+Range NEVER materializes infinite values.
+```
 
-**Patterns to reuse**
-- Generators (`function*`) **always** produce iterators that are also iterable. Use them instead of writing `next()` by hand whenever possible.
-- Lazy chaining: each operator returns a new iterable that pulls from the previous one. Zero intermediate arrays.
-- DB cursors / paginated APIs / tree traversals are all natural iterators.
+---
 
-**Common mistakes**
-- Returning `{ value, done: true }` with a real `value` — `done: true` means "the loop exits"; whatever `value` is there is ignored by `for ... of`. Use `done: true, value: undefined` unless you specifically want a generator's `return value`.
-- Using a property key `"iterator"` instead of `Symbol.iterator` — `for ... of` won't find it.
-- Mutating the iterable in-place during iteration — undefined behavior for most cases; for arrays, indices shift and you get duplicates / skips.
-- Forgetting `return()` on iterators that hold resources — leaks file handles, DB cursors.
-- Confusing iterator with iterable. `[1,2,3]` is iterable; `[1,2,3][Symbol.iterator]()` is the iterator.
+## 10. Common confusion + traps
 
-**Related**
-- `fibonacci-generator.md` — generators (`function*`) are sugar over this protocol.
-- `async-iterator-pagination.md` — async cousin: `Symbol.asyncIterator` + `for await`.
-- `readable-stream-push.md` — Node streams are async iterables under the hood.
+1. **Iterator vs iterable** — separate protocols.
+2. **String key `"iterator"`** — must be `Symbol.iterator`.
+3. **`done: true` with value** — `for...of` ignores value.
+4. **Forget `return()` on resource-holders** — fd/cursor leaks.
+5. **Mutate during iteration** — undefined behavior.
+6. **Spread infinite iterable** — `[...infiniteGen]` hangs.
+7. **Self-iterable trick** — iterator's `[Symbol.iterator]() { return this }` for `for...of` convenience.
 
-## Variants
+---
 
-1. **`zip(iterA, iterB)`** — produce pairs `[a, b]` until either runs out. Tests that you can pull from two iterators in lockstep and stop on the first `done: true`.
+## 11. Senior follow-ups & variants
 
-2. **`groupBy(iter, fn)`** — yield sub-iterators of consecutive equal-key items, lazily. Subtle because each sub-iterator must not pre-consume the next group.
+### Variant 1 — `zip(a, b)`
+Pull from two iterators in lockstep; stop on first done.
 
-3. **Async + sync interop** — make an iterable that exposes both `Symbol.iterator` and `Symbol.asyncIterator`. The async one might do I/O between values; the sync one might just iterate cached results. Bonus: how do you handle errors differently in each path?
+### Variant 2 — `groupBy(iter, keyFn)`
+Yield sub-iterators of consecutive equal-key items.
 
-## Revision notes
+### Variant 3 — Async + sync interop
+Expose both `Symbol.iterator` and `Symbol.asyncIterator`.
 
-> **custom iterator — 60 second recap**
-> - Iterable: `obj[Symbol.iterator]() { return iterator; }`
-> - Iterator: object with `next()` returning `{ value, done }`.
-> - `for ... of`, spread, destructuring, `Promise.all` — all use this protocol.
-> - Self-iterable trick: iterator's `[Symbol.iterator]() { return this; }`.
-> - Generators (`function*`) auto-implement both protocols — prefer them.
-> - Lazy chaining: each operator wraps the previous iterable. No intermediate arrays. Safe over infinite sources.
-> - `return(value)` is called when the consumer bails early — release resources here.
-> - Iterator Helpers (TC39 stage-4, 2025+): `.map/.filter/.take/.toArray` natively on iterators.
-> - Trap: `done: true` with a value — the value is ignored by `for ... of`.
-> - Trap: string key `"iterator"` instead of `Symbol.iterator`.
+### Variant 4 — Iterator helpers (TC39)
+`.map`, `.filter`, `.take`, `.toArray` native on iterators (stage-4).
+
+### Variant 5 — `for...of` over Map/Set
+Built-ins already implement protocol; same shape.
+
+---
+
+## 12. How to think aloud
+
+> "Two protocols. Iterable: has `[Symbol.iterator]()` returning an iterator. Iterator: has `next()` returning `{value, done}`. `for...of`, spread, destructuring, `Promise.all`, `Map`/`Set` construction all call `[Symbol.iterator]()` to get a fresh iterator. Generators (`function*`) auto-implement both — prefer them. Self-iterable iterator: include `[Symbol.iterator]() { return this; }` so the iterator itself can be passed to `for...of`. Lazy chaining (map/filter/take): each op returns a new iterable wrapping the previous; nothing executes until consumer pulls. Memory O(1); safe over infinite sources. `return(v)` hook is called when `for...of` breaks or throws — release file handles, DB cursors. Trap: iterator vs iterable confusion; string key `'iterator'`; `done: true` with value (ignored); forgetting return() on resource holders; spreading infinite iterables."
+
+---
+
+## 13. 60-second revision
+
+> - **Iterable:** `obj[Symbol.iterator]()` → iterator.
+> - **Iterator:** `iter.next()` → `{value, done}`.
+> - **Self-iterable trick:** `iter[Symbol.iterator]() { return this }`.
+> - **Generators auto-implement** both — prefer.
+> - **Lazy chaining:** wrap previous; no intermediate arrays; safe for infinite.
+> - **`return(v)` hook** for cleanup on `break`/`throw`.
+> - **Iterator helpers** (TC39 stage-4): `.map`, `.filter`, `.take`, `.toArray`.
+> - **Trap:** protocol confusion; string key; done+value; forget return().
+
+---
+
+**Related:** [fibonacci-generator.md](./fibonacci-generator.md) · [generator-pipeline.md](./generator-pipeline.md) · [async-iterator-pagination.md](./async-iterator-pagination.md) · [`03-prototype/symbol-iterator-on-class.md`](../03-prototype/symbol-iterator-on-class.md)
+
+**Concept primer:** [`concepts/streams.md`](../../concepts/streams.md)

@@ -1,153 +1,310 @@
-# `createIncrement(by)` — closure-based incrementer factory
+# Build an incrementer factory that returns a new sequence value on each call
 
-## Source
-- Foundational closure interview problem (BFE.dev #18 "Counter", every front-end / Node bootcamp).
-- Variants on LeetCode #2620 "Counter."
+> **Difficulty:** Easy   |   **Time:** ~5 min   |   **Prereqs:** [counter.md](./counter.md), [`concepts/closures.md`](../../concepts/closures.md)
+>
+> **Source:** BFE.dev #18 "Counter"; variant of [LeetCode 2620 — Counter](https://leetcode.com/problems/counter/)
 
-## Why this question matters in interviews
-`createIncrement(by)` is the **simplest possible factory closure** — it tests whether you can return a function that holds private state and produces a new value each call. Senior interviewers ask it as a 5-minute warm-up, then immediately follow up with "now make it support `reset()`," "now make two of these independent," "now make `by` configurable per call." Each follow-up surfaces whether you actually understand how closures partition state. Backend uses: ID generators, sequence numbers for log lines, sequence-per-tenant counters, deterministic test fixtures.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+**Signature**
+```ts
+function createIncrement(by?: number, start?: number): () => number;
+```
+
+**Input / Output examples**
+
+| Setup                           | Sequence of calls          | Output sequence |
+|---------------------------------|----------------------------|-----------------|
+| `const inc = createIncrement(2)` | `inc(); inc(); inc();`     | `2, 4, 6`       |
+| `const inc = createIncrement()`  | `inc(); inc();`            | `1, 2`          |
+| `const tick = createIncrement(2, 100)` | `tick(); tick();`     | `102, 104`      |
+| `const a = createIncrement(1); const b = createIncrement(10);` | `a(); a(); b(); a();` | `1, 2, 10, 3` (independent) |
+
+**Constraints**
+- The returned function takes no arguments and returns the *new* (post-increment) value.
+- `by` defaults to 1, `start` defaults to 0 (so the first call returns `by` itself).
+- Two factory calls produce **independent** counters with their own private state.
+
+---
+
+## 2. Plain-English restatement
+
+Write a function `createIncrement(by, start)` that returns *another* function. That returned function has a hidden counter inside it. Each time you call the returned function, it bumps the counter by `by` and gives you the new value. Two separate factory calls must produce two independent counters — calling one doesn't affect the other.
+
+This is essentially `counter.md` with a configurable step. The pedagogical purpose is to lock in the factory-closure shape — the smallest reusable building block for ID generators, sequence numbers, retry counters, and rate-limiter tickets.
+
+---
+
+## 3. Why this matters in interviews
+
+`createIncrement` is the **simplest possible factory closure**. Senior interviewers ask it as a 5-minute warmup and then immediately layer follow-ups: "now support `reset()`," "now make `by` per-call," "now expose the current value without mutating." Each follow-up tests whether you really understand how a closure partitions state. Backend uses are everywhere: log-sequence counters, request-ID generators, per-tenant counters, deterministic test fixtures.
+
+---
+
+## 4. Mental model
+
+Picture a **vending machine** with a sticky-note counter on the side. The factory `createIncrement(2)` builds a fresh machine and sticks a `0` on it. Every time you press the button (call the returned function), the machine adds `2` to the sticker, then hands you back the new number. You can't reach inside the machine to change the sticker; you can only press the button. If you order a *second* machine from the factory, it has its own sticker — pressing one machine's button does not bump the other's.
+
+```
+   createIncrement(2)
+        │
+        ├── new "machine":  ┌──────────┐
+        │                   │ count: 0 │   ← sticker (private slot)
+        │                   │ by: 2    │   ← configured at factory time
+        │                   └──────────┘
+        │                         ▲
+        │                         │ reads + writes via closure
+        │                   ┌──────────────┐
+        └── returns ──────▶ │  () => …     │   ← the button
+                            └──────────────┘
+
+   inc(); inc(); inc();
+   ↓      ↓      ↓
+   2      4      6   (each press: count += by, then return count)
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. After `const inc = createIncrement(); inc(); inc();`, what does each call return?
+> 2. If you call `createIncrement(2)` twice and call each result once, what do you get back from each? Do they share state?
+> 3. Should the increment happen *before* returning or *after*? Hint: the first call after `createIncrement(2)` should return `2`, not `0`.
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: a global counter
+
+```js
+let count = 0;
+function createIncrement(by = 1) {
+  return function () { count += by; return count; };
+}
+```
+
+What's wrong? Two callers of `createIncrement()` share the same `count`. Two factory calls leak into each other — fails the independence requirement. Reject.
+
+### Wrong attempt 2: `let count` inside the returned function
+
 ```js
 function createIncrement(by = 1) {
-  let count = 0;                              // closed-over state
   return function () {
+    let count = 0;        // BUG: fresh `count` every call
     count += by;
     return count;
   };
 }
-
-const inc = createIncrement(2);
-inc();   // 2
-inc();   // 4
-inc();   // 6
 ```
 
-### Runtime / engine behavior
-- `count` and `by` are captured in the inner function's closure record. Both live on the heap as long as the returned wrapper is reachable.
-- **Each call to `createIncrement` makes a fresh `count` slot.** Two incrementers from the same factory are completely independent — that's the whole point of factory functions.
-- The factory's lexical environment is created at call time, destroyed when nothing references it. Returning the inner function keeps the environment alive.
-- Arrow function or `function` doesn't matter here — there's no `this` involved.
+The inner `let count = 0` resets on every invocation. `inc(); inc(); inc();` returns `by, by, by` — the counter never advances. Classic blunder under stress.
 
-### Edge cases (interview traps)
-1. **Negative or zero `by`** — should work; the spec doesn't say "positive only." `createIncrement(-1)` is a decrementer.
-2. **Float `by`** — works but accumulates floating-point error: `createIncrement(0.1)` after 10 calls gives `0.9999999999999999`. Mention if asked about decimals.
-3. **Concurrent callers** — single-threaded JS, so no race. But in a worker thread with shared `SharedArrayBuffer`, you'd need `Atomics.add`. Mention for senior bonus.
-4. **Starting value** — usually 0; allow override `createIncrement(by, start)`.
-5. **`reset()`** — common follow-up. Expose by attaching to the returned function.
-6. **Per-call step** — `createIncrement(2)(); inc(5);` overriding step? Tests whether you can extend the API cleanly.
-7. **Memory** — `count` is small; no leak risk. But factories that close over large config objects do retain them.
-
-## Brute force approach
-"Use a global counter and add `by`." Breaks isolation — every caller shares the same counter. Fails the "factory" test. Or "stash count on the returned function as a property" — works but exposes mutable state to outside tampering. Closures are the right encapsulation.
-
-## Optimal approach
-Closure over `count` initialised inside the factory. Each `createIncrement(...)` call creates a fresh closure with its own `count`. O(1) state per incrementer, O(1) per call.
-
-## Solution (JavaScript)
+### Wrong attempt 3: stash on the returned function as a property
 
 ```js
-/**
- * Returns an incrementer that adds `by` to its private counter on each call.
- * @param {number} [by=1]
- * @param {number} [start=0]
- * @returns {(() => number) & { reset: () => void, value: () => number }}
- */
-function createIncrement(by = 1, start = 0) {
-  let count = start;
+function createIncrement(by = 1) {
+  const fn = function () { fn.count += by; return fn.count; };
+  fn.count = 0;
+  return fn;
+}
+```
 
-  function inc() {
-    count += by;
-    return count;
+Works, but exposes mutable state externally: anyone can write `inc.count = 999`. Closure version gives true privacy.
+
+---
+
+## 7. The unlocking insight
+
+> **The mutable counter slot must live in the factory's scope, not the inner function's body. That's what makes it survive across calls and stay private from the outside.**
+
+When you call `createIncrement(by, start)`, the engine creates a fresh LE holding three slots: `by`, `start`, and `count` (initialized to `start`). The inner function is defined inside that LE, so its `[[Environment]]` points there. Every call to the returned function reads `count` and `by` through the closure, mutates `count` in place, and returns the new value. The slot survives because the returned function still references its LE.
+
+The same insight powers the "decorated function" pattern: if you want to add helper methods like `.reset()` and `.value()` to the returned function, you define them in the *same* factory scope. They all close over the same LE, so they all see the same `count`. This is the same mechanism `counter-ii.md` uses for object-of-methods — just attached to a function instead of an object.
+
+---
+
+## 8. Solution (annotated)
+
+```js
+function createIncrement(by = 1, start = 0) {     // step 1: factory takes step + starting value
+  let count = start;                                // step 2: private slot lives in factory LE
+
+  function inc() {                                  // step 3: the button (the returned function)
+    count += by;                                    //         bump count by `by`
+    return count;                                   //         return the new value
   }
 
-  inc.reset = () => { count = start; };
-  inc.value = () => count;
-  return inc;
-}
+  inc.reset = () => { count = start; };             // step 4: decorate with `.reset()` — shares closure
+  inc.value = () => count;                          // step 5: decorate with `.value()` — read-only peek
 
-// Usage — independent counters
+  return inc;                                       // step 6: hand out the button
+}
+```
+
+**Try it yourself**
+
+```js
 const a = createIncrement(1);
 const b = createIncrement(10);
-a(); a(); a();    // 1, 2, 3
-b(); b();         // 10, 20
-a.value();        // 3 — totally independent of b
+console.log(a(), a(), a());   // 1 2 3
+console.log(b(), b());         // 10 20
+console.log(a.value());        // 3  (a is independent of b)
+
 a.reset();
-a();              // 1
+console.log(a());              // 1  (back to start)
+
+const tick = createIncrement(2, 100);
+console.log(tick(), tick());   // 102 104
 ```
 
-## Step-by-step dry run
+---
+
+## 9. Step-by-step dry run
 
 Input:
+
 ```js
 const tick = createIncrement(2, 100);
-tick();   // returns 102
-tick();   // returns 104
-tick.reset();
-tick();   // returns 102
+tick(); tick(); tick.reset(); tick();
 ```
 
-Trace:
-- `createIncrement(2, 100)`:
-  - Function body runs: `by = 2`, `start = 100`, `count = 100`.
-  - Defines `inc`. `inc`'s closure captures `count`, `by`, `start`.
-  - Attaches `inc.reset` and `inc.value`. Both share the same closure as `inc` (they're defined in the same scope).
-  - Returns `inc`. `tick = inc`.
-- `tick()` (1st):
-  - `count = 100 + 2 = 102`. Returns 102.
-- `tick()` (2nd):
-  - `count = 102 + 2 = 104`. Returns 104.
-- `tick.reset()`:
-  - `count = start = 100`. Returns undefined.
-- `tick()` (3rd):
-  - `count = 100 + 2 = 102`. Returns 102.
+Values-first trace:
 
-What's on the heap: one closure record containing `count`, `by`, `start`. The three functions (`inc`, `reset`, `value`) all reference it. `tick` keeps the whole graph alive.
+| Step | Action          | LE state                          | Returned   |
+|------|-----------------|------------------------------------|------------|
+| init | `createIncrement(2, 100)` | `{by: 2, start: 100, count: 100}` | the `inc` function |
+| 1    | `tick()`        | `count: 100 → 102`                | `102`      |
+| 2    | `tick()`        | `count: 102 → 104`                | `104`      |
+| 3    | `tick.reset()`  | `count: 104 → 100`                | `undefined` |
+| 4    | `tick()`        | `count: 100 → 102`                | `102`      |
 
-If we had also done `const tick2 = createIncrement(2, 100)`, `tick2` would have its **own** closure record with its **own** `count` — calling `tick()` wouldn't affect `tick2()` at all. This is the factory-function isolation guarantee.
+<details>
+<summary><b>Engine internals (click to expand)</b></summary>
 
-## Important takeaways
+1. `createIncrement(2, 100)` creates `LE_outer = { by: 2, start: 100, count: 100 }`.
+2. The `inc` function is defined; its `[[Environment]] = LE_outer`. So are the arrow functions `inc.reset` and `inc.value` — all three share the same LE.
+3. `inc` (with its attached methods) is returned. Outer frame pops; `LE_outer` survives on the heap because `tick` references it (and so do `tick.reset` and `tick.value`).
+4. Each invocation reads/writes `count` through `[[Environment]]` → `LE_outer`. Mutations persist between calls because they're all touching the same slot.
+5. A separate `createIncrement(10)` would create *its own* `LE_outer'`, completely independent — that's the factory isolation guarantee.
 
-**Syntax to memorize**
-- `let count = start` in the **outer** scope (the factory body), never inside the returned function.
-- Return the inner function directly.
-- For follow-ups, attach methods (`reset`, `value`) onto the returned function — they share the same closure.
+</details>
 
-**Patterns to reuse**
-- This is the **simplest factory closure**. The skeleton extends to: rate-limiter buckets, request-ID generators, log-sequence counters, retry-attempt counters, animation frame counters.
-- "Multiple methods sharing one closure" = the **module pattern's** sibling. Define methods in the factory body so they all see the same private state.
-- Attaching methods to the returned function (decorated-function pattern) is what lodash does for `.cancel` / `.flush` on debounce/throttle.
+---
 
-**Common mistakes**
-- Declaring `let count` **inside** the returned function — resets every call, counter never advances.
-- Returning the function and then assigning a property *to the count from outside* — `inc.count` doesn't exist; consumers can't reach the closure variable directly (that's the feature, not a bug).
-- Confusing global counter with closure counter — global = shared, closure = per-instance.
-- Forgetting that arrow vs `function` doesn't change closure semantics here.
+## 10. Common confusion + traps
 
-**Related questions**
-- `createCounter(init)` — same skeleton, return `{ increment, decrement, get }`
-- `once(fn)` — same skeleton, swap counter for a boolean
-- `createUUID()` / `createId()` — factory closure with a counter as the disambiguator
-- React's `useState` (set/get pair) — closure-based at heart
+1. **Declaring `let count` inside the inner function — resets every call.**
+   The slot has to live in the **factory** scope. Inside the inner, every call starts from `0` again.
 
-## Variants
+2. **Forgetting to capture `start` separately if you want `reset()`.**
+   If you reuse `count` and don't preserve `start`, your reset has nothing to restore to. Keep both.
 
-1. **`createCounter(init)` returning `{ increment, decrement, reset, value }`** — same closure, multiple methods. Variant of `module-pattern-iife`. Tests whether you understand that all methods defined in the same scope share state.
+3. **Negative or zero `by` — should work.**
+   `createIncrement(-1)` is a decrementer. `createIncrement(0)` returns `0` (or `start`) forever. Don't add unrequested validation.
 
-2. **Step-overridable on call** — `inc()` adds `by`, `inc(n)` adds `n` instead. One-line change inside the wrapper.
+4. **Float `by` accumulates IEEE-754 error.**
+   `createIncrement(0.1)` after 10 calls yields `0.9999999999999999`. Mention if asked about decimals; the fix is integer math or `Number.EPSILON` tolerance.
 
-3. **Capped incrementer** — `createIncrement(1, 0, max)` returns `null`/throws/cycles after hitting `max`. Tests bounds + closure state combined.
+5. **Concurrent callers — single-threaded JS is safe.**
+   The closure-bump-and-return is one synchronous operation; no race. Inside a Worker thread sharing a `SharedArrayBuffer`, you'd need `Atomics.add`.
 
-## Revision notes
+6. **Attaching methods exposes them but not the slot.**
+   `inc.reset()` works, but `inc.count` is `undefined` — there's no property by that name. The slot is in the closure, not on the function object. That's the privacy guarantee.
 
-> **create-incrementer — 60 second recap**
-> - Factory pattern: `function createIncrement(by) { let count = 0; return () => (count += by); }`.
-> - `count` lives in the **factory's** scope. Each call to `createIncrement` makes a fresh `count` → independent incrementers.
-> - Methods defined in the same scope (e.g., `reset`, `value`) all share the same closure — that's how `module-pattern-iife` works under the hood.
-> - Attach helper methods to the returned function (decorated-function pattern) for `.reset()`/`.value()`.
-> - Heap: closure record per incrementer; pinned while the returned function is reachable.
-> - Concurrency: safe in single-threaded JS; needs `Atomics.add` in worker threads with `SharedArrayBuffer`.
-> - Family: `once`, `createCounter`, debounce/throttle (closure over a single mutable handle).
-> - **Trap:** declaring `count` inside the returned function — resets per call; counter is broken.
+---
+
+## 11. Senior follow-ups & variants
+
+### Variant 1 — Step overridable per call
+
+The interviewer asks: "let callers pass a step to override the default."
+
+```js
+function createIncrement(defaultBy = 1, start = 0) {
+  let count = start;
+  return function (by = defaultBy) {
+    count += by;
+    return count;
+  };
+}
+const inc = createIncrement(1);
+inc();       // 1
+inc(5);      // 6  (one-off override)
+inc();       // 7  (back to default)
+```
+
+### Variant 2 — Capped / cycling incrementer
+
+`createIncrement(1, 0, { max: 10, onOverflow: 'throw' | 'cycle' | 'clamp' })`.
+
+```js
+function createIncrement(by = 1, start = 0, { max = Infinity, onOverflow = 'throw' } = {}) {
+  let count = start;
+  return function () {
+    count += by;
+    if (count > max) {
+      if (onOverflow === 'throw') throw new RangeError(`count exceeded ${max}`);
+      if (onOverflow === 'cycle') count = start + (count - max - 1);
+      if (onOverflow === 'clamp') count = max;
+    }
+    return count;
+  };
+}
+```
+
+### Variant 3 — `{ increment, decrement, reset, value }` object form
+
+This is the bridge to `counter-ii.md` — same factory scope, expose multiple operations.
+
+```js
+function createCounter(init) {
+  let n = init;
+  return {
+    increment() { return ++n; },
+    decrement() { return --n; },
+    reset() { return (n = init); },
+    value() { return n; },
+  };
+}
+```
+
+### Variant 4 — Atomic for SharedArrayBuffer
+
+For worker-shared counters, swap the local variable for an `Int32Array` view over a `SharedArrayBuffer`:
+
+```js
+function createSharedIncrement(sab, slot, by = 1) {
+  const view = new Int32Array(sab);
+  return function () { return Atomics.add(view, slot, by) + by; };
+}
+```
+
+`Atomics.add` returns the *old* value, so we add `by` again to return the new value. Senior bonus — mention only if asked.
+
+---
+
+## 12. How to think aloud in the interview
+
+> "Factory closure: outer holds `count`, inner does `count += by; return count`. Two factory calls give two independent LEs, so they don't share state — that's the whole point. Slot must live in the outer scope; declaring it inside the inner resets every call. If they ask for `reset()`, I attach a method on the returned function — same closure, same slot. If they want `value()` for read-only access, same trick. For per-call step override, the inner takes an optional parameter that defaults to the factory-time `by`. For shared-memory counters across workers, swap to `Atomics.add` over a typed-array view of `SharedArrayBuffer`."
+
+---
+
+## 13. 60-second revision
+
+> - **Pattern:** `function createIncrement(by, start) { let count = start; return () => (count += by, count); }`
+> - The slot **must** live in the factory scope, not in the inner function body.
+> - Each `createIncrement()` call = a fresh LE = independent counter.
+> - **Trap:** declaring `let count` inside the inner — resets every call.
+> - **Decorated-function pattern:** attach `.reset()` and `.value()` to the returned function; they share the closure.
+> - **Family:** `once`, `counter-ii`, debounce/throttle, ID generators, retry counters.
+> - For shared-memory across workers: `Atomics.add` on a typed-array view of `SharedArrayBuffer`.
+
+---
+
+**Related:** [counter.md](./counter.md) · [counter-ii.md](./counter-ii.md) · [once-with-cached-return.md](./once-with-cached-return.md) · [allow-one-function-call.md](./allow-one-function-call.md)
+
+**Concept primer:** [`concepts/closures.md`](../../concepts/closures.md)

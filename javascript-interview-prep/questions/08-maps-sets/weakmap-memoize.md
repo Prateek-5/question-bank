@@ -1,199 +1,324 @@
-# `WeakMap`-backed memoization and private fields
+# `WeakMap`-backed memoization + private fields
 
-## Source
-- Canonical interview problem.
-- Mirrors the use case behind ES private class fields (`#name`) and lodash `_.memoize` with object keys.
+> **Difficulty:** Senior   |   **Time:** ~12 min   |   **Prereqs:** [object-vs-map-vs-set.md](./object-vs-map-vs-set.md), [weakref-finalization-registry.md](./weakref-finalization-registry.md)
+>
+> **Source:** Pre-private-fields private-data pattern. Lodash `_.memoize` for object keys.
 
-## Why this question matters in interviews
-`WeakMap` is the most under-explained data structure in JavaScript and the interviewer knows it. If you can articulate **(a) keys must be objects, (b) entries are garbage-collected when the key has no other references, (c) WeakMap is not iterable**, you're already in the top quartile. The two killer use cases — **memoizing computed results per-object without leaking** and **attaching private data to user-supplied objects (DOM nodes, request contexts)** — are exactly the patterns senior engineers reach for in real code. As a backend engineer, you'll use `WeakMap` for per-request caches keyed by `req` object, per-connection state, lazy-loaded transformers, and prototype-clean "private slots" before classes. The follow-up is always "why not just `Map`?" — answer: GC. Always GC.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+Memoize per-object without preventing GC of that object. Also: attach private metadata to instances.
+
+**Verification examples**
+
 ```js
 const cache = new WeakMap();
-
-function memoize(fn) {
-  return function (obj) {
-    if (cache.has(obj)) return cache.get(obj);
-    const result = fn(obj);
-    cache.set(obj, result);
-    return result;
-  };
+function memoizedHash(obj) {
+  if (cache.has(obj)) return cache.get(obj);
+  const h = expensiveHash(obj);
+  cache.set(obj, h);
+  return h;
 }
 
-// Killer use case 2 — private data per object
+let req = {url: '/api'};
+memoizedHash(req);                       // compute + cache
+req = null;                              // last strong ref dropped
+// GC reclaims req AND cache entry — no leak
+
+// Private fields pattern
 const _privates = new WeakMap();
 class User {
-  constructor(name, pass) {
-    _privates.set(this, { passwordHash: hash(pass) });
+  constructor(name) {
+    _privates.set(this, { passwordHash: hash(name) });
     this.name = name;
   }
-  verify(p) { return _privates.get(this).passwordHash === hash(p); }
+  check(pass) { return _privates.get(this).passwordHash === hash(pass); }
 }
-// _privates is invisible from outside; entries vanish when User instance is GC'd.
 ```
 
-### Runtime / engine behavior
-- **Keys MUST be objects** (or symbols in ES2023+). `weakMap.set('a', 1)` throws `TypeError`.
-- **Entries are weakly held**: the WeakMap does NOT count as a reference to the key. When the only thing pointing at `key` is the WeakMap itself, the GC reclaims both `key` and its associated `value`.
-- **Not iterable**: no `.size`, no `.keys()`, no `.values()`, no `.entries()`, no `for...of`. By design — you can't safely enumerate something that may vanish mid-loop.
-- Methods: `get`, `set`, `has`, `delete`. That's it.
-- V8 implements WeakMap with ephemeron tables — special GC machinery that handles the "value is reachable iff key is reachable" semantic correctly. Don't roll your own; you can't.
-- **`WeakRef`** is a different primitive (single-target weak ref); WeakMap is multi-entry.
+**Constraints**
+- Keys MUST be objects (or symbols in ES2023+).
+- Entries are weakly held — GC'd when key has no other refs.
+- Not iterable; no size; no clear().
+- `wm.set('a', 1)` throws TypeError.
 
-### Edge cases (these are the interview traps)
-1. **Primitive key throws** — `wm.set(42, 'x')` → `TypeError`. Wrap primitives in objects only if you really need this (and at that point use `Map`).
-2. **You can't list contents** — no `wm.size`, no iteration. If you need to know "all cached keys," WeakMap is wrong. Use `Map` + manual eviction.
-3. **GC timing is non-deterministic** — `wm.has(key)` may return `true` long after `key`'s last visible reference goes out of scope. The spec only guarantees the entry is "eligible" for collection; engines decide when. Don't test by polling.
-4. **Symbols as keys (ES2023)** — `Symbol('x')` works (well-known symbols like `Symbol.iterator` are forbidden). Useful for token-shaped keys without allocating objects.
-5. **`delete` returns boolean** — `true` if the key existed, `false` otherwise. Same as `Map`.
-6. **No clear() in spec** — there's no `weakMap.clear()`. Allocate a fresh `WeakMap` if you need to wipe.
-7. **Re-entrancy** — if `fn(obj)` is recursive and calls back into the memoized version with the same `obj`, you'd loop forever. Set a sentinel before calling: `cache.set(obj, IN_PROGRESS); const r = fn(obj); cache.set(obj, r);`.
-8. **Cross-realm objects** — iframe / VM context boundaries: an object from another realm still works as a key. Identity is preserved across realms.
-9. **Memoize without WeakMap** — using a `Map` keeps every key alive forever. Classic memory leak. Use WeakMap unless you have a reason not to.
-10. **DOM-node use case** — `const data = new WeakMap(); data.set(domNode, { ...stuff });` — when the node is removed from the DOM and dereferenced, the data goes with it. Was the original motivation for adding WeakMap to the spec.
+---
 
-## Brute force approach
-Memoize with a plain object: `cache[key.id] = result`. Forces `key` to have an `id`, forces a stringification step, and **leaks** indefinitely. Plain `Map` is better but still leaks. Both are wrong when you want per-object cache that respects object lifetime.
+## 2. Plain-English restatement
 
-## Optimal approach
-`WeakMap` keyed by the input object. `has → get → return` happy path is O(1). On miss, compute, store, return. Memory footprint is bounded by **alive caller objects** — the cache rightsizes itself.
+`WeakMap` lets you attach data to an object without preventing its garbage collection. When the only reference to the key is the WeakMap, both vanish together.
 
-For the private-data variant: one module-level `WeakMap`, keyed by `this` inside class methods. Same shape.
+---
 
-## Solution (JavaScript)
+## 3. Why this matters in interviews
+
+Under-explained data structure. Senior signal: articulate (a) object-key constraint, (b) GC, (c) non-iterable. Use cases: per-request cache, per-instance private data.
+
+---
+
+## 4. Mental model
+
+```
+   WeakMap:
+     keys MUST be objects (or symbols ES2023+).
+     held weakly — Map doesn't count as a reference.
+     entries GC'd when key has no other strong refs.
+     NOT iterable: no size, keys(), values(), entries(), for..of.
+   
+   Why not iterable?
+     GC timing is unspecified.
+     If you could iterate, snapshot inconsistency: an entry might vanish mid-loop.
+   
+   Difference from Map:
+     Map: strong keys; explicit lifecycle; iterable.
+     WeakMap: weak keys; GC-managed; private/internal use.
+   
+   Use cases:
+     1. Per-object memoization — cache derived data without leaking.
+     2. Private state — attach #-data to instances pre-class-fields.
+     3. Per-request context — req → metadata.
+     4. DOM node mapping — node → handler state; auto-released on remove.
+   
+   Anti-patterns:
+     Iterating WeakMap (impossible).
+     WeakMap keyed by primitives (TypeError).
+     Using WeakMap to track instances (no way to list them).
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. Why must keys be objects?
+> 2. What's the GC observability of WeakMap?
+> 3. Why no `.size`?
+
+---
+
+## 6. Brute force — walked through
 
 ```js
-/**
- * Memoize a function whose single argument is an object.
- * Cached results are released when the argument object is GC'd.
- *
- * @template {object} T
- * @template R
- * @param {(arg: T) => R} fn
- * @returns {(arg: T) => R}
- */
+// Map for memoization — LEAKS
+const cache = new Map();
+function memo(obj) {
+  if (cache.has(obj)) return cache.get(obj);
+  const v = compute(obj);
+  cache.set(obj, v);    // ← strong ref; obj never GC'd while cache lives
+  return v;
+}
+// Long-lived cache → all objects ever passed in stay forever. Memory leak.
+```
+
+WeakMap fixes the leak.
+
+---
+
+## 7. The unlocking insight
+
+> **`WeakMap` keys must be objects, are held weakly, entries auto-GC'd. Non-iterable by design (GC observability). Perfect for per-instance memoization / private fields.**
+
+Three properties:
+
+1. **Object-only keys**.
+2. **Weakly held** — GC reclaims.
+3. **Non-iterable** by design.
+
+---
+
+## 8. Solution (annotated)
+
+```js
+// Memoization keyed by object
+const memoCache = new WeakMap();
+
 function memoizeByObject(fn) {
-  const cache = new WeakMap();
-  return function memoized(arg) {
-    if (typeof arg !== 'object' || arg === null) {
-      throw new TypeError('memoizeByObject expects an object argument');
-    }
-    if (cache.has(arg)) return cache.get(arg);
-    const result = fn.call(this, arg);
-    cache.set(arg, result);
+  return function (obj) {
+    if (memoCache.has(obj)) return memoCache.get(obj);                     // step 1: cached
+    const result = fn(obj);
+    memoCache.set(obj, result);                                            // step 2: store
     return result;
   };
 }
 
-/**
- * Multi-arg memoize where SOME args are objects.
- * Uses a nested WeakMap/Map chain so object-args participate as identity keys.
- * Mirrors LeetCode Memoize-II semantics.
- */
-function memoizeManyArgs(fn) {
-  const root = new Map();
+// Multi-arg memo using WeakMap-of-WeakMap (pre-Record/Tuple)
+function memoizeMultiArg(fn) {
+  const root = new WeakMap();
   return function (...args) {
-    let node = root;
-    for (const a of args) {
-      const next = node.get(a);
-      if (next) { node = next; continue; }
-      const fresh = (typeof a === 'object' && a !== null) ? new WeakMap() : new Map();
-      node.set(a, fresh);
-      node = fresh;
+    let m = root;
+    for (let i = 0; i < args.length - 1; i++) {
+      if (!m.has(args[i])) m.set(args[i], new WeakMap());                  // step 3: chain
+      m = m.get(args[i]);
     }
-    const RESULT = Symbol.for('memo.result');
-    if (node.has(RESULT)) return node.get(RESULT);
-    const r = fn.apply(this, args);
-    node.set(RESULT, r);
-    return r;
+    const last = args[args.length - 1];
+    if (m.has(last)) return m.get(last);
+    const result = fn(...args);
+    m.set(last, result);
+    return result;
   };
 }
 
-/* ---------- Killer use case: per-object private data ---------- */
-const _priv = new WeakMap();
-
-class RequestContext {
-  constructor(req) {
-    _priv.set(this, { startedAt: Date.now(), userId: null });
-    this.req = req;
+// Private fields via WeakMap
+const _state = new WeakMap();
+class Connection {
+  constructor(url) {
+    _state.set(this, {                                                      // step 4: private bag
+      url,
+      isOpen: false,
+      socket: null,
+    });
   }
-  markUser(id) { _priv.get(this).userId = id; }
-  elapsedMs()  { return Date.now() - _priv.get(this).startedAt; }
+  open() {
+    const s = _state.get(this);
+    s.socket = createSocket(s.url);
+    s.isOpen = true;
+  }
+  close() {
+    const s = _state.get(this);
+    if (s.socket) s.socket.close();
+    s.isOpen = false;
+  }
 }
-// _priv is invisible from outside; entries vanish when the RequestContext is GC'd.
+// _state invisible from outside. Entries GC'd when Connection instance is.
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
-Input — memoize an expensive feature flag computation keyed by a `User` object:
 ```js
-const computeFlags = (user) => { /* heavy lookups */ return { canEdit: true }; };
-const cached = memoizeByObject(computeFlags);
+// Per-request context (Express-like middleware)
+const reqContext = new WeakMap();
+app.use((req, res, next) => {
+  reqContext.set(req, { traceId: genTraceId(), startTime: Date.now() });
+  next();
+});
+// When req is GC'd after response, context auto-cleaned.
 
-let u1 = { id: 1 };
-let u2 = { id: 1 };           // different object, same shape
+// DOM node → handler state
+const handlerState = new WeakMap();
+function attachHandler(node) {
+  handlerState.set(node, { clicks: 0 });
+  node.addEventListener('click', () => {
+    handlerState.get(node).clicks++;
+  });
+}
+// Remove node from DOM + drop refs → entry GC'd.
 
-cached(u1);                   // miss -> compute -> store
-cached(u1);                   // hit -> return cached
-cached(u2);                   // miss -> different identity -> compute again
+// Won't work — primitive key
+try {
+  new WeakMap().set('string', 1);                            // TypeError
+} catch (e) { console.error(e); }
 
-u1 = null;                    // user logs out; no more refs to that object
-// at some indeterminate GC time, the WeakMap entry for u1 is reclaimed.
-// cached's internal map shrinks WITHOUT us having to call .delete().
+// Won't work — iteration
+try {
+  for (const [k, v] of new WeakMap()) {}                     // TypeError
+} catch (e) {}
+
+// No size property
+new WeakMap().size;                                          // undefined
+
+// ES2023: symbol keys allowed
+const wm = new WeakMap();
+wm.set(Symbol('key'), 'value');                               // works in modern engines
 ```
 
-Trace of the first two calls:
-1. `cached(u1)`: `cache.has(u1)` → false. Run `computeFlags(u1)` → `{canEdit:true}`. `cache.set(u1, ...)`. Return.
-2. `cached(u1)`: `cache.has(u1)` → true. `cache.get(u1)` → `{canEdit:true}`. Return without recomputing.
-3. `cached(u2)`: `u2 !== u1` (different identity even though equal shape). `cache.has(u2)` → false. Recompute. Store.
+---
 
-Why **not `Map`**? After `u1 = null`, the entry would remain in a `Map` forever (the Map's internal reference keeps `u1` alive too — classic leak). WeakMap explicitly avoids this.
+## 9. Step-by-step dry run
 
-## Important takeaways
+```
+function memo with Map vs WeakMap:
 
-**Syntax to memorize**
-- `new WeakMap()`. Methods: `get/set/has/delete`. That's all.
-- **Keys must be objects** (or non-registered symbols in ES2023+).
-- No `.size`, no iteration. If you need them, you need `Map`.
-- "Memoize per-object" pattern: `if(has) return get; result = fn(...); set; return.`
+Map version:
+  const cache = new Map();
+  let req = {url:'/a'};
+  memo(req) → cache.set(req, result).
+  req = null;
+  cache still holds req strongly.
+  GC: cannot collect req. Memory leak.
 
-**Patterns to reuse**
-- **Private data per object** — module-level `WeakMap`, keyed by `this` inside methods. Predates `#privateField` and still works in ESM modules without classes.
-- **Per-request scoped caches** in Express/Fastify middleware: `req` as the key, derived data as the value. Auto-cleaned at request end.
-- **DOM-node tagging** — attach event-handler maps, observer state, or framework metadata without polluting the node itself.
-- **Identity-keyed memoization** — when args are objects and you don't want to stringify (and break on cycles).
+WeakMap version:
+  const cache = new WeakMap();
+  let req = {url:'/a'};
+  memo(req) → cache.set(req, result).
+  req = null;     ← drop last user reference.
+  GC: req is now unreferenced (WeakMap doesn't count).
+  GC reclaims req. cache entry also dropped.
+  No way to observe this directly — by design.
 
-**Common mistakes**
-- Trying to use a primitive key. Fails loudly.
-- Trying to iterate a WeakMap. Fails silently (there's no method to call).
-- Relying on GC timing for tests. Spec doesn't guarantee any specific moment.
-- Caching with `Map` where you really want WeakMap → silent memory growth.
-- Forgetting `WeakMap` has no `.clear()`. Reassign a new one if you need a fresh slate.
-- Using `WeakMap` as a Set proxy with sentinel values — that's what `WeakSet` exists for.
+Private fields:
+  const _p = new WeakMap();
+  class C {
+    constructor() { _p.set(this, {secret: 42}); }
+    get() { return _p.get(this).secret; }
+  }
+  const c = new C();
+  c.get();    // 42
+  _p          // not exported; consumers can't reach _p.
+  c = null;   // C instance GC'd; _p entry vanishes.
 
-**Related questions**
-- `Map` vs `WeakMap` decision (see `object-vs-map-vs-set.md`).
-- LRU Cache — why is **Map** the right tool and WeakMap the **wrong** one? (LRU needs ordering + sized eviction; WeakMap has neither.)
-- LeetCode "Memoize II" — multi-arg memoization with object keys.
-- `WeakRef` + `FinalizationRegistry` — adjacent primitives.
+  Compare to public field:
+    class C { secret = 42; }
+    c.secret    // exposed.
 
-## Variants
+  Compare to # private (ES2022):
+    class C { #secret = 42; get() { return this.#secret; } }
+    Native; same effect; no WeakMap needed.
+```
 
-1. **WeakMap-backed memoize with manual invalidation** — expose `.invalidate(obj)` that calls `cache.delete(obj)`. Useful when the input mutates and you want to bust the cache eagerly.
+---
 
-2. **Multi-arg memoize (nested WeakMap chain)** — LeetCode #2630. Each argument is a level in a chain of WeakMap/Map nodes; object args use WeakMap, primitive args use Map. The leaf node stores the result under a sentinel symbol. Solves the "memoize function with mixed object + primitive args without losing GC."
+## 10. Common confusion + traps
 
-3. **Per-request request-scoped memoize** — Express middleware: `const get = (req, fn) => { let m = scopes.get(req); if (!m) scopes.set(req, m = new Map()); ... }`. Combined with WeakMap on `req`, gives you free cleanup when the response is sent.
+1. **Primitive key** — TypeError.
+2. **Iterate / size** — impossible.
+3. **Use to track all instances** — wrong tool; use plain Map.
+4. **Holding strong ref elsewhere** — pins object alive; WeakMap can't help.
+5. **`clear()`** — not available; replace WeakMap with new one.
+6. **`delete()`** works but no `size` change observable.
+7. **GC timing** — non-deterministic; tests are flaky.
 
-## Revision notes
+---
 
-> **WeakMap — 60 second recap**
-> - Keys MUST be objects (or non-well-known symbols). Primitive keys throw.
-> - Entries are **weakly held**: GC'd when the key has no other references.
-> - **Not iterable.** No `.size`, no `keys()`, no `values()`. No `clear()`.
-> - Methods: `get`, `set`, `has`, `delete`. Period.
-> - Killer use cases: (1) per-object memoize without leaks, (2) private data on user-supplied objects (DOM nodes, request contexts).
-> - **Trap:** trying to iterate or count entries. **Trap:** primitive key. **Trap:** caching with `Map` where you wanted WeakMap → unbounded growth.
-> - Pair with `WeakRef` / `FinalizationRegistry` for advanced lifecycle hooks.
+## 11. Senior follow-ups & variants
+
+### Variant 1 — Class private fields (ES2022)
+`class { #foo = 1 }` — native, replaces WeakMap-private-bag pattern.
+
+### Variant 2 — WeakRef + FinalizationRegistry
+For cleanup callbacks on GC.
+
+### Variant 3 — WeakSet
+Same idea, set semantics — `visited.has(node)`.
+
+### Variant 4 — Symbol keys (ES2023)
+WeakMap can use symbols.
+
+### Variant 5 — DOM node → state
+Auto-cleanup when node removed.
+
+---
+
+## 12. How to think aloud
+
+> "WeakMap solves 'attach data to objects without preventing GC.' Keys MUST be objects (or symbols in ES2023+) — primitive keys throw TypeError. Entries are weakly held: the WeakMap doesn't count as a reference, so when the only reference to a key is the WeakMap itself, GC reclaims both. Not iterable by design (no `size`, `keys()`, `values()`, `entries()`, `for..of`) — GC timing is unspecified, so you can't safely enumerate. Two killer use cases: (1) Per-object memoization — `WeakMap<obj, derivedResult>`; long-lived cache without leaking objects ever passed in. (2) Private state pre-class-fields — `WeakMap<instance, {private bag}>`; class methods read via the closure; consumers can't reach the WeakMap. ES2022 native `#field` mostly replaces this pattern, but WeakMap pattern still useful for cross-class private state. Anti-patterns: WeakMap to track all instances (can't iterate, can't list); WeakMap keyed by primitives (TypeError); using WeakMap where strong refs exist elsewhere (no GC benefit). Compare to WeakSet: same semantics, set-of-objects — useful for 'visited' flags. ES2023 symbol keys allowed. WeakRef + FinalizationRegistry for finer cleanup. Trap: primitive key; iteration; tracking via WeakMap; assuming GC timing."
+
+---
+
+## 13. 60-second revision
+
+> - **Keys MUST be objects** (or symbols ES2023+).
+> - **Weakly held** — GC reclaims.
+> - **Not iterable** — no `size`, no `keys()`, etc.
+> - **Per-object memo** — no leak.
+> - **Private state bag** — pre-#-fields.
+> - **`# private fields` (ES2022)** replaces many uses.
+> - **WeakSet** for membership.
+> - **GC timing non-deterministic.**
+> - **Trap:** primitive key; iterate; track instances; assume timing.
+
+---
+
+**Related:** [object-vs-map-vs-set.md](./object-vs-map-vs-set.md) · [weakref-finalization-registry.md](./weakref-finalization-registry.md) · [`10-machine-coding-patterns/memoize.md`](../10-machine-coding-patterns/memoize.md) · [`02-closures/private-state-with-closure.md`](../02-closures/private-state-with-closure.md)
+
+**Concept primer:** [`concepts/maps-sets.md`](../../concepts/maps-sets.md)

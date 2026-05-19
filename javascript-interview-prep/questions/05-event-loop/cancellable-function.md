@@ -1,81 +1,119 @@
-# Design Cancellable Function
+# Cancellable Function — generator-based cooperative coroutine
 
-## Source
-- LeetCode #2776 "Convert Callback Based Function To A Promise Based Function" / #2777 "Design Cancellable Function": https://leetcode.com/problems/design-cancellable-function/
-- Canonical: a generator-based cooperative scheduler — the JS analogue of Python's `asyncio.Task.cancel()`.
+> **Difficulty:** Senior   |   **Time:** ~25 min   |   **Prereqs:** [`04-promises/structured-concurrency-primitive.md`](../04-promises/structured-concurrency-primitive.md), [`10-machine-coding-patterns/cancellable-promise-wrapper.md`](../10-machine-coding-patterns/cancellable-promise-wrapper.md)
+>
+> **Source:** [LeetCode 2777 — Design Cancellable Function](https://leetcode.com/problems/design-cancellable-function/). The deepest event-loop problem on LeetCode JS.
 
-## Why this question matters in interviews
-This is the **deepest event-loop problem** in the LeetCode JS set. To solve it you must explain three things at once: (1) generators (`function*`, `yield`) are cooperative coroutines, (2) a **runner** drives them by repeatedly calling `.next(value)`, and (3) `Promise` integration lets `yield somePromise` look like `await`. The cancellation token is the punchline — it shows you understand that **cancellation in JS is cooperative**, never preemptive. There is no `Thread.kill()`. Senior backend engineers hit this when implementing request cancellation, saga rollbacks, and `AbortSignal`-aware libraries.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
-```js
-function cancellable(generator) {
-  let cancelled = false;
-  const cancel = () => { cancelled = true; };
-
-  const promise = new Promise((resolve, reject) => {
-    const step = (input, isError = false) => {
-      if (cancelled) {
-        try { generator.throw('Cancelled'); } catch (e) { return reject(e); }
-        return;
-      }
-      let result;
-      try {
-        result = isError ? generator.throw(input) : generator.next(input);
-      } catch (e) { return reject(e); }
-
-      if (result.done) return resolve(result.value);
-
-      Promise.resolve(result.value).then(
-        (v) => step(v),
-        (e) => step(e, true)
-      );
-    };
-    step();
-  });
-
-  return [cancel, promise];
-}
+**Signature**
+```ts
+function cancellable<T>(generator: Generator<Promise<T>|T, T, T>): [
+  cancel: () => void,
+  promise: Promise<T>,
+];
 ```
 
-### Runtime / engine behavior
-- A **generator function** (`function*`) returns an iterator. Each `.next()` runs the body up to the next `yield` and returns `{ value, done }`. The generator is paused — not blocked, not on a separate stack.
-- The **runner** loop awaits whatever the generator yielded (treating non-promises as already resolved via `Promise.resolve`), then resumes by calling `.next(value)` with the resolved value. This is exactly how `async/await` is implemented under the hood (regenerator/Babel transpiles `await` into this pattern).
-- **Cancellation is cooperative** — the runner inspects a flag on every resumption and, instead of calling `.next`, calls `.throw('Cancelled')`. This raises the error *inside* the generator at the paused `yield`, letting `try/finally` run cleanups.
-- Each `.then` enqueues a **microtask** — so cancellation takes effect at the next microtask checkpoint, not synchronously.
+**Input / Output examples**
 
-### Edge cases (interview traps)
-1. **Cancel before first step** — if `cancel()` runs synchronously after `cancellable(...)`, the first `step()` already ran sync. Some implementations defer the first `step` to a microtask (`Promise.resolve().then(step)`) so cancel always works.
-2. **Cancel during a long-running sync block in the generator** — useless. The runner can only check the flag between yields. No preemption.
-3. **Generator's `try/finally`** — when you `generator.throw`, the generator can `catch` and recover. Make sure cancellation is propagated by re-throwing or by surfacing the original `'Cancelled'` reason.
-4. **Yielding a rejected promise** — must re-enter the generator via `.throw`, not `.next`. That's the `isError` branch.
-5. **Generator already done** — calling `.throw` on a finished iterator throws synchronously. Guard before `step`.
-6. **Microtask ordering** — every `.then` schedules a microtask. A chain of `yield Promise.resolve()` advances one step per microtask, which means the generator drains in the **microtask queue**, not across macrotasks.
-7. **No `await` allowed in generators** — must use `yield` instead. `function*` and `async function*` are different beasts.
-8. **Return value vs throw value** — `done: true` resolves the outer promise; uncaught throw rejects it.
+| Setup                                          | Behaviour                                              |
+|------------------------------------------------|---------------------------------------------------------|
+| Normal completion                              | promise resolves to `return` value                     |
+| Cancel before first step                       | generator gets `.throw('Cancelled')` at first yield    |
+| Cancel mid-generator                            | next resumption injects throw; `try/finally` cleanups run |
+| Yielded promise rejects                         | runner re-enters via `.throw(error)`                   |
+| Generator already done; cancel called          | no-op                                                   |
 
-## Brute force approach
-"I'll just set a flag and have the generator check it itself." This forces the *caller's generator code* to be cancellation-aware everywhere — terrible API. The whole point is that the runner handles cancellation transparently.
+**Constraints**
+- Generator + runner = cooperative coroutine — same shape as transpiled `async/await`.
+- Cancellation is **cooperative** at microtask checkpoints, never preemptive.
+- `generator.throw('Cancelled')` lets `try/finally` clean up.
+- Defer first `step` to microtask so immediate `cancel()` is honored.
 
-Another brute force: race the promise against a "cancel" promise that rejects on cancel. This works for one-shot cancellation but doesn't let `try/finally` inside the generator run cleanups. The `.throw` approach is strictly more powerful.
+---
 
-## Optimal approach
-Runner-based scheduler with three rules:
-1. After each `.next` / `.throw`, inspect the result. If `done`, resolve the outer promise.
-2. Otherwise, wrap the yielded value in `Promise.resolve`, and on settlement re-enter the generator (`.next` on fulfill, `.throw` on reject).
-3. Before every re-entry, check the cancellation flag. If set, `.throw('Cancelled')` once.
+## 2. Plain-English restatement
 
-O(1) memory beyond the generator's own frame; one microtask per `yield`.
+A generator (`function*`) is a pause-able function. A "runner" drives it by calling `.next(value)` to resume, treating yielded promises as awaits. To cancel: set a flag; on the next resumption, call `.throw('Cancelled')` instead — raises the error inside the generator at the paused `yield`, so `try/finally` can clean up.
 
-## Solution (JavaScript)
+---
+
+## 3. Why this matters in interviews
+
+The deepest event-loop problem on LeetCode JS. Tests generators, microtask scheduling, cooperative cancellation, the realization that there is no `Thread.kill()` in JS.
+
+---
+
+## 4. Mental model
+
+```
+   Generator function:
+   function* gen() {
+     const a = yield Promise.resolve(1);    // suspend; await
+     const b = yield Promise.resolve(2);
+     return a + b;
+   }
+
+   Runner drives it:
+   step(input):
+     result = generator.next(input)       // resume up to next yield
+     if (result.done) resolve(result.value)
+     else Promise.resolve(result.value).then(
+       v => step(v),                       // re-enter with value
+       e => step(e, isError=true)          // re-enter with throw
+     )
+
+   Cancellation:
+   cancel() { cancelled = true }
+   step inspects cancelled BEFORE resuming
+     if set, generator.throw('Cancelled') instead of .next()
+     → try/finally inside generator runs cleanup
+
+   Cooperative: cancellation observed at microtask checkpoints,
+                never inside sync block within a yield's step.
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. What does `generator.throw('X')` do?
+> 2. Why defer the first `step` to a microtask?
+> 3. Can you cancel during a long sync `for` loop inside the generator?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: generator checks cancellation itself
+Forces generator code to be cancellation-aware everywhere. Bad API.
+
+### Wrong attempt 2: race against a cancel-rejected promise
+Works for one-shot; can't trigger `try/finally` cleanup.
+
+### Wrong attempt 3: forget the rejected-yield path
+`.then(v => step(v))` ignores errors; rejected yielded promises need `.throw`.
+
+---
+
+## 7. The unlocking insight
+
+> **Runner-based scheduler. After each `.next`/`.throw`, inspect result. If done, resolve. Else wrap yielded value in `Promise.resolve`; on settle, re-enter via `.next` (fulfill) or `.throw` (reject). Before every re-entry, check cancellation flag — if set, `.throw('Cancelled')` once.**
+
+Three properties:
+
+1. **Generator + runner** — cooperative coroutine.
+2. **Cancellation is microtask-aware** — observed between yields, not within.
+3. **`.throw` for cleanup** — enables `try/finally`.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
-/**
- * @param {Generator} generator
- * @returns {[cancelFn: () => void, promise: Promise<any>]}
- */
 function cancellable(generator) {
   let cancelled = false;
   const cancel = () => { cancelled = true; };
@@ -84,8 +122,7 @@ function cancellable(generator) {
     function step(input, isError = false) {
       let result;
       try {
-        if (cancelled && !isError) {
-          // Inject cancellation into the generator so try/finally can run.
+        if (cancelled && !isError) {                                  // step 1: inject cancellation
           result = generator.throw('Cancelled');
         } else {
           result = isError ? generator.throw(input) : generator.next(input);
@@ -94,112 +131,130 @@ function cancellable(generator) {
         return reject(e);
       }
 
-      if (result.done) return resolve(result.value);
+      if (result.done) return resolve(result.value);                  // step 2: done
 
-      Promise.resolve(result.value).then(
+      Promise.resolve(result.value).then(                              // step 3: re-enter
         (v) => step(v, false),
-        (e) => step(e, true)
+        (e) => step(e, true),
       );
     }
 
-    // Kick off via a microtask so cancel() called immediately after still
-    // takes effect on the very first step.
-    Promise.resolve().then(() => step(undefined, false));
+    Promise.resolve().then(() => step(undefined, false));              // step 4: defer first step
   });
 
   return [cancel, promise];
 }
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
-Input:
 ```js
 function* gen() {
-  const a = yield Promise.resolve(1);   // (A)
-  const b = yield Promise.resolve(2);   // (B)
-  return a + b;                          // (C)
+  try {
+    const a = yield Promise.resolve(1);
+    const b = yield Promise.resolve(2);
+    return a + b;
+  } finally {
+    console.log('cleanup ran');
+  }
 }
+
 const [cancel, p] = cancellable(gen());
-p.then(console.log);                     // expect 3
+p.then(console.log, (e) => console.log('rej:', e));
+
+// Without cancel: cleanup ran, then 3.
+
+// With cancel before first step:
+const [cancel2, p2] = cancellable(gen());
+cancel2();                                       // sync cancel
+p2.catch(console.log);
+// Output: cleanup ran, rej: Cancelled
 ```
 
-Trace (CS = call stack, NT = nextTick queue, MQ = microtask queue):
+---
 
-| Step | CS | NT | MQ | Notes |
-|------|----|----|----|-------|
-| 1 | `cancellable` runs → returns `[cancel,p]` | — | `[kickoff]` | First step queued via `.then` |
-| 2 | (empty) | — | `[kickoff]` | Sync done; drain microtasks |
-| 3 | `kickoff` → `step()` → `.next()` runs until yield (A); `result={value:P1,done:false}` | — | — | P1 already resolved |
-| 4 | `P1.then(v→step(v))` schedules microtask | — | `[stepA]` | — |
-| 5 | drain MQ → `stepA(1)` → `.next(1)` runs until yield (B); `a=1`; `result={value:P2,done:false}` | — | — | — |
-| 6 | `P2.then(...)` | — | `[stepB]` | — |
-| 7 | drain MQ → `stepB(2)` → `.next(2)` → `b=2`, hits `return 3`; `result={value:3,done:true}` | — | — | — |
-| 8 | `resolve(3)` → enqueues `.then(console.log)` | — | `[print]` | — |
-| 9 | drain MQ → `console.log(3)` | — | — | Output: `3` |
+## 9. Step-by-step dry run
 
-Now trace with `cancel()` called immediately:
+```
+Normal trace (gen yields P.resolve(1) → P.resolve(2) → return 3):
 
-```js
-const [cancel, p] = cancellable(gen());
-cancel();                       // sync, before first step
-p.catch(console.log);
+t=0    cancellable runs; queues kickoff via microtask. Returns [cancel, p].
+t=μ1   microtask: step():
+         generator.next() → result={value:P1, done:false}
+         P1.then(step) queues microtask
+t=μ2   step(1): generator.next(1) → {value:P2, done:false}; a=1.
+         P2.then(step) queues
+t=μ3   step(2): generator.next(2) → {value:3, done:true}; b=2.
+         resolve(3).
+
+Cancel-immediately trace:
+t=0    cancellable runs; queues kickoff. Returns [cancel, p].
+       cancel() sets cancelled=true.
+t=μ1   step(): cancelled=true → generator.throw('Cancelled').
+       gen has try/finally → finally runs → 'cleanup ran'.
+       gen rethrows 'Cancelled' (no catch).
+       caught by runner's try → reject('Cancelled').
+t=μ2   p.catch handler → 'rej: Cancelled'.
+
+Cancel mid-generator:
+  Each yield is a microtask suspend point.
+  When you call cancel(), the flag flips.
+  Next resumption (via .then) sees flag → injects throw at the yield.
+  try/finally runs before exception propagates.
 ```
 
-| Step | Notes |
-|------|-------|
-| 1 | `cancellable` runs, queues `kickoff` microtask, returns `[cancel,p]`. |
-| 2 | `cancel()` sets `cancelled = true`. |
-| 3 | `p.catch(...)` chains a handler. |
-| 4 | Sync stack unwinds. Microtask queue: `[kickoff, catch-pending]`. |
-| 5 | `kickoff` runs `step()`. `cancelled === true` → `generator.throw('Cancelled')`. Generator has no try/catch → rethrows out. |
-| 6 | Caught by runner's `try`, calls `reject('Cancelled')`. |
-| 7 | `console.log('Cancelled')` runs in the next microtask. Output: `Cancelled`. |
+---
 
-If the generator had a `try/finally`, that `finally` block runs between steps 5 and 6 — guaranteed cleanup.
+## 10. Common confusion + traps
 
-## Important takeaways
+1. **Forget `Promise.resolve(...)` around yielded value** — breaks for non-thenable yields.
+2. **Forget `isError` path** — rejected yielded promises must enter via `.throw`.
+3. **No defer of first step** — immediate cancel can't take effect.
+4. **`.throw` on done generator** — throws synchronously; guard.
+5. **Long sync block inside yield** — can't be cancelled until between yields.
+6. **`await` allowed in generator** — no, generators use `yield`, not `await`. Async generators are different.
+7. **Pre-emptive cancellation** — doesn't exist in JS; always cooperative.
 
-**Syntax to memorize**
-- `function*` returns an iterator. `gen.next(v)` resumes; `gen.throw(e)` injects an exception.
-- Wrap yielded values in `Promise.resolve(...)` so a yielded plain value still works.
-- Two re-entry paths: `.next` for fulfillment, `.throw` for rejection.
+---
 
-**Patterns to reuse**
-- The same runner pattern powers transpiled `async/await`. Reading Babel's regenerator output makes it click.
-- The same `[cancel, promise]` tuple is the shape of `AbortController.signal` + a wrapped operation.
-- Pair with `AbortSignal` instead of a custom flag to integrate with `fetch`, timers, etc.
+## 11. Senior follow-ups & variants
 
-**Common mistakes**
-- Forgetting `Promise.resolve(...)` around yielded value — breaks when the generator yields a non-thenable.
-- Not handling the `isError` path — a rejected yielded promise must enter via `.throw`.
-- Not deferring the first `step` to a microtask — cancel called immediately can't take effect.
-- Calling `.throw` on a generator that already returned — throws synchronously.
+### Variant 1 — AbortSignal-driven
+Replace flag with `signal.aborted`. Cancel via `controller.abort()`. Idiomatic modern API.
 
-**Where it sits in the event loop**
-- Each `yield <promise>` parks the generator. Resumption happens via `.then`, which is a **microtask**.
-- A chain of `yield Promise.resolve()` thus runs entirely in the microtask queue, **before** the next `setTimeout` ever fires.
-- Cancellation is observed **at the next microtask checkpoint** — never inside a sync block.
+### Variant 2 — Timeout cancellation
+`setTimeout(cancel, ms)` for auto-abort after deadline.
 
-## Variants
+### Variant 3 — Parallel `yield [p1, p2]`
+Extend runner to handle arrays (like `Promise.all`). Used in redux-saga.
 
-1. **AbortSignal-driven cancellable** — replace the boolean flag with `signal.aborted`. Generator can also be cancelled by `controller.abort()` from anywhere. This is the modern idiomatic API.
+### Variant 4 — Async generator
+`async function*` with `for await...of` — built-in. Explicit runner remains best mental model.
 
-2. **Timeout cancellation** — wrap `cancellable(gen)` with `setTimeout(cancel, ms)` to auto-abort after a deadline.
+### Variant 5 — Cancellation propagation
+`generator.throw` lets try/catch inside generator recover. To propagate, re-throw.
 
-3. **Race / parallel runner** — extend the runner so `yield [p1, p2, p3]` behaves like `Promise.all`. Common in saga libraries (redux-saga's `all` / `race` effects).
+---
 
-4. **Async generator equivalent** — once `async function*` is available, the same pattern is built-in via `for await...of`. But the explicit runner remains the best mental model for understanding what `await` actually does.
+## 12. How to think aloud
 
-## Revision notes
+> "Generator + runner = cooperative coroutine. `yield` pauses; `.next(v)` resumes; `.throw(e)` injects exception. Runner wraps yielded value in `Promise.resolve`, attaches `.then` with two handlers: `.next` for fulfill, `.throw` for reject. Cancellation: flag inspected on every re-entry; if set, call `generator.throw('Cancelled')` instead of `.next` — try/finally inside generator runs cleanup. Defer first step to microtask so immediate cancel is honored. Cooperative — never preemptive; long sync inside a yield can't be cancelled. This is exactly how Babel transpiles `async/await`. Modern equivalent: AbortSignal + async/await + early returns on `signal.aborted`."
 
-> **cancellable-function — 60 second recap**
-> - Generator + runner = cooperative coroutine. `yield` = pause; `.next(v)` = resume.
-> - Wrap yielded value with `Promise.resolve(...)`; re-enter via `.next` (fulfill) or `.throw` (reject).
-> - Cancellation is **cooperative**, observed at microtask checkpoints — never preemptive.
-> - `generator.throw('Cancelled')` lets `try/finally` clean up. Plain rejection doesn't.
-> - Defer the first `step` to a microtask so immediate `cancel()` is honored.
-> - This is exactly how `async/await` is transpiled by Babel/regenerator.
-> - Modern equivalent: `AbortSignal` + `async/await` + early returns on `signal.aborted`.
-> - **Trap:** long sync block inside a `yield` step cannot be cancelled — only between yields.
-> - **Trap:** forgetting the `isError` re-entry path — rejected yielded promises must use `.throw`.
+---
+
+## 13. 60-second revision
+
+> - **Generator + runner** = cooperative coroutine.
+> - **`yield`** pauses; **`.next(v)`** resumes; **`.throw(e)`** injects.
+> - **Wrap yielded value** with `Promise.resolve`; re-enter via `.next` or `.throw`.
+> - **Cancellation cooperative** — observed at microtask checkpoints.
+> - **`generator.throw('Cancelled')`** enables `try/finally` cleanup.
+> - **Defer first step** to microtask so immediate cancel works.
+> - **Modern:** AbortSignal + async/await + early returns.
+> - **Trap:** no `Promise.resolve` wrap; missing isError path; sync block inside yield; pre-emptive cancellation expectation.
+
+---
+
+**Related:** [`04-promises/structured-concurrency-primitive.md`](../04-promises/structured-concurrency-primitive.md) · [`10-machine-coding-patterns/cancellable-promise-wrapper.md`](../10-machine-coding-patterns/cancellable-promise-wrapper.md) · [timeout-cancellation.md](./timeout-cancellation.md) · [interval-cancellation.md](./interval-cancellation.md)
+
+**Concept primer:** [`concepts/promises.md`](../../concepts/promises.md), [`concepts/event-loop.md`](../../concepts/event-loop.md)

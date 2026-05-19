@@ -1,125 +1,134 @@
-# Output Order: setTimeout vs Promise.then vs queueMicrotask
+# Output Order — `setTimeout` vs `Promise.then` vs `queueMicrotask`
 
-## Source
-- Canonical output-prediction question: appears in nearly every senior JS interview.
-- Reference: https://nodejs.org/en/learn/asynchronous-work/event-loop-timers-and-nexttick
+> **Difficulty:** Senior   |   **Time:** ~15 min   |   **Prereqs:** [event-loop-concurrency.md](./event-loop-concurrency.md)
+>
+> **Source:** Canonical output-prediction puzzle — appears in every senior JS interview.
 
-## Why this question matters in interviews
-Pure output prediction. The interviewer drops a 10-line snippet mixing sync logs, `setTimeout`, `Promise.then`, `queueMicrotask`, and `await`, then asks you to predict the exact order. Getting this wrong is a fast no-hire signal because the rules are mechanical, not creative: **microtasks (Promise jobs + queueMicrotask) drain to empty between every macrotask**. Once you internalize that one rule plus "`await` is sugar for `.then`", these snippets become trivial. Senior backend interviews use this to gate the rest of the round.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### The one rule that solves everything
-> **Between every two macrotasks, the entire microtask queue is drained to empty.**
+Predict exact log order for snippets mixing sync, `setTimeout`, `Promise.then`, `queueMicrotask`, `await`, and (in Node) `process.nextTick`/`setImmediate`.
 
-A macrotask is: a `setTimeout` callback, a `setInterval` callback, a `setImmediate` callback, an I/O callback, a `'message'` event handler, etc. Each one is a discrete unit picked from a phase queue.
+**Verification examples**
 
-A microtask is: a `.then` / `.catch` / `.finally` callback, a `queueMicrotask` callback, code after an `await`, a `MutationObserver` callback (browser).
+| Snippet                                                               | Output                            |
+|------------------------------------------------------------------------|-----------------------------------|
+| `log(1); setTimeout(()=>log(2),0); Promise.resolve().then(()=>log(3)); log(4)` | `1, 4, 3, 2`                      |
+| `log(1); queueMicrotask(()=>log(2)); Promise.resolve().then(()=>log(3))` | `1, 2, 3` (FIFO microtask)        |
+| `log(1); setTimeout(()=>log(2),0); process.nextTick(()=>log(3)); Promise.resolve().then(()=>log(4))` | `1, 3, 4, 2` (Node)           |
+| `async function f(){log('A'); await null; log('B')} f(); log('C')` | `A, C, B`                         |
 
-`process.nextTick` is **higher priority than microtasks** but runs in the same interleave slot (drain to empty between callbacks). It's Node-specific.
+**Constraints**
+- **Microtasks drain to EMPTY** between every macrotask.
+- `await x` ≡ `.then(...)` — continuation is a microtask.
+- `process.nextTick` (Node) outranks microtasks.
+- Chained `.then`s aren't all enqueued at once.
 
-### Syntax to know
-```js
-queueMicrotask(() => console.log('mt'));     // explicit microtask
-Promise.resolve().then(() => console.log()); // implicit microtask
-process.nextTick(() => console.log());       // Node only, before microtasks
+---
 
-setTimeout(() => console.log('mt'), 0);      // macrotask (timers phase)
-setImmediate(() => console.log());           // Node only, macrotask (check)
+## 2. Plain-English restatement
+
+The interviewer drops a 10-line snippet mixing async APIs. You predict the exact log order. Rules are mechanical: walk top to bottom, queue async callbacks into their right buckets, drain in priority order after sync code, and **drain ALL microtasks before any macrotask**.
+
+---
+
+## 3. Why this matters in interviews
+
+Output prediction gate — fast no-hire if you guess. Tests whether you've internalized the priority rules (not just memorized "Promise wins").
+
+---
+
+## 4. Mental model
+
+```
+   Single rule that solves everything:
+   Between every two macrotasks, the ENTIRE microtask queue drains to empty.
+
+   Algorithm:
+   1. Walk top to bottom. Print every sync log.
+   2. Push setTimeout/setImmediate/I/O cb into macrotask queues.
+   3. Push .then/queueMicrotask/await-continuation into microtask queue.
+   4. Push process.nextTick into nextTick queue (Node).
+   5. After sync code: drain nextTick → drain microtask → pick ONE macrotask → goto 4.
+
+   `await x` is sugar:
+     await x;
+     // code after await
+   ≡
+     Promise.resolve(x).then(v => /* code after await */);
+   The post-await body is a MICROTASK.
 ```
 
-### `await` mechanics
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. Does `setTimeout(0)` ever run before `Promise.resolve().then`? Why/why not?
+> 2. Are `queueMicrotask(fn)` and `Promise.resolve().then(fn)` the same priority?
+> 3. In `async function f(){log('A'); await x; log('B')}`, what's between A and B in the output?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: read top to bottom
+Wrong for any async involvement.
+
+### Wrong attempt 2: "setTimeout(0) fires soonest because it's 0ms"
+Wrong. Microtasks drain first.
+
+### Wrong attempt 3: enqueue all chained `.then`s at once
+Wrong. Each `.then` waits for the prior to resolve.
+
+---
+
+## 7. The unlocking insight
+
+> **Walk sync first; drain nextTick (Node) → drain microtasks → run ONE macrotask → repeat. Each chained `.then` waits for the prior promise to resolve, then enqueues its continuation as a NEW microtask. `await x` is `.then` syntactic sugar — continuation is a microtask.**
+
+Three properties:
+
+1. **Microtasks drain to EMPTY** between macrotasks.
+2. **Chained `.then`s** are dependent, not co-enqueued.
+3. **`await` continuation** is always a microtask.
+
+---
+
+## 8. Solution (annotated)
+
 ```js
-async function f() {
-  console.log('A');
-  await Promise.resolve();   // suspends; rest is wrapped in a .then
-  console.log('B');          // microtask
-}
-f();
-console.log('C');
-// Output: A, C, B
-```
-`await x` is equivalent to `Promise.resolve(x).then(v => /* code after await uses v */)`. The continuation after `await` is a microtask.
+console.log('1');                                                    // sync
 
-### Edge cases (interview traps)
-1. **`setTimeout(fn, 0)` runs AFTER `Promise.resolve().then(fn)`** even though both look "immediate". Microtasks drain before the next macrotask.
-2. **`queueMicrotask` and `.then` have the same priority** (both microtasks) — resolve in registration order.
-3. **`process.nextTick` runs BEFORE microtasks** — including before `Promise.resolve().then`.
-4. **Microtask scheduled from inside a microtask** runs in the same drain pass, before the next macrotask. (Same for nextTick — that's why recursive nextTick starves the loop.)
-5. **`await` inside a for-loop** does NOT batch — each iteration's continuation is a separate microtask. For sequential ops, this is fine; for parallel, use `Promise.all`.
-6. **Top-level await (ESM)** — the entire module body becomes async; `import` waits.
-7. **Synchronous resolve doesn't make `.then` synchronous** — `new Promise(r => r(1)).then(...)` still schedules the `.then` as a microtask.
-8. **Throwing in a `.then`** schedules a rejected promise; the next `.catch` is also a microtask.
-
-## Brute force approach
-"I'll just read top to bottom." Wrong for any async involvement. You must separate sync (runs immediately), microtasks (drain before next macrotask), and macrotasks (one per loop iteration).
-
-## Optimal approach
-Mental algorithm:
-1. Walk the code; print every sync log.
-2. As you encounter `setTimeout` / `setImmediate` / `fs.x`, add to the appropriate macrotask queue. **Don't fire yet.**
-3. As you encounter `.then` / `queueMicrotask` / `process.nextTick`, add to the corresponding queue. **Don't fire yet.**
-4. After sync code finishes: drain nextTick → drain microtask → pick ONE macrotask → repeat from step 3.
-
-This algorithm produces the correct output every time.
-
-## Solution (JavaScript)
-
-```js
-// The canonical snippet. Predict the exact output.
-console.log('1');
-
-setTimeout(() => console.log('2'), 0);
+setTimeout(() => console.log('2'), 0);                                // macrotask T
 
 Promise.resolve()
-  .then(() => console.log('3'))
-  .then(() => console.log('4'));
+  .then(() => console.log('3'))                                       // microtask M3
+  .then(() => console.log('4'));                                      // M4 (chained — enqueued after M3 resolves)
 
-queueMicrotask(() => console.log('5'));
+queueMicrotask(() => console.log('5'));                               // microtask M5
 
 (async function () {
-  console.log('6');
-  await null;                  // suspends here
-  console.log('7');
+  console.log('6');                                                    // sync (inside IIFE)
+  await null;                                                          // suspend; continuation M7
+  console.log('7');                                                    // microtask M7
 })();
 
-console.log('8');
+console.log('8');                                                      // sync
+
+// Output: 1, 6, 8, 3, 5, 7, 4, 2
+//
+// 1, 6, 8        — all sync.
+// 3              — first .then microtask.
+// 5              — queueMicrotask (registered AFTER first .then).
+// 7              — await continuation.
+// 4              — second .then, enqueued when first .then resolves
+//                  (during the drain pass, AFTER 5 and 7).
+// 2              — setTimeout(0), only after all microtasks drained.
 ```
 
-```js
-// Expected output:
-// 1
-// 6      ← async fn runs sync up to the await
-// 8
-// 3      ← first .then microtask
-// 5      ← queueMicrotask (registered after the first .then)
-// 7      ← await continuation microtask
-// 4      ← second .then chained, scheduled when 3 resolves
-// 2      ← setTimeout(0) macrotask, after ALL microtasks drained
-```
-
-## Step-by-step dry run
-
-Tracking three queues: **MQ** (microtask), **Macro** (timers/check/etc), and the **Call Stack**.
-
-| Step | Action | Output | MQ (front→back) | Macro |
-|------|--------|--------|-----------------|-------|
-| 1 | `console.log('1')` | `1` | — | — |
-| 2 | `setTimeout(cbT, 0)` registered | — | — | `[cbT]` |
-| 3 | `Promise.resolve().then(cb3)` registers cb3 as microtask | — | `[cb3]` | `[cbT]` |
-| 4 | `.then(cb4)` chains to the promise returned by step 3 — cb4 is NOT scheduled yet; it's pending until cb3 resolves | — | `[cb3]` | `[cbT]` |
-| 5 | `queueMicrotask(cb5)` | — | `[cb3, cb5]` | `[cbT]` |
-| 6 | async IIFE runs: `console.log('6')`, then `await null` — wraps continuation `cb7` and schedules via microtask. async fn returns. | `6` | `[cb3, cb5, cb7]` | `[cbT]` |
-| 7 | `console.log('8')` | `8` | `[cb3, cb5, cb7]` | `[cbT]` |
-| 8 | Sync done. Drain microtasks. Pop cb3 → log `3`. cb3 returns undefined → the chained promise from step 3 resolves → cb4 (registered in step 4) is enqueued. | `3` | `[cb5, cb7, cb4]` | `[cbT]` |
-| 9 | Drain continues. Pop cb5 → log `5`. | `5` | `[cb7, cb4]` | `[cbT]` |
-| 10 | Pop cb7 → log `7`. (The await resumes the async fn; it returns.) | `7` | `[cb4]` | `[cbT]` |
-| 11 | Pop cb4 → log `4`. | `4` | — | `[cbT]` |
-| 12 | MQ empty. Pick next macrotask → cbT → log `2`. | `2` | — | — |
-
-Final output: `1, 6, 8, 3, 5, 7, 4, 2`.
-
-### Now add `process.nextTick` (Node)
+**With `process.nextTick` (Node):**
 
 ```js
 setTimeout(() => console.log('T'), 0);
@@ -127,75 +136,110 @@ Promise.resolve().then(() => console.log('P'));
 process.nextTick(() => console.log('N'));
 queueMicrotask(() => console.log('Q'));
 console.log('S');
+
+// Output: S, N, P, Q, T
+// Sync first → drain NT (N) → drain MQ (P, then Q in registration order) → macrotask (T).
 ```
 
-Trace:
-
-| Step | NT | MQ | Macro | Output |
-|------|----|----|----|--------|
-| Sync logs `S` | `[N]` | `[P, Q]` | `[T]` | `S` |
-| Drain NT first → `N` | — | `[P, Q]` | `[T]` | `N` |
-| Drain MQ → `P`, `Q` | — | — | `[T]` | `P`, `Q` |
-| Next macrotask → `T` | — | — | — | `T` |
-
-Output: `S, N, P, Q, T`.
-
-### With Node's `setImmediate`
+**Try it yourself**
 
 ```js
-setImmediate(() => console.log('I'));
-setTimeout(() => console.log('T'), 0);
-Promise.resolve().then(() => console.log('P'));
+async function fetchAndLog() {
+  console.log('start');
+  await Promise.resolve();
+  console.log('after await 1');
+  await Promise.resolve();
+  console.log('after await 2');
+}
+fetchAndLog();
+console.log('end');
+
+// Output: start, end, after await 1, after await 2
+// Each await suspends → next continuation runs as separate microtask.
 ```
 
-From main module, `I` vs `T` order is **non-deterministic** (depends on whether the loop reaches timers before the 0ms deadline expires). But `P` always wins because it's a microtask.
+---
 
-Output is either `P, T, I` or `P, I, T`.
+## 9. Step-by-step dry run
 
-## Important takeaways
+```
+Queues: MQ (microtask), NT (nextTick, Node), Macro
 
-**The hierarchy (memorize, in order)**
-1. Sync code on stack.
-2. `process.nextTick` queue (Node).
-3. Microtask queue (Promise jobs, `queueMicrotask`).
-4. One macrotask from the next phase / task queue.
-5. Goto 2 (drain 2 + 3 between every macrotask).
+t=0:
+  log '1'                            output: 1
+  setTimeout(cb_T, 0)                 Macro=[cb_T]
+  Promise.resolve().then(cb_3)        MQ=[cb_3]
+  .then(cb_4)                         cb_4 NOT enqueued yet — chained, depends on cb_3
+  queueMicrotask(cb_5)                MQ=[cb_3, cb_5]
+  IIFE: log '6'                       output: 1, 6
+        await null suspends; continuation = cb_7
+                                       MQ=[cb_3, cb_5, cb_7]
+  log '8'                              output: 1, 6, 8
 
-**`await` rule**
-- `await x` = `.then(v => /* rest */)`. The body before await is sync; after await is a microtask.
+Sync done. Drain microtasks:
+  pop cb_3 → log '3' → returns; previous promise resolves; cb_4 enqueued
+                                       MQ=[cb_5, cb_7, cb_4]
+                                       output: 1, 6, 8, 3
+  pop cb_5 → log '5'                  output: ..., 5
+  pop cb_7 → log '7' (await resume)   output: ..., 7
+  pop cb_4 → log '4'                  output: ..., 4
 
-**Common mistakes**
-- Predicting `setTimeout(0)` before `Promise.then`. **Wrong** — microtasks drain first.
-- Treating `queueMicrotask` differently from `.then` — they're the same priority.
-- Forgetting that **chained** `.then`s create dependent microtasks — they're not all enqueued at once. The second `.then` waits for the first to resolve.
-- Treating `process.nextTick` as a microtask — it has higher priority.
-- Forgetting that the sync prefix of an async function runs synchronously.
+MQ empty. Pick next macrotask:
+  run cb_T → log '2'                   output: 1, 6, 8, 3, 5, 7, 4, 2
+```
 
-**Where this shows up at work**
-- "Why is this log out of order?" debugging.
-- React's `useEffect` cleanup ordering, batched state updates.
-- Tracing distributed traces / OpenTelemetry context propagation through async callbacks.
-- Avoiding deadlocks with sync logic that assumes a microtask has drained.
+---
 
-## Variants
+## 10. Common confusion + traps
 
-1. **With `try/finally` and rejections** — `Promise.reject().catch(...).finally(...)`. Predict ordering when `.then` throws mid-chain.
+1. **`setTimeout(0)` before `Promise.then`** — never; MQ drains first.
+2. **`queueMicrotask` != `.then`** — they ARE the same priority (FIFO).
+3. **All chained `.then`s enqueued at once** — no, each waits for the prior's resolution.
+4. **`process.nextTick` is a microtask** — no, separate higher-priority queue.
+5. **`async` function runs entirely later** — runs sync up to first `await`.
+6. **`await null` is a no-op** — still enqueues a microtask continuation.
+7. **`MutationObserver`** — also microtask priority (browser).
 
-2. **Mixed `async/await` + `Promise.all`** — show that `await Promise.all([a, b])` resolves after all of them settle, but each settle still creates its own microtask.
+---
 
-3. **`MutationObserver` (browser)** — same microtask priority as Promise jobs. Used to demonstrate that microtasks are NOT just a Promise concept.
+## 11. Senior follow-ups & variants
 
-4. **`requestAnimationFrame`** — a third queue serviced once per browser repaint. Sits between macrotasks and the next paint, after all microtasks.
+### Variant 1 — With `try/finally` and rejections
+`.catch` and `.finally` are microtasks. `finally` returns the original value (or rejection) unchanged.
 
-## Revision notes
+### Variant 2 — `Promise.all` ordering
+`await Promise.all([a, b])` resolves after BOTH settle; each settle still creates own microtask.
 
-> **microtask-macrotask-order — 60 second recap**
-> - **Rule:** microtasks drain to EMPTY between every two macrotasks.
-> - Sync > `process.nextTick` > microtasks (Promise, `queueMicrotask`) > one macrotask > repeat.
-> - `await x` ≡ `.then(...)` — the post-await code is a microtask.
-> - `setTimeout(0)` ALWAYS loses to `Promise.resolve().then`.
-> - Chained `.then`s aren't all enqueued at once — each one waits for the prior to resolve.
-> - `process.nextTick` (Node only) outranks Promise microtasks.
-> - **Trap:** treating `queueMicrotask` differently from `.then` — both are microtasks.
-> - **Trap:** infinite microtask chain blocks ALL macrotasks (including I/O).
-> - Predict by walking sync logs first, then draining MQ, then ONE macrotask, then drain MQ again.
+### Variant 3 — `requestAnimationFrame` (browser)
+Third queue, serviced once per repaint, after microtasks but before next macrotask.
+
+### Variant 4 — `MessageChannel` (browser/Node)
+Macrotask (not microtask) — fastest yield primitive in cooperative schedulers.
+
+### Variant 5 — Top-level await (ESM)
+Module body becomes async; `import`-ers wait.
+
+---
+
+## 12. How to think aloud
+
+> "Walk top to bottom. Print sync logs. Push setTimeout/setImmediate to macrotask queue; .then/queueMicrotask/await-continuation to microtask queue; process.nextTick to NT queue (Node). After sync done: drain NT → drain MQ → run ONE macrotask → re-drain NT + MQ. Chained .then's aren't co-enqueued — each waits for prior to resolve. `await x` ≡ `.then(...)` — continuation is microtask. Trap: assuming setTimeout(0) beats Promise.then. Trap: treating queueMicrotask as a different priority. Trap: forgetting sync prefix of async fn."
+
+---
+
+## 13. 60-second revision
+
+> - **Microtasks drain to EMPTY between every macrotask.**
+> - **Priority:** sync → `process.nextTick` (Node) → microtasks → one macrotask.
+> - **`await x` ≡ `.then(...)`** — post-await is microtask.
+> - **`setTimeout(0)` ALWAYS loses to `Promise.then`.**
+> - **Chained `.then`s** depend; each enqueues NEW microtask when prior resolves.
+> - **`queueMicrotask` == `.then`** priority.
+> - **`process.nextTick`** > microtasks (Node).
+> - **Trap:** `setTimeout(0)` "soonest"; chained then co-enqueue; async fn entirely later.
+
+---
+
+**Related:** [event-loop-concurrency.md](./event-loop-concurrency.md) · [predict-mixed-async-output.md](./predict-mixed-async-output.md) · [nexttick-vs-setimmediate.md](./nexttick-vs-setimmediate.md) · [queuemicrotask-deep-dive.md](./queuemicrotask-deep-dive.md)
+
+**Concept primer:** [`concepts/event-loop.md`](../../concepts/event-loop.md), [`concepts/promises.md`](../../concepts/promises.md)

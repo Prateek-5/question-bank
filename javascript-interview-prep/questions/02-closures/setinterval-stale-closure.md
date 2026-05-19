@@ -1,196 +1,368 @@
-# Stale closure bug in `setInterval` — reading the latest state
+# Fix the stale-closure bug in `setInterval` — read latest state on every tick
 
-## Source
-- Real bug pattern from Node services and React components (`useEffect` + `setInterval`).
-- Frequent senior interview "find the bug in this code" question.
+> **Difficulty:** Medium   |   **Time:** ~15 min   |   **Prereqs:** [loop-closure-var-let.md](./loop-closure-var-let.md), [`concepts/closures.md`](../../concepts/closures.md)
+>
+> **Source:** Real Node + React production bug; canonical senior interview "find the bug" question.
 
-## Why this question matters in interviews
-The stale-closure-in-`setInterval` bug is the canonical "closures bite you in production" problem. Every Node backend engineer eventually writes a poll loop, a heartbeat, or a stats flusher that captures stale state — and gets paged at 3am. Senior interviewers love this question because it tests three things at once: (1) you understand that closures capture **variable references, not values**, (2) you know **when** that ref gets re-read (every time the inner function is called), and (3) you can articulate **three** different fixes, each with different trade-offs. Fumbling this signals junior; nailing it with all three fixes signals senior.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### The buggy code
+**The buggy code**
 ```js
 function startPoller(getConfig) {
-  let config = getConfig();                     // captured ONCE
+  let config = getConfig();
   setInterval(() => {
-    console.log('polling with', config.url);    // ← stale forever
-  }, 1000);
-}
-```
-The interval handler closes over `config`. The handler reads `config` every tick, but `config` is **never reassigned** in the outer scope, so it stays the original snapshot forever. If `getConfig()` is fresh data (e.g., from a config service that gets hot-reloaded), the poller will never see updates.
-
-### Why this happens (engine-level)
-- Closures capture **bindings**, not values. The interval callback has a reference to the *variable* `config`, not to the object it pointed at when captured.
-- The variable lives in the outer function's lexical environment record. As long as the interval is alive, that environment record is alive — including the (stale) value `config` points to.
-- If you reassign `config = getConfig()` inside the interval, future ticks see the new value. The problem is that nothing in the original code does that.
-
-### The three fixes (you MUST know all three)
-
-**Fix 1 — Re-read latest state via ref/getter on every tick**
-```js
-function startPoller(getConfig) {
-  setInterval(() => {
-    const config = getConfig();          // fresh on every tick
     console.log('polling with', config.url);
   }, 1000);
 }
 ```
-Best when `getConfig` is cheap. The closure now captures the **getter**, which is itself fresh on every call.
 
-**Fix 2 — Restart the interval when state changes**
+**Input / Output examples**
+
+| Setup                                                              | What happens                                                |
+|--------------------------------------------------------------------|-------------------------------------------------------------|
+| `getConfig()` returns `{url: 'v1'}`, then later `{url: 'v2'}`     | Every tick logs `v1` — never sees `v2`                      |
+| Replace with the fix (re-read via getter on each tick)            | Ticks reflect latest `getConfig()` returns                  |
+| Replace with the fix (restart on change)                          | Ticks reflect latest config; current tick may skip          |
+| Replace with the fix (ref object — `configRef.current`)            | Ticks reflect latest `.current` — same closure              |
+
+**Constraints**
+- Diagnose why the original is stale.
+- Provide **three** fixes with different trade-offs (re-read, restart, ref).
+- Always return a cleanup function from any code that starts an interval.
+
+---
+
+## 2. Plain-English restatement
+
+You write a function that starts a poller. Inside, you read some config once and capture it. The polling callback uses the captured config every tick. Later, the *source* of that config changes — but your poller never sees the change. It's reading a snapshot from when the poller started.
+
+The interviewer wants you to (1) explain why the closure is stuck on the old value, (2) propose at least three fixes, and (3) discuss the trade-offs.
+
+---
+
+## 3. Why this matters in interviews
+
+The stale-closure-in-`setInterval` bug is the canonical "closures bite you in production" problem. Every Node backend engineer eventually writes a poll loop, a heartbeat, or a stats flusher that captures stale state — and gets paged at 3 AM. Senior interviewers love it because it tests three things at once: (1) you understand that closures capture **variable references, not values**, (2) you know **when** that reference gets re-read (every time the inner function runs), and (3) you can articulate **three** different fixes with different trade-offs. Fumbling this signals junior; nailing it with all three fixes signals senior.
+
+---
+
+## 4. Mental model
+
+The closure is a **pointer to a labeled box**. The box's *label* never changes (`config`); the *contents* of the box are what gets read. If the box's contents are never reassigned, every tick reads the same contents — that's "stale." The three fixes are three different ways to make sure the contents stay fresh.
+
+```
+   closure inside setInterval
+     │
+     ├── ref to box labelled "config"
+     │
+     ▼
+   ┌─────────────────────┐
+   │ box: config         │
+   │ contents: {url:v1}  │   ← set once; never reassigned
+   └─────────────────────┘
+   
+   tick 1 reads contents → v1
+   tick 2 reads contents → v1   (stale forever)
+   tick N reads contents → v1
+```
+
+The three fix shapes:
+
+```
+   Fix 1 — re-read on every tick
+     box contents: (fresh from getConfig())   ← refreshed inside the tick
+   
+   Fix 2 — restart the interval when state changes
+     clearInterval(); fresh closure captures fresh contents.
+   
+   Fix 3 — ref object
+     box.contents = { current: {url} }
+     box.contents stays the same OBJECT; .current gets reassigned externally
+     closure reads box.contents.current — picks up the latest
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. If the outer scope reassigns `config = getConfig()` once after starting the poller, does the interval see it? Why or why not?
+> 2. What's the difference between capturing the value vs capturing a *getter*? Which one stays fresh?
+> 3. Why is the ref-object pattern (`configRef.current`) preferred in React?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: `var` instead of `let`
+
 ```js
-function startPoller(getConfig, onChange) {
-  let id;
-  function arm() {
-    const config = getConfig();
-    clearInterval(id);
-    id = setInterval(() => console.log('polling with', config.url), 1000);
-  }
-  arm();
-  onChange(arm);                         // call arm() on config change
+function startPoller(getConfig) {
+  var config = getConfig();
+  setInterval(() => console.log(config.url), 1000);
 }
 ```
-Best when `getConfig` is expensive or you only want to react to known events. The interval body has a fresh `config` binding each time `arm()` runs.
 
-**Fix 3 — Generation counter / ref object**
+`var` doesn't change anything — closures capture bindings regardless of declaration keyword. Same stale `config`.
+
+### Wrong attempt 2: redeclare `config` inside the interval body
+
 ```js
-function startPoller(configRef) {        // configRef.current updated externally
-  setInterval(() => {
-    console.log('polling with', configRef.current.url);
-  }, 1000);
+setInterval(() => {
+  let config;   // BUG: shadows the outer var with undefined
+  console.log(config?.url);
+}, 1000);
+```
+
+Each tick declares a fresh inner `config = undefined`. Logs `undefined`. Doesn't fix the original problem.
+
+### Wrong attempt 3: destructure at the top
+
+```js
+function startPoller(getConfig) {
+  const { url } = getConfig();
+  setInterval(() => console.log('polling', url), 1000);
 }
 ```
-The closure captures `configRef` (the object). The *object* is the same; its `.current` property is what gets reassigned. This is the React `useRef` pattern and the most ergonomic at scale.
 
-### Edge cases / discussion points
-1. **`useEffect` + `setInterval` in React** — the canonical front-end version. Closure captures the state value from the render where the effect ran. Fixes: functional setState, ref, restart on dep change.
-2. **Memory** — every closure pins the outer environment until the interval is cleared. If you forget `clearInterval`, the closure + its captured vars leak forever.
-3. **Pause/resume semantics** — fix 2 (restart) is the only fix that loses no scheduled ticks; fix 1 and fix 3 keep ticking through "changes."
-4. **Async work inside the tick** — if the tick `await`s, by the time it resumes `config` may have changed again. You want **request-scoped** captures (deref at the top of the tick).
-5. **EventEmitter handlers** — same bug class. A `socket.on('data', ...)` handler closes over outer vars; if the outer scope updates them, the handler sees the updates (because it re-reads); but if you bound *values* (e.g., destructured), you're stale.
-6. **`setImmediate` chains** — similar bug if you recursively schedule and capture state at the top.
+Now you've captured a **primitive snapshot** of `url`. Even if the outer scope held a getter, you've copied out the string. Strictly worse — the bug is now baked into a primitive instead of an object ref.
 
-### Memory leak corollary (closure + long-lived timer)
-```js
-function startSession(user) {
-  const cache = new Map();               // big — held forever
-  setInterval(() => sendHeartbeat(user.id), 30_000);   // pins `user` + `cache`
-}
-```
-The interval handler only uses `user.id`, but its closure record retains everything in scope — including `cache`. Engines do some "closure variable analysis" (V8's `ScopeInfo`) but in the general case you must assume the **entire scope is pinned**. Move the heavy `cache` out of scope, or `clearInterval` when the session ends.
+---
 
-## Brute force approach
-"Just declare `config` with `var` and reassign it." Doesn't fix anything — the binding semantics are identical. Or "use `let` inside the interval" — also doesn't fix it; you'd be redeclaring per tick but reading from the same outer source. The real fix is to **re-read fresh state**, by one of the three patterns above.
+## 7. The unlocking insight
 
-## Optimal approach
-Pick **fix 1** (re-read via getter) for simplicity, **fix 2** (restart) if state changes are event-driven, **fix 3** (ref object) for React or when state changes frequently and you don't want to rebuild the interval. State the choice and the trade-off explicitly.
+> **Closures capture bindings, not values. If the binding is never reassigned, every tick reads the same value. The fix is to capture something that *is* refreshable — a getter, a ref object, or to rebuild the closure entirely.**
 
-## Solution (JavaScript)
+The interval callback has a reference to the *binding* `config` in the outer LE. That binding holds an object reference set once. Every tick, the callback dereferences the binding and reads `config.url`. Since `config` never gets reassigned, the value never changes.
+
+Three patterns make the value refreshable:
+
+**Pattern 1 — capture a *getter*.** The callback calls `getConfig()` every tick. The getter encloses (or accesses) the up-to-date source of truth. The closure binding doesn't change; the result of calling the getter does.
+
+**Pattern 2 — capture a *ref object*.** Store config as `configRef = { current: getConfig() }`. The callback reads `configRef.current`. External code can mutate `configRef.current = newConfig` — the closure binding (`configRef`) stays the same object; its `.current` property changes. This is React's `useRef` pattern.
+
+**Pattern 3 — restart the interval.** When state changes, clear the interval and start a new one. The new closure captures a fresh `config`. No stale read because no continuous interval — each interval is short-lived against a fixed snapshot.
+
+Pattern 1 is the cheapest if `getConfig()` is fast. Pattern 3 is the cleanest if state changes are event-driven (you know when to restart). Pattern 2 is the most ergonomic at scale and is the React idiom.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
-/* ---- Buggy ---- */
+// ── The bug ───────────────────────────────────────────────────────
 function startPollerBuggy(getConfig) {
-  const config = getConfig();
+  const config = getConfig();                       // step 1: captured ONCE; never refreshed
   setInterval(() => console.log('poll:', config.url), 1000);
+  // closure reads `config.url` every tick, but `config` itself never changes
 }
 
-/* ---- Fix 1: re-read via getter ---- */
+// ── Fix 1: re-read via getter on every tick ───────────────────────
 function startPollerFix1(getConfig) {
-  const id = setInterval(() => {
-    const config = getConfig();
+  const id = setInterval(() => {                    // step 1: callback closes over getConfig (a function)
+    const config = getConfig();                      // step 2: fresh value on every tick
     console.log('poll:', config.url);
   }, 1000);
-  return () => clearInterval(id);            // always return a cleanup
+  return () => clearInterval(id);                    // step 3: ALWAYS return cleanup
 }
 
-/* ---- Fix 2: restart on change ---- */
+// ── Fix 2: restart on change ──────────────────────────────────────
 function startPollerFix2(getConfig, onChange) {
   let id;
-  function arm() {
+  function arm() {                                   // step 1: arm() builds a new interval with fresh config
     clearInterval(id);
     const config = getConfig();
     id = setInterval(() => console.log('poll:', config.url), 1000);
   }
   arm();
-  const unsub = onChange(arm);
+  const unsub = onChange(arm);                       // step 2: external signal re-arms the interval
   return () => { clearInterval(id); unsub?.(); };
 }
 
-/* ---- Fix 3: ref object (generation counter pattern) ---- */
-function startPollerFix3(configRef) {
-  const id = setInterval(() => console.log('poll:', configRef.current.url), 1000);
+// ── Fix 3: ref object (React-style) ───────────────────────────────
+function startPollerFix3(configRef) {                // configRef = { current: getConfig() }
+  const id = setInterval(() => {
+    console.log('poll:', configRef.current.url);     // step 1: reads .current — caller can update externally
+  }, 1000);
   return () => clearInterval(id);
 }
-// caller does: const ref = { current: getConfig() };  ref.current = newConfig;
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
-Setup:
 ```js
-let url = 'https://v1';
+let url = 'v1';
 const getConfig = () => ({ url });
 
-const stop = startPollerFix1(getConfig);
+// Fix 1
+const stop1 = startPollerFix1(getConfig);
+setTimeout(() => { url = 'v2'; }, 2500);
+// t=1000 → poll: v1
+// t=2000 → poll: v1
+// t=2500 → url changes
+// t=3000 → poll: v2   ← latest
+// t=4000 → poll: v2
+// stop1() cleans up
 
-setTimeout(() => { url = 'https://v2'; }, 2_500);
-setTimeout(() => stop(), 4_500);
+// Fix 3 — ref object
+const ref = { current: getConfig() };
+const stop3 = startPollerFix3(ref);
+setTimeout(() => { ref.current = { url: 'v2' }; }, 2500);
+// same behaviour: ticks 1-2 see v1, ticks 3+ see v2
 ```
 
-Trace (fix 1):
-- `t=0` — interval armed.
-- `t=1000` — tick: `getConfig()` returns `{url: 'https://v1'}`. Logs `poll: https://v1`.
-- `t=2000` — tick: same. Logs `poll: https://v1`.
-- `t=2500` — outer reassigns `url = 'https://v2'`.
-- `t=3000` — tick: `getConfig()` re-reads the outer `url`, returns `{url: 'https://v2'}`. Logs `poll: https://v2`.
-- `t=4000` — tick: `poll: https://v2`.
-- `t=4500` — `stop()` → `clearInterval(id)`. Closure record can now be GC'd (assuming no other refs).
+---
 
-With the **buggy** version: every tick would log `poll: https://v1` because `config` was captured once. Even after `t=2500`, the captured object is the same `{url: 'https://v1'}`.
+## 9. Step-by-step dry run
 
-What's on the heap (fix 1): the interval handler closure pins `getConfig`. `getConfig` itself closes over the outer `url`. Each tick reads `url` via the chain. Total retention: the handler + `getConfig` + the outer scope's `url` binding.
+Setup:
 
-## Important takeaways
+```js
+let url = 'v1';
+const getConfig = () => ({ url });
+const stop = startPollerFix1(getConfig);
+setTimeout(() => { url = 'v2'; }, 2500);
+setTimeout(() => stop(), 4500);
+```
 
-**Syntax to memorize**
-- Always **return a cleanup function** from any function that calls `setInterval`. Otherwise you've made it impossible to stop and easy to leak.
-- Capture **getters** or **ref objects**, not raw values, when the value changes over time.
-- Reach for `for...of` + `let` (or fresh `const` inside the loop body) instead of `var` to avoid the same bug class in loop-with-setTimeout.
+Values-first trace (Fix 1):
 
-**Patterns to reuse**
-- Ref-object pattern (`{ current: X }`) is the JS idiom for "shared mutable cell visible from multiple closures." Same as React's `useRef`. Use it for event emitters, sockets, long-lived timers.
-- "Restart on change" mirrors React's `useEffect` with a dep array.
-- Generation counter (`let gen = 0; const myGen = ++gen;`) lets old async work check `if (myGen !== gen) return;` and bail out. Used for race-condition-free async refresh.
+| Time (ms) | Action                | Outer `url` | What the tick sees | Log         |
+|-----------|------------------------|-------------|---------------------|-------------|
+| 0         | interval armed        | `'v1'`      | —                   | —           |
+| 1000      | tick                  | `'v1'`      | `getConfig()` → `{url:'v1'}` | `poll: v1` |
+| 2000      | tick                  | `'v1'`      | `{url:'v1'}`        | `poll: v1`  |
+| 2500      | outer reassigns `url` | `'v2'`      | —                   | —           |
+| 3000      | tick                  | `'v2'`      | `{url:'v2'}`        | `poll: v2`  |
+| 4000      | tick                  | `'v2'`      | `{url:'v2'}`        | `poll: v2`  |
+| 4500      | `stop()` cleans up    | `'v2'`      | —                   | —           |
 
-**Common mistakes**
-- Capturing destructured values (`const { url } = config`) inside long-lived handlers — you've snapshot the primitive, not the live ref.
-- Trusting that engines GC closures aggressively — they don't. The whole scope is pinned.
-- Forgetting `clearInterval` on shutdown — leaks the closure + everything it captures, often a huge graph.
-- Using `setInterval` for self-rescheduling tick work — prefer `setTimeout` chain so each tick gets a fresh closure naturally.
+With the **buggy** version, every tick would log `poll: v1` because `config` was captured once and never reassigned.
 
-**Related questions**
-- React's `useEffect` + `setInterval` stale-state bug (same problem class)
-- `setTimeout` in a `for` loop with `var` (sibling bug)
-- Generation-counter pattern for race-free async refresh
-- Memory leak via EventEmitter listeners
+---
 
-## Variants
+## 10. Common confusion + traps
 
-1. **Stale closure with EventEmitter** — `emitter.on('data', () => useStaleVar)` — same fix family. Often paired with "and why isn't the listener GC'd?"
+1. **Destructuring at capture time bakes in a primitive snapshot.**
+   `const { url } = config` copies the string. The closure now closes over a primitive that can never update. Worse than capturing the object.
 
-2. **Stale closure in `Promise.then` chain** — `then(() => doSomething(staleVar))` after a state change. Fix: re-fetch state at the top of `then`, or use a ref.
+2. **`var` doesn't help.**
+   Same binding semantics. The bug isn't about `var` vs `let` — it's about whether the binding gets reassigned.
 
-3. **Stale closure with React's `useEffect`** — captured `state` from a render is stale on the next tick. Fix: functional `setState`, `useRef`, or deps array including the value.
+3. **Trusting that engines GC closures aggressively.**
+   They don't. The entire scope is pinned until the interval is cleared. Always return a cleanup function.
 
-## Revision notes
+4. **`bind(this)` inside `addEventListener` makes removal harder.**
+   `bind` returns a new function each call. `emitter.off('e', this.handle.bind(this))` removes a *different* function reference. Store the bound function once if you need to off-it later.
 
-> **setinterval-stale-closure — 60 second recap**
-> - Closures capture **bindings**, not values. Captured-once values stay stale forever.
-> - **Three fixes:** (1) re-read via getter on every tick, (2) restart interval on change, (3) ref object (`{ current }`).
-> - React analog: `useEffect` + `setInterval` reads stale state — same problem.
-> - Always **return a cleanup** from functions that start intervals — leaking timers leaks the whole scope.
-> - Heap: the interval pins the entire outer scope, including unused vars.
-> - Memory leak corollary: heavy unused locals in scope get pinned alongside the timer. Move them out or `clearInterval` on shutdown.
-> - Self-rescheduling `setTimeout` chains avoid the bug naturally (fresh closure per tick).
-> - **Trap:** destructured snapshots (`const {url} = config`) inside the handler — you've snapshot the primitive, not the live ref.
+5. **`setInterval` for self-rescheduling work.**
+   Prefer a `setTimeout` chain so each tick gets a fresh closure naturally:
+   ```js
+   function tick() {
+     doWork();
+     setTimeout(tick, 1000);
+   }
+   tick();
+   ```
+   This sidesteps the stale-closure bug because each scheduled tick reads its own fresh environment.
+
+6. **Memory leak corollary.**
+   The interval pins the entire outer scope, including unused heavy locals. If your factory function allocated a 50 MB cache "just for now," it's pinned alongside the small `config`. Move heavy locals out of scope.
+
+7. **React `useEffect` + `setInterval`.**
+   Same bug. The effect captures `state` from the render where it ran. Fixes: functional `setState((s) => ...)`, `useRef`, or dependency array including the value.
+
+---
+
+## 11. Senior follow-ups & variants
+
+### Variant 1 — Self-rescheduling `setTimeout` chain (no stale-closure problem)
+
+```js
+function startPoller(getConfig) {
+  let stopped = false;
+  function tick() {
+    if (stopped) return;
+    const config = getConfig();                    // fresh per tick
+    console.log('poll:', config.url);
+    setTimeout(tick, 1000);                         // re-arm
+  }
+  tick();
+  return () => { stopped = true; };
+}
+```
+
+Each `tick` schedules the next one fresh. The closure-shape problem doesn't arise because each scheduled call re-enters `tick` cleanly. Also gives you natural backpressure if `getConfig` is async.
+
+### Variant 2 — Generation counter for race-free async refresh
+
+```js
+let gen = 0;
+function reload() {
+  const myGen = ++gen;
+  return asyncFetch().then((data) => {
+    if (myGen !== gen) return;   // stale — newer reload has started
+    apply(data);
+  });
+}
+```
+
+Two reloads firing in overlap: the older one checks `myGen !== gen` after its await and exits, leaving the newer one to apply. Same family of "snapshot at start, check at end" pattern.
+
+### Variant 3 — `AbortController` for unified teardown
+
+```js
+function startPoller(getConfig, signal) {
+  const id = setInterval(() => {
+    if (signal.aborted) return;
+    const config = getConfig();
+    console.log('poll:', config.url);
+  }, 1000);
+  signal.addEventListener('abort', () => clearInterval(id), { once: true });
+}
+```
+
+One `AbortController` cleans up multiple things — listeners, fetches, intervals — when its signal aborts. Modern Node and browsers all support this.
+
+### Variant 4 — React `useEffect` stale-state
+
+```jsx
+function Counter() {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => {
+      setCount(count + 1);   // BUG: count is stale (captured at render time)
+    }, 1000);
+    return () => clearInterval(id);
+  }, []);   // empty deps → effect only runs once → closure captures count=0 forever
+}
+```
+
+Fixes: functional `setCount((c) => c + 1)` (closure doesn't need `count`), or use `useRef` for the latest value, or add `count` to deps (rebuilds the interval each render — usually wrong).
+
+---
+
+## 12. How to think aloud in the interview
+
+> "Stale closure: the interval handler captured `config` once at start. Every tick reads the same binding, which is never reassigned. Three fixes. (1) Re-read via getter inside the tick — cheap if `getConfig` is fast. (2) Restart the interval when state changes — clean if state changes are event-driven, but tick timing is disrupted. (3) Ref object — `configRef.current` — closure binding stays the same; `.current` gets externally reassigned. React's `useRef` is this. Trade-offs: fix 1 wastes a getter call per tick; fix 2 loses the current tick; fix 3 is most ergonomic but requires the caller to manage the ref. I'd also always return a cleanup function; otherwise the interval pins the entire outer scope forever — closure-as-GC-anchor leak. For self-rescheduling work, prefer `setTimeout` chains — each tick gets a fresh closure naturally."
+
+---
+
+## 13. 60-second revision
+
+> - **Bug:** closure captures `config` once; binding never reassigned; every tick reads the stale value.
+> - **Root cause:** closures capture **bindings**, not values. The binding here is never refreshed.
+> - **Three fixes**: (1) re-read via getter inside the tick; (2) restart interval on change; (3) ref object (`{ current }`).
+> - **React analog:** `useEffect` + `setInterval` reads stale state — same problem class.
+> - **Always return a cleanup** from functions that start intervals — leaking timers leaks the whole scope.
+> - **Memory corollary:** heavy unused locals in the factory scope get pinned alongside the timer. Move them out.
+> - **Self-rescheduling `setTimeout` chains** avoid the bug naturally (fresh closure per tick).
+> - **Trap:** destructured snapshots (`const {url} = config`) bake in a primitive — strictly worse than capturing the object.
+
+---
+
+**Related:** [loop-closure-var-let.md](./loop-closure-var-let.md) · [closure-memory-leak-dom.md](./closure-memory-leak-dom.md) · [closure-with-cancel-token.md](./closure-with-cancel-token.md)
+
+**Concept primer:** [`concepts/closures.md`](../../concepts/closures.md)

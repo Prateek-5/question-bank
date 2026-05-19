@@ -1,162 +1,281 @@
-# Numeric Array Operations — `min`, `max`, `sum`, `avg`, `median`
+# Numeric array ops — min, max, sum, avg, median
 
-## Source
-- codedamn Lab: "JavaScript Math Object Lab" — https://codedamn.com/problem/sJuBtPemiWmWVbQClaxcR
-- Canonical interview warm-up that tests `Math` + `reduce` + array idioms together.
+> **Difficulty:** Foundation   |   **Time:** ~10 min   |   **Prereqs:** [polyfill-reduce.md](./polyfill-reduce.md)
+>
+> **Source:** codedamn Math Lab. Universal warm-up.
 
-## Why this question matters in interviews
-This is the "show me you can hold three primitives in your head at once" question. You're expected to deliver clean, idiomatic implementations of `min`, `max`, `sum`, `avg`, and `median` for a numeric array — handle empty input, handle a single-element array, and **not** blow up on huge arrays. The killer trap: `Math.max(...arr)` looks elegant but throws `RangeError: Maximum call stack size exceeded` on arrays around 100k+ elements because spread expands to function arguments. Backend engineers see numeric aggregation everywhere — latency metrics, throughput rollups, p50/p95/p99 calculations on log streams. Knowing the spread-stack trap and `sort`'s string-coercion default is what separates "I use JavaScript" from "I know JavaScript."
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### The `sort` default behavior trap
+Implement min, max, sum, avg, median for numeric arrays. Avoid spread for large arrays (stack overflow). Default `sort` stringifies — pass comparator.
+
+**Verification examples**
+
 ```js
-[10, 1, 5, 100].sort();   // [1, 10, 100, 5]  ← strings, not numbers
-[10, 1, 5, 100].sort((a, b) => a - b);   // [1, 5, 10, 100]
+sum([1, 2, 3]);                                   // 6
+avg([1, 2, 3]);                                   // 2
+min([3, 1, 5, 2]);                                // 1
+max([3, 1, 5, 2]);                                // 5
+median([1, 2, 3, 4]);                             // 2.5
+median([1, 2, 3]);                                // 2
+
+// Spread trap on large arrays
+Math.min(...new Array(200_000).fill(1));         // RangeError on many engines
 ```
-`Array.prototype.sort` **stringifies** elements before comparing. `"10" < "5"` lexicographically. Always pass a comparator for numbers. Burn this into muscle memory.
 
-### `Math.min` / `Math.max` and the spread trap
-```js
-Math.min(1, 2, 3);              // 1 — variadic
-Math.min(...arr);                // OK for small arr
-Math.min(...bigArr);             // RangeError around 100k–500k elements
+**Constraints**
+- `[].sort()` stringifies — pass `(a, b) => a - b` for numerics.
+- `Math.min(...arr)` blows stack ~100k+ elements (engine-dependent).
+- `Math.min()` (no args) → `Infinity`; max → `-Infinity`.
+- NaN poisons Math.min/max.
+- Median: sort + middle (or pair average).
+
+---
+
+## 2. Plain-English restatement
+
+Aggregate a numeric array. Use `reduce` with explicit init to handle empty. Avoid spread to Math.min/max on large arrays. Sort with numeric comparator.
+
+---
+
+## 3. Why this matters in interviews
+
+Three idioms in one head: reduce, Math, sort. Trap: spread stack overflow + sort default lex. Backend p50/p95/p99, latency rollups.
+
+---
+
+## 4. Mental model
+
 ```
-Spread expands the array into individual function arguments. Engines cap argument count (V8 is roughly 65k–500k depending on version/platform). Use `reduce` instead for unbounded sizes.
+   sum:   reduce((a, b) => a + b, 0)
+   avg:   sum / n (guard n>0)
+   min:   reduce((a, b) => Math.min(a, b), Infinity)
+   max:   reduce((a, b) => Math.max(a, b), -Infinity)
+   median:
+     sort numerically (a-b)
+     mid = floor(n/2)
+     n odd:  arr[mid]
+     n even: (arr[mid-1] + arr[mid]) / 2
 
-Other surprises:
-- `Math.min()` with **no args** → `Infinity`.
-- `Math.max()` with **no args** → `-Infinity`.
-- `Math.max(1, NaN, 3)` → `NaN`. Any NaN poisons the result. Filter first if your data may contain NaN.
-
-### `reduce`-based aggregation idioms
-```js
-const sum = arr.reduce((a, b) => a + b, 0);
-const min = arr.reduce((a, b) => Math.min(a, b), Infinity);
-const max = arr.reduce((a, b) => Math.max(a, b), -Infinity);
+   Spread trap:
+     Math.min(...bigArr) → RangeError ~100k+.
+     V8 argument limit ~65k-500k.
+     Use reduce for unbounded sizes.
+   
+   sort default:
+     [10, 1, 5].sort() → [1, 10, 5]  ← lex on string forms.
+     Always pass numeric comparator.
+   
+   NaN:
+     Math.max(1, NaN) → NaN.
+     Filter NaN before aggregation.
+   
+   Empty array:
+     reduce with init: returns init.
+     Math.min() with no args: Infinity.
+     median empty: undefined or throw — decide.
 ```
-O(n), constant stack depth, no spread. Pass an explicit initial value so `reduce` doesn't throw on empty arrays.
 
-### Median requires sorting
-- Sort numerically (`.toSorted((a,b) => a - b)` in ES2023 to avoid mutating input, or `[...arr].sort(...)`).
-- Odd length → middle element. Even length → average of the two middle elements.
-- O(n log n) — there's a faster O(n) algorithm (quickselect / median-of-medians) but interviewers rarely require it unless they ask explicitly.
+---
 
-### Floating-point caveat
-`avg = sum / n` can drift on huge arrays (sum overflows precision past 2^53). For ironclad accuracy, use **Welford's online algorithm**. Mention this for senior-level bonus.
+## 5. Try it yourself first
 
-## Brute force approach
-Spread into `Math` calls and use the default `sort`:
+> **Predict before reading on:**
+> 1. Why does `Math.min(...bigArr)` throw?
+> 2. What does `[10, 1].sort()` return?
+> 3. What's median of even-length array?
+
+---
+
+## 6. Brute force — walked through
+
 ```js
-const min = Math.min(...arr);
-const max = Math.max(...arr);
-const sum = arr.reduce((a, b) => a + b);   // no initial — throws on empty
-const avg = sum / arr.length;              // NaN on empty
-const median = arr.sort()[Math.floor(arr.length/2)];  // WRONG: string sort + mutates input
+const min = arr => Math.min(...arr);             // breaks at ~100k+
+const sort = arr => arr.sort();                  // lex default!
 ```
-Three bugs in five lines: spread blows the stack at scale, no-initial `reduce` throws on `[]`, default `sort` returns lexicographic order, and `arr.sort()` mutates the caller's array.
 
-## Optimal approach
-- `min`/`max`/`sum`: single-pass `reduce` with explicit initial values (`Infinity`, `-Infinity`, `0`).
-- `avg`: `sum / n`, guard `n === 0`.
-- `median`: `[...arr].sort((a,b)=>a-b)`, then index. Never mutate the input.
+Both subtly wrong for production.
 
-## Solution (JavaScript)
+---
+
+## 7. The unlocking insight
+
+> **Reduce with explicit init. Numeric sort `(a,b)=>a-b`. Avoid spread for large arrays. Filter NaN if needed.**
+
+Three properties:
+
+1. **`reduce` with init** — handles empty.
+2. **Numeric sort** comparator.
+3. **Avoid spread** on large.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
-function min(arr) {
-  if (arr.length === 0) return undefined;
-  return arr.reduce((a, b) => (a < b ? a : b));   // no spread → safe on huge arrays
-}
-
-function max(arr) {
-  if (arr.length === 0) return undefined;
-  return arr.reduce((a, b) => (a > b ? a : b));
-}
-
 function sum(arr) {
-  return arr.reduce((a, b) => a + b, 0);          // initial 0 → empty returns 0
+  return arr.reduce((a, b) => a + b, 0);                                  // step 1: init 0
 }
 
 function avg(arr) {
-  if (arr.length === 0) return NaN;               // mirror Math semantics
+  if (arr.length === 0) return NaN;                                       // step 2: empty guard
   return sum(arr) / arr.length;
+}
+
+function min(arr) {
+  if (arr.length === 0) return Infinity;
+  return arr.reduce((a, b) => (b < a ? b : a));                           // step 3: no spread, no Math
+}
+
+function max(arr) {
+  if (arr.length === 0) return -Infinity;
+  return arr.reduce((a, b) => (b > a ? b : a));
 }
 
 function median(arr) {
   if (arr.length === 0) return undefined;
-  const sorted = [...arr].sort((a, b) => a - b);   // non-mutating + numeric compare
-  const n = sorted.length;
-  const mid = n >> 1;                              // floor(n/2)
-  return n % 2 === 1
-    ? sorted[mid]
-    : (sorted[mid - 1] + sorted[mid]) / 2;
+  const sorted = [...arr].sort((a, b) => a - b);                           // step 4: numeric sort
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2
+    ? sorted[mid]                                                          // step 5: odd: middle
+    : (sorted[mid - 1] + sorted[mid]) / 2;                                 // step 6: even: pair avg
+}
+
+// Percentile (linear interpolation)
+function percentile(arr, p) {
+  if (arr.length === 0) return NaN;
+  const sorted = [...arr].sort((a, b) => a - b);
+  const i = (p / 100) * (sorted.length - 1);
+  const lo = Math.floor(i), hi = Math.ceil(i);
+  if (lo === hi) return sorted[lo];
+  return sorted[lo] * (hi - i) + sorted[hi] * (i - lo);
 }
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
-Input: `arr = [4, 1, 7, 3, 9, 2]`.
+```js
+sum([1, 2, 3, 4]);                                            // 10
+avg([1, 2, 3, 4]);                                            // 2.5
+min([3, 1, 5, 2]);                                            // 1
+max([3, 1, 5, 2]);                                            // 5
+median([1, 2, 3, 4]);                                         // 2.5
+median([1, 2, 3]);                                            // 2
 
-**min**
-- `reduce` with no initial → seed `acc=4`, start at index 1.
-- `i=1`: `1 < 4` → `acc=1`. `i=2`: `7<1` no. `i=3`: `3<1` no. `i=4`: `9<1` no. `i=5`: `2<1` no.
-- Return `1`.
+percentile([1, 2, 3, 4, 5], 50);                              // 3
+percentile([1, 2, 3, 4, 5], 95);                              // 4.8
+percentile(latencies, 99);                                    // p99
 
-**sum**
-- `acc=0`; iter: 4, 5, 12, 15, 24, 26. Return `26`.
+// NaN handling
+const arr = [1, NaN, 3];
+const clean = arr.filter(x => !Number.isNaN(x));
+max(clean);                                                    // 3
 
-**avg**
-- `26 / 6 = 4.333...`. Return `4.333...`.
+// Avoid spread trap
+const big = new Array(500_000).fill(1).map((_, i) => Math.random());
+// Math.max(...big);  → RangeError on V8
+max(big);                                                      // safe
 
-**median**
-- `sorted = [1, 2, 3, 4, 7, 9]`. `n=6`, even. `mid=3`. Return `(sorted[2] + sorted[3]) / 2 = (3 + 4) / 2 = 3.5`.
-- Verify: original `arr` is **unchanged** — `[...arr].sort` created a fresh copy.
+// Single-pass min and max
+function minMax(arr) {
+  let mn = Infinity, mx = -Infinity;
+  for (const x of arr) {
+    if (x < mn) mn = x;
+    if (x > mx) mx = x;
+  }
+  return { min: mn, max: mx };
+}
+```
 
-Edge runs:
-- `min([])` → `undefined`. `sum([])` → `0`. `avg([])` → `NaN`. `median([])` → `undefined`.
-- `min([5])` → `reduce` with single element + no initial returns it directly. → `5`. Same for `max`, `median`.
-- `max([1, NaN, 3])` with `Math.max` would be `NaN`; with the `(a > b ? a : b)` reducer, `NaN > x` is always false, so `NaN` slips through depending on order. **If NaN may appear, filter first:** `arr.filter(Number.isFinite)`.
+---
 
-## Important takeaways
+## 9. Step-by-step dry run
 
-**Syntax to memorize**
-- `arr.reduce((a, b) => a + b, 0)` — sum with safe initial.
-- `[...arr].sort((a, b) => a - b)` — numeric sort, non-mutating.
-- `n >> 1` — fast floor-divide-by-2. Equivalent to `Math.floor(n / 2)` for non-negative integers.
+```
+sum([1, 2, 3, 4]):
+  reduce(0, 1) = 1.
+  reduce(1, 2) = 3.
+  reduce(3, 3) = 6.
+  reduce(6, 4) = 10.
 
-**Patterns to reuse**
-- Replace `Math.max(...arr)` with `arr.reduce((a, b) => Math.max(a, b), -Infinity)` whenever array size is unbounded. Same for `Math.min`.
-- Always provide an explicit initial value to `reduce` unless you genuinely want first-element-as-seed semantics.
+median([4, 1, 3, 2]):
+  sorted = [1, 2, 3, 4]. n=4 even.
+  mid = 2. avg(sorted[1], sorted[2]) = (2+3)/2 = 2.5.
 
-**Common mistakes**
-- `arr.sort()[mid]` — string sort, wrong result, also mutates input.
-- `Math.max(...arr)` on large arrays — `RangeError`. Real production bug pattern.
-- `avg([]) === 0` — wrong; division by 0 is `NaN`. Decide the contract and document it.
-- Forgetting that `NaN` poisons comparisons. `NaN < anything` and `NaN > anything` are both false.
-- Using `arr.reduce((a, b) => a + b)` without an initial on potentially empty arrays — throws.
+median([4, 1, 3, 2, 5]):
+  sorted = [1, 2, 3, 4, 5]. n=5 odd.
+  mid = 2. sorted[2] = 3.
 
-**Related questions**
-- p95 / p99 from a latency array (sort then `arr[Math.floor(0.95 * n)]`).
-- Variance + standard deviation (Welford's algorithm for numerical stability).
-- Rolling window min/max with a deque (monotonic queue) — O(n) instead of O(n log n).
+Math.min(...bigArr) where len = 500_000:
+  Spread expands to 500k function args.
+  V8 caps args ~65k-500k → RangeError.
+  
+  vs reduce: O(n) but no spread. No limit.
 
-## Variants
+[10, 1, 5].sort():
+  Default stringifies: "10", "1", "5".
+  Compare as strings: "1" < "10" < "5".
+  Result: [1, 10, 5]. WRONG numeric order.
 
-1. **Streaming aggregator** — `Math.min`/`max`/`sum`/`count` updated on each push, no array stored. Use a class with `add(x)` and `value()` methods. Common for log-processing problems.
-2. **Welford online mean + variance** — numerically stable single-pass: `mean += (x - mean) / n; M2 += (x - mean_old) * (x - mean_new);`. Pulled out in any senior data-eng interview.
-3. **Percentile** — generalize `median` to `quantile(arr, q)`. Indexing: `sorted[Math.floor(q * (n - 1))]` (nearest-rank) vs linear-interpolation (R-7 method). Clarify with interviewer.
+[10, 1, 5].sort((a, b) => a - b):
+  Numeric: 1, 5, 10. CORRECT.
+```
 
-## Revision notes
+---
 
-> **Numeric array ops — 60 second recap**
-> - `Math.max(...arr)` blows the stack around 100k elements. Use `arr.reduce((a,b)=>a>b?a:b, -Infinity)`.
-> - `arr.sort()` **stringifies**. ALWAYS pass `(a, b) => a - b` for numeric sort.
-> - `[...arr].sort(...)` to avoid mutating; or ES2023 `arr.toSorted(...)`.
-> - `sum`: `reduce((a,b)=>a+b, 0)` — initial 0 means `sum([]) === 0`.
-> - `avg([])` → `NaN`. `min([])`/`max([])`/`median([])` → `undefined`. Pick contracts and document.
-> - `median`: sort first, even length → average two middle elements.
-> - `NaN` poisons `>`/`<` comparisons; filter with `Number.isFinite` if dirty data is possible.
-> - Big-O: min/max/sum O(n); median O(n log n); quickselect O(n) average.
-> - **Trap:** mutating input via `.sort()` without spreading. Burns callers.
-> - **Trap:** `Math.min()` with no args → `Infinity`; `Math.max()` → `-Infinity`. Test your guards.
+## 10. Common confusion + traps
+
+1. **`Math.min(...arr)`** — stack overflow ~100k+.
+2. **`[10, 1, 5].sort()`** — lex order.
+3. **`Math.min()`** with no args → Infinity.
+4. **NaN poisons** Math.min/max.
+5. **`reduce` without init** — empty throws (or seed bug).
+6. **`median` doesn't mutate** — clone before sort.
+7. **Integer overflow** — no in JS (BigInt for huge sums).
+
+---
+
+## 11. Senior follow-ups & variants
+
+### Variant 1 — Percentile
+Linear interpolation between adjacent sorted values.
+
+### Variant 2 — Streaming min/max
+Single-pass; no storage; or running window (deque).
+
+### Variant 3 — Running variance / stddev
+Welford's online algorithm.
+
+### Variant 4 — Median of medians
+O(n) selection (theoretical; rarely used).
+
+### Variant 5 — `BigInt` for huge sums
+Avoids precision loss; can't use Math directly.
+
+---
+
+## 12. How to think aloud
+
+> "Numeric array ops have two classic traps: (1) `Math.min(...arr)` blows the stack around 100k elements because spread expands to function arguments and engines cap them. Use `reduce((a,b) => b<a ? b : a)` instead — no spread, no limit. (2) `[10, 1, 5].sort()` returns `[1, 10, 5]` because default sort stringifies elements and compares lex — `'1' < '10' < '5'`. Always pass `(a,b)=>a-b` for numerics. Other edges: `Math.min()` with no args returns `Infinity`; NaN poisons Math.min/max — filter first. `median`: clone, sort numerically, middle element (odd) or average of mid pair (even). `percentile`: linear interpolation between adjacent sorted indices. Single-pass `minMax` for both at once. `BigInt` for sums that exceed 2^53. Streaming variance: Welford's online algorithm. Trap: spread on large; default sort; reduce no init (empty throws); NaN poisoning; integer precision past 2^53."
+
+---
+
+## 13. 60-second revision
+
+> - **`reduce` with explicit init.**
+> - **Numeric sort:** `(a,b)=>a-b`.
+> - **Avoid spread** for large arrays.
+> - **`Math.min()` no args → Infinity.**
+> - **NaN poisons** — filter first.
+> - **`median`:** clone, sort, middle or pair-avg.
+> - **`percentile`:** linear interpolation.
+> - **Single-pass minMax** for both.
+> - **`BigInt`** for huge sums.
+> - **Trap:** spread stack overflow; lex sort; NaN; empty no init.
+
+---
+
+**Related:** [polyfill-reduce.md](./polyfill-reduce.md) · [sort-by-multiple-keys.md](./sort-by-multiple-keys.md) · [polyfill-some-every.md](./polyfill-some-every.md)
+
+**Concept primer:** [`concepts/arrays.md`](../../concepts/arrays.md)

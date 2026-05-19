@@ -1,104 +1,152 @@
-# Implement a Tiny Observable / Subject (RxJS-lite)
+# Implement a tiny Observable / `Subject` (RxJS-lite)
 
-## Source
-- Canonical reactive-programming machine-coding problem (RxJS `Subject`, Angular EventEmitter, MobX reactions).
-- Asked at frontend-leaning senior rounds and at backend interviews that touch event-driven systems (SSE, WebSockets, change streams).
+> **Difficulty:** Medium   |   **Time:** ~25 min   |   **Prereqs:** [event-emitter.md](./event-emitter.md), [pub-sub.md](./pub-sub.md)
+>
+> **Source:** RxJS `Subject` source, Angular `EventEmitter`, MobX reactions. Asked at frontend-leaning senior rounds and at backend interviews touching event-driven systems.
 
-## Why this question matters in interviews
-Subject is the bridge between **imperative pub/sub** (Node's `EventEmitter`) and **declarative reactive streams** (RxJS Observables). Implementing one in ~30 lines tests **class state**, **iteration over a `Set` while it mutates**, **teardown via returned unsubscribe**, **error/completion as terminal states**, and the **hot vs cold** distinction. Interviewers reach for it when they want to probe whether you understand reactive systems beyond surface-level — change feeds, websocket fan-out, real-time price ticks, log multiplexers, server-sent events. The implementation is small; the conceptual surface (multicasting, replay, backpressure) is enormous.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
-```js
-class Subject {
-  constructor() {
-    this.subscribers = new Set();
-    this.closed = false;
-  }
-
-  subscribe(observer) {
-    if (this.closed) return () => {};
-    const obs = typeof observer === 'function' ? { next: observer } : observer;
-    this.subscribers.add(obs);
-    return () => this.subscribers.delete(obs);   // teardown
-  }
-
-  next(value) {
-    if (this.closed) return;
-    for (const obs of [...this.subscribers]) obs.next?.(value);
-  }
-
-  error(err) {
-    if (this.closed) return;
-    this.closed = true;
-    for (const obs of [...this.subscribers]) obs.error?.(err);
-    this.subscribers.clear();
-  }
-
-  complete() {
-    if (this.closed) return;
-    this.closed = true;
-    for (const obs of [...this.subscribers]) obs.complete?.();
-    this.subscribers.clear();
-  }
+**Signature**
+```ts
+class Subject<T> {
+  subscribe(observer: ((v: T) => void) | { next?(v: T); error?(e: any); complete?() }): () => void;
+  next(value: T): void;
+  error(err: any): void;
+  complete(): void;
 }
 ```
 
-### Runtime / engine behavior
-- `subscribers` is a `Set` for O(1) add/delete. The `Set` preserves insertion order — observers fire in subscription order.
-- The `[...this.subscribers]` copy before iterating is **load-bearing**. If a subscriber calls `unsubscribe()` (or another `subscribe`) inside its `next` handler, mutating the Set mid-iteration would either skip a subscriber or invoke the new one in the same tick. Snapshotting fixes both.
-- `closed = true` is a one-way latch. After `error` or `complete`, all further `next`/`error`/`complete` calls are silently dropped. New subscribers after termination get an immediate no-op teardown.
-- The returned unsubscribe function captures `obs` in its closure. This is a textbook closure-as-handle pattern.
-- Subjects are **hot**: values are pushed regardless of subscribers. A subscriber that joins after `next(1)` never sees that `1`. Compare with cold Observables that re-run a producer per subscription.
+**Input / Output examples**
 
-### Edge cases (these are the interview traps)
-1. **Re-entrancy** — handler calls `subject.next(x)` again. Without iteration-snapshot, you'd recurse over a mutating Set. With snapshot, the nested `next` enqueues its own loop and runs after the current one returns (or synchronously, but over its own snapshot).
-2. **Subscribing inside a handler** — the new subscriber should NOT receive the value currently being delivered (it joined mid-delivery). Snapshot-before-iteration gives this for free.
-3. **Unsubscribing inside a handler** — same observer can `unsubscribe` itself in `next`. Snapshot makes the current pass complete cleanly; future `next` calls skip the removed observer.
-4. **`error` and `complete` are terminal** — both set `closed=true`. After either, the Subject is dead. Don't conflate `error` with a transient "error event."
-5. **Multicast vs unicast** — Subject is multicast (one push, all subscribers see it). A plain Observable in RxJS is unicast (each subscriber gets its own producer). Subject = hot multicast.
-6. **Memory leak via long-lived subscribers** — a subscriber holds references to whatever its callbacks close over. If you never unsubscribe (e.g., long-running websocket fan-out), those references accumulate. Always return the unsubscribe and call it on cleanup.
-7. **Async observer methods** — `obs.next?.(v)` is called synchronously. If `next` is async, the returned promise is ignored. That's intentional for Subject. If you need to wait, you need a different abstraction (a backpressured stream).
-8. **Cold Observable** — would be: `new Observable(subscriber => { /* producer code */ return teardown; })`. Each `subscribe` re-runs the producer. Subject is the explicit hot version.
+| Setup                                                          | Behaviour                                                |
+|-----------------------------------------------------------------|----------------------------------------------------------|
+| `s.next(1); s.subscribe(log); s.next(2)`                        | new subscriber misses `1`, sees `2` (hot)                |
+| Subscriber unsubscribes inside its own `next` handler           | next call cleanly skips it; other subs unaffected        |
+| One subscriber throws inside `next`                             | other subscribers still receive the value                |
+| `s.complete(); s.next(x)`                                       | `next` is a no-op; Subject is closed                     |
+| `s.error(e)` then `s.complete()`                                | second call ignored; closed latch is one-way             |
+| `s.complete(); s.subscribe(log)`                                | returns no-op unsubscribe; subscriber never fires        |
 
-## Brute force approach
-"I'll use an array and `.push`/`.indexOf`/`.splice`." Works but `splice` is O(n). For a small number of subscribers it's fine; for thousands (a websocket fan-out server) it's a real cost. State the trade-off and reach for `Set`.
+**Constraints**
+- `Set<Observer>` — O(1) add/delete + insertion-order iteration.
+- Snapshot before iterating in `next`/`error`/`complete`.
+- `closed` latch is one-way; terminal `error`/`complete` set it.
+- Subject is **hot multicast**: late subscribers miss prior values.
 
-Another non-starter: storing callbacks as plain functions and returning their index as a "token." Forces lookup math on unsubscribe and breaks if you reorder. Stick with Set + closure-captured reference.
+---
 
-## Optimal approach
-`Set` of observer objects (`{next, error, complete}`). `subscribe` adds and returns a closure that deletes. `next`/`error`/`complete` iterate a **snapshot** of the Set, calling the matching handler. Terminal latch via `closed` boolean. O(1) subscribe/unsubscribe, O(n) per `next`.
+## 2. Plain-English restatement
 
-## Solution (JavaScript)
+A push-based event source. Subscribers attach handlers (`next`/`error`/`complete`) and receive values whenever `next` is called. After `error` or `complete`, the Subject is dead — no further events fire, new subscribers are no-ops. Difference from EventEmitter: explicit terminal states and the observer-object convention.
+
+---
+
+## 3. Why this matters in interviews
+
+Subject is the bridge between **imperative pub/sub** and **declarative reactive streams**. The implementation is ~30 lines but probes: class state, iteration-over-mutating-Set, teardown via returned unsubscribe, terminal states, hot vs cold distinction. Senior interviewers reach for it to test reactive-systems literacy — change feeds, websocket fan-out, real-time price ticks, log multiplexers.
+
+---
+
+## 4. Mental model
+
+```
+   Subject:
+   ┌─────────────────────────────────┐
+   │ subscribers: Set<Observer>      │
+   │ closed: boolean                 │
+   └─────────────────────────────────┘
+
+   subscribe(obs):
+     if closed → return () => {}
+     add obs to Set
+     return () => Set.delete(obs)
+
+   next(v):     iterate SNAPSHOT [...subscribers]; call obs.next?.(v)
+   error(e):    closed=true; fire obs.error?.(e); clear Set
+   complete():  closed=true; fire obs.complete?.(); clear Set
+
+   HOT MULTICAST:
+   s.next(1)                  ← nobody home, value drops
+   s.subscribe(A)
+   s.next(2)                  → A sees 2
+   s.subscribe(B)
+   s.next(3)                  → A and B both see 3
+   s.complete()               → A.complete fires, B.complete fires; closed=true
+   s.next(4)                  ← no-op
+```
+
+**Hot vs cold:** Subject is hot (push regardless of subscribers). A cold `Observable` re-runs its producer per subscription.
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. If a subscriber calls `unsub()` inside its `next` handler, do the other subscribers still see this value?
+> 2. After `complete()`, what does calling `next(x)` do? What about a new `subscribe(log)`?
+> 3. If one subscriber's `next` throws, does the Subject keep firing the other subscribers?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: Array + splice
+```js
+this.subs = [];
+this.subs.push(obs);
+const i = this.subs.indexOf(obs); this.subs.splice(i, 1);
+```
+Works but `splice` is O(n). For thousands of subscribers (websocket fan-out), real cost. Set is O(1).
+
+### Wrong attempt 2: iterate the live Set
+```js
+for (const obs of this.subscribers) obs.next?.(v);
+```
+If an `obs.next` unsubscribes itself or others, iteration is engine-defined. Snapshot first.
+
+### Wrong attempt 3: no closed latch
+Without `closed`, `complete()` followed by `next(x)` still fires handlers. Or `complete()` runs twice → handlers fire twice. Latch with one-way boolean.
+
+---
+
+## 7. The unlocking insight
+
+> **`Set<Observer>` for O(1) add/delete and insertion-order iteration. `closed` latch for terminal states. `next` iterates a SNAPSHOT (`[...subscribers]`) so handlers can safely subscribe/unsubscribe mid-emit. Wrap each handler in try/catch so one thrower doesn't stop the rest.**
+
+Three properties:
+
+1. **`Set<Observer>`** — observer is `{next?, error?, complete?}` (or a plain function for `next`).
+2. **`closed` one-way latch** — set by `error` or `complete`; gates all further mutation.
+3. **Snapshot + per-handler try/catch** — isolation and concurrent-modification safety.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
-/**
- * Minimal hot multicast Subject — RxJS-lite.
- * Observer shape: { next?, error?, complete? } or a plain `next` function.
- */
 class Subject {
   constructor() {
-    this.subscribers = new Set();
-    this.closed = false;
+    this.subscribers = new Set();                                  // step 1: O(1) ops, insertion order
+    this.closed = false;                                            // step 2: terminal latch
   }
 
   subscribe(observerOrNext) {
-    if (this.closed) return () => {};
+    if (this.closed) return () => {};                               // step 3: post-terminal no-op
     const observer =
       typeof observerOrNext === 'function'
         ? { next: observerOrNext }
         : observerOrNext;
     this.subscribers.add(observer);
-    return () => this.subscribers.delete(observer);
+    return () => this.subscribers.delete(observer);                 // step 4: closure-returned cleanup
   }
 
   next(value) {
     if (this.closed) return;
-    // Snapshot to survive in-handler subscribe/unsubscribe.
-    for (const obs of [...this.subscribers]) {
+    for (const obs of [...this.subscribers]) {                       // step 5: SNAPSHOT
       try { obs.next?.(value); }
-      catch (err) { queueMicrotask(() => { throw err; }); } // don't break the loop
+      catch (err) { queueMicrotask(() => { throw err; }); }          // isolate, re-throw async
     }
   }
 
@@ -106,7 +154,7 @@ class Subject {
     if (this.closed) return;
     this.closed = true;
     for (const obs of [...this.subscribers]) {
-      try { obs.error?.(err); } catch { /* swallow during teardown */ }
+      try { obs.error?.(err); } catch {}
     }
     this.subscribers.clear();
   }
@@ -115,15 +163,13 @@ class Subject {
     if (this.closed) return;
     this.closed = true;
     for (const obs of [...this.subscribers]) {
-      try { obs.complete?.(); } catch { /* swallow */ }
+      try { obs.complete?.(); } catch {}
     }
     this.subscribers.clear();
   }
 }
-```
 
-A `BehaviorSubject` variant (replays the last value to new subscribers):
-```js
+// BehaviorSubject — replays the last value to new subscribers
 class BehaviorSubject extends Subject {
   constructor(initial) { super(); this.value = initial; }
   subscribe(o) {
@@ -135,78 +181,115 @@ class BehaviorSubject extends Subject {
 }
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
-Input:
 ```js
 const s = new Subject();
 const log = (tag) => (v) => console.log(tag, v);
 
 const offA = s.subscribe(log('A'));
-s.next(1);                          // A 1
+s.next(1);                             // A 1
 
 const offB = s.subscribe(log('B'));
-s.next(2);                          // A 2, then B 2
+s.next(2);                             // A 2, B 2
 
 offA();
-s.next(3);                          // B 3
+s.next(3);                             // B 3
 
 s.complete();
-s.next(4);                          // nothing — Subject is closed
-s.subscribe(log('C'));              // returns no-op; C never fires
+s.next(4);                             // (nothing, closed)
+s.subscribe(log('C'));                 // returns no-op; C never fires
 ```
 
-Trace:
-- `subscribe(log('A'))`: add `{next: log('A')}` to Set. Return unsubscribe closure.
-- `next(1)`: snapshot=`[A]`. Call `A.next(1)` → `A 1`.
-- `subscribe(log('B'))`: add B.
-- `next(2)`: snapshot=`[A, B]`. Fire `A 2`, then `B 2`. Insertion order preserved.
-- `offA()`: delete A from Set.
-- `next(3)`: snapshot=`[B]`. Fire `B 3`.
-- `complete()`: closed=true. Fire `B.complete?.()` (no handler given → noop). Clear set.
-- `next(4)`: closed → return. No output.
-- `subscribe(log('C'))`: closed → return no-op teardown. C never registered.
+---
 
-## Important takeaways
+## 9. Step-by-step dry run
 
-**Syntax to memorize**
-- `Set` of observers; closure-returned unsubscribe.
-- **Snapshot before iterating** (`[...this.subscribers]`). This is the bug that catches everyone.
-- `closed` latch for terminal states (`error` and `complete` both set it).
-- Observer shape: `{next?, error?, complete?}`. Use `?.` to skip missing methods.
+```
+const s = new Subject()                                    state: subs={}, closed=false
+const offA = s.subscribe(log('A'))                         subs={A}
+s.next(1)                                                   snapshot=[A]; A.next(1) → 'A 1'
+const offB = s.subscribe(log('B'))                         subs={A, B}
+s.next(2)                                                   snapshot=[A, B]; A.next(2), B.next(2) → 'A 2', 'B 2'
+offA()                                                       subs={B}
+s.next(3)                                                   snapshot=[B]; B.next(3) → 'B 3'
+s.complete()                                                 closed=true; for [B]: B.complete?.() (noop); subs={}
+s.next(4)                                                   closed=true → return; no output
+s.subscribe(log('C'))                                       closed=true → return () => {}; C never registered
+```
 
-**Patterns to reuse**
-- "Set + closure-returned cleanup" is the canonical event-subscription pattern. Same shape as DOM `addEventListener` (where the cleanup returns nothing and you must remember the listener), `setInterval` (returns a handle), `MutationObserver` (returns `disconnect()`).
-- Hot vs cold distinction generalizes: `EventEmitter` is hot, `function*` generators are cold, async iterators can be either.
+In-handler unsubscribe:
+```
+sub1 subscribes; sub2 subscribes — subs={sub1, sub2}
+sub1.next = (v) => { ...; sub1Unsub(); s.subscribe(sub3) }
+s.next('x'):
+  snapshot=[sub1, sub2]
+  iterate snapshot:
+    fn=sub1: handles v. Inside handler: subs={sub2}, then subs={sub2, sub3}
+                       ↑ live mutation; snapshot unchanged
+    fn=sub2: still in snapshot → fires.
+  sub3 NOT fired this round.
+After next: subs={sub2, sub3}.
+```
 
-**Common mistakes**
-- Iterating `this.subscribers` directly without snapshot → reentrant `unsubscribe` skips a subscriber or visits a new one.
-- Not latching `closed` → calling `complete()` twice fires `complete` handlers twice.
-- Letting one thrown handler crash the whole `next` loop. Wrap in try/catch and rethrow async (`queueMicrotask`) so other subscribers still get the value.
-- Confusing Subject (hot, multicast, state-bearing) with Observable (cold, unicast, lazy).
+---
 
-**Related questions**
-- Node `EventEmitter` polyfill — same idea, different API (string event names).
-- `BehaviorSubject` (replay-last-value), `ReplaySubject` (replay-N), `AsyncSubject` (emit-only-on-complete).
-- Cold Observable: `new Observable(subscriber => { producer; return teardown; })`.
+## 10. Common confusion + traps
 
-## Variants
+1. **Iterating the live Set** — reentrant subscribe/unsubscribe causes inconsistent fan-out.
+2. **No `closed` latch** — `complete()` twice fires handlers twice; `next` after `complete` still dispatches.
+3. **Letting one thrower kill the loop** — wrap each `obs.next?.(v)` in try/catch.
+4. **Confusing Subject (hot multicast) with Observable (cold unicast)** — Subject pushes regardless; Observable re-runs producer per subscription.
+5. **Async `next` handlers** — `obs.next?.(v)` is called sync; returned promise is ignored.
+6. **Memory leak via long-lived subscribers** — closures retain everything. Always pair `subscribe` with cleanup.
+7. **BehaviorSubject replay timing** — replay happens during subscribe, before subsequent `next` calls.
 
-1. **`BehaviorSubject`** — holds a "current value." New subscribers immediately receive it. Used everywhere in MobX/Angular for state-bearing streams.
+---
 
-2. **`ReplaySubject(n)`** — buffers the last `n` values. New subscribers receive the buffer on subscribe. Useful for late-joiners to a feed.
+## 11. Senior follow-ups & variants
 
-3. **Backpressure-aware Subject** — if `next` returns a Promise, the Subject `await`s before delivering to the next subscriber. Converts the API from sync fan-out to serial-async fan-out. Trade-off: slow subscribers block fast ones.
+### Variant 1 — `BehaviorSubject`
+Holds a "current value." New subscribers immediately receive it. State-bearing streams (MobX, Angular services).
 
-4. **Typed Subject (TypeScript)** — `class Subject<T> { ... next(v: T) ... }`. Forces the value type at the boundary. Trivial syntax change, big DX win in real codebases.
+### Variant 2 — `ReplaySubject(n)`
+Buffers last `n` values. New subscribers receive the buffer on subscribe.
 
-## Revision notes
+### Variant 3 — `AsyncSubject`
+Only emits to subscribers when `complete()` is called — the **last** value before completion.
 
-> **Subject — 60 second recap**
-> - `Set<Observer>`, `closed` latch.
-> - `subscribe(obs) → add to Set, return () => Set.delete(obs)`.
-> - `next(v)`: iterate **snapshot** of Set, call `obs.next?.(v)` on each.
-> - `error(e)`/`complete()`: set `closed=true`, fire matching handler, clear Set.
-> - Subject is **hot multicast**. Late subscribers miss prior values (unless BehaviorSubject/ReplaySubject).
-> - Trap: iterating Set without snapshot → reentrancy bugs. One throwing handler must not break the loop.
-> - Same shape as `EventEmitter`; reactive cousin of `Promise` (multi-value vs single-value).
+### Variant 4 — Backpressure-aware Subject
+If `next` returns a Promise, await before next subscriber. Sync fan-out → serial-async fan-out. Slow subscribers block fast ones — trade-off.
+
+### Variant 5 — Cold Observable
+```js
+new Observable((subscriber) => {
+  const producer = ...;
+  return () => producer.cancel();   // teardown
+});
+```
+Each `subscribe` re-runs the producer. Subject is hot; Observable is cold.
+
+---
+
+## 12. How to think aloud
+
+> "`Set<Observer>` for O(1) add/delete and insertion-order iteration. `closed` boolean as a one-way latch — set by `error` or `complete`. `next` iterates a SNAPSHOT (`[...subscribers]`) so handlers can subscribe/unsubscribe mid-emit. Each handler call wrapped in try/catch — one thrower must not break the loop; rethrow async via `queueMicrotask` so test runners and global error handlers still see it. Subject is hot multicast — late subscribers miss prior values. BehaviorSubject replays last value to new subscribers. Cold Observable re-runs producer per subscription. Trap: iterating live Set without snapshot. Trap: no `closed` latch."
+
+---
+
+## 13. 60-second revision
+
+> - **`Set<Observer>` + `closed` latch.**
+> - **`subscribe`** returns closure that deletes from Set; no-op if already closed.
+> - **`next`** iterates SNAPSHOT (`[...subscribers]`), try/catch per handler.
+> - **`error` / `complete`** set `closed=true`, fire matching handler, clear Set.
+> - **Hot multicast** — late subscribers miss prior values.
+> - **`BehaviorSubject`** = replays last value; **`ReplaySubject(n)`** = buffers N.
+> - **vs cold Observable** — cold re-runs producer per subscription.
+> - **Trap:** iterate live Set; no `closed` latch; one thrower breaking loop.
+
+---
+
+**Related:** [event-emitter.md](./event-emitter.md) · [pub-sub.md](./pub-sub.md) · [`04-promises/async-generator-producer.md`](../04-promises/async-generator-producer.md) · [`06-streams/backpressure-and-highwater.md`](../06-streams/backpressure-and-highwater.md)
+
+**Concept primer:** [`concepts/maps-sets.md`](../../concepts/maps-sets.md)

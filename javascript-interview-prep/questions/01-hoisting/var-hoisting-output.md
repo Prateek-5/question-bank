@@ -1,137 +1,249 @@
-# Output prediction: `var` hoisting inside a function
+# `var` hoisting output prediction
 
-## Source
-Canonical senior-JS interview problem. MDN reference: https://developer.mozilla.org/en-US/docs/Glossary/Hoisting
+> **Difficulty:** Easy-Medium   |   **Time:** ~10 min   |   **Prereqs:** [hoisting-in-javascript.md](./hoisting-in-javascript.md)
+>
+> **Source:** #1 warm-up question on JS-rusty backend screens.
 
-## Why this question matters in interviews
-This is the #1 warm-up question on JS-rusty backend candidates. The interviewer doesn't care about the answer — they care whether you can articulate the **two-phase execution model** (creation phase + execution phase) and the **variable environment**. Senior backends often pattern-match `var` to "block-scoped local variable like in Go/Java," which is wrong on both axes (function-scoped + hoisted). If you fumble this, the interviewer assumes you'll fumble closures, TDZ, and async code that follows. Treat it as a 60-second test of your mental model of the engine.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
 ```js
 function f() {
-  console.log(a);  // undefined — NOT ReferenceError
+  console.log(a);
   var a = 2;
-  console.log(a);  // 2
+  console.log(a);
 }
-
 var a = 1;
 f();
 ```
 
-### Runtime / engine behavior
-- When a function is invoked, the engine creates an **Execution Context** with two sub-records: the **Variable Environment** (for `var` + function decls) and the **Lexical Environment** (for `let`/`const`/`class`).
-- **Creation phase**: every `var` declaration in the function body is registered in the Variable Environment and **initialized to `undefined`**. Function declarations get hoisted with their full body. This is "hoisting."
-- **Execution phase**: code runs top to bottom. Assignments (`a = 2`) update the binding. Until that assignment executes, `a` holds `undefined`.
-- `var` is **function-scoped**, not block-scoped. A `var` inside an `if` / `for` / `{}` block is hoisted to the enclosing function (or to the global object if at module/script top level, but ES modules behave slightly differently — top-level `var` does NOT become a property of `globalThis` in ESM).
-- The outer `a = 1` is shadowed inside `f()` because the inner `var a` creates a new binding in the function's VE — and that binding is the one resolved by the scope chain.
+What does this print? Explain via the two-phase execution model.
 
-### Edge cases (interview traps)
-1. **Shadowing happens during creation phase, not assignment** — the inner `a` exists from line 1 of the function, holding `undefined`. The outer `a = 1` is unreachable inside `f`.
-2. **Re-declaring `var`** is legal — `var a; var a;` is fine. `let a; let a;` is a `SyntaxError`.
-3. **`var` inside a block** still hoists to the function — `if (true) { var x = 5; } console.log(x);` prints `5`.
-4. **`typeof` safety** — `typeof undeclaredVar` returns `'undefined'` for truly undeclared identifiers. This is the only safe way to probe existence pre-`let`.
-5. **Function-declaration hoisting beats `var`** — if both `function foo(){}` and `var foo` exist, the function wins during creation. A later `foo = 5` overwrites the binding.
+**Answer:** `undefined`, then `2`.
 
-## Brute force approach
-Rusty candidate's first answer: *"It logs `1` then `2` — because `a` is declared outside."* Wrong. They're thinking lexical-scope-then-shadow, ignoring hoisting. Second guess: *"It throws because `a` isn't defined yet."* Also wrong — that's the `let`/TDZ behavior. The correct mental model needs both pieces: (a) the inner `var` shadows the outer, AND (b) hoisting initializes it to `undefined` before line 1.
+**Verification examples**
 
-## Optimal approach
-Mentally split the function body into two passes:
+| Variation                                            | Output                                  |
+|------------------------------------------------------|------------------------------------------|
+| Original                                              | `undefined, 2`                          |
+| Replace inner `var a = 2` with `let a = 2`            | `ReferenceError` (TDZ on first log)     |
+| Add `function a() {}` after var inside f              | tricky — function decl wins at creation |
+| Move outer `var a = 1` to inside f                    | same: inner var shadows                  |
 
-1. **Creation pass** — scan declarations, build the VE. `{ a: undefined }`.
-2. **Execution pass** — run statements. First `console.log(a)` reads VE → `undefined`. Then `a = 2` updates VE. Second `console.log(a)` reads VE → `2`.
+**Constraints**
+- `var` is function-scoped (not block).
+- Inner `var` shadows from line 1 of function (hoisted at creation).
+- Hoisted to `undefined`; assignment runs at execution time.
 
-This 2-pass framework answers every `var`-hoisting question you'll ever see.
+---
 
-## Solution (JavaScript)
+## 2. Plain-English restatement
+
+The inner `var a` is hoisted to the top of `f`'s VE as `undefined`. So when `console.log(a)` runs first, it reads `undefined` (NOT the outer `a = 1`, because the inner shadow already exists). Then `var a = 2` runs the assignment. Second log: `2`.
+
+---
+
+## 3. Why this matters in interviews
+
+The 60-second test of your engine mental model. Fumbling it signals you'll fumble closures, TDZ, and async ordering.
+
+---
+
+## 4. Mental model
+
+```
+   Two-pass execution per scope:
+
+   PASS 1 — CREATION (build VE)
+     scan all var declarations → bind to undefined
+     scan all function decls   → bind to full fn object
+
+   PASS 2 — EXECUTION (run code)
+     assignments update bindings
+     identifier reads walk scope chain
+
+   For our snippet:
+
+   Global VE after creation:
+     a → undefined
+     f → <function f>
+
+   f's VE after creation:
+     a → undefined         ← inner var a hoisted; SHADOWS outer
+
+   Execution:
+     var a = 1            global.VE.a = 1
+     f() called → push f's EC
+       console.log(a)     resolves to f.VE.a = undefined → print
+       var a = 2          f.VE.a = 2 (declaration already hoisted; just assigns)
+       console.log(a)     f.VE.a = 2 → print
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. Replace `var a = 2` with `let a = 2` — what changes?
+> 2. Why doesn't `console.log(a)` print `1`?
+> 3. What does `function f(a) { console.log(a); var a = 2; ...} f(7)` print?
+
+---
+
+## 6. Brute force — walked through
+
+### Wrong attempt 1: "prints 1 then 2"
+Lexical-scope-then-shadow without hoisting. Misses the inner `var` shadow at creation.
+
+### Wrong attempt 2: "throws — `a` not defined yet"
+That's `let`/TDZ behavior. `var` initializes to `undefined`.
+
+### Wrong attempt 3: forget the two phases
+Misses why the inner `var` shadows from line 1, not from line 2.
+
+---
+
+## 7. The unlocking insight
+
+> **Inner `var` is hoisted at creation phase to `undefined`. From line 1 of `f`, the inner binding shadows the outer. First log reads `undefined`. Then assignment sets to 2. Second log reads 2.**
+
+Three properties:
+
+1. **Two-pass model** — creation then execution.
+2. **Hoist-to-undefined** — not TDZ, not "not defined".
+3. **Inner shadow from line 1** — not from declaration line.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
 var a = 1;
 
 function f() {
-  // CREATION PHASE of f's execution context:
-  //   VariableEnvironment = { a: undefined }    // inner `var a` hoisted
-  //   OuterEnv -> global { a: 1, f: <fn> }
+  // CREATION PHASE of f's EC:
+  //   VE = { a: undefined }          // inner var a hoisted
+  //   OuterEnv → global { a: 1, f: <fn> }
   //
   // EXECUTION PHASE:
-  console.log(a);   // reads VE.a -> undefined
-  var a = 2;        // declaration was already hoisted; this line only assigns
-  console.log(a);   // reads VE.a -> 2
+  console.log(a);                                                      // step 1: reads f.VE.a → undefined
+  var a = 2;                                                            // step 2: declaration was already hoisted; assigns only
+  console.log(a);                                                       // step 3: reads f.VE.a → 2
 }
 
 f();
-// Output:
-// undefined
-// 2
+// Output: undefined, 2
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
-Input: the snippet above.
+```js
+// Variant 1: replace var with let
+function g() {
+  console.log(a);                                                       // ReferenceError (TDZ)
+  let a = 2;
+}
+let a = 1;
+g();
 
-**Global Execution Context — Creation Phase**
-| Identifier | Value          |
-|------------|----------------|
-| `a`        | `undefined`    |
-| `f`        | `<function f>` |
+// Variant 2: parameter + var combo
+function h(a) {
+  console.log(a);   // prints argument (e.g., 7)
+  var a = 2;        // re-declare; no-op on existing binding
+  console.log(a);   // 2
+}
+h(7);
+// Parameters are initialized BEFORE body's var redeclarations.
 
-**Global Execution Context — Execution Phase**
-- `var a = 1;` → global VE becomes `{ a: 1, f: <fn> }`.
-- `f();` → push new Execution Context for `f`.
+// Variant 3: function decl beats var
+function i() {
+  console.log(typeof x);   // 'function' — function decl wins at creation
+  var x;
+  function x() {}
+  console.log(typeof x);   // 'function' still — var without initializer is no-op
+}
+i();
+```
 
-**`f`'s Execution Context — Creation Phase**
-| Identifier | Value          |
-|------------|----------------|
-| `a`        | `undefined`    | (because of `var a = 2` inside)
+---
 
-The scope chain is `f's VE -> global VE`. Lookup for `a` stops at `f`'s VE.
+## 9. Step-by-step dry run
 
-**`f`'s Execution Context — Execution Phase**
-- Line `console.log(a)` → look up `a` → finds local `a = undefined` → prints `undefined`.
-- Line `var a = 2` → assignment only (declaration already done) → local `a = 2`.
-- Line `console.log(a)` → prints `2`.
+```
+Global EC — Creation phase:
+  a → undefined           (hoisted var)
+  f → <function f>        (hoisted function decl)
 
-Pop `f`'s context. Global `a` is still `1`.
+Global EC — Execution phase:
+  var a = 1                 global.VE.a = 1
+  f()                       push f's EC
 
-## Important takeaways
+f's EC — Creation phase:
+  a → undefined             (inner var a hoisted; shadows outer)
+  OuterEnv → global
 
-**Syntax to memorize**
-- `var` declarations are hoisted and initialized to `undefined`.
-- `var` is **function-scoped**, not block-scoped.
-- The inner `var` shadows the outer **from the first line of the function**, not from its declaration line.
+f's EC — Execution phase:
+  console.log(a)            resolves f.VE.a = undefined → print 'undefined'
+  var a = 2                 f.VE.a = 2 (declaration already hoisted; assigns)
+  console.log(a)            f.VE.a = 2 → print 2
 
-**Patterns to reuse**
-- The two-phase model (creation → execution) generalizes to every hoisting question.
-- The "Variable Environment table" is the right whiteboard artefact when explaining hoisting live.
+Pop f's EC. Global a still 1 (untouched).
 
-**Common mistakes**
-- Saying "JS hoists the declaration to the top" is technically fine but obscures the mechanism. Say "the engine registers the binding during the creation phase."
-- Forgetting that hoisting is **per-function-scope**, not per-block, for `var`.
-- Assuming `console.log` before declaration throws — that's the `let`/`const` behavior.
+Output: undefined, 2
+```
 
-**Related questions**
-- TDZ with `let`/`const`
-- Function declaration vs expression hoisting
-- Loop closure with `var` vs `let`
-- `class` hoisting (TDZ)
+---
 
-## Variants
+## 10. Common confusion + traps
 
-1. **Same code, but change `var` to `let`** — now the first `console.log(a)` throws `ReferenceError: Cannot access 'a' before initialization` (TDZ). Outer `a = 1` is shadowed but inaccessible inside `f`.
+1. **"declarations move to the top"** — nothing physically moves; engine pre-registers.
+2. **Inner `var` shadows from line 2** — no, from line 1 (creation phase).
+3. **First log prints outer `a`** — no, inner shadow exists from creation.
+4. **Two `var` in same scope** — silent re-declare; second initializer wins.
+5. **`var` inside `if` is block-scoped** — function-scoped; leaks.
+6. **Parameter + var combo** — params init first; var without initializer is no-op.
+7. **Function decl + var same name** — function decl wins at creation.
 
-2. **Hoisting + parameter** — `function f(a) { console.log(a); var a = 2; console.log(a); } f(7);` prints `7` then `2`. Parameters are initialized BEFORE the function body's `var` re-declarations; `var a` re-declares but doesn't reset to `undefined` (re-declaration without initializer is a no-op).
+---
 
-3. **Hoisting + nested function** — `function f() { console.log(typeof g); var g; function g(){} console.log(typeof g); }` prints `'function'` then `'function'`. Function declarations beat `var` during creation phase.
+## 11. Senior follow-ups & variants
 
-## Revision notes
+### Variant 1 — Replace inner `var` with `let`
+First log throws TDZ ReferenceError. Outer `a = 1` is shadowed but inaccessible.
 
-> **var hoisting — 60 second recap**
-> - Two phases: **creation** (register `var` as `undefined`, hoist `function` fully) → **execution** (run statements).
-> - `var` is **function-scoped** (not block).
-> - Inner `var` shadows outer from line 1 of the function — the outer binding is invisible inside.
-> - Reading a hoisted `var` before assignment → `undefined`. **Never throws.**
-> - Whiteboard trick: draw the VE table for each EC.
-> - Trap: confusing this with `let`/`const` TDZ behavior (which throws).
-> - Output of canonical snippet: `undefined`, then `2`.
+### Variant 2 — Parameter shadowing
+`function f(a) { console.log(a); var a = 2; }; f(7)` → `7, 2`. Param initialized first.
+
+### Variant 3 — Function decl + `var` same name
+`function g() { console.log(typeof g); var g; function g(){} console.log(typeof g); }` → `function, function`. Function wins; var without initializer is no-op.
+
+### Variant 4 — Nested fn shadowing
+Three nested fns each with `var x`; each `console.log(x)` resolves to nearest VE.
+
+### Variant 5 — Loop closure bug
+`for (var i = 0; i < 3; i++) setTimeout(() => log(i))` → `3, 3, 3` (shared i).
+
+---
+
+## 12. How to think aloud
+
+> "Two-phase model: creation registers bindings, execution runs code. f's creation: inner `var a` hoisted to `undefined`, shadowing the outer `a`. f's execution: first `console.log(a)` resolves to f's local `a` (undefined), then `var a = 2` runs the assignment (declaration already hoisted), second log reads 2. Output: undefined, 2. Trap: thinking inner var shadows only from its declaration line — it shadows from line 1 (creation phase). Trap: thinking first log throws — that's `let` behavior; `var` initializes to `undefined`."
+
+---
+
+## 13. 60-second revision
+
+> - **Two phases:** creation (hoist `var` → `undefined`) → execution (assign).
+> - **Inner `var` shadows from line 1** of function, not from declaration line.
+> - **Reading hoisted `var` before assignment** → `undefined` (NEVER throws).
+> - **`var` is function-scoped** (not block).
+> - **Whiteboard:** draw VE table per EC.
+> - **Output of canonical snippet:** `undefined, 2`.
+> - **Trap:** "prints 1, 2" (no — inner shadow); "throws" (no — that's `let`/TDZ).
+
+---
+
+**Related:** [hoisting-in-javascript.md](./hoisting-in-javascript.md) · [hoisting-and-scoping.md](./hoisting-and-scoping.md) · [function-declaration-vs-expression-hoisting.md](./function-declaration-vs-expression-hoisting.md) · [var-in-block.md](./var-in-block.md)
+
+**Concept primer:** [`concepts/hoisting.md`](../../concepts/hoisting.md)

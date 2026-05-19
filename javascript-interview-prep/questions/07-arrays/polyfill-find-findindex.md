@@ -1,173 +1,261 @@
-# Polyfill `Array.prototype.find` and `Array.prototype.findIndex`
+# Polyfill `Array.prototype.find` / `findIndex`
 
-## Source
-- Canonical ES6 polyfill interview problem (BFE.dev #46, GreatFrontEnd, codedamn).
-- MDN: [Array.prototype.find](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/find), [Array.prototype.findIndex](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/findIndex).
-- ECMAScript spec: https://tc39.es/ecma262/#sec-array.prototype.find
+> **Difficulty:** Foundation   |   **Time:** ~10 min   |   **Prereqs:** [polyfill-some-every.md](./polyfill-some-every.md), [polyfill-filter.md](./polyfill-filter.md)
+>
+> **Source:** BFE.dev #46, GreatFrontEnd, codedamn.
 
-## Why this question matters in interviews
-`find` / `findIndex` look like clones of `some` / `every` but **diverge on one spec rule** that interviewers love: they do **NOT skip holes**. They iterate every index including missing ones and call the predicate with `undefined`. This is a deliberate spec choice (ES6 cleanup) that catches even mid-level candidates off guard. The question tests: do you know the difference between "ES5 hole-skipping iterators" and "ES6+ non-skipping iterators"? Backend candidates often dismiss this as trivia until they realize `find` and `some` produce different results on sparse arrays — and they've shipped a bug because of it.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+Re-implement `find` and `findIndex`. They are ES6+ — and crucially, **do NOT skip holes** (unlike `some`/`every`/`map`/`filter`).
+
+**Verification examples**
+
 ```js
-// find — returns the first ELEMENT that passes predicate
-[1, 2, 3].find(x => x > 1);          // 2
-[1, 2, 3].find(x => x > 99);          // undefined
-
-// findIndex — returns the first INDEX that passes predicate
-[1, 2, 3].findIndex(x => x > 1);     // 1
-[1, 2, 3].findIndex(x => x > 99);    // -1
+[1, 2, 3].myFind(x => x > 1);            // 2
+[1, 2, 3].myFindIndex(x => x > 1);       // 1
+[1, 2, 3].myFind(x => x > 99);           // undefined
+[1, 2, 3].myFindIndex(x => x > 99);      // -1
+[, , , 3].myFind(x => true);             // undefined (hole at 0 visited as undefined; passes)
+                                          //   wait — predicate of `true` returns undefined.
+                                          //   Actually: visits index 0, pred(undefined)→true, returns undefined.
 ```
 
-### Runtime / engine behavior
-- Iterate `0` to `length - 1`, short-circuit on first truthy predicate.
-- **No hole-skipping.** Predicate is called with `undefined` for missing indices. This is the headline difference vs `some`/`every`/`map`/`filter`.
-- `length` is snapshotted once at start.
-- `thisArg` supported (second param).
-- `find` returns the **element** (or `undefined` if none); `findIndex` returns the **index** (or `-1` if none).
-- ES2023 added `findLast` / `findLastIndex` (same semantics, reverse iteration).
+**Constraints**
+- 3-arg predicate `(value, index, array)`.
+- `thisArg` second param.
+- **NO hole-skipping** (ES6 cleanup).
+- Short-circuit on first truthy.
+- `find` returns element (or undefined); `findIndex` returns index (or -1).
 
-### Edge cases (the interview traps)
-1. **Holes are visited** — `[,,,3].find(x => true)` returns `undefined` (the first hole, called as `undefined`, satisfies `true`). This is the canonical interview trap.
-2. **Distinguishing "not found" from "found undefined"** — `find` returning `undefined` is ambiguous; that's why `findIndex` exists. If you need to know whether the element exists, use `findIndex !== -1`.
-3. **Empty array** — `[].find()` → `undefined`; `[].findIndex()` → `-1`. No vacuous-truth twist (unlike `every`).
-4. **`thisArg` is the second arg** — same as `some`/`every`.
-5. **Predicate signature** — `(element, index, array)`, three args.
-6. **Mutation during iteration** — length is snapshotted, but already-passed indices reflect mutations (per spec). Don't mutate.
-7. **Strict equality NOT used** — these are predicate-driven, not value-driven (unlike `indexOf` which uses `===`).
+---
 
-## Brute force approach
-Some candidates reach for `arr.filter(fn)[0]` for `find`. Three problems:
-- No short-circuit — full pass even after match.
-- O(n) memory for intermediate array.
-- `filter` **skips holes**, so behavior diverges from native `find` on sparse arrays.
+## 2. Plain-English restatement
 
-Avoid this. The polyfill must be a hand-written loop.
+`find` returns first ELEMENT where predicate truthy; `findIndex` returns first INDEX. Both visit ALL indices including holes (where value is `undefined`). Returns `undefined`/`-1` if none found.
 
-## Optimal approach
-For loop from `0` to `length - 1`. No `i in this` check — visit every index. Call predicate with `(O[i], i, O)` (where `O[i]` is `undefined` for holes). Short-circuit on truthy result: return `O[i]` from `find`, `i` from `findIndex`. Fall through with `undefined` / `-1`.
+---
 
-O(n) time, O(1) space.
+## 3. Why this matters in interviews
 
-## Solution (JavaScript)
+The "trap" question: `find` / `findIndex` look like clones of `some` but they DON'T skip holes. ES6 deliberately cleaned this up. `[,,,3].find(x=>true)` returns `undefined` (the first hole passes). Common bug.
+
+---
+
+## 4. Mental model
+
+```
+   find(pred, thisArg):
+     for i in 0..len-1:
+       v = this[i]                       ← read directly; no `i in this`
+       if Boolean(pred.call(thisArg, v, i, this)):
+         return v                         ← short-circuit
+     return undefined
+
+   findIndex same but returns i (or -1).
+   
+   Key difference vs some/every/map/filter:
+     find/findIndex visit ALL indices.
+     Holes read as undefined and pred IS called.
+   
+   ES2023: findLast / findLastIndex — same semantics, reverse iter.
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. `[,,,3].find(x => true)` returns what?
+> 2. Can `find` distinguish "found undefined" from "not found"?
+> 3. Does `find` skip holes like `some` does?
+
+---
+
+## 6. Brute force — walked through
 
 ```js
-// ---- find ----
-Array.prototype.myFind = function (predicate, thisArg) {
-  if (this == null) throw new TypeError('myFind called on null or undefined');
-  if (typeof predicate !== 'function') {
-    throw new TypeError(`${predicate} is not a function`);
-  }
-
-  const O = Object(this);
-  const len = O.length >>> 0;
-
-  for (let i = 0; i < len; i++) {
-    // NOTE: no `i in O` check — find visits holes
-    const value = O[i];
-    if (predicate.call(thisArg, value, i, O)) {
-      return value;
-    }
+arr.find = function(pred) {
+  for (let i = 0; i < this.length; i++) {
+    if (i in this && pred(this[i])) return this[i];   // BUG: skips holes — wrong spec
   }
   return undefined;
 };
+```
 
-// ---- findIndex ----
-Array.prototype.myFindIndex = function (predicate, thisArg) {
-  if (this == null) throw new TypeError('myFindIndex called on null or undefined');
-  if (typeof predicate !== 'function') {
-    throw new TypeError(`${predicate} is not a function`);
-  }
+The bug: ES6 `find` does NOT skip holes. Use the index without `in` check.
 
-  const O = Object(this);
-  const len = O.length >>> 0;
+---
 
-  for (let i = 0; i < len; i++) {
-    // NOTE: no `i in O` check
-    if (predicate.call(thisArg, O[i], i, O)) {
-      return i;
+## 7. The unlocking insight
+
+> **Visit ALL indices (no hole-skipping). Read `this[i]` directly; predicate sees `undefined` at holes. Short-circuit on truthy.**
+
+Three properties:
+
+1. **No hole-skipping** — visit every index.
+2. **Short-circuit** on first truthy.
+3. **Default returns** — `undefined` for find, `-1` for findIndex.
+
+---
+
+## 8. Solution (annotated)
+
+```js
+Object.defineProperty(Array.prototype, 'myFind', {
+  enumerable: false,
+  value: function (callback, thisArg) {
+    if (this == null) throw new TypeError('myFind on null/undefined');
+    if (typeof callback !== 'function') throw new TypeError('cb not callable');
+
+    const O = Object(this);
+    const len = O.length >>> 0;
+    for (let i = 0; i < len; i++) {
+      const v = O[i];                                                    // step 1: read (NO `i in O` check)
+      if (callback.call(thisArg, v, i, O)) return v;                     // step 2: short-circuit element
     }
-  }
-  return -1;
-};
+    return undefined;                                                     // step 3: default
+  },
+});
+
+Object.defineProperty(Array.prototype, 'myFindIndex', {
+  enumerable: false,
+  value: function (callback, thisArg) {
+    if (this == null) throw new TypeError('myFindIndex on null/undefined');
+    if (typeof callback !== 'function') throw new TypeError('cb not callable');
+
+    const O = Object(this);
+    const len = O.length >>> 0;
+    for (let i = 0; i < len; i++) {
+      if (callback.call(thisArg, O[i], i, O)) return i;                  // step 4: short-circuit index
+    }
+    return -1;                                                            // step 5: default
+  },
+});
+
+// ES2023: findLast / findLastIndex
+Object.defineProperty(Array.prototype, 'myFindLast', {
+  enumerable: false,
+  value: function (callback, thisArg) {
+    const O = Object(this);
+    const len = O.length >>> 0;
+    for (let i = len - 1; i >= 0; i--) {                                 // reverse iteration
+      const v = O[i];
+      if (callback.call(thisArg, v, i, O)) return v;
+    }
+    return undefined;
+  },
+});
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
-Input 1 — normal case:
 ```js
-const users = [{ id: 1 }, { id: 2 }, { id: 3 }];
-users.myFind(u => u.id === 2);       // → { id: 2 }
-users.myFindIndex(u => u.id === 2);  // → 1
+// Standard
+[1, 2, 3].myFind(x => x > 1);                                // 2
+[1, 2, 3].myFindIndex(x => x > 1);                           // 1
+[].myFind(() => true);                                        // undefined
+[].myFindIndex(() => true);                                   // -1
+
+// Hole behavior — KEY DIFFERENCE FROM some/filter
+[,,,3].myFind(x => true);                                     // undefined (visits i=0, val=undefined)
+[,,,3].myFindIndex(x => x === 3);                             // 3 (visits all, finds 3)
+
+// Distinguish "found undefined" from "not found"
+const arr = [1, undefined, 3];
+arr.myFind(x => x === undefined);                             // undefined (same as not found!)
+arr.myFindIndex(x => x === undefined);                        // 1 (clear distinction)
+
+// thisArg
+users.myFind(function(u){ return u.id === this.id; }, { id: 42 });
+
+// findLast (ES2023)
+[1, 2, 3, 4].myFindLast(x => x % 2 === 0);                    // 4
 ```
 
-Trace:
-- `len = 3`. `i=0`: predicate(`{id:1}`, 0) → false. `i=1`: predicate(`{id:2}`, 1) → true → return `{id:2}` (or `1` for findIndex).
+---
 
-Input 2 — the sparse-array gotcha:
-```js
-const sparse = [, , 3];   // holes at 0 and 1
-sparse.myFind(v => true);       // → undefined (the first hole)
-sparse.myFindIndex(v => true);  // → 0
+## 9. Step-by-step dry run
+
+```
+[,,,3].myFind(x => true):
+  len = 4.
+  i=0: v = this[0] = undefined (hole reads as undefined).
+       pred(undefined, 0, arr) = true → return undefined.
+  
+  WAIT — this returns undefined but match WAS at index 0.
+  This is the canonical trap: find returning undefined is AMBIGUOUS
+  (could be "found undefined" or "not found").
+
+[,,,3].myFindIndex(x => x === 3):
+  i=0: 3 === undefined false.
+  i=1: undefined !== 3.
+  i=2: undefined !== 3.
+  i=3: 3 === 3 → return 3.
+
+[1, undefined, 3].myFindIndex(x => x === undefined):
+  i=0: 1 === undefined false.
+  i=1: undefined === undefined → return 1.
+
+Compare to some/every:
+  [,,,3].some(x => true) → false (holes skipped).
+  vs find which returns undefined (visit hole as undefined, pass true).
+  Different semantics by design.
 ```
 
-Compare with `some`:
-```js
-sparse.mySome(v => true);   // → true (skips holes, hits the 3)
-```
+---
 
-Same predicate, opposite-feeling results. **This is the diagnostic question** on this polyfill.
+## 10. Common confusion + traps
 
-Input 3 — not-found:
-```js
-[1, 2, 3].myFind(x => x > 99);       // undefined
-[1, 2, 3].myFindIndex(x => x > 99);  // -1
-```
+1. **Skip holes like `some`** — wrong; `find` visits all.
+2. **`find` returns undefined ambiguity** — use `findIndex !== -1` for existence.
+3. **`thisArg` ignored** — second param.
+4. **Predicate signature missed** — 3 args.
+5. **`findLast` reverse** but same hole behavior.
+6. **`indexOf` uses `===` not predicate** — find is predicate-based.
+7. **Empty array** — `[].find()` → undefined; `[].findIndex()` → -1.
 
-## Important takeaways
+---
 
-**Syntax to memorize**
-- `O = Object(this)`, `len = O.length >>> 0` — boilerplate.
-- **No `i in O` check** — this is the differentiator.
-- Return value: element for `find`, index for `findIndex`.
-- Fallback: `undefined` for `find`, `-1` for `findIndex`.
+## 11. Senior follow-ups & variants
 
-**Patterns to reuse**
-- The "ES6 iterator family" (find / findIndex / fill / copyWithin / includes) does NOT skip holes — they treat sparse slots as `undefined`. This was a deliberate ES6 cleanup.
-- The "ES5 iterator family" (forEach / map / filter / some / every / reduce) DOES skip holes — legacy compatibility.
-- When asked "what's the difference between `some` and `find`?", the answer is: short-circuit return semantics (boolean vs element) AND hole-skipping (yes vs no).
+### Variant 1 — `findLast` / `findLastIndex`
+ES2023; iterate reverse.
 
-**Common mistakes**
-- Adding `i in O` — turns your `find` into `some` semantically. Fails the sparse-array spec test.
-- Returning `null` instead of `undefined` for not-found — wrong fallback.
-- Returning `0` instead of `-1` from `findIndex` — fails the "did we find anything?" check (`0` is a valid index!).
-- Using `===` instead of calling a predicate — that's `indexOf`, not `find`.
+### Variant 2 — `indexOf` vs `findIndex`
+indexOf: SameValueZero comparison (no NaN). findIndex: predicate (handles NaN).
 
-**Related questions**
-- Polyfill `Array.prototype.some` / `every` (skip holes).
-- Polyfill `Array.prototype.findLast` / `findLastIndex` (ES2023, reverse iteration).
-- Polyfill `Array.prototype.indexOf` (uses `===`, not predicate; skips holes per ES5).
-- `Array.prototype.includes` vs `indexOf` (includes uses SameValueZero, finds NaN).
+### Variant 3 — `find` on object
+Use `Object.entries(obj).find(([k,v]) => pred(v))`.
 
-## Variants
+### Variant 4 — `findFirstMatching` async
+`Promise.race(arr.map(asyncPred))` — but order-aware needs `for await`.
 
-1. **findLast / findLastIndex** — "Now write the reverse-iteration versions." Trivial twist: loop `i = len - 1; i >= 0; i--`. Same no-hole-skip rule.
+### Variant 5 — Use findIndex over find
+Distinguishes "found undefined" from "not found".
 
-2. **findKey / findEntry for objects** — "What about for plain objects?" Pivot to `Object.entries(obj).find(([k, v]) => predicate(v, k, obj))`. Tests object iteration knowledge.
+---
 
-3. **Async find** — "Find the first element where an async predicate resolves truthy, short-circuiting." This is genuinely hard — Promise.all loses short-circuit; sequential `for...of` with `await` is correct but slow; the elegant answer uses an AbortController to race + cancel.
+## 12. How to think aloud
 
-4. **find with default value** — "Add a third param `defaultValue` returned when no match." Easy to add but tests whether you can extend cleanly.
+> "`find` and `findIndex` are ES6+ and they DON'T skip holes — deliberate spec cleanup. Visit every index `0..len-1`; read `this[i]` directly without `in` check; predicate gets `(value, index, array)` where value at holes is `undefined`. Short-circuit on first truthy. `find` returns the element (or `undefined`); `findIndex` returns the index (or `-1`). `thisArg` second param. Trap: `[,,,3].find(x=>true)` returns `undefined` (visits i=0, val=undefined, pred true, returns undefined) — different from `some(()=>true)` which returns false. Ambiguity: `find` returning undefined could mean 'found undefined element' or 'not found' — use `findIndex !== -1` for existence check. ES2023 added `findLast`/`findLastIndex` (reverse). `indexOf` uses `===` (no NaN); `findIndex` uses predicate (handles NaN via `Number.isNaN`)."
 
-## Revision notes
+---
 
-> **find / findIndex — 60 second recap**
-> - `find` → first matching ELEMENT or `undefined`.
-> - `findIndex` → first matching INDEX or `-1`.
-> - Short-circuit on first truthy predicate.
-> - **DO NOT skip holes** — opposite of `some`/`every`/`map`/`filter`.
-> - Predicate signature `(value, index, array)`, supports `thisArg`.
-> - **Trap:** `[,,].find(() => true)` returns `undefined`, not the hole — but it DID call the predicate.
-> - **Family:** ES6 iterators (find / findIndex / includes / fill) skip nothing. ES5 iterators (forEach / map / etc.) skip holes.
+## 13. 60-second revision
+
+> - **No hole skipping** — visit every index (diff from some/every/map/filter).
+> - **`find` returns element** or `undefined`.
+> - **`findIndex` returns index** or `-1`.
+> - **3 args + `thisArg`**.
+> - **Short-circuit** on first truthy.
+> - **`findLast` / `findLastIndex`** — ES2023, reverse.
+> - **Use `findIndex` for existence** — disambiguates undefined.
+> - **Trap:** skip holes (wrong); find/undefined ambiguity; indexOf vs findIndex.
+
+---
+
+**Related:** [polyfill-some-every.md](./polyfill-some-every.md) · [polyfill-filter.md](./polyfill-filter.md) · [polyfill-map.md](./polyfill-map.md)
+
+**Concept primer:** [`concepts/arrays.md`](../../concepts/arrays.md)

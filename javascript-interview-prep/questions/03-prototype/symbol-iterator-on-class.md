@@ -1,16 +1,17 @@
-# Symbol.iterator on a Custom Class
+# `Symbol.iterator` on a custom class
 
-## Source / Origin
-- ES2015 iteration protocol.
-- Asked at: Stripe, Razorpay, Atlassian.
-- Concept reference: `concepts/prototype.md`, sibling `06-streams/custom-iterator.md`.
+> **Difficulty:** Medium   |   **Time:** ~10 min   |   **Prereqs:** [`concepts/prototype.md`](../../concepts/prototype.md), [getter-setter-via-prototype.md](./getter-setter-via-prototype.md)
+>
+> **Source:** ES2015 iteration protocol. Stripe, Razorpay, Atlassian.
 
-## Why this question matters in interviews
-"Make this class iterable so it works in `for...of`." That's `Symbol.iterator`. Senior bar: you know the protocol (`return { next() { return { value, done } } }`), distinguish iterable from iterator, support multiple-pass iteration via separate iterator instances, and know about `Symbol.asyncIterator` for `for await ... of`.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+Make a class iterable so it works in `for...of`, spread, destructuring.
+
+**Verification examples**
+
 ```js
 class Range {
   constructor(start, end, step = 1) { this.start = start; this.end = end; this.step = step; }
@@ -19,157 +20,252 @@ class Range {
     const { end, step } = this;
     return {
       next() {
-        if (i < end) return { value: i, done: false }, i += step, { value: i - step, done: false };
+        if (i < end) {
+          const v = i;
+          i += step;
+          return { value: v, done: false };
+        }
         return { value: undefined, done: true };
-      }
+      },
     };
   }
 }
-for (const n of new Range(1, 5)) console.log(n);   // 1 2 3 4
+
+for (const n of new Range(1, 5)) console.log(n);                         // 1, 2, 3, 4
+[...new Range(1, 4)];                                                    // [1, 2, 3]
+const [a, b] = new Range(10, 13);                                        // a=10, b=11
 ```
 
-### Edge cases / traps
-1. **Iterable vs iterator.** Iterable: has `[Symbol.iterator]()` returning an iterator. Iterator: has `next()`. The same object can be both (returns `this` from `[Symbol.iterator]`).
-2. **Multiple passes.** `for (const n of r) {} for (const n of r) {}` should work twice. Each `[Symbol.iterator]()` call must return a *fresh* iterator. If you reuse one, second pass is empty.
-3. **Generator shorthand.** `*[Symbol.iterator]() { yield* ... }` is cleaner than manual `next()`.
-4. **`return()` and `throw()`.** Iterator protocol includes optional `return(value)` (early exit cleanup) and `throw(err)`. `for...of`'s `break` calls `return()`.
-5. **Infinite iterators.** Fine — `for...of` with a `break`.
-6. **`Symbol.asyncIterator`** — async version; required for `for await ... of`.
-7. **Spread/destructure** — `[...iterable]`, `[a, b, ...rest] = iterable`. Same protocol.
-8. **`Array.from` accepts iterables** — `Array.from(new Range(1, 5))`.
+**Constraints**
+- Iteration protocol: `[Symbol.iterator]()` returns an iterator.
+- Iterator: `{ next() { return {value, done} } }`.
+- Multiple iterations need fresh iterator each time.
+- Generators (`function*`) are the cleanest implementation.
 
-## Mental Model
+---
+
+## 2. Plain-English restatement
+
+The iteration protocol is two parts. **Iterable**: has a `[Symbol.iterator]()` method that returns an iterator. **Iterator**: has a `next()` method returning `{value, done}`. `for...of`, spread, and destructuring all call `[Symbol.iterator]()` to get a fresh iterator.
+
+---
+
+## 3. Why this matters in interviews
+
+Tests well-known symbols + iteration protocol + understanding of language hooks.
+
+---
+
+## 4. Mental model
 
 ```
-   iterable                    iterator
-   ┌────────────┐              ┌───────────────────────┐
-   │ [SI]: fn   │── calls ──▶  │ next: ()=>{v,d}       │
-   │            │              │ return?: ()=>{v,d}    │
-   │            │              │ throw?: ()=>{v,d}     │
-   └────────────┘              └───────────────────────┘
-   each call returns FRESH iterator
-   for...of pulls next() until done=true
+   Iterable protocol:
+   - obj[Symbol.iterator]() → returns iterator
+   
+   Iterator protocol:
+   - iterator.next() → returns { value, done }
+   - done: true → end of sequence
+   
+   Iteration consumers:
+   - for...of      → repeatedly call next() until done
+   - spread [...x] → same
+   - destructuring → same
+   - Array.from(x) → same
+   
+   Cleanest: use generator
+     [Symbol.iterator]() {
+       const self = this;
+       return (function*() {
+         for (let i = self.start; i < self.end; i += self.step) yield i;
+       })();
+     }
+   
+   Or method shorthand:
+     *[Symbol.iterator]() {
+       for (let i = this.start; i < this.end; i += this.step) yield i;
+     }
 ```
 
-## Why interviewers care
+---
 
-- **Spec literacy** — protocol-driven design.
-- **Generator awareness** — they're the easy way.
-- **Iterable vs iterator distinction** — common confusion.
+## 5. Try it yourself first
 
-## Common confusion
+> **Predict before reading on:**
+> 1. What does `[Symbol.iterator]()` return — the iterator or the value?
+> 2. Can you iterate a Range twice independently?
+> 3. What's the simplest implementation using `function*`?
 
-- **"`[Symbol.iterator]` returns the items array."** No — it returns an iterator object with `next()`.
-- **"Iterator can be reused."** Only if your `[Symbol.iterator]` returns a fresh iterator each call.
-- **"Generators are sync only."** `async function*` is async generator.
-- **"`for...of` works on plain objects."** No — only on iterables (Array, Map, Set, String, custom).
+---
 
-## Brute force
+## 6. Brute force — walked through
 
-`Array.from(thing)` only works if `thing` is iterable. Otherwise no `for...of`.
+### Wrong attempt 1: `next()` directly on class
+That's an iterator, not iterable. `for...of` needs the iterable protocol.
 
-## Optimal approach
+### Wrong attempt 2: single iterator stored on class
+Second `for...of` finds done; can't restart.
 
-Implement `[Symbol.iterator]` via a generator function. Cleaner and supports `return()` automatically via `try/finally`.
+### Wrong attempt 3: return primitive from next()
+Must return `{value, done}` object.
 
-## Solution
+---
+
+## 7. The unlocking insight
+
+> **`[Symbol.iterator]()` returns a fresh iterator. Iterator has `next()` returning `{value, done}`. Generators (`function*`) implement both protocols automatically — cleanest pattern.**
+
+Three properties:
+
+1. **Iterable vs iterator** — two protocols.
+2. **Fresh iterator per call** — supports multi-pass.
+3. **Generator method** — `*[Symbol.iterator]()` is the cleanest.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
 class Range {
-  constructor(start, end, step = 1) { this.start = start; this.end = end; this.step = step; }
-  *[Symbol.iterator]() {
-    for (let i = this.start; i < this.end; i += this.step) yield i;
+  constructor(start, end, step = 1) {
+    this.start = start; this.end = end; this.step = step;
   }
-}
 
-const r = new Range(1, 6);
-[...r];                      // [1,2,3,4,5]
-Array.from(r, x => x * x);   // [1,4,9,16,25]
-for (const n of r) console.log(n);
-for (const n of r) console.log(n);   // works again (fresh iterator)
-
-// Async iterable
-class FetchPages {
-  constructor(url) { this.url = url; }
-  async *[Symbol.asyncIterator]() {
-    let cursor = null;
-    while (true) {
-      const res = await fetch(`${this.url}?cursor=${cursor ?? ''}`).then(r => r.json());
-      for (const it of res.items) yield it;
-      if (!res.next) return;
-      cursor = res.next;
+  *[Symbol.iterator]() {                                                  // step 1: generator method
+    for (let i = this.start; i < this.end; i += this.step) {
+      yield i;
     }
   }
 }
-for await (const item of new FetchPages('/api')) console.log(item);
 
-// Custom iteration with cleanup
-class FileReader {
-  *[Symbol.iterator]() {
-    const handle = openFile(this.path);
-    try {
-      let line;
-      while ((line = handle.readLine()) !== null) yield line;
-    } finally {
-      handle.close();
-    }
-  }
-}
-for (const line of new FileReader('/log')) {
-  if (line.includes('ERROR')) break;        // triggers iterator.return() → runs finally
-}
+// Use
+for (const n of new Range(1, 5)) console.log(n);                         // 1, 2, 3, 4
+[...new Range(1, 4)];                                                    // [1, 2, 3]
+const [a, b, c] = new Range(10, 14);                                     // 10, 11, 12
+
+// Multi-pass works (fresh iterator each call)
+const r = new Range(1, 4);
+[...r];                                                                   // [1, 2, 3]
+[...r];                                                                   // [1, 2, 3] (fresh)
 ```
 
-## Dry run
+**Try it yourself — manual version:**
 
 ```js
-class Range { *[Symbol.iterator]() { yield 1; yield 2; yield 3; } }
-const r = new Range();
-const iter = r[Symbol.iterator]();
-iter.next();   // { value: 1, done: false }
-iter.next();   // { value: 2, done: false }
-iter.next();   // { value: 3, done: false }
-iter.next();   // { value: undefined, done: true }
-
-for (const n of r) console.log(n);   // calls [Symbol.iterator]() AGAIN → fresh iterator
-```
-
-## How to think aloud
-
-> "I'd implement `[Symbol.iterator]` as a generator. Each call returns a fresh iterator — that's how `for...of` works twice. Generators give me `return()` cleanup for free via try/finally; `break` in `for...of` calls `return()` and runs my finally. For paginated data I'd use `[Symbol.asyncIterator]` with `for await...of` — same protocol, async."
-
-## Important takeaways
-
-- **`[Symbol.iterator]()` returns iterator** with `next() → {value, done}`.
-- **Generator shorthand** (`*[Symbol.iterator]`) handles return/throw cleanup.
-- **Fresh iterator per call** for multi-pass iteration.
-- **`[Symbol.asyncIterator]()`** for `for await ... of`.
-- **`break` calls `iterator.return()`** — cleanup happens.
-
-## Variants
-
-- **Iterable + iterator combined**: `[Symbol.iterator]() { return this }`; class itself has `next()`. Common for stream-like objects.
-- **Lazy infinite iterable**: `function* naturals() { let n = 0; while (true) yield n++; }`.
-- **Iterator helpers** (ES2024): `Iterator.prototype.map`, `.filter`, `.take` etc.
-- **`.entries()`, `.keys()`, `.values()`** — convention from Array/Map/Set.
-
-## Revision notes
-
-```
-class C {
-  *[Symbol.iterator]() { yield ...; }
+class ManualRange {
+  constructor(start, end, step = 1) {
+    this.start = start; this.end = end; this.step = step;
+  }
+  [Symbol.iterator]() {                                                   // step 2: explicit iterator
+    let i = this.start;
+    const { end, step } = this;
+    return {
+      next() {
+        if (i < end) {
+          const v = i;
+          i += step;
+          return { value: v, done: false };
+        }
+        return { value: undefined, done: true };
+      },
+      // Optional: [Symbol.iterator]() { return this; }  — for iterator+iterable
+    };
+  }
 }
-for (const v of new C()) ...
 
-protocol:
-  iterator: { next: () => { value, done }, return?, throw? }
-  iterable: { [Symbol.iterator]: () => iterator }
-
-generator simplifies:
-  *[Symbol.iterator]() { yield ...; }   ← gives next/return/throw for free
-  try { yield } finally { cleanup }     ← break triggers finally
-
-async: [Symbol.asyncIterator] + async function* + for await...of
-
-each [Symbol.iterator]() call should produce FRESH iterator (multi-pass)
+// Async iteration with Symbol.asyncIterator
+class AsyncRange {
+  constructor(start, end) { this.start = start; this.end = end; }
+  async *[Symbol.asyncIterator]() {
+    for (let i = this.start; i < this.end; i++) {
+      await new Promise((r) => setTimeout(r, 100));
+      yield i;
+    }
+  }
+}
+// for await (const n of new AsyncRange(0, 3)) console.log(n);
 ```
+
+---
+
+## 9. Step-by-step dry run
+
+```
+for (const n of new Range(1, 4)) console.log(n):
+
+1. const r = new Range(1, 4);
+2. const iter = r[Symbol.iterator]():
+     generator function called → returns iterator object.
+3. loop:
+     iter.next() → generator runs:
+       yield 1 → { value: 1, done: false }
+     log 1.
+   iter.next() → resumes after yield:
+       i = 2, yield 2 → { value: 2, done: false }
+     log 2.
+   iter.next() → i = 3, yield 3 → { value: 3, done: false }
+     log 3.
+   iter.next() → i = 4, i < 4? no, fall through → { value: undefined, done: true }
+     loop exits.
+
+Multi-pass:
+  const r = new Range(1, 4);
+  for (const x of r) {}   ← calls r[Symbol.iterator]() → fresh iterator
+  for (const x of r) {}   ← calls again → ANOTHER fresh iterator
+  Works because [Symbol.iterator] is a method that creates a new iterator each call.
+```
+
+---
+
+## 10. Common confusion + traps
+
+1. **Iterable = iterator** — separate protocols.
+2. **`next()` directly on class** — that's an iterator, not iterable.
+3. **Single iterator stored** — can't multi-pass.
+4. **Return primitive from next()** — must be `{value, done}`.
+5. **Generator inside arrow** — arrows can't be generators.
+6. **`Symbol.asyncIterator` for async** — separate from `Symbol.iterator`.
+7. **`return()` for early termination** — iterator can implement for cleanup.
+
+---
+
+## 11. Senior follow-ups & variants
+
+### Variant 1 — Async iterable
+`*async [Symbol.asyncIterator]()` + `for await...of`.
+
+### Variant 2 — Iterator + iterable
+Iterator's own `[Symbol.iterator]() { return this; }` makes it both.
+
+### Variant 3 — Early termination
+`iter.return?.()` for cleanup when `for...of` breaks.
+
+### Variant 4 — `Array.from(iterable, mapFn)`
+Built on iteration protocol; spreads + maps.
+
+### Variant 5 — Infinite iterables
+Generator can yield forever; consumer breaks.
+
+---
+
+## 12. How to think aloud
+
+> "Two protocols. Iterable: object with `[Symbol.iterator]()` method that returns an iterator. Iterator: object with `next()` method returning `{value, done}`. `for...of`, spread, destructuring all call `[Symbol.iterator]()` to get a fresh iterator. Use a generator method (`*[Symbol.iterator]()`) for the cleanest implementation — generators auto-implement both protocols and handle pause/resume. For async iteration use `*async [Symbol.asyncIterator]()` + `for await...of`. Multi-pass works automatically because each `for...of` calls `[Symbol.iterator]()` again, creating a fresh iterator. Trap: confusing iterable and iterator; storing single iterator on instance (breaks multi-pass); returning primitive from next() (must be object)."
+
+---
+
+## 13. 60-second revision
+
+> - **Iterable:** `obj[Symbol.iterator]()` returns iterator.
+> - **Iterator:** `iter.next()` returns `{value, done}`.
+> - **Generator method** `*[Symbol.iterator]()` = cleanest.
+> - **Multi-pass:** each `for...of` calls `[Symbol.iterator]()` fresh.
+> - **Async:** `Symbol.asyncIterator` + `for await...of`.
+> - **Early term:** `iter.return?.()` for cleanup.
+> - **`Array.from(iterable, mapFn)`** uses protocol.
+> - **Trap:** iterable vs iterator; single stored iterator; primitive from next.
+
+---
+
+**Related:** [`06-streams/custom-iterator.md`](../06-streams/custom-iterator.md) · [`04-promises/async-generator-producer.md`](../04-promises/async-generator-producer.md) · [tostring-symbol-tag-override.md](./tostring-symbol-tag-override.md)
+
+**Concept primer:** [`concepts/prototype.md`](../../concepts/prototype.md)

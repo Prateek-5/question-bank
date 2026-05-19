@@ -1,158 +1,260 @@
-# Chunk an Array — `chunk(arr, size)`
+# Chunk an array — `chunk(arr, size)`
 
-## Source
-- LeetCode #2677 "Chunk Array" — https://leetcode.com/problems/chunk-array/
-- Lodash `_.chunk(arr, size)` — https://lodash.com/docs/4.17.15#chunk
-- Appears on codedamn, BFE.dev, and almost every "build a paginator/batch processor" round.
+> **Difficulty:** Foundation   |   **Time:** ~8 min   |   **Prereqs:** [polyfill-map.md](./polyfill-map.md)
+>
+> **Source:** LeetCode #2677. Lodash `_.chunk`. Pagination/batching everywhere.
 
-## Why this question matters in interviews
-Chunking is the one-liner that proves you can think in **batches** — paginating API results, splitting BigQuery insert rows into 500-row groups, breaking a webhook fan-out into rate-limited windows, streaming N records at a time to a worker pool. Interviewers love it because there are two clean solutions (functional `Array.from` vs imperative `for` loop), both correct, with different readability/performance tradeoffs. They'll also probe your awareness that `arr.slice(start, end)` is **O(k)** (copies the window), so total work is O(n) — not O(n²) as some candidates fear. The follow-ups (lazy iterator, balanced chunks, fixed-count instead of fixed-size) test how flexibly you compose primitives.
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+Split an array into chunks of fixed size. Last chunk may be shorter.
+
+**Verification examples**
+
 ```js
-chunk([1,2,3,4,5], 2);   // [[1,2], [3,4], [5]]
-chunk([1,2,3,4], 2);     // [[1,2], [3,4]]
-chunk([], 3);            // []
-chunk([1,2,3], 0);       // [] (treat non-positive size as empty)
+chunk([1, 2, 3, 4, 5], 2);              // [[1, 2], [3, 4], [5]]
+chunk([1, 2, 3, 4], 2);                 // [[1, 2], [3, 4]]
+chunk([], 3);                            // []
+chunk([1, 2, 3], 0);                     // [] or throw — define behavior
+chunk([1, 2, 3], 5);                     // [[1, 2, 3]]
 ```
 
-### Two canonical implementations
-**Functional (one-liner):**
-```js
-Array.from({ length: Math.ceil(arr.length / size) },
-           (_, i) => arr.slice(i * size, (i + 1) * size));
-```
-Elegant. Pre-computes the bucket count; `Array.from` with a length+mapper produces a dense array. Easy to misuse if you forget `Math.ceil`.
+**Constraints**
+- `size > 0` (define behavior for 0 / negative).
+- Last chunk handles remainder naturally via `slice(start, start+size)`.
+- O(n) total work — `slice` is O(k) per window.
+- Two canonical impls: functional `Array.from` vs imperative `for`.
 
-**Imperative (loop):**
+---
+
+## 2. Plain-English restatement
+
+Walk the array in fixed-size windows of `size`. Push each window's slice to output. Last chunk shorter if remainder. O(n) total.
+
+---
+
+## 3. Why this matters in interviews
+
+Batches everywhere — DB batched inserts, webhook fan-out windows, worker queues. Tests `Array.from(length, mapper)` literacy + `slice` semantics + lazy generator variant.
+
+---
+
+## 4. Mental model
+
+```
+   Functional (one-liner):
+     bucketCount = ceil(n / size)
+     result = Array.from({length: bucketCount}, (_, i) => 
+       arr.slice(i*size, (i+1)*size)
+     )
+
+   Imperative:
+     out = []
+     for i = 0; i < n; i += size:
+       out.push(arr.slice(i, i + size))
+
+   Both O(n). slice copies the window O(k); sum O(n).
+   
+   slice(start, end):
+     - Non-mutating.
+     - end > length: clips to length (no padding).
+     - end omitted: defaults to length.
+   
+   Lazy variant (generator):
+     function* chunks(arr, size) {
+       for (let i = 0; i < arr.length; i += size) yield arr.slice(i, i+size);
+     }
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. What if `size > arr.length`?
+> 2. What if `size = 0`?
+> 3. Is `slice` O(1) or O(k)?
+
+---
+
+## 6. Brute force — walked through
+
 ```js
-const out = [];
-for (let i = 0; i < arr.length; i += size) {
-  out.push(arr.slice(i, i + size));
+function chunk(arr, size) {
+  if (size <= 0) return [];
+  const out = [];
+  let cur = [];
+  for (const v of arr) {
+    cur.push(v);
+    if (cur.length === size) { out.push(cur); cur = []; }
+  }
+  if (cur.length) out.push(cur);
+  return out;
 }
 ```
-Equally O(n); some engineers find it more readable, and it generalises cleanly to a generator (lazy chunking, see Variants).
 
-### Slice semantics
-`arr.slice(start, end)` is non-mutating, returns a shallow copy, accepts an `end` larger than `arr.length` (just clips to the end). That's why the last chunk being shorter "just works" — no special-case needed.
+Works; more verbose. Slice variant is cleaner.
 
-### Edge cases that earn points
-1. `size <= 0` or non-integer `size` → return `[]` (lodash behavior) or throw. **Clarify with interviewer.**
-2. `arr` empty → return `[]`. Both implementations naturally handle this.
-3. Very large `size` (greater than `arr.length`) → returns `[[...arr.slice()]]` — one chunk containing a shallow copy.
-4. **Sparse arrays** — `slice` preserves holes. If interviewer hands you `[1, , 3]`, the chunk containing index 1 will still be sparse. Mention this; offer to densify with `.filter(() => true)` if asked.
-5. **Mutation safety** — chunks are shallow copies of the *array*; nested object refs are shared. Document this.
+---
 
-### Big-O
-- Time: O(n) — every element copied into exactly one chunk.
-- Space: O(n) for output + O(1) overhead.
-- `slice` per chunk is O(k); summed across `⌈n/size⌉` chunks → O(n). Not O(n²).
+## 7. The unlocking insight
 
-## Brute force approach
-Push elements one by one into the "current" sub-array, opening a new one every `size` items:
-```js
-const out = [];
-arr.forEach((v, i) => {
-  if (i % size === 0) out.push([]);
-  out[out.length - 1].push(v);
-});
-```
-Correct, but creates extra array writes and ignores holes the same way `forEach` does (silently). The `slice` approach is cleaner and engine-optimized.
+> **Iterate by step `size`, slice each window. `slice(i, i+size)` clips naturally at end. `Array.from({length}, mapper)` for one-liner.**
 
-## Optimal approach
-Use `arr.slice(i, i + size)` inside a stepped loop (or `Array.from` with a computed bucket count). Both are O(n) and idiomatic. Pick the imperative version if you want to extend later (early exit, async, generator); pick the functional one for a clean one-liner.
+Three properties:
 
-## Solution (JavaScript)
+1. **Step by `size`** — fixed window.
+2. **`slice(start, end)` clips** — no special-case last chunk.
+3. **`Array.from`** for functional one-liner.
+
+---
+
+## 8. Solution (annotated)
 
 ```js
-/**
- * Split `arr` into contiguous sub-arrays of length `size`. Last chunk may be shorter.
- * @param {Array} arr
- * @param {number} size  positive integer
- * @returns {Array<Array>}
- */
+// Imperative — most readable
 function chunk(arr, size) {
-  if (!Array.isArray(arr)) throw new TypeError('arr must be an array');
-  if (!Number.isInteger(size) || size <= 0) return [];
-
-  // Imperative — generalises easily to lazy/async variants.
+  if (size <= 0) return [];                                              // step 1: guard
   const out = [];
-  for (let i = 0; i < arr.length; i += size) {
-    out.push(arr.slice(i, i + size));
+  for (let i = 0; i < arr.length; i += size) {                          // step 2: step by size
+    out.push(arr.slice(i, i + size));                                    // step 3: slice clips at end
   }
   return out;
 }
 
-// One-liner alternative — keep both in your head:
-const chunkFn = (arr, size) =>
-  size > 0
-    ? Array.from({ length: Math.ceil(arr.length / size) },
-                 (_, i) => arr.slice(i * size, (i + 1) * size))
-    : [];
+// Functional one-liner
+function chunkFn(arr, size) {
+  if (size <= 0) return [];
+  return Array.from(                                                     // step 4: pre-compute buckets
+    { length: Math.ceil(arr.length / size) },
+    (_, i) => arr.slice(i * size, (i + 1) * size),
+  );
+}
+
+// Lazy generator
+function* chunksLazy(arr, size) {
+  if (size <= 0) return;
+  for (let i = 0; i < arr.length; i += size) {
+    yield arr.slice(i, i + size);                                        // step 5: yield window
+  }
+}
 ```
 
-## Step-by-step dry run
+**Try it yourself**
 
-Input:
 ```js
-chunk([10, 20, 30, 40, 50], 2);
+chunk([1, 2, 3, 4, 5], 2);                                    // [[1,2], [3,4], [5]]
+chunk([1, 2, 3, 4], 2);                                       // [[1,2], [3,4]]
+chunk([], 3);                                                  // []
+chunk([1, 2, 3], 5);                                          // [[1, 2, 3]]
+chunk([1, 2, 3], 0);                                          // []
+
+// Lazy use — stop early
+for (const c of chunksLazy(bigArray, 100)) {
+  if (shouldStop(c)) break;
+  await batchInsert(c);
+}
+
+// Balanced chunks (close to equal sizes)
+function chunkBalanced(arr, count) {
+  const out = Array.from({ length: count }, () => []);
+  arr.forEach((v, i) => out[i % count].push(v));
+  return out;
+}
+chunkBalanced([1, 2, 3, 4, 5], 3);                            // [[1, 4], [2, 5], [3]]
+
+// Chunk by predicate (split on)
+function splitOn(arr, pred) {
+  const out = []; let cur = [];
+  for (const v of arr) {
+    if (pred(v)) { if (cur.length) out.push(cur); cur = []; }
+    else cur.push(v);
+  }
+  if (cur.length) out.push(cur);
+  return out;
+}
 ```
 
-Trace:
-- `Array.isArray` → true. `size=2`, valid.
-- `i=0`: `arr.slice(0, 2)` → `[10, 20]`. `out = [[10, 20]]`.
-- `i=2`: `arr.slice(2, 4)` → `[30, 40]`. `out = [[10, 20], [30, 40]]`.
-- `i=4`: `arr.slice(4, 6)` → `[50]` (slice clips end at length 5). `out = [[10, 20], [30, 40], [50]]`.
-- `i=6`: loop exits (`6 < 5` false).
-- Return `[[10, 20], [30, 40], [50]]`.
+---
 
-Edge run — `chunk([], 3)`:
-- Loop condition fails immediately. Return `[]`.
+## 9. Step-by-step dry run
 
-Edge run — `chunk([1, 2], 5)`:
-- `i=0`: `arr.slice(0, 5)` → `[1, 2]`. Return `[[1, 2]]`. One chunk, shorter than `size`.
+```
+chunk([1, 2, 3, 4, 5], 2):
+  i=0: out.push(slice(0, 2)) = [1, 2]. out = [[1,2]].
+  i=2: out.push(slice(2, 4)) = [3, 4]. out = [[1,2], [3,4]].
+  i=4: out.push(slice(4, 6)) = [5]. (slice clips at length 5).
+       out = [[1,2], [3,4], [5]].
+  i=6 ≥ 5 → exit.
+  Return [[1,2], [3,4], [5]].
 
-Edge run — `chunk([1, 2, 3], 0)`:
-- `Number.isInteger(0) && 0 <= 0` → return `[]`. Avoids infinite loop.
+chunk([1, 2, 3], 5):
+  i=0: out.push(slice(0, 5)) = [1, 2, 3]. (clips).
+  i=5 ≥ 3 → exit.
+  Return [[1, 2, 3]].
 
-## Important takeaways
+chunk([], 3):
+  i=0 ≥ 0 → loop skipped.
+  Return [].
 
-**Syntax to memorize**
-- `arr.slice(i, i + size)` — the workhorse. Auto-clips at array length.
-- `Array.from({ length: N }, (_, i) => ...)` — produces a dense array; the `length` property is enough.
-- `Math.ceil(n / size)` — bucket count. Off-by-one if you forget the `ceil`.
+Lazy generator (BigArray, 100):
+  Yields one chunk at a time; consumer can break.
+  Memory: only current chunk + iter state.
+  vs eager: all chunks allocated up front.
+```
 
-**Patterns to reuse**
-- Chunking is the foundation of paginators, batchers, rate limiters, and parallel uploaders. `for await` over `chunk(rows, 500)` is the typical "bulk insert" pattern.
-- The "stepped `for` loop" (`i += size`) is the same skeleton as a sliding window — just change the slice bounds.
+---
 
-**Common mistakes**
-- Forgetting `Math.ceil` in the functional version → drops the last partial chunk.
-- Guarding `size > 0` AFTER the loop starts → infinite loop on `size = 0`.
-- Assuming `slice` is O(1). It's O(k) per call, O(n) total — but never O(n²).
-- Mutating the source array (e.g., `arr.splice(0, size)` inside a loop). Works, but destroys input. Bad form.
+## 10. Common confusion + traps
 
-**Related questions**
-- `unchunk(chunks)` — `chunks.flat()` or `[].concat(...chunks)`.
-- `chunkInto(arr, count)` — split into a fixed number of chunks instead of a fixed size. Different math.
-- Lazy `chunk` via generator (see Variants).
+1. **Forget `Math.ceil`** in Array.from → wrong bucket count.
+2. **Handle `size = 0`** — divide by zero (Infinity), define behavior.
+3. **Negative size** — return [] or throw.
+4. **Slice is O(k)** — yes; total O(n) is fine.
+5. **Mutate original** — chunk doesn't mutate; slice copies.
+6. **Last chunk shorter** — slice(start, end) handles it; no special case.
+7. **Lazy generator unused** — fine for large arrays.
 
-## Variants
+---
 
-1. **Lazy chunk (generator)** — yields chunks on demand instead of allocating the full output. Crucial when `arr` is huge or backed by a stream of pages. `function* chunkLazy(it, size) { let buf=[]; for (const v of it) { buf.push(v); if (buf.length===size) { yield buf; buf=[]; } } if (buf.length) yield buf; }`. Works on any iterable, not just arrays.
-2. **`chunkInto(arr, n)`** — produce exactly `n` near-equal chunks. Compute `size = Math.ceil(arr.length / n)` then chunk; or distribute remainder one-per-bucket for "as balanced as possible." Common follow-up.
-3. **Async chunk-and-process** — `for (const c of chunk(arr, 50)) await processBatch(c);` — sequential throttling, no extra library needed. Mention it; interviewers love seeing it applied.
+## 11. Senior follow-ups & variants
 
-## Revision notes
+### Variant 1 — Generator (lazy)
+Yield chunks; consumer breaks early.
 
-> **chunk(arr, size) — 60 second recap**
-> - `arr.slice(i, i + size)` inside `for (i=0; i<n; i+=size)`. Last chunk auto-shortens.
-> - Functional alt: `Array.from({length: Math.ceil(n/size)}, (_,i) => arr.slice(i*size,(i+1)*size))`.
-> - Guard non-positive / non-integer `size` → return `[]`.
-> - Time O(n), space O(n). `slice` is O(k) per call; total still O(n).
-> - Non-mutating; chunks are **shallow** copies — nested objects shared.
-> - Sparse-array holes survive `slice` — densify with `.filter(() => true)` if asked.
-> - For huge data, prefer a **generator** version that yields chunks lazily.
-> - **Trap:** forgetting `Math.ceil` drops the tail. `size=0` without guard → infinite loop.
+### Variant 2 — Balanced chunks
+Round-robin distribute into N buckets.
+
+### Variant 3 — Split on predicate
+Drop separators; group consecutive matching.
+
+### Variant 4 — Sliding (overlapping) windows
+Window of size k stepping by 1.
+
+### Variant 5 — Async batches
+`for await (const c of chunksLazy(arr, n)) await process(c);`
+
+---
+
+## 12. How to think aloud
+
+> "Chunk is the batching primitive: walk by step `size`, slice each window. `slice(start, end)` naturally clips at array end — no special-case for the last (possibly shorter) chunk. Two clean implementations: imperative `for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size))`, or functional `Array.from({length: Math.ceil(n/size)}, (_, i) => slice(i*size, (i+1)*size))`. Both O(n). For very large arrays, a generator yields chunks lazily — consumer can `break` to stop early; memory bounded by chunk size. Guards: `size <= 0` returns `[]` (or throw — define). Lodash matches the imperative version. Variants: balanced chunks (round-robin into N buckets), split-on-predicate (drop separators), sliding windows. Trap: forget `Math.ceil` (off-by-one bucket); divide by zero for size 0; expecting O(1) slice (it's O(k))."
+
+---
+
+## 13. 60-second revision
+
+> - **Step by `size`, `slice(i, i+size)`** — slice clips at end.
+> - **O(n) total** — slice is O(k); sum O(n).
+> - **`Array.from({length: ceil(n/size)}, ...)`** for one-liner.
+> - **Lazy generator** for huge arrays / early break.
+> - **`size = 0`** → return [] (define).
+> - **Variants:** balanced, split-on, sliding window.
+> - **Trap:** forget ceil; div-by-zero size; mutate (don't).
+
+---
+
+**Related:** [polyfill-map.md](./polyfill-map.md) · [sliding-window-helper.md](./sliding-window-helper.md) · [`10-machine-coding-patterns/promise-pool.md`](../10-machine-coding-patterns/promise-pool.md)
+
+**Concept primer:** [`concepts/arrays.md`](../../concepts/arrays.md)

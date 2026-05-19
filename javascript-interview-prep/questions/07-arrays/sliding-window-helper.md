@@ -1,233 +1,293 @@
-# Sliding Window Helper
+# Sliding window helper
 
-## Source / Origin
-- Standard algorithmic pattern; LeetCode tag.
-- Asked at: every senior interview (substring, sub-array problems).
-- Concept reference: `concepts/arrays.md`.
+> **Difficulty:** Medium-Senior   |   **Time:** ~15 min   |   **Prereqs:** [find-runs.md](./find-runs.md), [move-zeros-in-place.md](./move-zeros-in-place.md)
+>
+> **Source:** Universal pattern. LeetCode tag. Every senior interview.
 
-## Why this question matters in interviews
-Many "longest/shortest/max-something within constraint X" problems collapse to a sliding window: two pointers, expand right, contract left when constraint violated. Senior bar: you produce the template on demand, distinguish fixed-size vs variable-size windows, and pick the right invariant to maintain (sum, count, character frequency, etc.).
+---
 
-## Concepts involved
+## 1. Problem statement
 
-### Syntax to lock in
+Implement the sliding-window template for both fixed-size and variable-size variants.
+
+**Verification examples**
+
 ```js
-// Variable-size window template
-function maxLengthSubstring(s, isValid) {
-  let left = 0, best = 0;
-  // any state needed to test validity
-  for (let right = 0; right < s.length; right++) {
-    // include s[right]
-    while (!isValid(/* state */)) {
-      // exclude s[left]
-      left++;
+// Fixed-size window — max sum of k consecutive
+maxSumFixed([2, 1, 5, 1, 3, 2], 3);          // 9 (5+1+3)
+
+// Variable-size — longest substring of distinct chars
+longestDistinct('abcabcbb');                  // 3 ('abc')
+
+// Variable-size — minimum size subarray sum >= target
+minSubarraySum([2, 3, 1, 2, 4, 3], 7);       // 2 ([4, 3])
+```
+
+**Constraints**
+- O(n) — each index visited at most O(1) times amortized.
+- Fixed: precompute first window; slide by adding right, subtracting left.
+- Variable: expand right; contract left while invariant violated.
+- Maintain incremental state (sum / count / frequency map).
+
+---
+
+## 2. Plain-English restatement
+
+Two pointers `left, right`. Expand right; if constraint violated, contract left until valid again. Track best answer. O(n) because each pointer moves only forward.
+
+---
+
+## 3. Why this matters in interviews
+
+"Longest/shortest/max-something within constraint" → sliding window. Senior bar: produce template on demand, distinguish fixed vs variable, pick the right invariant.
+
+---
+
+## 4. Mental model
+
+```
+   Fixed-size window:
+     sum = sum of first k.
+     best = sum.
+     for i = k..n-1:
+       sum += arr[i] - arr[i-k]      ← slide; O(1)
+       best = max(best, sum)
+   
+   Variable-size window template:
+     left = 0
+     for right = 0..n-1:
+       include arr[right] in state
+       while constraint violated:
+         exclude arr[left] from state
+         left++
+       update best with (right - left + 1)
+   
+   Common invariants:
+     - sum / running average
+     - unique count (use Map<char, lastIndex> or Set)
+     - frequency map (Map<value, count>)
+     - max/min (use deque for O(1) max — monotonic queue)
+```
+
+---
+
+## 5. Try it yourself first
+
+> **Predict before reading on:**
+> 1. Difference between fixed and variable window?
+> 2. Why is it O(n) not O(n²)?
+> 3. When use Set vs Map for the state?
+
+---
+
+## 6. Brute force — walked through
+
+```js
+// O(n²) all substrings
+function longestDistinctBrute(s) {
+  let best = 0;
+  for (let i = 0; i < s.length; i++) {
+    const seen = new Set();
+    for (let j = i; j < s.length; j++) {
+      if (seen.has(s[j])) break;
+      seen.add(s[j]);
     }
-    best = Math.max(best, right - left + 1);
+    best = Math.max(best, seen.size);
   }
   return best;
 }
+```
 
-// Fixed-size window template
+O(n²); sliding window does it in O(n).
+
+---
+
+## 7. The unlocking insight
+
+> **Two pointers, both move only forward (O(n) total). Expand right; contract left while invalid. Maintain state incrementally.**
+
+Three properties:
+
+1. **Each pointer monotonic** — O(n) amortized.
+2. **Incremental state update** — add/remove single element.
+3. **Best updated** when window valid.
+
+---
+
+## 8. Solution (annotated)
+
+```js
+// Fixed-size: max sum of k consecutive
 function maxSumFixed(arr, k) {
+  if (arr.length < k) return null;                                        // step 1: guard
   let sum = 0;
-  for (let i = 0; i < k; i++) sum += arr[i];
+  for (let i = 0; i < k; i++) sum += arr[i];                              // step 2: first window
   let best = sum;
   for (let i = k; i < arr.length; i++) {
-    sum += arr[i] - arr[i - k];      // slide
+    sum += arr[i] - arr[i - k];                                            // step 3: slide
     best = Math.max(best, sum);
   }
   return best;
 }
-```
 
-### Edge cases / traps
-1. **Boundary inclusivity**: `right - left + 1` is the window size when both ends are inclusive.
-2. **Invariant maintenance** — choose ONE invariant to maintain and shrink the window when it breaks.
-3. **Hash map of counts** — common state for "longest substring with k distinct chars."
-4. **Reset vs slide** — fixed-size always slides one position; variable-size shrinks as needed.
-5. **`left` only moves forward** — total work is O(n) amortized (right and left each move at most n times).
-6. **Empty input** — return 0 or undefined explicitly.
-7. **Negative numbers** — fixed-window sum works; max subarray with negatives is Kadane's (different pattern).
-8. **At-most vs exactly** — "exactly K distinct" = "at-most K" minus "at-most K-1."
-
-## Mental Model
-
-```
-   [a b c d e f g h i]
-       ↑       ↑
-      left    right
-
-   expand:  right → ; update state
-   shrink:  left  → ; update state; until invariant restored
-   record:  window size or window sum
-
-   each step: O(1) work
-   total:    O(n) — left advances at most n times across the whole run
-```
-
-## Why interviewers care
-
-- **Pattern recognition** — many problems are sliding-window in disguise.
-- **Amortization reasoning** — explaining why it's O(n) not O(n²).
-- **State design** — picking the right invariant.
-
-## Common confusion
-
-- **"Two-pointer = sliding window."** Sliding window IS a two-pointer pattern, but two-pointer also includes opposite-ends-converge (e.g., two-sum sorted).
-- **"Window must always grow."** No — fixed-size slides one-at-a-time; variable-size can shrink.
-- **"O(n²) because nested loop."** The inner `while` only advances `left`; left moves at most n total → amortized O(n).
-- **"Need to revisit elements."** Don't — both pointers only go forward.
-
-## Brute force
-
-`O(n²)` or `O(n³)`: nested loops over all subarrays.
-
-## Optimal approach
-
-Two pointers moving in one direction. Maintain invariant via a hashmap of counts, running sum, or similar.
-
-## Solution
-
-```js
-// 1. Longest substring without repeating characters
-function lengthOfLongestSubstring(s) {
-  const seen = new Map();
+// Variable: longest substring with no repeating chars
+function longestDistinct(s) {
+  const lastIdx = new Map();                                              // step 4: char → last index
   let left = 0, best = 0;
   for (let right = 0; right < s.length; right++) {
-    const c = s[right];
-    if (seen.has(c) && seen.get(c) >= left) left = seen.get(c) + 1;
-    seen.set(c, right);
+    if (lastIdx.has(s[right]) && lastIdx.get(s[right]) >= left) {
+      left = lastIdx.get(s[right]) + 1;                                   // step 5: jump past dup
+    }
+    lastIdx.set(s[right], right);
     best = Math.max(best, right - left + 1);
   }
   return best;
 }
 
-// 2. Longest substring with at most K distinct characters
-function lengthOfLongestSubstringKDistinct(s, k) {
-  const count = new Map();
-  let left = 0, best = 0;
-  for (let right = 0; right < s.length; right++) {
-    count.set(s[right], (count.get(s[right]) || 0) + 1);
-    while (count.size > k) {
-      const lc = s[left];
-      count.set(lc, count.get(lc) - 1);
-      if (count.get(lc) === 0) count.delete(lc);
+// Variable: minimum subarray sum >= target
+function minSubarraySum(arr, target) {
+  let left = 0, sum = 0, best = Infinity;
+  for (let right = 0; right < arr.length; right++) {
+    sum += arr[right];                                                     // step 6: include right
+    while (sum >= target) {                                                // step 7: shrink while valid
+      best = Math.min(best, right - left + 1);
+      sum -= arr[left];
       left++;
     }
-    best = Math.max(best, right - left + 1);
   }
-  return best;
+  return best === Infinity ? 0 : best;
 }
+```
 
-// 3. Minimum window substring
-function minWindow(s, t) {
-  const need = new Map();
-  for (const c of t) need.set(c, (need.get(c) || 0) + 1);
-  let missing = t.length;
+**Try it yourself**
+
+```js
+maxSumFixed([2, 1, 5, 1, 3, 2], 3);                          // 9
+maxSumFixed([1, 2], 3);                                       // null
+
+longestDistinct('abcabcbb');                                  // 3
+longestDistinct('bbbb');                                       // 1
+longestDistinct('pwwkew');                                    // 3
+
+minSubarraySum([2, 3, 1, 2, 4, 3], 7);                       // 2 ([4, 3])
+minSubarraySum([1, 1, 1], 10);                                // 0 (impossible)
+
+// Reusable helper (LeetCode #76 style)
+function minWindowContains(s, needCounts) {
+  const have = new Map();
+  let satisfied = 0, required = needCounts.size;
   let left = 0, bestLen = Infinity, bestStart = 0;
   for (let right = 0; right < s.length; right++) {
-    if (need.has(s[right])) {
-      if (need.get(s[right]) > 0) missing--;
-      need.set(s[right], need.get(s[right]) - 1);
+    const c = s[right];
+    if (needCounts.has(c)) {
+      have.set(c, (have.get(c) || 0) + 1);
+      if (have.get(c) === needCounts.get(c)) satisfied++;
     }
-    while (missing === 0) {
-      if (right - left + 1 < bestLen) { bestLen = right - left + 1; bestStart = left; }
-      if (need.has(s[left])) {
-        need.set(s[left], need.get(s[left]) + 1);
-        if (need.get(s[left]) > 0) missing++;
+    while (satisfied === required) {
+      if (right - left + 1 < bestLen) {
+        bestLen = right - left + 1;
+        bestStart = left;
+      }
+      const lc = s[left];
+      if (needCounts.has(lc)) {
+        have.set(lc, have.get(lc) - 1);
+        if (have.get(lc) < needCounts.get(lc)) satisfied--;
       }
       left++;
     }
   }
   return bestLen === Infinity ? '' : s.slice(bestStart, bestStart + bestLen);
 }
-
-// 4. Max sum of subarray of size K (fixed window)
-function maxSumK(arr, k) {
-  let sum = 0;
-  for (let i = 0; i < k; i++) sum += arr[i];
-  let best = sum;
-  for (let i = k; i < arr.length; i++) {
-    sum += arr[i] - arr[i - k];
-    best = Math.max(best, sum);
-  }
-  return best;
-}
-
-// 5. Sliding window maximum (monotonic deque)
-function maxSlidingWindow(arr, k) {
-  const deque = [];
-  const out = [];
-  for (let i = 0; i < arr.length; i++) {
-    if (deque[0] <= i - k) deque.shift();
-    while (deque.length && arr[deque[deque.length - 1]] < arr[i]) deque.pop();
-    deque.push(i);
-    if (i >= k - 1) out.push(arr[deque[0]]);
-  }
-  return out;
-}
 ```
 
-## Dry run
+---
 
-`lengthOfLongestSubstring("abcabcbb")`:
-
-```
-right=0 s[0]='a' seen={}     left=0 best=1  set seen[a]=0
-right=1 s[1]='b' seen={a:0}  left=0 best=2  set seen[b]=1
-right=2 s[2]='c' seen={a:0,b:1} left=0 best=3  set seen[c]=2
-right=3 s[3]='a' seen has 'a' at 0 ≥ left → left=1; set seen[a]=3; best=3
-right=4 s[4]='b' seen has 'b' at 1 ≥ left → left=2; set seen[b]=4; best=3
-right=5 s[5]='c' seen has 'c' at 2 ≥ left → left=3; set seen[c]=5; best=3
-right=6 s[6]='b' seen has 'b' at 4 ≥ left → left=5; set seen[b]=6; best=3
-right=7 s[7]='b' seen has 'b' at 6 ≥ left → left=7; set seen[b]=7; best=3
-return 3
-```
-
-## How to think aloud
-
-> "Sliding window: two pointers `left` and `right`, both moving forward. Expand right; if invariant breaks, advance left until restored. Record best on each iteration. Total O(n) amortized because each pointer moves at most n times. For 'at most K distinct,' the invariant is `map.size <= k`. For 'minimum window containing T,' the invariant is 'all chars in T covered.' For fixed-size, it's a one-add-one-remove slide each step. Sliding-window maximum needs a monotonic deque to retrieve the max in O(1)."
-
-## Important takeaways
-
-- **Two pointers**, both moving forward.
-- **Amortized O(n)** — each pointer moves at most n.
-- **Invariant** chosen from problem: count, distinct chars, sum, frequency match.
-- **Fixed-size**: one-add-one-remove slide.
-- **Variable-size**: expand right, shrink left when invariant breaks.
-- **Monotonic deque** for window-min/max in O(1) per step.
-
-## Variants
-
-- **Sliding window over stream** — async iterator + bounded buffer.
-- **2D sliding window** — submatrix sums.
-- **Window of fixed *sum* not size** — like rate limiter.
-- **Two-pointer (opposite-ends)** — different but related family.
-
-## Revision notes
+## 9. Step-by-step dry run
 
 ```
-Sliding Window:
-  let left=0, best=0
-  for right in 0..n:
-    include arr[right] (update state)
-    while !isValid(state):
-      exclude arr[left]; left++
-    best = max(best, right-left+1)
+longestDistinct('abcabcbb'):
+  left=0, best=0, lastIdx={}.
+  right=0 'a': not seen. set a→0. best=max(0, 1)=1.
+  right=1 'b': not seen. set b→1. best=2.
+  right=2 'c': not seen. set c→2. best=3.
+  right=3 'a': lastIdx['a']=0 ≥ left=0. left = 0+1 = 1. set a→3. best=max(3, 3)=3.
+  right=4 'b': lastIdx['b']=1 ≥ left=1. left = 2. set b→4. best=3.
+  right=5 'c': lastIdx['c']=2 ≥ left=2. left = 3. set c→5. best=3.
+  right=6 'b': lastIdx['b']=4 ≥ left=3. left = 5. set b→6. best=3.
+  right=7 'b': lastIdx['b']=6 ≥ left=5. left = 7. set b→7. best=max(3, 1)=3.
+  
+  Return 3.
 
-Fixed-size:
-  one-add-one-remove slide
-
-Variable-size:
-  expand right, shrink left when invariant breaks
-
-AMORTIZED O(n) — left moves at most n times
-state: hashmap of counts, running sum, distinct count
-
-Variants:
-  longest no-repeat
-  at most K distinct
-  exactly K = at-most-K minus at-most-(K-1)
-  min window substring
-  max in window: monotonic deque
+minSubarraySum([2,3,1,2,4,3], 7):
+  left=0, sum=0, best=∞.
+  r=0: sum=2. 2<7.
+  r=1: sum=5. 5<7.
+  r=2: sum=6. <7.
+  r=3: sum=8. ≥7.
+    best=min(∞, 4)=4. sum-=arr[0]=2 → 6. left=1.
+    6<7 → exit while.
+  r=4: sum=10. ≥7.
+    best=min(4, 4)=4. sum-=3 → 7. left=2.
+    7≥7: best=min(4, 3)=3. sum-=1 → 6. left=3.
+    6<7 → exit.
+  r=5: sum=9.
+    best=min(3, 3)=3. sum-=2 → 7. left=4.
+    7≥7: best=min(3, 2)=2. sum-=4 → 3. left=5.
+    3<7 → exit.
+  Return 2.
 ```
+
+---
+
+## 10. Common confusion + traps
+
+1. **Nested loop, not sliding** — O(n²).
+2. **left not monotonic** — must only increase.
+3. **State not incremental** — recomputing per window is O(n × n) → O(n²).
+4. **`if` vs `while`** to shrink — `while` until valid.
+5. **Off-by-one** — window size `right - left + 1`.
+6. **Fixed-size needs `arr.length >= k`** check.
+7. **Reset state across runs** — closures may leak.
+
+---
+
+## 11. Senior follow-ups & variants
+
+### Variant 1 — Min window substring (LeetCode #76)
+Need frequency map; track "satisfied" count.
+
+### Variant 2 — Monotonic deque
+Window max/min in O(n) using deque.
+
+### Variant 3 — Sliding window median
+Two heaps; O(n log k).
+
+### Variant 4 — At most K distinct
+Variable window with `Map<char, count>` size.
+
+### Variant 5 — Exactly K — at most K minus at most K-1.
+
+---
+
+## 12. How to think aloud
+
+> "Sliding window collapses 'longest/shortest/max-something with constraint' problems from O(n²) to O(n). Two pointers `left, right`, both move only forward — total work bounded by `2n` operations. Expand right; while constraint violated, contract left. Update best when valid. Fixed-size variant: precompute first window's state, then slide by adding `arr[right]` and subtracting `arr[right-k]` — O(1) per step. Variable variant: include arr[right] in incremental state, while invariant violated remove arr[left] and increment left. State varies by problem: running sum, frequency Map, last-index Map, monotonic deque (window max). LeetCode #76 'minimum window substring' uses frequency Map + 'satisfied' counter. Trap: nested loop without monotonic pointers (still O(n²)); recomputing state per window; `if` vs `while` for shrink (must shrink until valid)."
+
+---
+
+## 13. 60-second revision
+
+> - **Two pointers, both monotonic** → O(n).
+> - **Fixed:** add right + subtract left-k.
+> - **Variable:** expand right; while invalid contract left.
+> - **State incremental:** sum, freq Map, lastIdx Map.
+> - **Window size:** `right - left + 1`.
+> - **Update best when window valid.**
+> - **Monotonic deque** for window max/min in O(n).
+> - **Trap:** non-monotonic; `if` vs `while`; state recomputed.
+
+---
+
+**Related:** [find-runs.md](./find-runs.md) · [move-zeros-in-place.md](./move-zeros-in-place.md) · [`08-maps-sets/two-sum-map.md`](../08-maps-sets/two-sum-map.md) · [`08-maps-sets/first-non-repeating-char.md`](../08-maps-sets/first-non-repeating-char.md)
+
+**Concept primer:** [`concepts/arrays.md`](../../concepts/arrays.md)
