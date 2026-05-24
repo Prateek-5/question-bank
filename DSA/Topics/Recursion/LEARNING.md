@@ -3,6 +3,8 @@
 > **Stage:** Structures   |   **Prereqs:** Arrays   |   **Problems:** 6
 >
 > Choose → explore → unchoose. Master subsets and permutations and the backtracking template is yours.
+>
+> **Two-tier format:** each problem has a **reference card** (linked first below) AND a paced **teaching walkthrough** in [`learn/`](./learn/) for first-time learners.
 
 ---
 
@@ -18,21 +20,21 @@ After this topic, **[Backtracking/](../Backtracking/LEARNING.md)** has constrain
 
 ### Subsets — include/exclude
 
-1. **[Subsets.md](./Subsets.md)** — At each index, branch include/exclude. Or bitmask iteration. **must-do**
-2. **[Subsets_II.md](./Subsets_II.md)** — Sort + skip duplicate at the same depth.
+1. **[Subsets.md](./Subsets.md)**  ·  [walkthrough →](./learn/Subsets.md) — At each index, branch include/exclude. Or bitmask iteration. **must-do**
+2. **[Subsets_II.md](./Subsets_II.md)**  ·  [walkthrough →](./learn/Subsets_II.md) — Sort + skip duplicate at the same depth.
 
 ### Permutations — used[] flag set
 
-3. **[Permutations.md](./Permutations.md)** — For each position, try each unused element. **must-do**
-4. **[Permutations_II.md](./Permutations_II.md)** — Sort + `!used[i-1] && nums[i] == nums[i-1] → skip` dedup. The classic subtle rule.
+3. **[Permutations.md](./Permutations.md)**  ·  [walkthrough →](./learn/Permutations.md) — For each position, try each unused element. **must-do**
+4. **[Permutations_II.md](./Permutations_II.md)**  ·  [walkthrough →](./learn/Permutations_II.md) — Sort + `!used[i-1] && nums[i] == nums[i-1] → skip` dedup. The classic subtle rule.
 
 ### Combination with pruning
 
-5. **[Combination_Sum_II.md](./Combination_Sum_II.md)** — Sort + skip duplicates + early break when sum > target.
+5. **[Combination_Sum_II.md](./Combination_Sum_II.md)**  ·  [walkthrough →](./learn/Combination_Sum_II.md) — Sort + skip duplicates + early break when sum > target.
 
 ### Constraint-driven — N-Queens
 
-6. **[N_Queens.md](./N_Queens.md)** — Track cols, diag1 (r-c), diag2 (r+c) as Sets for O(1) check. Sets > board-scan. **must-do**
+6. **[N_Queens.md](./N_Queens.md)**  ·  [walkthrough →](./learn/N_Queens.md) — Track cols, diag1 (r-c), diag2 (r+c) as Sets for O(1) check. Sets > board-scan. **must-do**
 
 ---
 

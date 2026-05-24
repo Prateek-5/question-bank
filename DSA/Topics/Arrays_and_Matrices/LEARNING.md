@@ -3,6 +3,8 @@
 > **Stage:** Foundation (start here)   |   **Prereqs:** none   |   **Problems:** 9
 >
 > First topic to attempt. Builds "scan, sweep, simulate" intuition that every later topic relies on. Read [`Concepts.md`](./Concepts.md) first.
+>
+> **Two-tier format:** each problem has a **reference card** (linked first below) AND a paced **teaching walkthrough** in [`learn/`](./learn/) for first-time learners.
 
 ---
 
@@ -21,24 +23,24 @@ After this topic, move to **[1_D_and_2_D_Arrays/](../1_D_and_2_D_Arrays/LEARNING
 
 ### Warm-ups — basic scan and indexing
 
-1. **[Concatenation_of_Array.md](./Concatenation_of_Array.md)** — Re-index into a 2×N array. **must-do**
-2. **[Fizz_Buzz.md](./Fizz_Buzz.md)** — Branching on divisibility; cleanest hello-world. **must-do**
-3. **[Maximum_Number_of_Words_Found_in_Sentences.md](./Maximum_Number_of_Words_Found_in_Sentences.md)** — Per-row max via split.
+1. **[Concatenation_of_Array.md](./Concatenation_of_Array.md)**  ·  [walkthrough →](./learn/Concatenation_of_Array.md) — Re-index into a 2×N array. **must-do**
+2. **[Fizz_Buzz.md](./Fizz_Buzz.md)**  ·  [walkthrough →](./learn/Fizz_Buzz.md) — Branching on divisibility; cleanest hello-world. **must-do**
+3. **[Maximum_Number_of_Words_Found_in_Sentences.md](./Maximum_Number_of_Words_Found_in_Sentences.md)**  ·  [walkthrough →](./learn/Maximum_Number_of_Words_Found_in_Sentences.md) — Per-row max via split.
 
 ### Matrix access — 2D indexing
 
-4. **[Matrix_Diagonal_Sum.md](./Matrix_Diagonal_Sum.md)** — Main + anti-diagonal; handle odd-size middle. **must-do**
-5. **[Spiral_Matrix_II.md](./Spiral_Matrix_II.md)** — Boundary-walking simulation with four directions. **must-do**
+4. **[Matrix_Diagonal_Sum.md](./Matrix_Diagonal_Sum.md)**  ·  [walkthrough →](./learn/Matrix_Diagonal_Sum.md) — Main + anti-diagonal; handle odd-size middle. **must-do**
+5. **[Spiral_Matrix_II.md](./Spiral_Matrix_II.md)**  ·  [walkthrough →](./learn/Spiral_Matrix_II.md) — Boundary-walking simulation with four directions. **must-do**
 
 ### Sweep / observation
 
-6. **[Maximum_Gap.md](./Maximum_Gap.md)** — Bucket sort to beat sort's O(n log n). Senior signal.
-7. **[Total_Hamming_Distance.md](./Total_Hamming_Distance.md)** — Bit-by-bit contribution; O(n × 32) not O(n²).
-8. **[Maximum_Absolute_Value_Expression.md](./Maximum_Absolute_Value_Expression.md)** — Math trick to remove absolute values via sign enumeration.
+6. **[Maximum_Gap.md](./Maximum_Gap.md)**  ·  [walkthrough →](./learn/Maximum_Gap.md) — Bucket sort to beat sort's O(n log n). Senior signal.
+7. **[Total_Hamming_Distance.md](./Total_Hamming_Distance.md)**  ·  [walkthrough →](./learn/Total_Hamming_Distance.md) — Bit-by-bit contribution; O(n × 32) not O(n²).
+8. **[Maximum_Absolute_Value_Expression.md](./Maximum_Absolute_Value_Expression.md)**  ·  [walkthrough →](./learn/Maximum_Absolute_Value_Expression.md) — Math trick to remove absolute values via sign enumeration.
 
 ### Classic finale
 
-9. **[Trapping_Rain_Water.md](./Trapping_Rain_Water.md)** — Two-pointer or precomputed L/R max. THE classic. **must-do**
+9. **[Trapping_Rain_Water.md](./Trapping_Rain_Water.md)**  ·  [walkthrough →](./learn/Trapping_Rain_Water.md) — Two-pointer or precomputed L/R max. THE classic. **must-do**
 
 ---
 

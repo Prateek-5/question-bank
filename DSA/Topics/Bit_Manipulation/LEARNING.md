@@ -3,6 +3,8 @@
 > **Stage:** Structures   |   **Prereqs:** Math basics   |   **Problems:** 4
 >
 > Bitwise reasoning at three levels: counting bits, manipulating bits, exploiting XOR's algebraic properties (involution, commutativity).
+>
+> **Two-tier format:** each problem has a **reference card** (linked first below) AND a paced **teaching walkthrough** in [`learn/`](./learn/) for first-time learners.
 
 ---
 
@@ -16,16 +18,16 @@ Small topic. Do all four in one session.
 
 ### Counting / popcount
 
-1. **[Number_of_1_Bits.md](./Number_of_1_Bits.md)** — Brian Kernighan's trick: `n & (n-1)` clears the lowest set bit. **must-do**
+1. **[Number_of_1_Bits.md](./Number_of_1_Bits.md)**  ·  [walkthrough →](./learn/Number_of_1_Bits.md) — Brian Kernighan's trick: `n & (n-1)` clears the lowest set bit. **must-do**
 
 ### Bit movement
 
-2. **[Reverse_Bits.md](./Reverse_Bits.md)** — Bit-by-bit shift, or divide-and-conquer swap (halves, quarters, ...).
+2. **[Reverse_Bits.md](./Reverse_Bits.md)**  ·  [walkthrough →](./learn/Reverse_Bits.md) — Bit-by-bit shift, or divide-and-conquer swap (halves, quarters, ...).
 
 ### XOR algebra
 
-3. **[Single_Number.md](./Single_Number.md)** — `a ^ a = 0`, `a ^ 0 = a`. XOR all elements; pairs cancel. **must-do**
-4. **[Single_Number_II.md](./Single_Number_II.md)** — Bit-count mod 3, or two-counter state machine. The state-machine version is the senior signal.
+3. **[Single_Number.md](./Single_Number.md)**  ·  [walkthrough →](./learn/Single_Number.md) — `a ^ a = 0`, `a ^ 0 = a`. XOR all elements; pairs cancel. **must-do**
+4. **[Single_Number_II.md](./Single_Number_II.md)**  ·  [walkthrough →](./learn/Single_Number_II.md) — Bit-count mod 3, or two-counter state machine. The state-machine version is the senior signal.
 
 ---
 

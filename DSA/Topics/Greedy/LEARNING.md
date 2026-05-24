@@ -3,6 +3,8 @@
 > **Stage:** Advanced   |   **Prereqs:** [Sorting_Divide_and_Conquer/](../Sorting_Divide_and_Conquer/LEARNING.md), [Heap_Priority_Queue/](../Heap_Priority_Queue/LEARNING.md)   |   **Problems:** 7
 >
 > Sort then pick. The hardest part of greedy is **proving the greedy choice is optimal** (exchange argument).
+>
+> **Two-tier format:** each problem has a **reference card** (linked first below) AND a paced **teaching walkthrough** in [`learn/`](./learn/) for first-time learners.
 
 ---
 
@@ -20,22 +22,22 @@
 
 ### Two-pointer greedy match
 
-1. **[Assign_Cookies.md](./Assign_Cookies.md)** — Sort both, two pointers; smallest greedy match. **must-do**
+1. **[Assign_Cookies.md](./Assign_Cookies.md)**  ·  [walkthrough →](./learn/Assign_Cookies.md) — Sort both, two pointers; smallest greedy match. **must-do**
 
 ### Sort + product / sign
 
-2. **[Distribute_Candies.md](./Distribute_Candies.md)** — Distinct types; `min(distinct, n/2)`.
-3. **[Maximum_Product_of_Three_Numbers.md](./Maximum_Product_of_Three_Numbers.md)** — Sort; max of `(last 3) vs (first 2 + last 1)`. Handles negatives.
-4. **[Maximize_Sum_After_K_Negations.md](./Maximize_Sum_After_K_Negations.md)** — Sort or min-heap; flip smallest K times.
+2. **[Distribute_Candies.md](./Distribute_Candies.md)**  ·  [walkthrough →](./learn/Distribute_Candies.md) — Distinct types; `min(distinct, n/2)`.
+3. **[Maximum_Product_of_Three_Numbers.md](./Maximum_Product_of_Three_Numbers.md)**  ·  [walkthrough →](./learn/Maximum_Product_of_Three_Numbers.md) — Sort; max of `(last 3) vs (first 2 + last 1)`. Handles negatives.
+4. **[Maximize_Sum_After_K_Negations.md](./Maximize_Sum_After_K_Negations.md)**  ·  [walkthrough →](./learn/Maximize_Sum_After_K_Negations.md) — Sort or min-heap; flip smallest K times.
 
 ### Interval scheduling
 
-5. **[Non_overlapping_Intervals.md](./Non_overlapping_Intervals.md)** — Sort by end time; pick if start ≥ last end. The interval-greedy template. **must-do**
-6. **[Minimum_Platforms.md](./Minimum_Platforms.md)** — Sort starts and ends separately; two-pointer sweep. **must-do**
+5. **[Non_overlapping_Intervals.md](./Non_overlapping_Intervals.md)**  ·  [walkthrough →](./learn/Non_overlapping_Intervals.md) — Sort by end time; pick if start ≥ last end. The interval-greedy template. **must-do**
+6. **[Minimum_Platforms.md](./Minimum_Platforms.md)**  ·  [walkthrough →](./learn/Minimum_Platforms.md) — Sort starts and ends separately; two-pointer sweep. **must-do**
 
 ### Math observation
 
-7. **[Bulb_Switcher.md](./Bulb_Switcher.md)** — Square numbers have odd divisors → `floor(sqrt(n))`.
+7. **[Bulb_Switcher.md](./Bulb_Switcher.md)**  ·  [walkthrough →](./learn/Bulb_Switcher.md) — Square numbers have odd divisors → `floor(sqrt(n))`.
 
 ---
 

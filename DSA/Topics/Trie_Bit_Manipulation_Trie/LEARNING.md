@@ -3,6 +3,8 @@
 > **Stage:** Trees & Graphs   |   **Prereqs:** [Trees_Binary_Trees/](../Trees_Binary_Trees/LEARNING.md), [Bit_Manipulation/](../Bit_Manipulation/LEARNING.md)   |   **Problems:** 7
 >
 > Two distinct tries: **character trie** for prefix problems, **bit trie** for XOR maximization.
+>
+> **Two-tier format:** each problem has a **reference card** (linked first below) AND a paced **teaching walkthrough** in [`learn/`](./learn/) for first-time learners.
 
 ---
 
@@ -20,25 +22,25 @@
 
 ### Build the trie
 
-1. **[Implement_Trie_Prefix_Tree.md](./Implement_Trie_Prefix_Tree.md)** — `insert`, `search`, `startsWith`. Memorize. **must-do**
+1. **[Implement_Trie_Prefix_Tree.md](./Implement_Trie_Prefix_Tree.md)**  ·  [walkthrough →](./learn/Implement_Trie_Prefix_Tree.md) — `insert`, `search`, `startsWith`. Memorize. **must-do**
 
 ### Wildcards / design
 
-2. **[Design_Add_and_Search_Words_DS.md](./Design_Add_and_Search_Words_DS.md)** — Recursive search with `.` wildcard tries all children. **must-do**
+2. **[Design_Add_and_Search_Words_DS.md](./Design_Add_and_Search_Words_DS.md)**  ·  [walkthrough →](./learn/Design_Add_and_Search_Words_DS.md) — Recursive search with `.` wildcard tries all children. **must-do**
 
 ### Prefix tasks
 
-3. **[Shortest_Unique_prefix_for_every_word.md](./Shortest_Unique_prefix_for_every_word.md)** — Build trie with frequency counts; first single-occurrence node = shortest unique prefix.
-4. **[Prefix_and_Suffix_Search.md](./Prefix_and_Suffix_Search.md)** — Insert each word's `suffix#word` variants into one trie. Powerful trick.
+3. **[Shortest_Unique_prefix_for_every_word.md](./Shortest_Unique_prefix_for_every_word.md)**  ·  [walkthrough →](./learn/Shortest_Unique_prefix_for_every_word.md) — Build trie with frequency counts; first single-occurrence node = shortest unique prefix.
+4. **[Prefix_and_Suffix_Search.md](./Prefix_and_Suffix_Search.md)**  ·  [walkthrough →](./learn/Prefix_and_Suffix_Search.md) — Insert each word's `suffix#word` variants into one trie. Powerful trick.
 
 ### Bit trie — XOR family
 
-5. **[Maximum_XOR_of_Two_Numbers.md](./Maximum_XOR_of_Two_Numbers.md)** — Bit trie; greedily pick opposite-bit branch at each level. **must-do**
-6. **[Subarrays_with_XOR_Less_Than_K_Concept.md](./Subarrays_with_XOR_Less_Than_K_Concept.md)** — Bit trie + counting; harder generalization.
+5. **[Maximum_XOR_of_Two_Numbers.md](./Maximum_XOR_of_Two_Numbers.md)**  ·  [walkthrough →](./learn/Maximum_XOR_of_Two_Numbers.md) — Bit trie; greedily pick opposite-bit branch at each level. **must-do**
+6. **[Subarrays_with_XOR_Less_Than_K_Concept.md](./Subarrays_with_XOR_Less_Than_K_Concept.md)**  ·  [walkthrough →](./learn/Subarrays_with_XOR_Less_Than_K_Concept.md) — Bit trie + counting; harder generalization.
 
 ### Hardest
 
-7. **[Count_Substrings_That_Differ_by_One_Character.md](./Count_Substrings_That_Differ_by_One_Character.md)** — Trie + dynamic programming hybrid; advanced.
+7. **[Count_Substrings_That_Differ_by_One_Character.md](./Count_Substrings_That_Differ_by_One_Character.md)**  ·  [walkthrough →](./learn/Count_Substrings_That_Differ_by_One_Character.md) — Trie + dynamic programming hybrid; advanced.
 
 ---
 

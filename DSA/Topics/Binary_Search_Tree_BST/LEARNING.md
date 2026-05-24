@@ -3,6 +3,8 @@
 > **Stage:** Trees & Graphs   |   **Prereqs:** [Trees_Binary_Trees/](../Trees_Binary_Trees/LEARNING.md)   |   **Problems:** 11
 >
 > BST property: left subtree < root < right subtree. Inorder traversal yields sorted order. That's the entire topic.
+>
+> **Two-tier format:** each problem has a **reference card** (linked first below) AND a paced **teaching walkthrough** in [`learn/`](./learn/) for first-time learners.
 
 ---
 
@@ -22,32 +24,32 @@
 
 ### BST property exploitation
 
-1. **[Range_Sum_of_BST.md](./Range_Sum_of_BST.md)** — Prune subtrees outside the range. **must-do**
-2. **[Lowest_Common_Ancestor_of_BST.md](./Lowest_Common_Ancestor_of_BST.md)** — Walk; turn left if both targets < node, right if both >, else current is LCA. **must-do**
+1. **[Range_Sum_of_BST.md](./Range_Sum_of_BST.md)**  ·  [walkthrough →](./learn/Range_Sum_of_BST.md) — Prune subtrees outside the range. **must-do**
+2. **[Lowest_Common_Ancestor_of_BST.md](./Lowest_Common_Ancestor_of_BST.md)**  ·  [walkthrough →](./learn/Lowest_Common_Ancestor_of_BST.md) — Walk; turn left if both targets < node, right if both >, else current is LCA. **must-do**
 
 ### Inorder = sorted
 
-3. **[Kth_Smallest_Element_in_BST.md](./Kth_Smallest_Element_in_BST.md)** — Iterative inorder; count to k. **must-do**
-4. **[Binary_Search_Tree_Iterator.md](./Binary_Search_Tree_Iterator.md)** — Inorder iterator state via a stack of left-spine. **must-do**
+3. **[Kth_Smallest_Element_in_BST.md](./Kth_Smallest_Element_in_BST.md)**  ·  [walkthrough →](./learn/Kth_Smallest_Element_in_BST.md) — Iterative inorder; count to k. **must-do**
+4. **[Binary_Search_Tree_Iterator.md](./Binary_Search_Tree_Iterator.md)**  ·  [walkthrough →](./learn/Binary_Search_Tree_Iterator.md) — Inorder iterator state via a stack of left-spine. **must-do**
 
 ### Construction
 
-5. **[Convert_Sorted_Array_to_BST.md](./Convert_Sorted_Array_to_BST.md)** — Pick middle as root; recurse halves. Produces balanced BST. **must-do**
-6. **[Construct_Binary_Tree_from_Traversals.md](./Construct_Binary_Tree_from_Traversals.md)** — Variant — companion to the one in Trees folder.
+5. **[Convert_Sorted_Array_to_BST.md](./Convert_Sorted_Array_to_BST.md)**  ·  [walkthrough →](./learn/Convert_Sorted_Array_to_BST.md) — Pick middle as root; recurse halves. Produces balanced BST. **must-do**
+6. **[Construct_Binary_Tree_from_Traversals.md](./Construct_Binary_Tree_from_Traversals.md)**  ·  [walkthrough →](./learn/Construct_Binary_Tree_from_Traversals.md) — Variant — companion to the one in Trees folder.
 
 ### Side views (BFS / level)
 
-7. **[Binary_Tree_Right_Side_View.md](./Binary_Tree_Right_Side_View.md)** — BFS; last node of each level. **must-do**
-8. **[Binary_Tree_Left_Side_View.md](./Binary_Tree_Left_Side_View.md)** — BFS; first node of each level.
+7. **[Binary_Tree_Right_Side_View.md](./Binary_Tree_Right_Side_View.md)**  ·  [walkthrough →](./learn/Binary_Tree_Right_Side_View.md) — BFS; last node of each level. **must-do**
+8. **[Binary_Tree_Left_Side_View.md](./Binary_Tree_Left_Side_View.md)**  ·  [walkthrough →](./learn/Binary_Tree_Left_Side_View.md) — BFS; first node of each level.
 
 ### Two-BST merge
 
-9. **[All_Elements_in_Two_BSTs.md](./All_Elements_in_Two_BSTs.md)** — Inorder both → merge two sorted lists.
-10. **[Merge_Two_BSTs.md](./Merge_Two_BSTs.md)** — Flatten both, merge, rebuild balanced BST from sorted array.
+9. **[All_Elements_in_Two_BSTs.md](./All_Elements_in_Two_BSTs.md)**  ·  [walkthrough →](./learn/All_Elements_in_Two_BSTs.md) — Inorder both → merge two sorted lists.
+10. **[Merge_Two_BSTs.md](./Merge_Two_BSTs.md)**  ·  [walkthrough →](./learn/Merge_Two_BSTs.md) — Flatten both, merge, rebuild balanced BST from sorted array.
 
 ### Misfit (greedy, slotted here historically)
 
-11. **[Queue_Reconstruction_by_Height.md](./Queue_Reconstruction_by_Height.md)** — Sort by `(-height, k)` then insert at index k. Greedy.
+11. **[Queue_Reconstruction_by_Height.md](./Queue_Reconstruction_by_Height.md)**  ·  [walkthrough →](./learn/Queue_Reconstruction_by_Height.md) — Sort by `(-height, k)` then insert at index k. Greedy.
 
 ---
 

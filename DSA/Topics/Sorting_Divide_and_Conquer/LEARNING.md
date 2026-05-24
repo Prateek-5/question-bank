@@ -3,6 +3,8 @@
 > **Stage:** Structures   |   **Prereqs:** [Two_Pointers/](../Two_Pointers/LEARNING.md), [Searching_Binary_Search/](../Searching_Binary_Search/LEARNING.md)   |   **Problems:** 6
 >
 > Beyond `arr.sort()`: in-place partitioning, quickselect, and merge-sort as a primitive that counts pairs.
+>
+> **Two-tier format:** each problem has a **reference card** (linked first below) AND a paced **teaching walkthrough** in [`learn/`](./learn/) for first-time learners.
 
 ---
 
@@ -19,24 +21,24 @@
 
 ### Dutch flag — 3-way partition
 
-1. **[Sort_Colors.md](./Sort_Colors.md)** — Three pointers `lo, mid, hi`. The classic. **must-do**
+1. **[Sort_Colors.md](./Sort_Colors.md)**  ·  [walkthrough →](./learn/Sort_Colors.md) — Three pointers `lo, mid, hi`. The classic. **must-do**
 
 ### Quickselect
 
-2. **[Kth_Largest_Element_in_an_Array.md](./Kth_Largest_Element_in_an_Array.md)** — Partition until pivot lands at index k. Average O(n). **must-do** (also lives in Heap with O(n log k) approach — compare)
+2. **[Kth_Largest_Element_in_an_Array.md](./Kth_Largest_Element_in_an_Array.md)**  ·  [walkthrough →](./learn/Kth_Largest_Element_in_an_Array.md) — Partition until pivot lands at index k. Average O(n). **must-do** (also lives in Heap with O(n log k) approach — compare)
 
 ### Counting via merge sort
 
-3. **[Reverse_Pairs.md](./Reverse_Pairs.md)** — During merge, count `i, j` with `nums[i] > 2*nums[j]`. Senior bar.
-4. **[Count_of_Smaller_Numbers_After_Self.md](./Count_of_Smaller_Numbers_After_Self.md)** — Same idea — count during merge, but track original indices.
+3. **[Reverse_Pairs.md](./Reverse_Pairs.md)**  ·  [walkthrough →](./learn/Reverse_Pairs.md) — During merge, count `i, j` with `nums[i] > 2*nums[j]`. Senior bar.
+4. **[Count_of_Smaller_Numbers_After_Self.md](./Count_of_Smaller_Numbers_After_Self.md)**  ·  [walkthrough →](./learn/Count_of_Smaller_Numbers_After_Self.md) — Same idea — count during merge, but track original indices.
 
 ### Observation / greedy
 
-5. **[Minimum_Number_of_Bottles_Visible.md](./Minimum_Number_of_Bottles_Visible.md)** — Sort + greedy stacking.
+5. **[Minimum_Number_of_Bottles_Visible.md](./Minimum_Number_of_Bottles_Visible.md)**  ·  [walkthrough →](./learn/Minimum_Number_of_Bottles_Visible.md) — Sort + greedy stacking.
 
 ### Misfit (BFS — slotted here historically)
 
-6. **[Open_the_Lock.md](./Open_the_Lock.md)** — BFS on the state graph; mention this is really a Graph problem.
+6. **[Open_the_Lock.md](./Open_the_Lock.md)**  ·  [walkthrough →](./learn/Open_the_Lock.md) — BFS on the state graph; mention this is really a Graph problem.
 
 ---
 

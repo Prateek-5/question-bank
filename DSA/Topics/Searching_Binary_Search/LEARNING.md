@@ -3,6 +3,8 @@
 > **Stage:** Foundation   |   **Prereqs:** [Arrays_and_Matrices/](../Arrays_and_Matrices/LEARNING.md)   |   **Problems:** 8
 >
 > Binary search on **values** (sorted array) and on **answers** (monotonic predicate). The second is the senior-bar variant.
+>
+> **Two-tier format:** each problem has a **reference card** (linked first below) AND a paced **teaching walkthrough** in [`learn/`](./learn/) for first-time learners.
 
 ---
 
@@ -20,29 +22,29 @@
 
 ### Lower / upper bound — boundary precision
 
-1. **[Find_First_and_Last_Position_of_Element_in_Sorted_Array.md](./Find_First_and_Last_Position_of_Element_in_Sorted_Array.md)** — Lower-bound for first, upper-bound for last. Memorize the templates. **must-do**
+1. **[Find_First_and_Last_Position_of_Element_in_Sorted_Array.md](./Find_First_and_Last_Position_of_Element_in_Sorted_Array.md)**  ·  [walkthrough →](./learn/Find_First_and_Last_Position_of_Element_in_Sorted_Array.md) — Lower-bound for first, upper-bound for last. Memorize the templates. **must-do**
 
 ### Shape-based search
 
-2. **[Find_Peak_Element.md](./Find_Peak_Element.md)** — Move toward the larger neighbor. **must-do**
-3. **[Search_in_Rotated_Sorted_Array.md](./Search_in_Rotated_Sorted_Array.md)** — Decide which half is sorted, then check target's range. **must-do**
+2. **[Find_Peak_Element.md](./Find_Peak_Element.md)**  ·  [walkthrough →](./learn/Find_Peak_Element.md) — Move toward the larger neighbor. **must-do**
+3. **[Search_in_Rotated_Sorted_Array.md](./Search_in_Rotated_Sorted_Array.md)**  ·  [walkthrough →](./learn/Search_in_Rotated_Sorted_Array.md) — Decide which half is sorted, then check target's range. **must-do**
 
 ### Invariant search
 
-4. **[Single_Element_in_a_Sorted_Array.md](./Single_Element_in_a_Sorted_Array.md)** — Pair-index invariant (`mid ^ 1`) breaks when single element is to the left.
+4. **[Single_Element_in_a_Sorted_Array.md](./Single_Element_in_a_Sorted_Array.md)**  ·  [walkthrough →](./learn/Single_Element_in_a_Sorted_Array.md) — Pair-index invariant (`mid ^ 1`) breaks when single element is to the left.
 
 ### Sorted matrix
 
-5. **[Search_a_2D_Matrix.md](./Search_a_2D_Matrix.md)** — Treat matrix as flat sorted array; binary search with index math.
+5. **[Search_a_2D_Matrix.md](./Search_a_2D_Matrix.md)**  ·  [walkthrough →](./learn/Search_a_2D_Matrix.md) — Treat matrix as flat sorted array; binary search with index math.
 
 ### Binary search on the answer
 
-6. **[Capacity_To_Ship_Packages_Within_D_Days.md](./Capacity_To_Ship_Packages_Within_D_Days.md)** — Binary search the capacity; predicate is `canShipIn(D, capacity)`. **must-do**
-7. **[Magnetic_Force_Between_Two_Balls.md](./Magnetic_Force_Between_Two_Balls.md)** — Binary search the gap; predicate is `canPlaceMBallsWithGap(g)`.
+6. **[Capacity_To_Ship_Packages_Within_D_Days.md](./Capacity_To_Ship_Packages_Within_D_Days.md)**  ·  [walkthrough →](./learn/Capacity_To_Ship_Packages_Within_D_Days.md) — Binary search the capacity; predicate is `canShipIn(D, capacity)`. **must-do**
+7. **[Magnetic_Force_Between_Two_Balls.md](./Magnetic_Force_Between_Two_Balls.md)**  ·  [walkthrough →](./learn/Magnetic_Force_Between_Two_Balls.md) — Binary search the gap; predicate is `canPlaceMBallsWithGap(g)`.
 
 ### Math + search
 
-8. **[Smallest_Good_Base.md](./Smallest_Good_Base.md)** — Number-theoretic; binary search on the base. Hardest of the set.
+8. **[Smallest_Good_Base.md](./Smallest_Good_Base.md)**  ·  [walkthrough →](./learn/Smallest_Good_Base.md) — Number-theoretic; binary search on the base. Hardest of the set.
 
 ---
 

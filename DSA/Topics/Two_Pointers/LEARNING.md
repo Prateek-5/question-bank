@@ -3,6 +3,8 @@
 > **Stage:** Foundation   |   **Prereqs:** Arrays   |   **Problems:** 7
 >
 > Two indices, both moving forward (one direction or opposite). Each pointer moves O(n) times total → linear algorithms for problems that look quadratic.
+>
+> **Two-tier format:** each problem has a **reference card** (linked first below) AND a paced **teaching walkthrough** in [`learn/`](./learn/) for first-time learners.
 
 ---
 
@@ -20,25 +22,25 @@ Pair this topic with **[Hashing_Sliding_Window/](../Hashing_Sliding_Window/LEARN
 
 ### Sorted-array opposing pointers
 
-1. **[Two_Sum_II_Input_Array_Is_Sorted.md](./Two_Sum_II_Input_Array_Is_Sorted.md)** — The template. `lo, hi`, move based on sum vs target. **must-do**
-2. **[Container_With_Most_Water.md](./Container_With_Most_Water.md)** — Same shape, different metric. Move the shorter side. **must-do**
+1. **[Two_Sum_II_Input_Array_Is_Sorted.md](./Two_Sum_II_Input_Array_Is_Sorted.md)**  ·  [walkthrough →](./learn/Two_Sum_II_Input_Array_Is_Sorted.md) — The template. `lo, hi`, move based on sum vs target. **must-do**
+2. **[Container_With_Most_Water.md](./Container_With_Most_Water.md)**  ·  [walkthrough →](./learn/Container_With_Most_Water.md) — Same shape, different metric. Move the shorter side. **must-do**
 
 ### k-sum family
 
-3. **[3Sum.md](./3Sum.md)** — Fix one, two-pointer the rest. Dedup carefully. **must-do**
+3. **[3Sum.md](./3Sum.md)**  ·  [walkthrough →](./learn/3Sum.md) — Fix one, two-pointer the rest. Dedup carefully. **must-do**
 
 ### Pair problems with constraints
 
-4. **[Minimize_Maximum_Pair_Sum_in_Array.md](./Minimize_Maximum_Pair_Sum_in_Array.md)** — Sort + pair from ends.
-5. **[K_diff_Pairs_in_an_Array.md](./K_diff_Pairs_in_an_Array.md)** — Sorted two-pointer with difference target.
+4. **[Minimize_Maximum_Pair_Sum_in_Array.md](./Minimize_Maximum_Pair_Sum_in_Array.md)**  ·  [walkthrough →](./learn/Minimize_Maximum_Pair_Sum_in_Array.md) — Sort + pair from ends.
+5. **[K_diff_Pairs_in_an_Array.md](./K_diff_Pairs_in_an_Array.md)**  ·  [walkthrough →](./learn/K_diff_Pairs_in_an_Array.md) — Sorted two-pointer with difference target.
 
 ### Two-pointer variant of a classic
 
-6. **[Trapping_Rain_Water.md](./Trapping_Rain_Water.md)** — Same problem as in `Arrays_and_Matrices/`, but solved with O(1) extra space via two pointers. Compare to the L/R precomputed version.
+6. **[Trapping_Rain_Water.md](./Trapping_Rain_Water.md)**  ·  [walkthrough →](./learn/Trapping_Rain_Water.md) — Same problem as in `Arrays_and_Matrices/`, but solved with O(1) extra space via two pointers. Compare to the L/R precomputed version.
 
 ### Multi-pointer DP-flavored
 
-7. **[Ugly_Number_II.md](./Ugly_Number_II.md)** — Three pointers tracking ×2, ×3, ×5 progress. Atypical but illuminating.
+7. **[Ugly_Number_II.md](./Ugly_Number_II.md)**  ·  [walkthrough →](./learn/Ugly_Number_II.md) — Three pointers tracking ×2, ×3, ×5 progress. Atypical but illuminating.
 
 ---
 

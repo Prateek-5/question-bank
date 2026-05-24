@@ -3,6 +3,8 @@
 > **Stage:** Trees & Graphs   |   **Prereqs:** [Trees_Binary_Trees/](../Trees_Binary_Trees/LEARNING.md), [Queues_Deque_Monotonic_Queue/](../Queues_Deque_Monotonic_Queue/LEARNING.md), [Heap_Priority_Queue/](../Heap_Priority_Queue/LEARNING.md)   |   **Problems:** 27
 >
 > The biggest topic. Five sub-patterns: **grid BFS/DFS**, **graph traversal**, **topological sort**, **DSU (union-find)**, **shortest path family** (BFS / Dijkstra / Bellman-Ford / Floyd-Warshall).
+>
+> **Two-tier format:** each problem has a **reference card** (linked first below) AND a paced **teaching walkthrough** in [`learn/`](./learn/) for first-time learners.
 
 ---
 
@@ -24,63 +26,63 @@ Strict order — each sub-pattern builds on the previous:
 
 ### Grid DFS (start here)
 
-1. **[Number_of_Islands.md](./Number_of_Islands.md)** — DFS flood-fill on grid. **must-do**
-2. **[Max_Area_of_Island.md](./Max_Area_of_Island.md)** — Same, track max area.
-3. **[Number_of_Provinces.md](./Number_of_Provinces.md)** — Adjacency-matrix DFS or DSU. **must-do**
+1. **[Number_of_Islands.md](./Number_of_Islands.md)**  ·  [walkthrough →](./learn/Number_of_Islands.md) — DFS flood-fill on grid. **must-do**
+2. **[Max_Area_of_Island.md](./Max_Area_of_Island.md)**  ·  [walkthrough →](./learn/Max_Area_of_Island.md) — Same, track max area.
+3. **[Number_of_Provinces.md](./Number_of_Provinces.md)**  ·  [walkthrough →](./learn/Number_of_Provinces.md) — Adjacency-matrix DFS or DSU. **must-do**
 
 ### Multi-source BFS
 
-4. **[Rotting_Oranges.md](./Rotting_Oranges.md)** — Initialize queue with all sources; BFS levels = time. **must-do**
-5. **[01_Matrix.md](./01_Matrix.md)** — Multi-source BFS from all 0s outward. **must-do**
+4. **[Rotting_Oranges.md](./Rotting_Oranges.md)**  ·  [walkthrough →](./learn/Rotting_Oranges.md) — Initialize queue with all sources; BFS levels = time. **must-do**
+5. **[01_Matrix.md](./01_Matrix.md)**  ·  [walkthrough →](./learn/01_Matrix.md) — Multi-source BFS from all 0s outward. **must-do**
 
 ### Boundary DFS
 
-6. **[Surrounded_Regions.md](./Surrounded_Regions.md)** — Mark boundary-reachable Os; flip the rest. **must-do**
-7. **[Number_of_Enclaves.md](./Number_of_Enclaves.md)** — Same idea.
+6. **[Surrounded_Regions.md](./Surrounded_Regions.md)**  ·  [walkthrough →](./learn/Surrounded_Regions.md) — Mark boundary-reachable Os; flip the rest. **must-do**
+7. **[Number_of_Enclaves.md](./Number_of_Enclaves.md)**  ·  [walkthrough →](./learn/Number_of_Enclaves.md) — Same idea.
 
 ### Simple graph DFS/BFS
 
-8. **[Keys_and_Rooms.md](./Keys_and_Rooms.md)** — DFS/BFS; visited set. **must-do**
-9. **[Find_the_Town_Judge.md](./Find_the_Town_Judge.md)** — In-degree / out-degree counting.
-10. **[Find_Eventual_Safe_States.md](./Find_Eventual_Safe_States.md)** — Reverse-graph topo or DFS with 3-color cycle detection.
+8. **[Keys_and_Rooms.md](./Keys_and_Rooms.md)**  ·  [walkthrough →](./learn/Keys_and_Rooms.md) — DFS/BFS; visited set. **must-do**
+9. **[Find_the_Town_Judge.md](./Find_the_Town_Judge.md)**  ·  [walkthrough →](./learn/Find_the_Town_Judge.md) — In-degree / out-degree counting.
+10. **[Find_Eventual_Safe_States.md](./Find_Eventual_Safe_States.md)**  ·  [walkthrough →](./learn/Find_Eventual_Safe_States.md) — Reverse-graph topo or DFS with 3-color cycle detection.
 
 ### Bipartite / coloring
 
-11. **[Is_Graph_Bipartite.md](./Is_Graph_Bipartite.md)** — BFS coloring; adjacent nodes different colors. **must-do**
+11. **[Is_Graph_Bipartite.md](./Is_Graph_Bipartite.md)**  ·  [walkthrough →](./learn/Is_Graph_Bipartite.md) — BFS coloring; adjacent nodes different colors. **must-do**
 
 ### Shortest path — unweighted (BFS)
 
-12. **[Shortest_Path_in_an_Undirected_Graph.md](./Shortest_Path_in_an_Undirected_Graph.md)** — BFS gives shortest path on unweighted graphs. **must-do**
-13. **[Shortest_Path_in_Binary_Matrix.md](./Shortest_Path_in_Binary_Matrix.md)** — Grid BFS with 8-direction moves.
-14. **[Check_if_There_Is_a_Valid_Path_in_a_Graph.md](./Check_if_There_Is_a_Valid_Path_in_a_Graph.md)** — BFS reachability or DSU.
+12. **[Shortest_Path_in_an_Undirected_Graph.md](./Shortest_Path_in_an_Undirected_Graph.md)**  ·  [walkthrough →](./learn/Shortest_Path_in_an_Undirected_Graph.md) — BFS gives shortest path on unweighted graphs. **must-do**
+13. **[Shortest_Path_in_Binary_Matrix.md](./Shortest_Path_in_Binary_Matrix.md)**  ·  [walkthrough →](./learn/Shortest_Path_in_Binary_Matrix.md) — Grid BFS with 8-direction moves.
+14. **[Check_if_There_Is_a_Valid_Path_in_a_Graph.md](./Check_if_There_Is_a_Valid_Path_in_a_Graph.md)**  ·  [walkthrough →](./learn/Check_if_There_Is_a_Valid_Path_in_a_Graph.md) — BFS reachability or DSU.
 
 ### Topological sort
 
-15. **[Course_Schedule_II.md](./Course_Schedule_II.md)** — Kahn's algorithm (BFS on in-degree zero) or DFS post-order reversed. **must-do**
+15. **[Course_Schedule_II.md](./Course_Schedule_II.md)**  ·  [walkthrough →](./learn/Course_Schedule_II.md) — Kahn's algorithm (BFS on in-degree zero) or DFS post-order reversed. **must-do**
 
 ### Shortest path — weighted
 
-16. **[Network_Delay_Time.md](./Network_Delay_Time.md)** — Dijkstra (min-heap of distances). **must-do**
-17. **[Cheapest_Flights_Within_K_Stops.md](./Cheapest_Flights_Within_K_Stops.md)** — Bellman-Ford limited to K iterations OR Dijkstra with state `(node, stops)`. **must-do**
-18. **[Find_the_City_With_the_Smallest_Number_of_Neighbors.md](./Find_the_City_With_the_Smallest_Number_of_Neighbors.md)** — Floyd-Warshall (all-pairs shortest path).
+16. **[Network_Delay_Time.md](./Network_Delay_Time.md)**  ·  [walkthrough →](./learn/Network_Delay_Time.md) — Dijkstra (min-heap of distances). **must-do**
+17. **[Cheapest_Flights_Within_K_Stops.md](./Cheapest_Flights_Within_K_Stops.md)**  ·  [walkthrough →](./learn/Cheapest_Flights_Within_K_Stops.md) — Bellman-Ford limited to K iterations OR Dijkstra with state `(node, stops)`. **must-do**
+18. **[Find_the_City_With_the_Smallest_Number_of_Neighbors.md](./Find_the_City_With_the_Smallest_Number_of_Neighbors.md)**  ·  [walkthrough →](./learn/Find_the_City_With_the_Smallest_Number_of_Neighbors.md) — Floyd-Warshall (all-pairs shortest path).
 
 ### DSU (union-find)
 
-19. **[Number_of_Operations_to_Make_Network_Connected.md](./Number_of_Operations_to_Make_Network_Connected.md)** — DSU; count components. **must-do**
-20. **[Redundant_Connection.md](./Redundant_Connection.md)** — DSU; first edge whose endpoints already connected. **must-do**
-21. **[Accounts_Merge.md](./Accounts_Merge.md)** — Map emails to canonical owner via DSU. **must-do**
-22. **[Most_Stones_Removed_with_Same_Row_or_Column.md](./Most_Stones_Removed_with_Same_Row_or_Column.md)** — DSU on rows + cols (use `n + col` to distinguish).
-23. **[Satisfiability_of_Equality_Equations.md](./Satisfiability_of_Equality_Equations.md)** — Union the equals first; check the not-equals after.
+19. **[Number_of_Operations_to_Make_Network_Connected.md](./Number_of_Operations_to_Make_Network_Connected.md)**  ·  [walkthrough →](./learn/Number_of_Operations_to_Make_Network_Connected.md) — DSU; count components. **must-do**
+20. **[Redundant_Connection.md](./Redundant_Connection.md)**  ·  [walkthrough →](./learn/Redundant_Connection.md) — DSU; first edge whose endpoints already connected. **must-do**
+21. **[Accounts_Merge.md](./Accounts_Merge.md)**  ·  [walkthrough →](./learn/Accounts_Merge.md) — Map emails to canonical owner via DSU. **must-do**
+22. **[Most_Stones_Removed_with_Same_Row_or_Column.md](./Most_Stones_Removed_with_Same_Row_or_Column.md)**  ·  [walkthrough →](./learn/Most_Stones_Removed_with_Same_Row_or_Column.md) — DSU on rows + cols (use `n + col` to distinguish).
+23. **[Satisfiability_of_Equality_Equations.md](./Satisfiability_of_Equality_Equations.md)**  ·  [walkthrough →](./learn/Satisfiability_of_Equality_Equations.md) — Union the equals first; check the not-equals after.
 
 ### DP on graph / probability
 
-24. **[Knight_Probability_in_Chessboard.md](./Knight_Probability_in_Chessboard.md)** — DP `prob[k][r][c]`. Iterate K moves.
+24. **[Knight_Probability_in_Chessboard.md](./Knight_Probability_in_Chessboard.md)**  ·  [walkthrough →](./learn/Knight_Probability_in_Chessboard.md) — DP `prob[k][r][c]`. Iterate K moves.
 
 ### Misc / advanced
 
-25. **[Count_Primes.md](./Count_Primes.md)** — Sieve of Eratosthenes (graph-adjacent topic).
-26. **[Find_the_Smallest_Binary_Digit_Multiple_of_Given_Number.md](./Find_the_Smallest_Binary_Digit_Multiple_of_Given_Number.md)** — BFS on remainders (modular state).
-27. **[Minimum_Weight_Cycle.md](./Minimum_Weight_Cycle.md)** — Hardest in the set.
+25. **[Count_Primes.md](./Count_Primes.md)**  ·  [walkthrough →](./learn/Count_Primes.md) — Sieve of Eratosthenes (graph-adjacent topic).
+26. **[Find_the_Smallest_Binary_Digit_Multiple_of_Given_Number.md](./Find_the_Smallest_Binary_Digit_Multiple_of_Given_Number.md)**  ·  [walkthrough →](./learn/Find_the_Smallest_Binary_Digit_Multiple_of_Given_Number.md) — BFS on remainders (modular state).
+27. **[Minimum_Weight_Cycle.md](./Minimum_Weight_Cycle.md)**  ·  [walkthrough →](./learn/Minimum_Weight_Cycle.md) — Hardest in the set.
 
 ---
 

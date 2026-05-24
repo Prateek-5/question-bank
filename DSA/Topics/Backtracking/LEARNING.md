@@ -3,6 +3,8 @@
 > **Stage:** Structures   |   **Prereqs:** [Recursion/](../Recursion/LEARNING.md)   |   **Problems:** 4
 >
 > Constraint-driven recursion. Pruning is the whole game.
+>
+> **Two-tier format:** each problem has a **reference card** (linked first below) AND a paced **teaching walkthrough** in [`learn/`](./learn/) for first-time learners.
 
 ---
 
@@ -14,10 +16,10 @@ Short topic. Order: constraint-shaped → string-based → bit-pattern → harde
 
 ## Problems in study order
 
-1. **[Generate_Parentheses.md](./Generate_Parentheses.md)** — Two counters (`open`, `close`); place `(` if `open < n`, place `)` if `close < open`. Catalan C(n) outputs. **must-do**
-2. **[Palindrome_Partitioning.md](./Palindrome_Partitioning.md)** — At each index, try all palindrome prefixes; recurse on the rest. **must-do**
-3. **[Gray_Code.md](./Gray_Code.md)** — Generate by XOR pattern (`i ^ (i >> 1)`) or recursive mirror-prefix.
-4. **[Sudoku_Solver.md](./Sudoku_Solver.md)** — Backtracking with three constraint Sets (rows, cols, boxes). The hardest. **must-do** for senior interviews.
+1. **[Generate_Parentheses.md](./Generate_Parentheses.md)**  ·  [walkthrough →](./learn/Generate_Parentheses.md) — Two counters (`open`, `close`); place `(` if `open < n`, place `)` if `close < open`. Catalan C(n) outputs. **must-do**
+2. **[Palindrome_Partitioning.md](./Palindrome_Partitioning.md)**  ·  [walkthrough →](./learn/Palindrome_Partitioning.md) — At each index, try all palindrome prefixes; recurse on the rest. **must-do**
+3. **[Gray_Code.md](./Gray_Code.md)**  ·  [walkthrough →](./learn/Gray_Code.md) — Generate by XOR pattern (`i ^ (i >> 1)`) or recursive mirror-prefix.
+4. **[Sudoku_Solver.md](./Sudoku_Solver.md)**  ·  [walkthrough →](./learn/Sudoku_Solver.md) — Backtracking with three constraint Sets (rows, cols, boxes). The hardest. **must-do** for senior interviews.
 
 ---
 

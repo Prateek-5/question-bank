@@ -3,6 +3,8 @@
 > **Stage:** Advanced   |   **Prereqs:** [1_D_and_2_D_Arrays/](../1_D_and_2_D_Arrays/LEARNING.md), [Trees_Binary_Trees/](../Trees_Binary_Trees/LEARNING.md)   |   **Problems:** 6
 >
 > Beyond prefix sum: when you need both **fast range queries AND fast point updates**, you need a segment tree.
+>
+> **Two-tier format:** each problem has a **reference card** (linked first below) AND a paced **teaching walkthrough** in [`learn/`](./learn/) for first-time learners.
 
 ---
 
@@ -21,21 +23,21 @@ Strict difficulty order:
 
 ### Warm-up — prefix sum (no updates needed)
 
-1. **[Range_Sum_Query_Immutable.md](./Range_Sum_Query_Immutable.md)** — Prefix-sum array; range query O(1). No segment tree needed. **must-do**
+1. **[Range_Sum_Query_Immutable.md](./Range_Sum_Query_Immutable.md)**  ·  [walkthrough →](./learn/Range_Sum_Query_Immutable.md) — Prefix-sum array; range query O(1). No segment tree needed. **must-do**
 
 ### Segment tree — sum
 
-2. **[Range_Sum_Query_Mutable.md](./Range_Sum_Query_Mutable.md)** — Segment tree (or Fenwick/BIT). Build, update, query all O(log n). **must-do**
+2. **[Range_Sum_Query_Mutable.md](./Range_Sum_Query_Mutable.md)**  ·  [walkthrough →](./learn/Range_Sum_Query_Mutable.md) — Segment tree (or Fenwick/BIT). Build, update, query all O(log n). **must-do**
 
 ### Segment tree — max
 
-3. **[Range_Maximum_Query.md](./Range_Maximum_Query.md)** — Same shape; `max` instead of `sum`. **must-do**
-4. **[Segment_Tree_Range_Maximum_Query_Node_Update.md](./Segment_Tree_Range_Maximum_Query_Node_Update.md)** — Companion with point updates.
+3. **[Range_Maximum_Query.md](./Range_Maximum_Query.md)**  ·  [walkthrough →](./learn/Range_Maximum_Query.md) — Same shape; `max` instead of `sum`. **must-do**
+4. **[Segment_Tree_Range_Maximum_Query_Node_Update.md](./Segment_Tree_Range_Maximum_Query_Node_Update.md)**  ·  [walkthrough →](./learn/Segment_Tree_Range_Maximum_Query_Node_Update.md) — Companion with point updates.
 
 ### Lazy propagation
 
-5. **[Flipping_Sign_Problem_Lazy_Propagation.md](./Flipping_Sign_Problem_Lazy_Propagation.md)** — Range flip; defer propagation. The hard one.
-6. **[Flipping_Sign_Problem_Lazy_Propagation_Segment_Tree.md](./Flipping_Sign_Problem_Lazy_Propagation_Segment_Tree.md)** — Companion / variant.
+5. **[Flipping_Sign_Problem_Lazy_Propagation.md](./Flipping_Sign_Problem_Lazy_Propagation.md)**  ·  [walkthrough →](./learn/Flipping_Sign_Problem_Lazy_Propagation.md) — Range flip; defer propagation. The hard one.
+6. **[Flipping_Sign_Problem_Lazy_Propagation_Segment_Tree.md](./Flipping_Sign_Problem_Lazy_Propagation_Segment_Tree.md)**  ·  [walkthrough →](./learn/Flipping_Sign_Problem_Lazy_Propagation_Segment_Tree.md) — Companion / variant.
 
 ---
 

@@ -3,6 +3,8 @@
 > **Stage:** Foundation   |   **Prereqs:** Arrays   |   **Problems:** 10
 >
 > Stack = last-in-first-out. Two families: **balanced parens / expression parsing** and **monotonic stack** (next-greater-element).
+>
+> **Two-tier format:** each problem has a **reference card** (linked first below) AND a paced **teaching walkthrough** in [`learn/`](./learn/) for first-time learners.
 
 ---
 
@@ -19,25 +21,25 @@
 
 ### Balanced parens / string simulation
 
-1. **[Valid_Parentheses.md](./Valid_Parentheses.md)** — The hello-world of stacks. Push openers, match on closers. **must-do**
-2. **[Remove_Outermost_Parentheses.md](./Remove_Outermost_Parentheses.md)** — Depth counter (a stack of size 1 conceptually).
-3. **[Remove_All_Adjacent_Duplicates_in_String.md](./Remove_All_Adjacent_Duplicates_in_String.md)** — Stack of chars; pop on match. **must-do**
+1. **[Valid_Parentheses.md](./Valid_Parentheses.md)**  ·  [walkthrough →](./learn/Valid_Parentheses.md) — The hello-world of stacks. Push openers, match on closers. **must-do**
+2. **[Remove_Outermost_Parentheses.md](./Remove_Outermost_Parentheses.md)**  ·  [walkthrough →](./learn/Remove_Outermost_Parentheses.md) — Depth counter (a stack of size 1 conceptually).
+3. **[Remove_All_Adjacent_Duplicates_in_String.md](./Remove_All_Adjacent_Duplicates_in_String.md)**  ·  [walkthrough →](./learn/Remove_All_Adjacent_Duplicates_in_String.md) — Stack of chars; pop on match. **must-do**
 
 ### Stack design
 
-4. **[Min_Stack.md](./Min_Stack.md)** — Auxiliary stack tracking min so far. O(1) min. **must-do**
+4. **[Min_Stack.md](./Min_Stack.md)**  ·  [walkthrough →](./learn/Min_Stack.md) — Auxiliary stack tracking min so far. O(1) min. **must-do**
 
 ### Expression eval
 
-5. **[Baseball_Game.md](./Baseball_Game.md)** — Stack of scores; operations transform top elements.
-6. **[Evaluate_Reverse_Polish_Notation.md](./Evaluate_Reverse_Polish_Notation.md)** — Postfix → stack of operands. **must-do**
-7. **[Expression_Contains_Redundant_Bracket_or_Not.md](./Expression_Contains_Redundant_Bracket_or_Not.md)** — Detect `(...)` with no operator inside.
+5. **[Baseball_Game.md](./Baseball_Game.md)**  ·  [walkthrough →](./learn/Baseball_Game.md) — Stack of scores; operations transform top elements.
+6. **[Evaluate_Reverse_Polish_Notation.md](./Evaluate_Reverse_Polish_Notation.md)**  ·  [walkthrough →](./learn/Evaluate_Reverse_Polish_Notation.md) — Postfix → stack of operands. **must-do**
+7. **[Expression_Contains_Redundant_Bracket_or_Not.md](./Expression_Contains_Redundant_Bracket_or_Not.md)**  ·  [walkthrough →](./learn/Expression_Contains_Redundant_Bracket_or_Not.md) — Detect `(...)` with no operator inside.
 
 ### Monotonic stack
 
-8. **[Next_Greater_Element_I.md](./Next_Greater_Element_I.md)** — Build NGE for nums2 via decreasing stack, look up for nums1. The template. **must-do**
-9. **[Daily_Temperatures.md](./Daily_Temperatures.md)** — NGE returning distance. **must-do**
-10. **[Largest_Rectangle_in_Histogram.md](./Largest_Rectangle_in_Histogram.md)** — Increasing stack; on pop compute area with current index as right boundary. THE classic. **must-do**
+8. **[Next_Greater_Element_I.md](./Next_Greater_Element_I.md)**  ·  [walkthrough →](./learn/Next_Greater_Element_I.md) — Build NGE for nums2 via decreasing stack, look up for nums1. The template. **must-do**
+9. **[Daily_Temperatures.md](./Daily_Temperatures.md)**  ·  [walkthrough →](./learn/Daily_Temperatures.md) — NGE returning distance. **must-do**
+10. **[Largest_Rectangle_in_Histogram.md](./Largest_Rectangle_in_Histogram.md)**  ·  [walkthrough →](./learn/Largest_Rectangle_in_Histogram.md) — Increasing stack; on pop compute area with current index as right boundary. THE classic. **must-do**
 
 ---
 

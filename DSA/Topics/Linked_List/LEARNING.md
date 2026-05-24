@@ -3,6 +3,8 @@
 > **Stage:** Foundation   |   **Prereqs:** none   |   **Problems:** 11
 >
 > Pointer manipulation without the safety net of random access. The canonical "do you think in pointers" topic.
+>
+> **Two-tier format:** each problem has a **reference card** (linked first below) AND a paced **teaching walkthrough** in [`learn/`](./learn/) for first-time learners.
 
 ---
 
@@ -20,35 +22,35 @@
 
 ### Design — implement the API
 
-1. **[Design_Linked_List.md](./Design_Linked_List.md)** — Build it yourself: `addAtHead`, `addAtTail`, `addAtIndex`, `get`, `delete`. Establishes every primitive you'll use later. **must-do**
+1. **[Design_Linked_List.md](./Design_Linked_List.md)**  ·  [walkthrough →](./learn/Design_Linked_List.md) — Build it yourself: `addAtHead`, `addAtTail`, `addAtIndex`, `get`, `delete`. Establishes every primitive you'll use later. **must-do**
 
 ### Single-node tricks
 
-2. **[Delete_Node_in_a_Linked_List.md](./Delete_Node_in_a_Linked_List.md)** — Copy-and-skip trick when you don't have the head. Clever puzzle.
+2. **[Delete_Node_in_a_Linked_List.md](./Delete_Node_in_a_Linked_List.md)**  ·  [walkthrough →](./learn/Delete_Node_in_a_Linked_List.md) — Copy-and-skip trick when you don't have the head. Clever puzzle.
 
 ### Dummy-head idiom
 
-3. **[Remove_Linked_List_Elements.md](./Remove_Linked_List_Elements.md)** — Dummy head before iteration so you can delete the original head uniformly. **must-do**
+3. **[Remove_Linked_List_Elements.md](./Remove_Linked_List_Elements.md)**  ·  [walkthrough →](./learn/Remove_Linked_List_Elements.md) — Dummy head before iteration so you can delete the original head uniformly. **must-do**
 
 ### In-place reverse (THE pattern)
 
-4. **[Reverse_Linked_List.md](./Reverse_Linked_List.md)** — `prev / cur / nxt` three-pointer iterative reverse. Burn into reflex. **must-do**
+4. **[Reverse_Linked_List.md](./Reverse_Linked_List.md)**  ·  [walkthrough →](./learn/Reverse_Linked_List.md) — `prev / cur / nxt` three-pointer iterative reverse. Burn into reflex. **must-do**
 
 ### Slow / fast (Floyd's tortoise and hare)
 
-5. **[Middle_of_the_Linked_List.md](./Middle_of_the_Linked_List.md)** — Slow moves 1, fast moves 2. **must-do**
-6. **[Remove_Nth_Node_From_End_of_List.md](./Remove_Nth_Node_From_End_of_List.md)** — Fixed-gap two-pointer; gap = n. **must-do**
-7. **[Linked_List_Cycle.md](./Linked_List_Cycle.md)** — Floyd's cycle detection. **must-do**
-8. **[Linked_List_Cycle_II.md](./Linked_List_Cycle_II.md)** — After detection, reset one pointer to head — they meet at the cycle start. The math is elegant. **must-do**
+5. **[Middle_of_the_Linked_List.md](./Middle_of_the_Linked_List.md)**  ·  [walkthrough →](./learn/Middle_of_the_Linked_List.md) — Slow moves 1, fast moves 2. **must-do**
+6. **[Remove_Nth_Node_From_End_of_List.md](./Remove_Nth_Node_From_End_of_List.md)**  ·  [walkthrough →](./learn/Remove_Nth_Node_From_End_of_List.md) — Fixed-gap two-pointer; gap = n. **must-do**
+7. **[Linked_List_Cycle.md](./Linked_List_Cycle.md)**  ·  [walkthrough →](./learn/Linked_List_Cycle.md) — Floyd's cycle detection. **must-do**
+8. **[Linked_List_Cycle_II.md](./Linked_List_Cycle_II.md)**  ·  [walkthrough →](./learn/Linked_List_Cycle_II.md) — After detection, reset one pointer to head — they meet at the cycle start. The math is elegant. **must-do**
 
 ### Compose patterns — merge and palindrome
 
-9. **[Merge_Two_Sorted_Lists.md](./Merge_Two_Sorted_Lists.md)** — Dummy head + zip-merge. Foundation for Merge K (in Heap). **must-do**
-10. **[Palindrome_Linked_List.md](./Palindrome_Linked_List.md)** — Find middle + reverse second half + compare. Composes 3 patterns.
+9. **[Merge_Two_Sorted_Lists.md](./Merge_Two_Sorted_Lists.md)**  ·  [walkthrough →](./learn/Merge_Two_Sorted_Lists.md) — Dummy head + zip-merge. Foundation for Merge K (in Heap). **must-do**
+10. **[Palindrome_Linked_List.md](./Palindrome_Linked_List.md)**  ·  [walkthrough →](./learn/Palindrome_Linked_List.md) — Find middle + reverse second half + compare. Composes 3 patterns.
 
 ### Light traversal
 
-11. **[Convert_Binary_Number_in_a_Linked_List_to_Integer.md](./Convert_Binary_Number_in_a_Linked_List_to_Integer.md)** — Walk + accumulate. Warm-up if you need a break.
+11. **[Convert_Binary_Number_in_a_Linked_List_to_Integer.md](./Convert_Binary_Number_in_a_Linked_List_to_Integer.md)**  ·  [walkthrough →](./learn/Convert_Binary_Number_in_a_Linked_List_to_Integer.md) — Walk + accumulate. Warm-up if you need a break.
 
 ---
 

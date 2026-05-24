@@ -3,6 +3,8 @@
 > **Stage:** Structures   |   **Prereqs:** [Stack/](../Stack/LEARNING.md), [Hashing_Sliding_Window/](../Hashing_Sliding_Window/LEARNING.md)   |   **Problems:** 5
 >
 > Queues are FIFO; deques are double-ended; **monotonic deques** are the workhorse for "max/min in sliding window" problems.
+>
+> **Two-tier format:** each problem has a **reference card** (linked first below) AND a paced **teaching walkthrough** in [`learn/`](./learn/) for first-time learners.
 
 ---
 
@@ -20,20 +22,20 @@ Order matters: design first, then the harder structural use.
 
 ### Conversions — stack ↔ queue
 
-1. **[Implement_Queue_using_Stacks.md](./Implement_Queue_using_Stacks.md)** — Two-stack amortized-O(1) pattern. **must-do**
-2. **[Implement_Stack_using_Queues.md](./Implement_Stack_using_Queues.md)** — Push-O(n) or pop-O(n) tradeoff.
+1. **[Implement_Queue_using_Stacks.md](./Implement_Queue_using_Stacks.md)**  ·  [walkthrough →](./learn/Implement_Queue_using_Stacks.md) — Two-stack amortized-O(1) pattern. **must-do**
+2. **[Implement_Stack_using_Queues.md](./Implement_Stack_using_Queues.md)**  ·  [walkthrough →](./learn/Implement_Stack_using_Queues.md) — Push-O(n) or pop-O(n) tradeoff.
 
 ### Stack-flavored (sometimes filed here, sometimes in Stack)
 
-3. **[Longest_Valid_Parentheses.md](./Longest_Valid_Parentheses.md)** — Stack of indices; DP also works.
+3. **[Longest_Valid_Parentheses.md](./Longest_Valid_Parentheses.md)**  ·  [walkthrough →](./learn/Longest_Valid_Parentheses.md) — Stack of indices; DP also works.
 
 ### Greedy / circular array
 
-4. **[Gas_Station.md](./Gas_Station.md)** — Single pass + reset-on-deficit. Tank tracks running balance. **must-do**
+4. **[Gas_Station.md](./Gas_Station.md)**  ·  [walkthrough →](./learn/Gas_Station.md) — Single pass + reset-on-deficit. Tank tracks running balance. **must-do**
 
 ### Monotonic deque — the real reason this topic exists
 
-5. **[Sliding_Window_Maximum.md](./Sliding_Window_Maximum.md)** — Decreasing deque; front is window max; pop back while smaller, pop front when out of window. **must-do** (senior bar)
+5. **[Sliding_Window_Maximum.md](./Sliding_Window_Maximum.md)**  ·  [walkthrough →](./learn/Sliding_Window_Maximum.md) — Decreasing deque; front is window max; pop back while smaller, pop front when out of window. **must-do** (senior bar)
 
 ---
 

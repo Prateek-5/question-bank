@@ -3,6 +3,8 @@
 > **Stage:** Foundation   |   **Prereqs:** [Arrays_and_Matrices/](../Arrays_and_Matrices/LEARNING.md)   |   **Problems:** 8
 >
 > The prefix-sum gateway. Master `prefix[i+1] = prefix[i] + nums[i]` and you've unlocked half of array problems.
+>
+> **Two-tier format:** each problem has a **reference card** (linked first below) AND a paced **teaching walkthrough** in [`learn/`](./learn/) for first-time learners.
 
 ---
 
@@ -21,32 +23,32 @@ Then proceed to **[Two_Pointers/](../Two_Pointers/LEARNING.md)**.
 
 ### Prefix sum — 1D
 
-1. **[Running_Sum_of_1D_Array.md](./Running_Sum_of_1D_Array.md)** — Literally the prefix-sum array. The reflex starts here. **must-do**
+1. **[Running_Sum_of_1D_Array.md](./Running_Sum_of_1D_Array.md)**  ·  [walkthrough →](./learn/Running_Sum_of_1D_Array.md) — Literally the prefix-sum array. The reflex starts here. **must-do**
 
 ### 2D scan (no prefix yet)
 
-2. **[Richest_Customer_Wealth.md](./Richest_Customer_Wealth.md)** — Row sums + max. **must-do**
-3. **[Special_Positions_in_a_Binary_Matrix.md](./Special_Positions_in_a_Binary_Matrix.md)** — Precompute row + column counts.
+2. **[Richest_Customer_Wealth.md](./Richest_Customer_Wealth.md)**  ·  [walkthrough →](./learn/Richest_Customer_Wealth.md) — Row sums + max. **must-do**
+3. **[Special_Positions_in_a_Binary_Matrix.md](./Special_Positions_in_a_Binary_Matrix.md)**  ·  [walkthrough →](./learn/Special_Positions_in_a_Binary_Matrix.md) — Precompute row + column counts.
 
 ### Index mapping
 
-4. **[Convert_1D_Array_Into_2D_Array.md](./Convert_1D_Array_Into_2D_Array.md)** — `i = k/cols, j = k%cols`. **must-do**
+4. **[Convert_1D_Array_Into_2D_Array.md](./Convert_1D_Array_Into_2D_Array.md)**  ·  [walkthrough →](./learn/Convert_1D_Array_Into_2D_Array.md) — `i = k/cols, j = k%cols`. **must-do**
 
 ### Greedy on arrays
 
-5. **[Max_Chunks_To_Make_Sorted.md](./Max_Chunks_To_Make_Sorted.md)** — Running max equals current index → chunk boundary.
+5. **[Max_Chunks_To_Make_Sorted.md](./Max_Chunks_To_Make_Sorted.md)**  ·  [walkthrough →](./learn/Max_Chunks_To_Make_Sorted.md) — Running max equals current index → chunk boundary.
 
 ### Contribution / submatrix sums
 
-6. **[Sum_of_All_Submatrices_Odd_Length_Subarrays.md](./Sum_of_All_Submatrices_Odd_Length_Subarrays.md)** — Each element's contribution = (number of subarrays containing it). Classic counting trick.
+6. **[Sum_of_All_Submatrices_Odd_Length_Subarrays.md](./Sum_of_All_Submatrices_Odd_Length_Subarrays.md)**  ·  [walkthrough →](./learn/Sum_of_All_Submatrices_Odd_Length_Subarrays.md) — Each element's contribution = (number of subarrays containing it). Classic counting trick.
 
 ### 2D prefix sum
 
-7. **[Range_Sum_Query_2D_Immutable.md](./Range_Sum_Query_2D_Immutable.md)** — 2D prefix sum via inclusion-exclusion. **must-do**
+7. **[Range_Sum_Query_2D_Immutable.md](./Range_Sum_Query_2D_Immutable.md)**  ·  [walkthrough →](./learn/Range_Sum_Query_2D_Immutable.md) — 2D prefix sum via inclusion-exclusion. **must-do**
 
 ### Sorted 2D search
 
-8. **[Search_a_2D_Matrix_II.md](./Search_a_2D_Matrix_II.md)** — Staircase search from top-right (or bottom-left). O(n+m). **must-do**
+8. **[Search_a_2D_Matrix_II.md](./Search_a_2D_Matrix_II.md)**  ·  [walkthrough →](./learn/Search_a_2D_Matrix_II.md) — Staircase search from top-right (or bottom-left). O(n+m). **must-do**
 
 ---
 
