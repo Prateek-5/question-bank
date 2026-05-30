@@ -1,7 +1,7 @@
 # Min Cost Climbing Stairs
 
 **Problem Link:**
-https://leetcode.com/problems/min-cost-climbing-stairs/
+<a href="https://leetcode.com/problems/min-cost-climbing-stairs/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/min-cost-climbing-stairs/</a>
 
 **Topic:**
 Dynamic Programming (DP)

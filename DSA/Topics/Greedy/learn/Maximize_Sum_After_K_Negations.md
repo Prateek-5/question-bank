@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Maximize_Sum_After_K_Negations.md`](../Maximize_Sum_After_K_Negations.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/maximize-sum-of-array-after-k-negations/
+> **Problem link:** <a href="https://leetcode.com/problems/maximize-sum-of-array-after-k-negations/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/maximize-sum-of-array-after-k-negations/</a>
 
 ---
 

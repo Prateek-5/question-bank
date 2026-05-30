@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Count_Substrings_That_Differ_by_One_Character.md`](../Count_Substrings_That_Differ_by_One_Character.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/count-substrings-that-differ-by-one-character/
+> **Problem link:** <a href="https://leetcode.com/problems/count-substrings-that-differ-by-one-character/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/count-substrings-that-differ-by-one-character/</a>
 
 ---
 

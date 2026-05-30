@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Largest_Subarray_With_0_Sum.md`](../Largest_Subarray_With_0_Sum.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://www.geeksforgeeks.org/find-the-largest-subarray-with-0-sum/
+> **Problem link:** <a href="https://www.geeksforgeeks.org/find-the-largest-subarray-with-0-sum/" target="_blank" rel="noopener noreferrer">https://www.geeksforgeeks.org/find-the-largest-subarray-with-0-sum/</a>
 
 ---
 

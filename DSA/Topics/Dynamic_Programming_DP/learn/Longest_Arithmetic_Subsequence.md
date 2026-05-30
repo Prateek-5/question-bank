@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Longest_Arithmetic_Subsequence.md`](../Longest_Arithmetic_Subsequence.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/longest-arithmetic-subsequence/
+> **Problem link:** <a href="https://leetcode.com/problems/longest-arithmetic-subsequence/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/longest-arithmetic-subsequence/</a>
 
 ---
 

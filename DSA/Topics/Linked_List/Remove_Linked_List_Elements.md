@@ -1,7 +1,7 @@
 # Remove Linked List Elements
 
 **Problem Link:**
-https://leetcode.com/problems/remove-linked-list-elements/
+<a href="https://leetcode.com/problems/remove-linked-list-elements/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/remove-linked-list-elements/</a>
 
 **Topic:**
 Linked List

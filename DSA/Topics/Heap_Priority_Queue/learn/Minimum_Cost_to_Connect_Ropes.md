@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Minimum_Cost_to_Connect_Ropes.md`](../Minimum_Cost_to_Connect_Ropes.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/minimum-cost-to-connect-sticks/
+> **Problem link:** <a href="https://leetcode.com/problems/minimum-cost-to-connect-sticks/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/minimum-cost-to-connect-sticks/</a>
 
 ---
 

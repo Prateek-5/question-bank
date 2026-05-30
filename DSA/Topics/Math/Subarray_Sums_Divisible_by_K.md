@@ -1,7 +1,7 @@
 # Subarray Sums Divisible by K
 
 **Problem Link:**
-https://leetcode.com/problems/subarray-sums-divisible-by-k/
+<a href="https://leetcode.com/problems/subarray-sums-divisible-by-k/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/subarray-sums-divisible-by-k/</a>
 
 **Topic:**
 Math

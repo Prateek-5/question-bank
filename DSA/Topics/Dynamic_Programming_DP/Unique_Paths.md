@@ -1,7 +1,7 @@
 # Unique Paths
 
 **Problem Link:**
-https://leetcode.com/problems/unique-paths/
+<a href="https://leetcode.com/problems/unique-paths/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/unique-paths/</a>
 
 **Topic:**
 Dynamic Programming (DP)

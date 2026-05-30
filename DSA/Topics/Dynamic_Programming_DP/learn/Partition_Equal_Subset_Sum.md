@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Partition_Equal_Subset_Sum.md`](../Partition_Equal_Subset_Sum.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/partition-equal-subset-sum/
+> **Problem link:** <a href="https://leetcode.com/problems/partition-equal-subset-sum/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/partition-equal-subset-sum/</a>
 
 ---
 

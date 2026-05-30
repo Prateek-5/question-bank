@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Number_of_Digit_One.md`](../Number_of_Digit_One.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/number-of-digit-one/description/
+> **Problem link:** <a href="https://leetcode.com/problems/number-of-digit-one/description/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/number-of-digit-one/description/</a>
 
 ---
 

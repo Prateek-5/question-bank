@@ -1,7 +1,7 @@
 # Max Consecutive Ones
 
 **Problem Link:**
-https://leetcode.com/problems/max-consecutive-ones/
+<a href="https://leetcode.com/problems/max-consecutive-ones/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/max-consecutive-ones/</a>
 
 **Topic:**
 Number Theory / Misc

@@ -1,7 +1,7 @@
 # Binary Tree Inorder Traversal (Iterative)
 
 **Problem Link:**
-https://leetcode.com/problems/binary-tree-inorder-traversal/
+<a href="https://leetcode.com/problems/binary-tree-inorder-traversal/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/binary-tree-inorder-traversal/</a>
 
 **Topic:**
 Trees / Binary Trees

@@ -1,7 +1,7 @@
 # Maximum Height by Stacking Cuboids
 
 **Problem Link:**
-https://leetcode.com/problems/maximum-height-by-stacking-cuboids/
+<a href="https://leetcode.com/problems/maximum-height-by-stacking-cuboids/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/maximum-height-by-stacking-cuboids/</a>
 
 **Topic:**
 Dynamic Programming (DP)

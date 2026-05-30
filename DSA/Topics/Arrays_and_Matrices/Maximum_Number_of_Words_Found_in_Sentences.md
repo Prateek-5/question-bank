@@ -1,7 +1,7 @@
 # Maximum Number of Words Found in Sentences
 
 **Problem Link:**
-https://leetcode.com/problems/maximum-number-of-words-found-in-sentences/
+<a href="https://leetcode.com/problems/maximum-number-of-words-found-in-sentences/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/maximum-number-of-words-found-in-sentences/</a>
 
 **Topic:**
 Arrays and Matrices

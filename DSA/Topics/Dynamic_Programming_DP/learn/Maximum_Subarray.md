@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Maximum_Subarray.md`](../Maximum_Subarray.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/maximum-subarray/
+> **Problem link:** <a href="https://leetcode.com/problems/maximum-subarray/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/maximum-subarray/</a>
 
 ---
 

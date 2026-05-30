@@ -1,10 +1,10 @@
 # Audit log via ORM hook — interceptors, signals, listeners
 
 ## Source / Origin
-- Hibernate Envers (https://hibernate.org/orm/envers/) — the JVM standard.
+- Hibernate Envers (<a href="https://hibernate.org/orm/envers/" target="_blank" rel="noopener noreferrer">https://hibernate.org/orm/envers/</a>) — the JVM standard.
 - SQLAlchemy events: `before_flush`, `after_insert`, etc.
 - Django `pre_save`/`post_save` signals.
-- Prisma extensions (formerly middleware): https://www.prisma.io/docs/concepts/components/prisma-client/client-extensions
+- Prisma extensions (formerly middleware): <a href="https://www.prisma.io/docs/concepts/components/prisma-client/client-extensions" target="_blank" rel="noopener noreferrer">https://www.prisma.io/docs/concepts/components/prisma-client/client-extensions</a>
 - TypeORM Subscribers / `EventSubscriberInterface`.
 
 ## Why this question matters in interviews

@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Design_Add_and_Search_Words_DS.md`](../Design_Add_and_Search_Words_DS.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/design-add-and-search-words-data-structure/
+> **Problem link:** <a href="https://leetcode.com/problems/design-add-and-search-words-data-structure/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/design-add-and-search-words-data-structure/</a>
 
 ---
 

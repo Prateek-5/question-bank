@@ -1,7 +1,7 @@
 # Merge K Sorted Lists
 
 **Problem Link:**
-https://leetcode.com/problems/merge-k-sorted-lists/
+<a href="https://leetcode.com/problems/merge-k-sorted-lists/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/merge-k-sorted-lists/</a>
 
 **Topic:**
 Heap / Priority Queue

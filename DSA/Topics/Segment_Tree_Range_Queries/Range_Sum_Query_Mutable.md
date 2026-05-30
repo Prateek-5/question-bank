@@ -1,7 +1,7 @@
 # Range Sum Query — Mutable
 
 **Problem Link:**
-https://leetcode.com/problems/range-sum-query-mutable/
+<a href="https://leetcode.com/problems/range-sum-query-mutable/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/range-sum-query-mutable/</a>
 
 **Topic:**
 Segment Tree / Range Queries

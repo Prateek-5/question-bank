@@ -1,7 +1,7 @@
 # Evaluate Reverse Polish Notation
 
 **Problem Link:**
-https://leetcode.com/problems/evaluate-reverse-polish-notation/
+<a href="https://leetcode.com/problems/evaluate-reverse-polish-notation/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/evaluate-reverse-polish-notation/</a>
 
 **Topic:**
 Stack

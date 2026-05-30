@@ -1,7 +1,7 @@
 # Richest Customer Wealth
 
 **Problem Link:**
-https://leetcode.com/problems/richest-customer-wealth/
+<a href="https://leetcode.com/problems/richest-customer-wealth/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/richest-customer-wealth/</a>
 
 **Topic:**
 1-D & 2-D Arrays

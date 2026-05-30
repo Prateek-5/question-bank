@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Largest_Multiple_of_Three.md`](../Largest_Multiple_of_Three.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/largest-multiple-of-three/
+> **Problem link:** <a href="https://leetcode.com/problems/largest-multiple-of-three/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/largest-multiple-of-three/</a>
 
 ---
 

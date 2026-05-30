@@ -1,7 +1,7 @@
 # Prefix and Suffix Search
 
 **Problem Link:**
-https://leetcode.com/problems/prefix-and-suffix-search/
+<a href="https://leetcode.com/problems/prefix-and-suffix-search/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/prefix-and-suffix-search/</a>
 
 **Topic:**
 Trie / Bit Manipulation Trie

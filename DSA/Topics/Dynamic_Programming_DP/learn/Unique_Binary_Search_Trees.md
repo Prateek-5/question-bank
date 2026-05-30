@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Unique_Binary_Search_Trees.md`](../Unique_Binary_Search_Trees.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/unique-binary-search-trees/
+> **Problem link:** <a href="https://leetcode.com/problems/unique-binary-search-trees/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/unique-binary-search-trees/</a>
 
 ---
 

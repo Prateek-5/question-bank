@@ -1,7 +1,7 @@
 # Find the Smallest Binary Digit Multiple of Given Number
 
 **Problem Link:**
-https://www.geeksforgeeks.org/dsa/find-the-smallest-binary-digit-multiple-of-given-number/
+<a href="https://www.geeksforgeeks.org/dsa/find-the-smallest-binary-digit-multiple-of-given-number/" target="_blank" rel="noopener noreferrer">https://www.geeksforgeeks.org/dsa/find-the-smallest-binary-digit-multiple-of-given-number/</a>
 
 **Topic:**
 Graph (BFS / DFS / Dijkstra / DSU)

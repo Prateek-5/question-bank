@@ -1,7 +1,7 @@
 # Generate Parentheses
 
 **Problem Link:**
-https://leetcode.com/problems/generate-parentheses/
+<a href="https://leetcode.com/problems/generate-parentheses/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/generate-parentheses/</a>
 
 **Topic:**
 Backtracking

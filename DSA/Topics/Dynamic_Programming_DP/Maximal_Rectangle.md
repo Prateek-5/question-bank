@@ -1,7 +1,7 @@
 # Maximal Rectangle
 
 **Problem Link:**
-https://leetcode.com/problems/maximal-rectangle/
+<a href="https://leetcode.com/problems/maximal-rectangle/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/maximal-rectangle/</a>
 
 **Topic:**
 Dynamic Programming (DP)

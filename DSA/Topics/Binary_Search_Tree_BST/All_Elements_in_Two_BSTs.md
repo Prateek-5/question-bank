@@ -1,7 +1,7 @@
 # All Elements in Two BSTs
 
 **Problem Link:**
-https://leetcode.com/problems/all-elements-in-two-binary-search-trees/
+<a href="https://leetcode.com/problems/all-elements-in-two-binary-search-trees/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/all-elements-in-two-binary-search-trees/</a>
 
 **Topic:**
 Binary Search Tree (BST)

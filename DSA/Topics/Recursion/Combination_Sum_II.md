@@ -1,7 +1,7 @@
 # Combination Sum II
 
 **Problem Link:**
-https://leetcode.com/problems/combination-sum-ii/
+<a href="https://leetcode.com/problems/combination-sum-ii/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/combination-sum-ii/</a>
 
 **Topic:**
 Recursion

@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Generate_Parentheses.md`](../Generate_Parentheses.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/generate-parentheses/
+> **Problem link:** <a href="https://leetcode.com/problems/generate-parentheses/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/generate-parentheses/</a>
 
 ---
 

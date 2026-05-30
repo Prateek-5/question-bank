@@ -1,7 +1,7 @@
 # Single Number II
 
 **Problem Link:**
-https://leetcode.com/problems/single-number-ii/
+<a href="https://leetcode.com/problems/single-number-ii/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/single-number-ii/</a>
 
 **Topic:**
 Bit Manipulation

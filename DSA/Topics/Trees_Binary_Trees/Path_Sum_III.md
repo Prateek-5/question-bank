@@ -1,7 +1,7 @@
 # Path Sum III
 
 **Problem Link:**
-https://leetcode.com/problems/path-sum-iii/
+<a href="https://leetcode.com/problems/path-sum-iii/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/path-sum-iii/</a>
 
 **Topic:**
 Trees / Binary Trees

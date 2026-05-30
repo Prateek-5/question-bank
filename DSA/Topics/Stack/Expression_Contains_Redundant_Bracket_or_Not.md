@@ -1,7 +1,7 @@
 # Expression Contains Redundant Bracket or Not
 
 **Problem Link:**
-https://www.geeksforgeeks.org/expression-contains-redundant-bracket-not/
+<a href="https://www.geeksforgeeks.org/expression-contains-redundant-bracket-not/" target="_blank" rel="noopener noreferrer">https://www.geeksforgeeks.org/expression-contains-redundant-bracket-not/</a>
 
 **Topic:**
 Stack

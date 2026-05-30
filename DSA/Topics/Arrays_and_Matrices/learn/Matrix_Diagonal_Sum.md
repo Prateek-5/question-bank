@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Matrix_Diagonal_Sum.md`](../Matrix_Diagonal_Sum.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/matrix-diagonal-sum/
+> **Problem link:** <a href="https://leetcode.com/problems/matrix-diagonal-sum/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/matrix-diagonal-sum/</a>
 
 ---
 

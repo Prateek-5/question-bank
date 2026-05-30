@@ -2,7 +2,7 @@
 
 > **Difficulty:** Easy-Medium   |   **Time:** ~15 min   |   **Prereqs:** [promise-race-polyfill.md](./promise-race-polyfill.md), [sleep.md](./sleep.md)
 >
-> **Source:** [LeetCode 2637 — Promise Time Limit](https://leetcode.com/problems/promise-time-limit/); the standard pattern in every HTTP client.
+> **Source:** <a href="https://leetcode.com/problems/promise-time-limit/" target="_blank" rel="noopener noreferrer">LeetCode 2637 — Promise Time Limit</a>; the standard pattern in every HTTP client.
 
 ---
 

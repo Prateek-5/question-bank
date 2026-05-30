@@ -2,7 +2,7 @@
 
 > **Difficulty:** Medium   |   **Time:** ~25 min   |   **Prereqs:** [`concepts/recursion.md`](../../concepts/recursion.md), [circular-buffer.md](./circular-buffer.md)
 >
-> **Source:** [LeetCode 703](https://leetcode.com/problems/kth-largest-element-in-a-stream/), [215](https://leetcode.com/problems/kth-largest-element-in-an-array/), [1046](https://leetcode.com/problems/last-stone-weight/). Backbone of Dijkstra, A*, top-K, K-way merge, async schedulers.
+> **Source:** <a href="https://leetcode.com/problems/kth-largest-element-in-a-stream/" target="_blank" rel="noopener noreferrer">LeetCode 703</a>, <a href="https://leetcode.com/problems/kth-largest-element-in-an-array/" target="_blank" rel="noopener noreferrer">215</a>, <a href="https://leetcode.com/problems/last-stone-weight/" target="_blank" rel="noopener noreferrer">1046</a>. Backbone of Dijkstra, A*, top-K, K-way merge, async schedulers.
 
 ---
 

@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Maximum_Number_of_Words_Found_in_Sentences.md`](../Maximum_Number_of_Words_Found_in_Sentences.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/maximum-number-of-words-found-in-sentences/
+> **Problem link:** <a href="https://leetcode.com/problems/maximum-number-of-words-found-in-sentences/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/maximum-number-of-words-found-in-sentences/</a>
 
 ---
 

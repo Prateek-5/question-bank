@@ -1,7 +1,7 @@
 # Ones and Zeroes
 
 **Problem Link:**
-https://leetcode.com/problems/ones-and-zeroes/
+<a href="https://leetcode.com/problems/ones-and-zeroes/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/ones-and-zeroes/</a>
 
 **Topic:**
 Dynamic Programming (DP)

@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Remove_Outermost_Parentheses.md`](../Remove_Outermost_Parentheses.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/remove-outermost-parentheses/
+> **Problem link:** <a href="https://leetcode.com/problems/remove-outermost-parentheses/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/remove-outermost-parentheses/</a>
 
 ---
 

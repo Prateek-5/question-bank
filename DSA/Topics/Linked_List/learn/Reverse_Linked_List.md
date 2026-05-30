@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Reverse_Linked_List.md`](../Reverse_Linked_List.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/reverse-linked-list/
+> **Problem link:** <a href="https://leetcode.com/problems/reverse-linked-list/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/reverse-linked-list/</a>
 
 ---
 

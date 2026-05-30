@@ -1,7 +1,7 @@
 # Range Maximum Query
 
 **Problem Link:**
-https://www.geeksforgeeks.org/range-minimum-query-for-static-array/
+<a href="https://www.geeksforgeeks.org/range-minimum-query-for-static-array/" target="_blank" rel="noopener noreferrer">https://www.geeksforgeeks.org/range-minimum-query-for-static-array/</a>
 
 **Topic:**
 Segment Tree / Range Queries

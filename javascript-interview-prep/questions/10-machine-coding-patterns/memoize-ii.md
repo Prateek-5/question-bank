@@ -2,7 +2,7 @@
 
 > **Difficulty:** Senior   |   **Time:** ~25 min   |   **Prereqs:** [memoize.md](./memoize.md), [`concepts/maps-sets.md`](../../concepts/maps-sets.md)
 >
-> **Source:** [LeetCode 2630 — Memoize II](https://leetcode.com/problems/memoize-ii/). The Memoize follow-up that separates value-keyed from identity-keyed.
+> **Source:** <a href="https://leetcode.com/problems/memoize-ii/" target="_blank" rel="noopener noreferrer">LeetCode 2630 — Memoize II</a>. The Memoize follow-up that separates value-keyed from identity-keyed.
 
 ---
 

@@ -1,7 +1,7 @@
 # Ugly Number
 
 **Problem Link:**
-https://leetcode.com/problems/ugly-number/
+<a href="https://leetcode.com/problems/ugly-number/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/ugly-number/</a>
 
 **Topic:**
 Number Theory / Misc

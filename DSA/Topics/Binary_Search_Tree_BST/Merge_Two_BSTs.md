@@ -1,7 +1,7 @@
 # Merge Two BSTs
 
 **Problem Link:**
-https://www.geeksforgeeks.org/merge-two-balanced-binary-search-trees/
+<a href="https://www.geeksforgeeks.org/merge-two-balanced-binary-search-trees/" target="_blank" rel="noopener noreferrer">https://www.geeksforgeeks.org/merge-two-balanced-binary-search-trees/</a>
 
 **Topic:**
 Binary Search Tree (BST)

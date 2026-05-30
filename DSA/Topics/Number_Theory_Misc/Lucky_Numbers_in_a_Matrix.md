@@ -1,7 +1,7 @@
 # Lucky Numbers in a Matrix
 
 **Problem Link:**
-https://leetcode.com/problems/lucky-numbers-in-a-matrix/description/
+<a href="https://leetcode.com/problems/lucky-numbers-in-a-matrix/description/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/lucky-numbers-in-a-matrix/description/</a>
 
 **Topic:**
 Number Theory / Misc

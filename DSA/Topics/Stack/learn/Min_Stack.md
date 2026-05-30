@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Min_Stack.md`](../Min_Stack.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/min-stack/
+> **Problem link:** <a href="https://leetcode.com/problems/min-stack/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/min-stack/</a>
 
 ---
 

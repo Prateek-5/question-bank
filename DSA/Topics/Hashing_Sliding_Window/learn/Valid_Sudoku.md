@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Valid_Sudoku.md`](../Valid_Sudoku.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/valid-sudoku/
+> **Problem link:** <a href="https://leetcode.com/problems/valid-sudoku/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/valid-sudoku/</a>
 
 ---
 

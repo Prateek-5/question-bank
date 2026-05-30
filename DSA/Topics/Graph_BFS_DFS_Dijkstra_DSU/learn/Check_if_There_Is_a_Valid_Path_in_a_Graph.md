@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Check_if_There_Is_a_Valid_Path_in_a_Graph.md`](../Check_if_There_Is_a_Valid_Path_in_a_Graph.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/find-if-path-exists-in-graph/
+> **Problem link:** <a href="https://leetcode.com/problems/find-if-path-exists-in-graph/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/find-if-path-exists-in-graph/</a>
 
 ---
 

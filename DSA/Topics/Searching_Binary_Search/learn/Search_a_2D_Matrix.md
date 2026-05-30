@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Search_a_2D_Matrix.md`](../Search_a_2D_Matrix.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/search-a-2d-matrix/
+> **Problem link:** <a href="https://leetcode.com/problems/search-a-2d-matrix/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/search-a-2d-matrix/</a>
 
 ---
 

@@ -1,7 +1,7 @@
 # Longest Substring Without Repeating Characters
 
 **Problem Link:**
-https://leetcode.com/problems/longest-substring-without-repeating-characters/
+<a href="https://leetcode.com/problems/longest-substring-without-repeating-characters/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/longest-substring-without-repeating-characters/</a>
 
 **Topic:**
 Hashing / Sliding Window

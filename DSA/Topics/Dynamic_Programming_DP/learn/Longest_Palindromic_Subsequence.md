@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Longest_Palindromic_Subsequence.md`](../Longest_Palindromic_Subsequence.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/longest-palindromic-subsequence/
+> **Problem link:** <a href="https://leetcode.com/problems/longest-palindromic-subsequence/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/longest-palindromic-subsequence/</a>
 
 ---
 

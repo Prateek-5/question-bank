@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Longest_Substring_Without_Repeating_Characters.md`](../Longest_Substring_Without_Repeating_Characters.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/longest-substring-without-repeating-characters/
+> **Problem link:** <a href="https://leetcode.com/problems/longest-substring-without-repeating-characters/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/longest-substring-without-repeating-characters/</a>
 
 ---
 

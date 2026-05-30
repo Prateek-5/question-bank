@@ -1,7 +1,7 @@
 # Sudoku Solver
 
 **Problem Link:**
-https://leetcode.com/problems/sudoku-solver/
+<a href="https://leetcode.com/problems/sudoku-solver/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/sudoku-solver/</a>
 
 **Topic:**
 Backtracking

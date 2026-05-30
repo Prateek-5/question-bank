@@ -1,7 +1,7 @@
 # Self Dividing Numbers
 
 **Problem Link:**
-https://leetcode.com/problems/self-dividing-numbers/
+<a href="https://leetcode.com/problems/self-dividing-numbers/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/self-dividing-numbers/</a>
 
 **Topic:**
 Number Theory / Misc

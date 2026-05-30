@@ -1,7 +1,7 @@
 # Kth Smallest Element in BST
 
 **Problem Link:**
-https://leetcode.com/problems/kth-smallest-element-in-a-bst/
+<a href="https://leetcode.com/problems/kth-smallest-element-in-a-bst/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/kth-smallest-element-in-a-bst/</a>
 
 **Topic:**
 Binary Search Tree (BST)

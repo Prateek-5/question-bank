@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Subarrays_with_XOR_Less_Than_K_Concept.md`](../Subarrays_with_XOR_Less_Than_K_Concept.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/subarray-xor-queries/
+> **Problem link:** <a href="https://leetcode.com/problems/subarray-xor-queries/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/subarray-xor-queries/</a>
 
 ---
 

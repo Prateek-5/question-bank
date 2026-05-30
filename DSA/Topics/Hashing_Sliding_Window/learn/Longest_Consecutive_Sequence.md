@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Longest_Consecutive_Sequence.md`](../Longest_Consecutive_Sequence.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/longest-consecutive-sequence/
+> **Problem link:** <a href="https://leetcode.com/problems/longest-consecutive-sequence/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/longest-consecutive-sequence/</a>
 
 ---
 

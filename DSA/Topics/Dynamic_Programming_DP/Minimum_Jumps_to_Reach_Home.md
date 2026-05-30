@@ -1,7 +1,7 @@
 # Minimum Jumps to Reach Home
 
 **Problem Link:**
-https://leetcode.com/problems/minimum-jumps-to-reach-home/
+<a href="https://leetcode.com/problems/minimum-jumps-to-reach-home/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/minimum-jumps-to-reach-home/</a>
 
 **Topic:**
 Dynamic Programming (DP)

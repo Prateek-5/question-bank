@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Count_of_Smaller_Numbers_After_Self.md`](../Count_of_Smaller_Numbers_After_Self.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/count-of-smaller-numbers-after-self/
+> **Problem link:** <a href="https://leetcode.com/problems/count-of-smaller-numbers-after-self/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/count-of-smaller-numbers-after-self/</a>
 
 ---
 

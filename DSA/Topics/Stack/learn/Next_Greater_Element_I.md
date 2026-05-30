@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Next_Greater_Element_I.md`](../Next_Greater_Element_I.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/next-greater-element-i/
+> **Problem link:** <a href="https://leetcode.com/problems/next-greater-element-i/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/next-greater-element-i/</a>
 
 ---
 

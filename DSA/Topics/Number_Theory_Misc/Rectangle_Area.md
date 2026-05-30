@@ -1,7 +1,7 @@
 # Rectangle Area
 
 **Problem Link:**
-https://leetcode.com/problems/rectangle-area/description/
+<a href="https://leetcode.com/problems/rectangle-area/description/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/rectangle-area/description/</a>
 
 **Topic:**
 Number Theory / Misc (geometry / inclusion-exclusion)

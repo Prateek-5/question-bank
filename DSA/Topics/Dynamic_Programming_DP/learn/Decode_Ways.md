@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Decode_Ways.md`](../Decode_Ways.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/decode-ways/
+> **Problem link:** <a href="https://leetcode.com/problems/decode-ways/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/decode-ways/</a>
 
 ---
 

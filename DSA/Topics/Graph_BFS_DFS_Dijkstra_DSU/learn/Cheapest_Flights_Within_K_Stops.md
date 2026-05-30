@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Cheapest_Flights_Within_K_Stops.md`](../Cheapest_Flights_Within_K_Stops.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/cheapest-flights-within-k-stops/
+> **Problem link:** <a href="https://leetcode.com/problems/cheapest-flights-within-k-stops/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/cheapest-flights-within-k-stops/</a>
 
 ---
 

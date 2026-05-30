@@ -1,7 +1,7 @@
 # Numbers At Most N Given Digit Set
 
 **Problem Link:**
-https://leetcode.com/problems/numbers-at-most-n-given-digit-set/
+<a href="https://leetcode.com/problems/numbers-at-most-n-given-digit-set/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/numbers-at-most-n-given-digit-set/</a>
 
 **Topic:**
 Dynamic Programming (DP)

@@ -1,7 +1,7 @@
 # Structured Logging Patterns — JSON Logs, Key Naming, Redaction, Levels
 
 ## Source / Origin
-- Twelve-Factor App, factor XI: "Logs": https://12factor.net/logs
+- Twelve-Factor App, factor XI: "Logs": <a href="https://12factor.net/logs" target="_blank" rel="noopener noreferrer">https://12factor.net/logs</a>
 - ELK / Loki / Datadog all expect JSON-structured input; unstructured text loses 80% of the value.
 - Frequent interview prompt: "Walk me through what `logger.info('user signed in')` should actually emit in production."
 

@@ -2,7 +2,7 @@
 
 > **Difficulty:** Medium   |   **Time:** ~15 min   |   **Prereqs:** [counter-ii.md](./counter-ii.md), [`concepts/closures.md`](../../concepts/closures.md)
 >
-> **Source:** [Codedamn — Encapsulating Private Data with Closures](https://codedamn.com/news/nodejs/encapsulating-private-data-closures)
+> **Source:** <a href="https://codedamn.com/news/nodejs/encapsulating-private-data-closures" target="_blank" rel="noopener noreferrer">Codedamn — Encapsulating Private Data with Closures</a>
 
 ---
 

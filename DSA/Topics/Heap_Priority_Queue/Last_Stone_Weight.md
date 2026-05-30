@@ -1,7 +1,7 @@
 # Last Stone Weight
 
 **Problem Link:**
-https://leetcode.com/problems/last-stone-weight/
+<a href="https://leetcode.com/problems/last-stone-weight/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/last-stone-weight/</a>
 
 **Topic:**
 Heap / Priority Queue

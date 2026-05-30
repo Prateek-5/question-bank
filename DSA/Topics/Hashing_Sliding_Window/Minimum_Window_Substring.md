@@ -1,7 +1,7 @@
 # Minimum Window Substring
 
 **Problem Link:**
-https://leetcode.com/problems/minimum-window-substring/
+<a href="https://leetcode.com/problems/minimum-window-substring/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/minimum-window-substring/</a>
 
 **Topic:**
 Hashing / Sliding Window

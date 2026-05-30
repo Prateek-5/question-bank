@@ -1,7 +1,7 @@
 # Determine Color of a Chessboard Square
 
 **Problem Link:**
-https://leetcode.com/problems/determine-color-of-a-chessboard-square/
+<a href="https://leetcode.com/problems/determine-color-of-a-chessboard-square/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/determine-color-of-a-chessboard-square/</a>
 
 **Topic:**
 Math

@@ -2,7 +2,7 @@
 
 > **Difficulty:** Medium   |   **Time:** ~20 min   |   **Prereqs:** [`concepts/maps-sets.md`](../../concepts/maps-sets.md), [memoize.md](./memoize.md)
 >
-> **Source:** [LeetCode 146 — LRU Cache](https://leetcode.com/problems/lru-cache/). The single most-asked data-structure design problem in tech interviews.
+> **Source:** <a href="https://leetcode.com/problems/lru-cache/" target="_blank" rel="noopener noreferrer">LeetCode 146 — LRU Cache</a>. The single most-asked data-structure design problem in tech interviews.
 
 ---
 
@@ -238,7 +238,7 @@ Every operation: 1 hash lookup + at most 1 delete + 1 set + 1 keys().next(). All
 Each entry has `{value, expiry}`. On `get`, lazy-evict if expired (return -1, remove). Eviction policy stays LRU.
 
 ### Variant 2 — LFU cache
-[LeetCode 460](https://leetcode.com/problems/lfu-cache/). Eviction by lowest access count; ties broken by LRU within count. Two HashMaps + min-frequency tracker.
+<a href="https://leetcode.com/problems/lfu-cache/" target="_blank" rel="noopener noreferrer">LeetCode 460</a>. Eviction by lowest access count; ties broken by LRU within count. Two HashMaps + min-frequency tracker.
 
 ### Variant 3 — Approximate LRU (Redis-style)
 Pick K random keys, evict the one with the oldest access timestamp. O(1) amortized, no DLL, sacrifices precision. Good system-design talking point.

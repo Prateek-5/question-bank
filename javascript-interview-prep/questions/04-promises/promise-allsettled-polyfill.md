@@ -2,7 +2,7 @@
 
 > **Difficulty:** Medium   |   **Time:** ~20 min   |   **Prereqs:** [promise-all-polyfill.md](./promise-all-polyfill.md), [build-promise-from-scratch.md](./build-promise-from-scratch.md)
 >
-> **Source:** ES2020. Canonical polyfill interview problem. MDN: [Promise.allSettled](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise/allSettled).
+> **Source:** ES2020. Canonical polyfill interview problem. MDN: <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise/allSettled" target="_blank" rel="noopener noreferrer">Promise.allSettled</a>.
 
 ---
 

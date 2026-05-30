@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Determine_Color_of_a_Chessboard_Square.md`](../Determine_Color_of_a_Chessboard_Square.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/determine-color-of-a-chessboard-square/
+> **Problem link:** <a href="https://leetcode.com/problems/determine-color-of-a-chessboard-square/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/determine-color-of-a-chessboard-square/</a>
 
 ---
 

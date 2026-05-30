@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Path_Sum.md`](../Path_Sum.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/path-sum/
+> **Problem link:** <a href="https://leetcode.com/problems/path-sum/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/path-sum/</a>
 
 ---
 

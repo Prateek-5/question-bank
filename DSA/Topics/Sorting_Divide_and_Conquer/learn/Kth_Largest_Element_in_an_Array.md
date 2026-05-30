@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Kth_Largest_Element_in_an_Array.md`](../Kth_Largest_Element_in_an_Array.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/kth-largest-element-in-an-array/
+> **Problem link:** <a href="https://leetcode.com/problems/kth-largest-element-in-an-array/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/kth-largest-element-in-an-array/</a>
 
 ---
 

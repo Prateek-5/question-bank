@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Convert_Binary_Number_in_a_Linked_List_to_Integer.md`](../Convert_Binary_Number_in_a_Linked_List_to_Integer.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/convert-binary-number-in-a-linked-list-to-integer/
+> **Problem link:** <a href="https://leetcode.com/problems/convert-binary-number-in-a-linked-list-to-integer/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/convert-binary-number-in-a-linked-list-to-integer/</a>
 
 ---
 

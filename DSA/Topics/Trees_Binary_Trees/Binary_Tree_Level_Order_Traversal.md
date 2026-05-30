@@ -1,7 +1,7 @@
 # Binary Tree Level Order Traversal
 
 **Problem Link:**
-https://leetcode.com/problems/binary-tree-level-order-traversal/
+<a href="https://leetcode.com/problems/binary-tree-level-order-traversal/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/binary-tree-level-order-traversal/</a>
 
 **Topic:**
 Trees / Binary Trees

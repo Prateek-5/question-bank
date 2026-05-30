@@ -2,8 +2,8 @@
 
 ## Source / Origin
 - Google's Dapper paper (2010) — the canonical reference for production tracing at scale.
-- OpenTelemetry Trace specification: https://opentelemetry.io/docs/specs/otel/trace/
-- W3C Trace Context: https://www.w3.org/TR/trace-context/
+- OpenTelemetry Trace specification: <a href="https://opentelemetry.io/docs/specs/otel/trace/" target="_blank" rel="noopener noreferrer">https://opentelemetry.io/docs/specs/otel/trace/</a>
+- W3C Trace Context: <a href="https://www.w3.org/TR/trace-context/" target="_blank" rel="noopener noreferrer">https://www.w3.org/TR/trace-context/</a>
 - Frequent senior interview prompt: "A single user request fans out across 8 microservices; how do you reconstruct what happened?"
 
 ## Why this question matters in interviews

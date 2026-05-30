@@ -1,7 +1,7 @@
 # Number of Good Pairs
 
 **Problem Link:**
-https://leetcode.com/problems/number-of-good-pairs/
+<a href="https://leetcode.com/problems/number-of-good-pairs/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/number-of-good-pairs/</a>
 
 **Topic:**
 Number Theory / Misc

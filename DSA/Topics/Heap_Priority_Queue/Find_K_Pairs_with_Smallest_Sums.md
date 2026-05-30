@@ -1,7 +1,7 @@
 # Find K Pairs with Smallest Sums
 
 **Problem Link:**
-https://leetcode.com/problems/find-k-pairs-with-smallest-sums/
+<a href="https://leetcode.com/problems/find-k-pairs-with-smallest-sums/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/find-k-pairs-with-smallest-sums/</a>
 
 **Topic:**
 Heap / Priority Queue

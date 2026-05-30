@@ -1,7 +1,7 @@
 # Most Stones Removed with Same Row or Column
 
 **Problem Link:**
-https://leetcode.com/problems/most-stones-removed-with-same-row-or-column/
+<a href="https://leetcode.com/problems/most-stones-removed-with-same-row-or-column/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/most-stones-removed-with-same-row-or-column/</a>
 
 **Topic:**
 Graph (BFS / DFS / Dijkstra / DSU)

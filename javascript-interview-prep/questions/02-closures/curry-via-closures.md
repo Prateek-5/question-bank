@@ -2,7 +2,7 @@
 
 > **Difficulty:** Medium   |   **Time:** ~25 min   |   **Prereqs:** [partial-application.md](./partial-application.md), [`concepts/closures.md`](../../concepts/closures.md)
 >
-> **Source:** [LeetCode 2632 — Curry](https://leetcode.com/problems/curry/); lodash `_.curry`; classic FP interview problem.
+> **Source:** <a href="https://leetcode.com/problems/curry/" target="_blank" rel="noopener noreferrer">LeetCode 2632 — Curry</a>; lodash `_.curry`; classic FP interview problem.
 
 ---
 

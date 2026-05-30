@@ -1,7 +1,7 @@
 # Shortest Path in an Undirected Graph
 
 **Problem Link:**
-https://www.geeksforgeeks.org/problems/shortest-path-in-weighted-undirected-graph/1
+<a href="https://www.geeksforgeeks.org/problems/shortest-path-in-weighted-undirected-graph/1" target="_blank" rel="noopener noreferrer">https://www.geeksforgeeks.org/problems/shortest-path-in-weighted-undirected-graph/1</a>
 
 **Topic:**
 Graph (BFS / DFS / Dijkstra / DSU)

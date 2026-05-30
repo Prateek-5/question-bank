@@ -1,7 +1,7 @@
 # Day of the Week
 
 **Problem Link:**
-https://leetcode.com/problems/day-of-the-week/
+<a href="https://leetcode.com/problems/day-of-the-week/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/day-of-the-week/</a>
 
 **Topic:**
 Math

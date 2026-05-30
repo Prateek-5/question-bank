@@ -1,7 +1,7 @@
 # Palindrome Partitioning
 
 **Problem Link:**
-https://leetcode.com/problems/palindrome-partitioning/
+<a href="https://leetcode.com/problems/palindrome-partitioning/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/palindrome-partitioning/</a>
 
 **Topic:**
 Backtracking

@@ -1,7 +1,7 @@
 # Daily Temperatures
 
 **Problem Link:**
-https://leetcode.com/problems/daily-temperatures/
+<a href="https://leetcode.com/problems/daily-temperatures/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/daily-temperatures/</a>
 
 **Topic:**
 Stack

@@ -2,7 +2,7 @@
 
 > **Difficulty:** Medium   |   **Time:** ~20 min   |   **Prereqs:** [promise-all-polyfill.md](./promise-all-polyfill.md), [promise-race-polyfill.md](./promise-race-polyfill.md)
 >
-> **Source:** ES2021. BFE.dev #45, LeetCode #2637 family. MDN: [Promise.any](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise/any).
+> **Source:** ES2021. BFE.dev #45, LeetCode #2637 family. MDN: <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise/any" target="_blank" rel="noopener noreferrer">Promise.any</a>.
 
 ---
 

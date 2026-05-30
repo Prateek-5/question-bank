@@ -1,7 +1,7 @@
 # Add Digits
 
 **Problem Link:**
-https://leetcode.com/problems/add-digits/
+<a href="https://leetcode.com/problems/add-digits/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/add-digits/</a>
 
 **Topic:**
 Math

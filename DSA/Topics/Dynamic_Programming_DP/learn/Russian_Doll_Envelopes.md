@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Russian_Doll_Envelopes.md`](../Russian_Doll_Envelopes.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/russian-doll-envelopes/
+> **Problem link:** <a href="https://leetcode.com/problems/russian-doll-envelopes/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/russian-doll-envelopes/</a>
 
 ---
 

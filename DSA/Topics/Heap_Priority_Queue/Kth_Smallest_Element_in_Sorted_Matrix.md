@@ -1,7 +1,7 @@
 # Kth Smallest Element in Sorted Matrix
 
 **Problem Link:**
-https://leetcode.com/problems/kth-smallest-element-in-a-sorted-matrix/
+<a href="https://leetcode.com/problems/kth-smallest-element-in-a-sorted-matrix/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/kth-smallest-element-in-a-sorted-matrix/</a>
 
 **Topic:**
 Heap / Priority Queue

@@ -2,7 +2,7 @@
 
 > **Difficulty:** Medium   |   **Time:** ~25 min   |   **Prereqs:** [memoize-with-ttl.md](../02-closures/memoize-with-ttl.md), [`concepts/maps-sets.md`](../../concepts/maps-sets.md)
 >
-> **Source:** [LeetCode 2622 — Cache With Time Limit](https://leetcode.com/problems/cache-with-time-limit/).
+> **Source:** <a href="https://leetcode.com/problems/cache-with-time-limit/" target="_blank" rel="noopener noreferrer">LeetCode 2622 — Cache With Time Limit</a>.
 
 ---
 

@@ -1,7 +1,7 @@
 # Paths from Root with a Specified Sum
 
 **Problem Link:**
-https://www.geeksforgeeks.org/problems/paths-from-root-with-a-specified-sum/1
+<a href="https://www.geeksforgeeks.org/problems/paths-from-root-with-a-specified-sum/1" target="_blank" rel="noopener noreferrer">https://www.geeksforgeeks.org/problems/paths-from-root-with-a-specified-sum/1</a>
 
 **Topic:**
 Trees / Binary Trees

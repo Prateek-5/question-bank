@@ -1,7 +1,7 @@
 # 01 Matrix
 
 **Problem Link:**
-https://leetcode.com/problems/01-matrix/
+<a href="https://leetcode.com/problems/01-matrix/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/01-matrix/</a>
 
 **Topic:**
 Graph (BFS / DFS / Dijkstra / DSU)

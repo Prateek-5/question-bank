@@ -1,7 +1,7 @@
 # Keys and Rooms
 
 **Problem Link:**
-https://leetcode.com/problems/keys-and-rooms/
+<a href="https://leetcode.com/problems/keys-and-rooms/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/keys-and-rooms/</a>
 
 **Topic:**
 Graph (BFS / DFS / Dijkstra / DSU)

@@ -1,7 +1,7 @@
 # Non-overlapping Intervals
 
 **Problem Link:**
-https://leetcode.com/problems/non-overlapping-intervals/
+<a href="https://leetcode.com/problems/non-overlapping-intervals/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/non-overlapping-intervals/</a>
 
 **Topic:**
 Greedy

@@ -1,7 +1,7 @@
 # Minimum Platforms
 
 **Problem Link:**
-https://www.geeksforgeeks.org/minimum-number-platforms-required-railwaybus-station/
+<a href="https://www.geeksforgeeks.org/minimum-number-platforms-required-railwaybus-station/" target="_blank" rel="noopener noreferrer">https://www.geeksforgeeks.org/minimum-number-platforms-required-railwaybus-station/</a>
 
 **Topic:**
 Greedy

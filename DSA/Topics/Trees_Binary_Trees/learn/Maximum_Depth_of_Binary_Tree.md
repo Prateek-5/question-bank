@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Maximum_Depth_of_Binary_Tree.md`](../Maximum_Depth_of_Binary_Tree.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/maximum-depth-of-binary-tree/
+> **Problem link:** <a href="https://leetcode.com/problems/maximum-depth-of-binary-tree/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/maximum-depth-of-binary-tree/</a>
 
 ---
 

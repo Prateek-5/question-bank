@@ -1,7 +1,7 @@
 # Pow(x, n)
 
 **Problem Link:**
-https://leetcode.com/problems/powx-n/
+<a href="https://leetcode.com/problems/powx-n/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/powx-n/</a>
 
 **Topic:**
 Number Theory / Misc

@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Numbers_at_Most_N_Given_Digit_Set.md`](../Numbers_at_Most_N_Given_Digit_Set.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/numbers-at-most-n-given-digit-set/
+> **Problem link:** <a href="https://leetcode.com/problems/numbers-at-most-n-given-digit-set/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/numbers-at-most-n-given-digit-set/</a>
 
 ---
 

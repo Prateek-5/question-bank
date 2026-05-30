@@ -2,7 +2,7 @@
 
 > **Difficulty:** Easy-Medium   |   **Time:** ~20 min   |   **Prereqs:** [`concepts/closures.md`](../../concepts/closures.md), [`02-closures/counter.md`](../02-closures/counter.md)
 >
-> **Source:** [LeetCode 2627 — Debounce](https://leetcode.com/problems/debounce/). The canonical machine-coding warm-up.
+> **Source:** <a href="https://leetcode.com/problems/debounce/" target="_blank" rel="noopener noreferrer">LeetCode 2627 — Debounce</a>. The canonical machine-coding warm-up.
 
 ---
 

@@ -1,7 +1,7 @@
 # Triangle
 
 **Problem Link:**
-https://leetcode.com/problems/triangle/
+<a href="https://leetcode.com/problems/triangle/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/triangle/</a>
 
 **Topic:**
 Dynamic Programming (DP)

@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Capacity_To_Ship_Packages_Within_D_Days.md`](../Capacity_To_Ship_Packages_Within_D_Days.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/capacity-to-ship-packages-within-d-days/
+> **Problem link:** <a href="https://leetcode.com/problems/capacity-to-ship-packages-within-d-days/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/capacity-to-ship-packages-within-d-days/</a>
 
 ---
 

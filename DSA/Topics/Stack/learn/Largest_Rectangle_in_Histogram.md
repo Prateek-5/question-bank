@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Largest_Rectangle_in_Histogram.md`](../Largest_Rectangle_in_Histogram.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/largest-rectangle-in-histogram/
+> **Problem link:** <a href="https://leetcode.com/problems/largest-rectangle-in-histogram/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/largest-rectangle-in-histogram/</a>
 
 ---
 

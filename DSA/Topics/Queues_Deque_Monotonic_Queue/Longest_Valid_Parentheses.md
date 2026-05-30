@@ -1,7 +1,7 @@
 # Longest Valid Parentheses
 
 **Problem Link:**
-https://leetcode.com/problems/longest-valid-parentheses/
+<a href="https://leetcode.com/problems/longest-valid-parentheses/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/longest-valid-parentheses/</a>
 
 **Topic:**
 Queues / Deque / Monotonic Queue (also: Stack, DP)

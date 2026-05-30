@@ -1,7 +1,7 @@
 # Sum of All Odd-Length Subarrays
 
 **Problem Link:**
-https://leetcode.com/problems/sum-of-all-odd-length-subarrays/
+<a href="https://leetcode.com/problems/sum-of-all-odd-length-subarrays/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/sum-of-all-odd-length-subarrays/</a>
 
 **Topic:**
 1-D & 2-D Arrays

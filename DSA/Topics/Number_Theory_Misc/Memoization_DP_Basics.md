@@ -1,7 +1,7 @@
 # Memoization / DP Basics
 
 **Problem Link:**
-https://leetcode.com/tag/dynamic-programming/
+<a href="https://leetcode.com/tag/dynamic-programming/" target="_blank" rel="noopener noreferrer">https://leetcode.com/tag/dynamic-programming/</a>
 
 **Topic:**
 Number Theory / Misc (concepts primer)

@@ -2,7 +2,7 @@
 
 > **Difficulty:** Easy   |   **Time:** ~5 min   |   **Prereqs:** [prototype-chain-inheritance.md](./prototype-chain-inheritance.md)
 >
-> **Source:** [LeetCode 2619 — Array Prototype Last](https://leetcode.com/problems/array-prototype-last/). Frontend-leaning 10-min warm-up.
+> **Source:** <a href="https://leetcode.com/problems/array-prototype-last/" target="_blank" rel="noopener noreferrer">LeetCode 2619 — Array Prototype Last</a>. Frontend-leaning 10-min warm-up.
 
 ---
 

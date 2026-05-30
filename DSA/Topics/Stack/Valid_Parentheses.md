@@ -1,7 +1,7 @@
 # Valid Parentheses
 
 **Problem Link:**
-https://leetcode.com/problems/valid-parentheses/
+<a href="https://leetcode.com/problems/valid-parentheses/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/valid-parentheses/</a>
 
 **Topic:**
 Stack

@@ -1,7 +1,7 @@
 # Split Array with Same Average
 
 **Problem Link:**
-https://leetcode.com/problems/split-array-with-same-average/
+<a href="https://leetcode.com/problems/split-array-with-same-average/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/split-array-with-same-average/</a>
 
 **Topic:**
 Dynamic Programming (DP)

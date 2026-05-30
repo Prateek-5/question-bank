@@ -1,7 +1,7 @@
 # Longest Common Subsequence
 
 **Problem Link:**
-https://leetcode.com/problems/longest-common-subsequence/
+<a href="https://leetcode.com/problems/longest-common-subsequence/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/longest-common-subsequence/</a>
 
 **Topic:**
 Dynamic Programming (DP)

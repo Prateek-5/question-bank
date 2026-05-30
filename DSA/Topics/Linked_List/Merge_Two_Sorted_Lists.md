@@ -1,7 +1,7 @@
 # Merge Two Sorted Lists
 
 **Problem Link:**
-https://leetcode.com/problems/merge-two-sorted-lists/
+<a href="https://leetcode.com/problems/merge-two-sorted-lists/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/merge-two-sorted-lists/</a>
 
 **Topic:**
 Linked List

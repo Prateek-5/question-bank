@@ -1,7 +1,7 @@
 # SQLAlchemy session scope — `scoped_session`, `async_session`, request scope
 
 ## Source / Origin
-- SQLAlchemy 2.0 Unified API: https://docs.sqlalchemy.org/en/20/orm/session_basics.html
+- SQLAlchemy 2.0 Unified API: <a href="https://docs.sqlalchemy.org/en/20/orm/session_basics.html" target="_blank" rel="noopener noreferrer">https://docs.sqlalchemy.org/en/20/orm/session_basics.html</a>
 - Mike Bayer's docs on session scope are the canonical reference; every senior Python engineer should read them.
 - The single most common Flask/FastAPI bug source: wrong session scope.
 

@@ -1,7 +1,7 @@
 # Delete Node in a Linked List
 
 **Problem Link:**
-https://leetcode.com/problems/delete-node-in-a-linked-list/
+<a href="https://leetcode.com/problems/delete-node-in-a-linked-list/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/delete-node-in-a-linked-list/</a>
 
 **Topic:**
 Linked List

@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Subsequence_of_Size_K_With_Largest_Sum.md`](../Subsequence_of_Size_K_With_Largest_Sum.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/subsequence-of-size-k-with-the-largest-sum/
+> **Problem link:** <a href="https://leetcode.com/problems/subsequence-of-size-k-with-the-largest-sum/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/subsequence-of-size-k-with-the-largest-sum/</a>
 
 ---
 

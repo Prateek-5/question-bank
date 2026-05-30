@@ -1,7 +1,7 @@
 # K-diff Pairs in an Array
 
 **Problem Link:**
-https://leetcode.com/problems/k-diff-pairs-in-an-array/
+<a href="https://leetcode.com/problems/k-diff-pairs-in-an-array/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/k-diff-pairs-in-an-array/</a>
 
 **Topic:**
 Two Pointers

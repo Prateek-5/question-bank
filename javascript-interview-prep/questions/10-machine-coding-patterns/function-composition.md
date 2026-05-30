@@ -2,7 +2,7 @@
 
 > **Difficulty:** Easy-Medium   |   **Time:** ~15 min   |   **Prereqs:** [`concepts/closures.md`](../../concepts/closures.md), [curry.md](./curry.md)
 >
-> **Source:** [LeetCode 2629 — Function Composition](https://leetcode.com/problems/function-composition/). Redux `compose`, Ramda `R.pipe`, RxJS `pipe`.
+> **Source:** <a href="https://leetcode.com/problems/function-composition/" target="_blank" rel="noopener noreferrer">LeetCode 2629 — Function Composition</a>. Redux `compose`, Ramda `R.pipe`, RxJS `pipe`.
 
 ---
 

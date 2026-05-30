@@ -1,7 +1,7 @@
 # Binary Tree Preorder Traversal
 
 **Problem Link:**
-https://leetcode.com/problems/binary-tree-preorder-traversal/
+<a href="https://leetcode.com/problems/binary-tree-preorder-traversal/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/binary-tree-preorder-traversal/</a>
 
 **Topic:**
 Trees / Binary Trees

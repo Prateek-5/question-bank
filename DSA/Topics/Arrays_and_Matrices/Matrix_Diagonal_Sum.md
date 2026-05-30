@@ -1,7 +1,7 @@
 # Matrix Diagonal Sum
 
 **Problem Link:**
-https://leetcode.com/problems/matrix-diagonal-sum/
+<a href="https://leetcode.com/problems/matrix-diagonal-sum/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/matrix-diagonal-sum/</a>
 
 **Topic:**
 Arrays & Matrices

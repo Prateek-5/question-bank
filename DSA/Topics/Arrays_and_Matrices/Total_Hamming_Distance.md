@@ -1,7 +1,7 @@
 # Total Hamming Distance
 
 **Problem Link:**
-https://leetcode.com/problems/total-hamming-distance/
+<a href="https://leetcode.com/problems/total-hamming-distance/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/total-hamming-distance/</a>
 
 **Topic:**
 Arrays & Matrices (Bit Manipulation flavored)

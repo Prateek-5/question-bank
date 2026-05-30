@@ -1,7 +1,7 @@
 # Matrix Chain Multiplication
 
 **Problem Link:**
-https://www.geeksforgeeks.org/matrix-chain-multiplication-dp-8/
+<a href="https://www.geeksforgeeks.org/matrix-chain-multiplication-dp-8/" target="_blank" rel="noopener noreferrer">https://www.geeksforgeeks.org/matrix-chain-multiplication-dp-8/</a>
 
 **Topic:**
 Dynamic Programming (DP)

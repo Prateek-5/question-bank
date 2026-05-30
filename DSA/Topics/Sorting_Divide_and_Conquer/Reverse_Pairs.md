@@ -1,7 +1,7 @@
 # Reverse Pairs
 
 **Problem Link:**
-https://leetcode.com/problems/reverse-pairs/
+<a href="https://leetcode.com/problems/reverse-pairs/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/reverse-pairs/</a>
 
 **Topic:**
 Sorting / Divide and Conquer

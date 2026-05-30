@@ -2,7 +2,7 @@
 
 > **Difficulty:** Senior   |   **Time:** ~25 min   |   **Prereqs:** [`04-promises/structured-concurrency-primitive.md`](../04-promises/structured-concurrency-primitive.md), [`10-machine-coding-patterns/cancellable-promise-wrapper.md`](../10-machine-coding-patterns/cancellable-promise-wrapper.md)
 >
-> **Source:** [LeetCode 2777 — Design Cancellable Function](https://leetcode.com/problems/design-cancellable-function/). The deepest event-loop problem on LeetCode JS.
+> **Source:** <a href="https://leetcode.com/problems/design-cancellable-function/" target="_blank" rel="noopener noreferrer">LeetCode 2777 — Design Cancellable Function</a>. The deepest event-loop problem on LeetCode JS.
 
 ---
 

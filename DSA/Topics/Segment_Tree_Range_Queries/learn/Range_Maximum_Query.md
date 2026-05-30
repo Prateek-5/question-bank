@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Range_Maximum_Query.md`](../Range_Maximum_Query.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://www.geeksforgeeks.org/range-minimum-query-for-static-array/
+> **Problem link:** <a href="https://www.geeksforgeeks.org/range-minimum-query-for-static-array/" target="_blank" rel="noopener noreferrer">https://www.geeksforgeeks.org/range-minimum-query-for-static-array/</a>
 
 ---
 

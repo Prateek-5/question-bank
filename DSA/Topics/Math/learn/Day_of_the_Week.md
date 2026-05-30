@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Day_of_the_Week.md`](../Day_of_the_Week.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/day-of-the-week/
+> **Problem link:** <a href="https://leetcode.com/problems/day-of-the-week/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/day-of-the-week/</a>
 
 ---
 

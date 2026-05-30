@@ -1,7 +1,7 @@
 # Teemo Attacking
 
 **Problem Link:**
-https://leetcode.com/problems/teemo-attacking/description/
+<a href="https://leetcode.com/problems/teemo-attacking/description/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/teemo-attacking/description/</a>
 
 **Topic:**
 Number Theory / Misc (really interval merging)

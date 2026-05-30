@@ -1,7 +1,7 @@
 # Divisor Game
 
 **Problem Link:**
-https://leetcode.com/problems/divisor-game/
+<a href="https://leetcode.com/problems/divisor-game/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/divisor-game/</a>
 
 **Topic:**
 Number Theory / Misc

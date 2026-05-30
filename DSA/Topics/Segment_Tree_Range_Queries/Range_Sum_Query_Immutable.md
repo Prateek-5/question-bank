@@ -1,7 +1,7 @@
 # Range Sum Query – Immutable
 
 **Problem Link:**
-https://leetcode.com/problems/range-sum-query-immutable/
+<a href="https://leetcode.com/problems/range-sum-query-immutable/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/range-sum-query-immutable/</a>
 
 **Topic:**
 Segment Tree / Range Queries

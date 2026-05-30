@@ -1,7 +1,7 @@
 # Count of Matches in Tournament
 
 **Problem Link:**
-https://leetcode.com/problems/count-of-matches-in-tournament/
+<a href="https://leetcode.com/problems/count-of-matches-in-tournament/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/count-of-matches-in-tournament/</a>
 
 **Topic:**
 Math

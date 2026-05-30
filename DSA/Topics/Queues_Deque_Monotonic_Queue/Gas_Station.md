@@ -1,7 +1,7 @@
 # Gas Station
 
 **Problem Link:**
-https://leetcode.com/problems/gas-station/
+<a href="https://leetcode.com/problems/gas-station/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/gas-station/</a>
 
 **Topic:**
 Queues / Deque / Monotonic Queue

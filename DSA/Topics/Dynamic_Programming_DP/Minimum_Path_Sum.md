@@ -1,7 +1,7 @@
 # Minimum Path Sum
 
 **Problem Link:**
-https://leetcode.com/problems/minimum-path-sum/
+<a href="https://leetcode.com/problems/minimum-path-sum/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/minimum-path-sum/</a>
 
 **Topic:**
 Dynamic Programming (DP)

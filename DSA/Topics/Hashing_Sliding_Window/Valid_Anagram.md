@@ -1,7 +1,7 @@
 # Valid Anagram
 
 **Problem Link:**
-https://leetcode.com/problems/valid-anagram/
+<a href="https://leetcode.com/problems/valid-anagram/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/valid-anagram/</a>
 
 **Topic:**
 Hashing / Sliding Window

@@ -2,7 +2,7 @@
 
 ## Source / Origin
 - Postgres-specific feature; widely used by Sidekiq-Postgres, gh-ost, schema migration tools.
-- Reference: Postgres `pg_advisory_lock` family (https://www.postgresql.org/docs/current/functions-admin.html#FUNCTIONS-ADVISORY-LOCKS).
+- Reference: Postgres `pg_advisory_lock` family (<a href="https://www.postgresql.org/docs/current/functions-admin.html#FUNCTIONS-ADVISORY-LOCKS" target="_blank" rel="noopener noreferrer">https://www.postgresql.org/docs/current/functions-admin.html#FUNCTIONS-ADVISORY-LOCKS</a>).
 - Concept reference: `backend-data-prep/sql/08-locks-concurrency.md`.
 
 ## Why this question matters in interviews

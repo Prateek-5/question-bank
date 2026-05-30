@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Count_Primes.md`](../Count_Primes.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/count-primes/
+> **Problem link:** <a href="https://leetcode.com/problems/count-primes/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/count-primes/</a>
 
 ---
 

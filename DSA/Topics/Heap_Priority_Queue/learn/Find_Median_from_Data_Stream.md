@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Find_Median_from_Data_Stream.md`](../Find_Median_from_Data_Stream.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/find-median-from-data-stream/
+> **Problem link:** <a href="https://leetcode.com/problems/find-median-from-data-stream/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/find-median-from-data-stream/</a>
 
 ---
 

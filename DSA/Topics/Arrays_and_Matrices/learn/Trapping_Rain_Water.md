@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Trapping_Rain_Water.md`](../Trapping_Rain_Water.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/trapping-rain-water/
+> **Problem link:** <a href="https://leetcode.com/problems/trapping-rain-water/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/trapping-rain-water/</a>
 
 ---
 

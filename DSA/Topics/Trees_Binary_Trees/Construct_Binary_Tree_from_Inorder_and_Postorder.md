@@ -1,7 +1,7 @@
 # Construct Binary Tree from Inorder & Postorder
 
 **Problem Link:**
-https://leetcode.com/problems/construct-binary-tree-from-inorder-and-postorder-traversal/
+<a href="https://leetcode.com/problems/construct-binary-tree-from-inorder-and-postorder-traversal/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/construct-binary-tree-from-inorder-and-postorder-traversal/</a>
 
 **Topic:**
 Trees / Binary Trees

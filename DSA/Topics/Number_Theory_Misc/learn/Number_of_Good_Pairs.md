@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Number_of_Good_Pairs.md`](../Number_of_Good_Pairs.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/number-of-good-pairs/
+> **Problem link:** <a href="https://leetcode.com/problems/number-of-good-pairs/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/number-of-good-pairs/</a>
 
 ---
 

@@ -1,7 +1,7 @@
 # Permutations
 
 **Problem Link:**
-https://leetcode.com/problems/permutations/
+<a href="https://leetcode.com/problems/permutations/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/permutations/</a>
 
 **Topic:**
 Recursion

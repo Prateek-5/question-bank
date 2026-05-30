@@ -1,7 +1,7 @@
 # Next Greater Element I
 
 **Problem Link:**
-https://leetcode.com/problems/next-greater-element-i/
+<a href="https://leetcode.com/problems/next-greater-element-i/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/next-greater-element-i/</a>
 
 **Topic:**
 Stack

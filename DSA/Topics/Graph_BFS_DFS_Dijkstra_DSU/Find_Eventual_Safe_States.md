@@ -1,7 +1,7 @@
 # Find Eventual Safe States
 
 **Problem Link:**
-https://leetcode.com/problems/find-eventual-safe-states/
+<a href="https://leetcode.com/problems/find-eventual-safe-states/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/find-eventual-safe-states/</a>
 
 **Topic:**
 Graph (BFS / DFS / Dijkstra / DSU)

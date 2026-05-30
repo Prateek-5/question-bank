@@ -1,7 +1,7 @@
 # Sort Colors
 
 **Problem Link:**
-https://leetcode.com/problems/sort-colors/
+<a href="https://leetcode.com/problems/sort-colors/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/sort-colors/</a>
 
 **Topic:**
 Sorting / Divide & Conquer

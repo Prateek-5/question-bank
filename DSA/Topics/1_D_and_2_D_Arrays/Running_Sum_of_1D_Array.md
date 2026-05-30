@@ -1,7 +1,7 @@
 # Running Sum of 1D Array
 
 **Problem Link:**
-https://leetcode.com/problems/running-sum-of-1d-array/
+<a href="https://leetcode.com/problems/running-sum-of-1d-array/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/running-sum-of-1d-array/</a>
 
 **Topic:**
 1-D & 2-D Arrays

@@ -1,7 +1,7 @@
 # Balanced Binary Tree
 
 **Problem Link:**
-https://leetcode.com/problems/balanced-binary-tree/
+<a href="https://leetcode.com/problems/balanced-binary-tree/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/balanced-binary-tree/</a>
 
 **Topic:**
 Trees / Binary Trees

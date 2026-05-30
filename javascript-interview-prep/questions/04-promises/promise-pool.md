@@ -2,7 +2,7 @@
 
 > **Difficulty:** Medium   |   **Time:** ~30 min   |   **Prereqs:** [promise-all-polyfill.md](./promise-all-polyfill.md), [`concepts/promises.md`](../../concepts/promises.md)
 >
-> **Source:** [LeetCode 2636 — Promise Pool](https://leetcode.com/problems/promise-pool/); inspired by `p-limit`, `async-pool`, `bluebird.map({ concurrency })`.
+> **Source:** <a href="https://leetcode.com/problems/promise-pool/" target="_blank" rel="noopener noreferrer">LeetCode 2636 — Promise Pool</a>; inspired by `p-limit`, `async-pool`, `bluebird.map({ concurrency })`.
 
 ---
 

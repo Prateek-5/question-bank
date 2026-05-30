@@ -1,7 +1,7 @@
 # Implement Stack using Queues
 
 **Problem Link:**
-https://leetcode.com/problems/implement-stack-using-queues/
+<a href="https://leetcode.com/problems/implement-stack-using-queues/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/implement-stack-using-queues/</a>
 
 **Topic:**
 Queues / Deque / Monotonic Queue

@@ -1,7 +1,7 @@
 # Search in Rotated Sorted Array
 
 **Problem Link:**
-https://leetcode.com/problems/search-in-rotated-sorted-array/
+<a href="https://leetcode.com/problems/search-in-rotated-sorted-array/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/search-in-rotated-sorted-array/</a>
 
 **Topic:**
 Searching / Binary Search

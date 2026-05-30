@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Maximum_Height_by_Stacking_Cuboids.md`](../Maximum_Height_by_Stacking_Cuboids.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/maximum-height-by-stacking-cuboids/
+> **Problem link:** <a href="https://leetcode.com/problems/maximum-height-by-stacking-cuboids/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/maximum-height-by-stacking-cuboids/</a>
 
 ---
 

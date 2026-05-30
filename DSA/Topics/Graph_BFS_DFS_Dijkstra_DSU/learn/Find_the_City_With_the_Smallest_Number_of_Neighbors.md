@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Find_the_City_With_the_Smallest_Number_of_Neighbors.md`](../Find_the_City_With_the_Smallest_Number_of_Neighbors.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/find-the-city-with-the-smallest-number-of-neighbors-at-a-threshold-distance/
+> **Problem link:** <a href="https://leetcode.com/problems/find-the-city-with-the-smallest-number-of-neighbors-at-a-threshold-distance/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/find-the-city-with-the-smallest-number-of-neighbors-at-a-threshold-distance/</a>
 
 ---
 

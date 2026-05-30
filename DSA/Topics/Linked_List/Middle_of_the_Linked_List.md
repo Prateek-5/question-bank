@@ -1,7 +1,7 @@
 # Middle of the Linked List
 
 **Problem Link:**
-https://leetcode.com/problems/middle-of-the-linked-list/
+<a href="https://leetcode.com/problems/middle-of-the-linked-list/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/middle-of-the-linked-list/</a>
 
 **Topic:**
 Linked List

@@ -1,7 +1,7 @@
 # Special Positions in a Binary Matrix
 
 **Problem Link:**
-https://leetcode.com/problems/special-positions-in-a-binary-matrix/
+<a href="https://leetcode.com/problems/special-positions-in-a-binary-matrix/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/special-positions-in-a-binary-matrix/</a>
 
 **Topic:**
 1-D & 2-D Arrays

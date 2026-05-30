@@ -1,7 +1,7 @@
 # Palindrome Pairs
 
 **Problem Link:**
-https://leetcode.com/problems/palindrome-pairs/
+<a href="https://leetcode.com/problems/palindrome-pairs/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/palindrome-pairs/</a>
 
 **Topic:**
 Hashing / Sliding Window

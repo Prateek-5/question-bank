@@ -2,7 +2,7 @@
 
 > **Difficulty:** Easy   |   **Time:** ~5 min   |   **Prereqs:** [`concepts/promises.md`](../../concepts/promises.md)
 >
-> **Source:** [LeetCode 2621 — Sleep](https://leetcode.com/problems/sleep/). Canonical async-utility warm-up.
+> **Source:** <a href="https://leetcode.com/problems/sleep/" target="_blank" rel="noopener noreferrer">LeetCode 2621 — Sleep</a>. Canonical async-utility warm-up.
 
 ---
 

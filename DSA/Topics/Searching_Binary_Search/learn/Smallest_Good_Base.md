@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Smallest_Good_Base.md`](../Smallest_Good_Base.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/smallest-good-base/
+> **Problem link:** <a href="https://leetcode.com/problems/smallest-good-base/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/smallest-good-base/</a>
 
 ---
 

@@ -1,7 +1,7 @@
 # Cheapest Flights Within K Stops
 
 **Problem Link:**
-https://leetcode.com/problems/cheapest-flights-within-k-stops/
+<a href="https://leetcode.com/problems/cheapest-flights-within-k-stops/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/cheapest-flights-within-k-stops/</a>
 
 **Topic:**
 Graph (BFS / DFS / Dijkstra / DSU)

@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Subtract_Product_and_Sum_of_Digits.md`](../Subtract_Product_and_Sum_of_Digits.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/subtract-the-product-and-sum-of-digits-of-an-integer/
+> **Problem link:** <a href="https://leetcode.com/problems/subtract-the-product-and-sum-of-digits-of-an-integer/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/subtract-the-product-and-sum-of-digits-of-an-integer/</a>
 
 ---
 

@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Find_Eventual_Safe_States.md`](../Find_Eventual_Safe_States.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/find-eventual-safe-states/
+> **Problem link:** <a href="https://leetcode.com/problems/find-eventual-safe-states/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/find-eventual-safe-states/</a>
 
 ---
 

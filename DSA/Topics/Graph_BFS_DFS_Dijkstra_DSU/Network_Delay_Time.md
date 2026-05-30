@@ -1,7 +1,7 @@
 # Network Delay Time
 
 **Problem Link:**
-https://leetcode.com/problems/network-delay-time/
+<a href="https://leetcode.com/problems/network-delay-time/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/network-delay-time/</a>
 
 **Topic:**
 Graph (BFS / DFS / Dijkstra / DSU)

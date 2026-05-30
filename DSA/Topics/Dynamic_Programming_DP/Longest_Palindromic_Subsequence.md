@@ -1,7 +1,7 @@
 # Longest Palindromic Subsequence
 
 **Problem Link:**
-https://leetcode.com/problems/longest-palindromic-subsequence/
+<a href="https://leetcode.com/problems/longest-palindromic-subsequence/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/longest-palindromic-subsequence/</a>
 
 **Topic:**
 Dynamic Programming (DP)

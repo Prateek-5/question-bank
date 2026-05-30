@@ -1,7 +1,7 @@
 # Number of Provinces
 
 **Problem Link:**
-https://leetcode.com/problems/number-of-provinces/
+<a href="https://leetcode.com/problems/number-of-provinces/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/number-of-provinces/</a>
 
 **Topic:**
 Graph (BFS / DFS / Dijkstra / DSU)

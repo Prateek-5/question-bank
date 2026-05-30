@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Paths_from_root_with_a_specified_sum.md`](../Paths_from_root_with_a_specified_sum.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://www.geeksforgeeks.org/problems/paths-from-root-with-a-specified-sum/1
+> **Problem link:** <a href="https://www.geeksforgeeks.org/problems/paths-from-root-with-a-specified-sum/1" target="_blank" rel="noopener noreferrer">https://www.geeksforgeeks.org/problems/paths-from-root-with-a-specified-sum/1</a>
 
 ---
 

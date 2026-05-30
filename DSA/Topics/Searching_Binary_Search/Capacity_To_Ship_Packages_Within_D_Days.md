@@ -1,7 +1,7 @@
 # Capacity To Ship Packages Within D Days
 
 **Problem Link:**
-https://leetcode.com/problems/capacity-to-ship-packages-within-d-days/
+<a href="https://leetcode.com/problems/capacity-to-ship-packages-within-d-days/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/capacity-to-ship-packages-within-d-days/</a>
 
 **Topic:**
 Searching / Binary Search

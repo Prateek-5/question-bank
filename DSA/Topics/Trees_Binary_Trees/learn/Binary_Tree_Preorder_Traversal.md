@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Binary_Tree_Preorder_Traversal.md`](../Binary_Tree_Preorder_Traversal.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/binary-tree-preorder-traversal/
+> **Problem link:** <a href="https://leetcode.com/problems/binary-tree-preorder-traversal/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/binary-tree-preorder-traversal/</a>
 
 ---
 

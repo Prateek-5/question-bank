@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Range_Sum_Query_Mutable.md`](../Range_Sum_Query_Mutable.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/range-sum-query-mutable/
+> **Problem link:** <a href="https://leetcode.com/problems/range-sum-query-mutable/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/range-sum-query-mutable/</a>
 
 ---
 

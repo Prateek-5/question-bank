@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Kth_Smallest_Element_in_BST.md`](../Kth_Smallest_Element_in_BST.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/kth-smallest-element-in-a-bst/
+> **Problem link:** <a href="https://leetcode.com/problems/kth-smallest-element-in-a-bst/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/kth-smallest-element-in-a-bst/</a>
 
 ---
 

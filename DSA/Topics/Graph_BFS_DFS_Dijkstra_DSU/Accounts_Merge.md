@@ -1,7 +1,7 @@
 # Accounts Merge
 
 **Problem Link:**
-https://leetcode.com/problems/accounts-merge/
+<a href="https://leetcode.com/problems/accounts-merge/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/accounts-merge/</a>
 
 **Topic:**
 Graph (BFS / DFS / Dijkstra / DSU)

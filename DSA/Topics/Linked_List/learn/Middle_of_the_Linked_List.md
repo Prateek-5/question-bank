@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Middle_of_the_Linked_List.md`](../Middle_of_the_Linked_List.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/middle-of-the-linked-list/
+> **Problem link:** <a href="https://leetcode.com/problems/middle-of-the-linked-list/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/middle-of-the-linked-list/</a>
 
 ---
 

@@ -1,7 +1,7 @@
 # Dungeon Game
 
 **Problem Link:**
-https://leetcode.com/problems/dungeon-game/
+<a href="https://leetcode.com/problems/dungeon-game/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/dungeon-game/</a>
 
 **Topic:**
 Dynamic Programming (DP)

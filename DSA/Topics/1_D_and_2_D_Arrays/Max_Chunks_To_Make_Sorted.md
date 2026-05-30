@@ -1,7 +1,7 @@
 # Max Chunks To Make Sorted
 
 **Problem Link:**
-https://leetcode.com/problems/max-chunks-to-make-sorted/
+<a href="https://leetcode.com/problems/max-chunks-to-make-sorted/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/max-chunks-to-make-sorted/</a>
 
 **Topic:**
 1-D & 2-D Arrays

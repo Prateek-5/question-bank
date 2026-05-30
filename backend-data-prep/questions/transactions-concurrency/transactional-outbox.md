@@ -1,7 +1,7 @@
 # Transactional outbox pattern: atomic DB write + event publish
 
 ## Source / Origin
-- Pattern catalogued by Chris Richardson (https://microservices.io/patterns/data/transactional-outbox.html).
+- Pattern catalogued by Chris Richardson (<a href="https://microservices.io/patterns/data/transactional-outbox.html" target="_blank" rel="noopener noreferrer">https://microservices.io/patterns/data/transactional-outbox.html</a>).
 - Used by Debezium, Confluent, every modern event-driven microservice stack.
 - Concept reference: `backend-data-prep/sql/06-transactions.md`.
 

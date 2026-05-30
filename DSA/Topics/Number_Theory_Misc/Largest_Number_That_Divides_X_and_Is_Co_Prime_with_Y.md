@@ -1,7 +1,7 @@
 # Largest Number That Divides X and Is Co-Prime with Y
 
 **Problem Link:**
-https://www.geeksforgeeks.org/dsa/largest-number-divides-x-co-prime-y/
+<a href="https://www.geeksforgeeks.org/dsa/largest-number-divides-x-co-prime-y/" target="_blank" rel="noopener noreferrer">https://www.geeksforgeeks.org/dsa/largest-number-divides-x-co-prime-y/</a>
 
 **Topic:**
 Number Theory / Misc

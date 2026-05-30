@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Maximal_Rectangle.md`](../Maximal_Rectangle.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/maximal-rectangle/
+> **Problem link:** <a href="https://leetcode.com/problems/maximal-rectangle/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/maximal-rectangle/</a>
 
 ---
 

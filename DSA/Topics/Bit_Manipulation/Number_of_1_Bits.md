@@ -1,7 +1,7 @@
 # Number of 1 Bits
 
 **Problem Link:**
-https://leetcode.com/problems/number-of-1-bits/
+<a href="https://leetcode.com/problems/number-of-1-bits/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/number-of-1-bits/</a>
 
 **Topic:**
 Bit Manipulation

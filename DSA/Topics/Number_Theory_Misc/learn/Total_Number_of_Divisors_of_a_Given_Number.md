@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Total_Number_of_Divisors_of_a_Given_Number.md`](../Total_Number_of_Divisors_of_a_Given_Number.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://www.geeksforgeeks.org/dsa/total-number-divisors-given-number/
+> **Problem link:** <a href="https://www.geeksforgeeks.org/dsa/total-number-divisors-given-number/" target="_blank" rel="noopener noreferrer">https://www.geeksforgeeks.org/dsa/total-number-divisors-given-number/</a>
 
 ---
 

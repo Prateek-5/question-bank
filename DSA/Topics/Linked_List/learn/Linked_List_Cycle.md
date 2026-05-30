@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Linked_List_Cycle.md`](../Linked_List_Cycle.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/linked-list-cycle/
+> **Problem link:** <a href="https://leetcode.com/problems/linked-list-cycle/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/linked-list-cycle/</a>
 
 ---
 

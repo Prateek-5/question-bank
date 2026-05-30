@@ -2,7 +2,7 @@
 
 > **Difficulty:** Easy-Medium   |   **Time:** ~10 min   |   **Prereqs:** [build-promise-from-scratch.md](./build-promise-from-scratch.md), [`concepts/promises.md`](../../concepts/promises.md)
 >
-> **Source:** TC39 ES2024; popularized by jQuery's `$.Deferred` (2009). [Proposal](https://github.com/tc39/proposal-promise-with-resolvers).
+> **Source:** TC39 ES2024; popularized by jQuery's `$.Deferred` (2009). <a href="https://github.com/tc39/proposal-promise-with-resolvers" target="_blank" rel="noopener noreferrer">Proposal</a>.
 
 ---
 

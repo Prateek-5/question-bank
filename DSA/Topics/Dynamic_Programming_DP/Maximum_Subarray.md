@@ -1,7 +1,7 @@
 # Maximum Subarray
 
 **Problem Link:**
-https://leetcode.com/problems/maximum-subarray/
+<a href="https://leetcode.com/problems/maximum-subarray/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/maximum-subarray/</a>
 
 **Topic:**
 Dynamic Programming (DP)

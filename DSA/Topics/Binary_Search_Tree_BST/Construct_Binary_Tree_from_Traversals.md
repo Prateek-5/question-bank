@@ -1,7 +1,7 @@
 # Construct Binary Tree from Traversals
 
 **Problem Link:**
-https://leetcode.com/problems/construct-binary-tree-from-preorder-and-inorder-traversal/
+<a href="https://leetcode.com/problems/construct-binary-tree-from-preorder-and-inorder-traversal/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/construct-binary-tree-from-preorder-and-inorder-traversal/</a>
 
 **Topic:**
 Binary Search Tree (BST)

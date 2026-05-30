@@ -1,7 +1,7 @@
 # Range Sum of BST
 
 **Problem Link:**
-https://leetcode.com/problems/range-sum-of-bst/
+<a href="https://leetcode.com/problems/range-sum-of-bst/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/range-sum-of-bst/</a>
 
 **Topic:**
 Binary Search Tree (BST)

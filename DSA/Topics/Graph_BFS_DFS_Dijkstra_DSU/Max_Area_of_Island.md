@@ -1,7 +1,7 @@
 # Max Area of Island
 
 **Problem Link:**
-https://leetcode.com/problems/max-area-of-island/
+<a href="https://leetcode.com/problems/max-area-of-island/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/max-area-of-island/</a>
 
 **Topic:**
 Graph (BFS / DFS / Dijkstra / DSU)

@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Queue_Reconstruction_by_Height.md`](../Queue_Reconstruction_by_Height.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/queue-reconstruction-by-height/
+> **Problem link:** <a href="https://leetcode.com/problems/queue-reconstruction-by-height/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/queue-reconstruction-by-height/</a>
 
 ---
 

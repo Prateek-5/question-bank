@@ -1,7 +1,7 @@
 # Russian Doll Envelopes
 
 **Problem Link:**
-https://leetcode.com/problems/russian-doll-envelopes/
+<a href="https://leetcode.com/problems/russian-doll-envelopes/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/russian-doll-envelopes/</a>
 
 **Topic:**
 Dynamic Programming (DP)

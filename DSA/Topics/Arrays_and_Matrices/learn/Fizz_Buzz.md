@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Fizz_Buzz.md`](../Fizz_Buzz.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/fizz-buzz/
+> **Problem link:** <a href="https://leetcode.com/problems/fizz-buzz/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/fizz-buzz/</a>
 
 ---
 

@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Knight_Probability_in_Chessboard.md`](../Knight_Probability_in_Chessboard.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/knight-probability-in-chessboard/
+> **Problem link:** <a href="https://leetcode.com/problems/knight-probability-in-chessboard/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/knight-probability-in-chessboard/</a>
 
 ---
 

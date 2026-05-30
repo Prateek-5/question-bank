@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Kth_Largest_Element_in_a_Stream.md`](../Kth_Largest_Element_in_a_Stream.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/kth-largest-element-in-a-stream/
+> **Problem link:** <a href="https://leetcode.com/problems/kth-largest-element-in-a-stream/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/kth-largest-element-in-a-stream/</a>
 
 ---
 

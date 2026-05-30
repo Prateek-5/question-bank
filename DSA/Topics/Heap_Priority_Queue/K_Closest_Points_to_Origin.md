@@ -1,7 +1,7 @@
 # K Closest Points to Origin
 
 **Problem Link:**
-https://leetcode.com/problems/k-closest-points-to-origin/
+<a href="https://leetcode.com/problems/k-closest-points-to-origin/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/k-closest-points-to-origin/</a>
 
 **Topic:**
 Heap / Priority Queue

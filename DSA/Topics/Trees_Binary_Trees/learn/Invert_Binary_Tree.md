@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Invert_Binary_Tree.md`](../Invert_Binary_Tree.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/invert-binary-tree/
+> **Problem link:** <a href="https://leetcode.com/problems/invert-binary-tree/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/invert-binary-tree/</a>
 
 ---
 

@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Surrounded_Regions.md`](../Surrounded_Regions.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/surrounded-regions/
+> **Problem link:** <a href="https://leetcode.com/problems/surrounded-regions/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/surrounded-regions/</a>
 
 ---
 

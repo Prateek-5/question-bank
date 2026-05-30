@@ -1,7 +1,7 @@
 # Shortest Unique Prefix for Every Word
 
 **Problem Link:**
-https://www.geeksforgeeks.org/find-all-shortest-unique-prefixes-to-represent-each-word-in-a-given-list/
+<a href="https://www.geeksforgeeks.org/find-all-shortest-unique-prefixes-to-represent-each-word-in-a-given-list/" target="_blank" rel="noopener noreferrer">https://www.geeksforgeeks.org/find-all-shortest-unique-prefixes-to-represent-each-word-in-a-given-list/</a>
 
 **Topic:**
 Trie / Bit Manipulation Trie

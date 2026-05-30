@@ -2,7 +2,7 @@
 
 > **Difficulty:** Easy   |   **Time:** ~10 min   |   **Prereqs:** [`concepts/closures.md`](../../concepts/closures.md), [`02-closures/once-with-cached-return.md`](../02-closures/once-with-cached-return.md)
 >
-> **Source:** lodash `_.once`, Underscore, [LeetCode 2666 — Allow One Function Call](https://leetcode.com/problems/allow-one-function-call/).
+> **Source:** lodash `_.once`, Underscore, <a href="https://leetcode.com/problems/allow-one-function-call/" target="_blank" rel="noopener noreferrer">LeetCode 2666 — Allow One Function Call</a>.
 
 ---
 

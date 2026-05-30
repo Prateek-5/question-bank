@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Longest_Valid_Parentheses.md`](../Longest_Valid_Parentheses.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/longest-valid-parentheses/
+> **Problem link:** <a href="https://leetcode.com/problems/longest-valid-parentheses/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/longest-valid-parentheses/</a>
 
 ---
 

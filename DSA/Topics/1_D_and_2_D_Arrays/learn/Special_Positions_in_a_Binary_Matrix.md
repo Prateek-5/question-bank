@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Special_Positions_in_a_Binary_Matrix.md`](../Special_Positions_in_a_Binary_Matrix.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/special-positions-in-a-binary-matrix/
+> **Problem link:** <a href="https://leetcode.com/problems/special-positions-in-a-binary-matrix/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/special-positions-in-a-binary-matrix/</a>
 
 ---
 

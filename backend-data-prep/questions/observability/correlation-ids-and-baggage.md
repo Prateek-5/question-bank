@@ -2,8 +2,8 @@
 
 ## Source / Origin
 - Pre-OTel pattern: every mature microservices shop (Twitter, Uber, Shopify) wrote their own `X-Request-ID` middleware before OpenTelemetry standardised baggage.
-- W3C Baggage spec: https://www.w3.org/TR/baggage/
-- OpenTelemetry Baggage API: https://opentelemetry.io/docs/specs/otel/baggage/
+- W3C Baggage spec: <a href="https://www.w3.org/TR/baggage/" target="_blank" rel="noopener noreferrer">https://www.w3.org/TR/baggage/</a>
+- OpenTelemetry Baggage API: <a href="https://opentelemetry.io/docs/specs/otel/baggage/" target="_blank" rel="noopener noreferrer">https://opentelemetry.io/docs/specs/otel/baggage/</a>
 - Common interview prompt: "A user reports 'my checkout failed at 14:32'. How do you find every log line, every metric, and every span related to *that one request*?"
 
 ## Why this question matters in interviews

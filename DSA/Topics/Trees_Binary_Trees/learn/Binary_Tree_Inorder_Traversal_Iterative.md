@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Binary_Tree_Inorder_Traversal_Iterative.md`](../Binary_Tree_Inorder_Traversal_Iterative.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/binary-tree-inorder-traversal/
+> **Problem link:** <a href="https://leetcode.com/problems/binary-tree-inorder-traversal/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/binary-tree-inorder-traversal/</a>
 
 ---
 

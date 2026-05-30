@@ -1,7 +1,7 @@
 # Gray Code
 
 **Problem Link:**
-https://leetcode.com/problems/gray-code/
+<a href="https://leetcode.com/problems/gray-code/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/gray-code/</a>
 
 **Topic:**
 Backtracking

@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Network_Delay_Time.md`](../Network_Delay_Time.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/network-delay-time/
+> **Problem link:** <a href="https://leetcode.com/problems/network-delay-time/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/network-delay-time/</a>
 
 ---
 

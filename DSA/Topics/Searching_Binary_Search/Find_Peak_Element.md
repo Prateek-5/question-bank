@@ -1,7 +1,7 @@
 # Find Peak Element
 
 **Problem Link:**
-https://leetcode.com/problems/find-peak-element/
+<a href="https://leetcode.com/problems/find-peak-element/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/find-peak-element/</a>
 
 **Topic:**
 Searching / Binary Search

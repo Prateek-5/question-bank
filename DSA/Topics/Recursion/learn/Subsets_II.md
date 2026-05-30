@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Subsets_II.md`](../Subsets_II.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/subsets-ii/
+> **Problem link:** <a href="https://leetcode.com/problems/subsets-ii/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/subsets-ii/</a>
 
 ---
 

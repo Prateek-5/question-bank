@@ -2,7 +2,7 @@
 
 > **Difficulty:** Easy   |   **Time:** ~10 min   |   **Prereqs:** [`concepts/closures.md`](../../concepts/closures.md)
 >
-> **Source:** [LeetCode 2620 — Counter](https://leetcode.com/problems/counter/)
+> **Source:** <a href="https://leetcode.com/problems/counter/" target="_blank" rel="noopener noreferrer">LeetCode 2620 — Counter</a>
 
 ---
 

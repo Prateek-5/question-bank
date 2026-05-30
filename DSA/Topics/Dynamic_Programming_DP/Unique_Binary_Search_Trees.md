@@ -1,7 +1,7 @@
 # Unique Binary Search Trees
 
 **Problem Link:**
-https://leetcode.com/problems/unique-binary-search-trees/
+<a href="https://leetcode.com/problems/unique-binary-search-trees/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/unique-binary-search-trees/</a>
 
 **Topic:**
 Dynamic Programming (DP)

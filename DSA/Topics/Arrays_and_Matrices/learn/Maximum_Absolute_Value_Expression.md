@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Maximum_Absolute_Value_Expression.md`](../Maximum_Absolute_Value_Expression.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/maximum-of-absolute-value-expression/
+> **Problem link:** <a href="https://leetcode.com/problems/maximum-of-absolute-value-expression/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/maximum-of-absolute-value-expression/</a>
 
 ---
 

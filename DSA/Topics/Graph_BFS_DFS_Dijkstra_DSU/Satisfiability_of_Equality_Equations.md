@@ -1,7 +1,7 @@
 # Satisfiability of Equality Equations
 
 **Problem Link:**
-https://leetcode.com/problems/satisfiability-of-equality-equations/
+<a href="https://leetcode.com/problems/satisfiability-of-equality-equations/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/satisfiability-of-equality-equations/</a>
 
 **Topic:**
 Graph (BFS / DFS / Dijkstra / DSU)

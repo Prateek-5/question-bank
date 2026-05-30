@@ -1,7 +1,7 @@
 # Trapping Rain Water
 
 **Problem Link:**
-https://leetcode.com/problems/trapping-rain-water/
+<a href="https://leetcode.com/problems/trapping-rain-water/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/trapping-rain-water/</a>
 
 **Topic:**
 Arrays & Matrices

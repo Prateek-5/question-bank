@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Subarray_Sums_Divisible_by_K.md`](../Subarray_Sums_Divisible_by_K.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/subarray-sums-divisible-by-k/
+> **Problem link:** <a href="https://leetcode.com/problems/subarray-sums-divisible-by-k/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/subarray-sums-divisible-by-k/</a>
 
 ---
 

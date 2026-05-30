@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Find_First_and_Last_Position_of_Element_in_Sorted_Array.md`](../Find_First_and_Last_Position_of_Element_in_Sorted_Array.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/find-first-and-last-position-of-element-in-sorted-array/
+> **Problem link:** <a href="https://leetcode.com/problems/find-first-and-last-position-of-element-in-sorted-array/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/find-first-and-last-position-of-element-in-sorted-array/</a>
 
 ---
 

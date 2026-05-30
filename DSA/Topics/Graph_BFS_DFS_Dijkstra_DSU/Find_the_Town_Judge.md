@@ -1,7 +1,7 @@
 # Find the Town Judge
 
 **Problem Link:**
-https://leetcode.com/problems/find-the-town-judge/
+<a href="https://leetcode.com/problems/find-the-town-judge/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/find-the-town-judge/</a>
 
 **Topic:**
 Graph (BFS / DFS / Dijkstra / DSU)

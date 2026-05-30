@@ -1,7 +1,7 @@
 # Redundant Connection
 
 **Problem Link:**
-https://leetcode.com/problems/redundant-connection/
+<a href="https://leetcode.com/problems/redundant-connection/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/redundant-connection/</a>
 
 **Topic:**
 Graph (BFS / DFS / Dijkstra / DSU)

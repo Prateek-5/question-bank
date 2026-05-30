@@ -1,7 +1,7 @@
 # Find the Pivot Integer
 
 **Problem Link:**
-https://leetcode.com/problems/find-the-pivot-integer/
+<a href="https://leetcode.com/problems/find-the-pivot-integer/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/find-the-pivot-integer/</a>
 
 **Topic:**
 Math

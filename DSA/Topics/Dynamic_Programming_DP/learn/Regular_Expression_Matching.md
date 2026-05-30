@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Regular_Expression_Matching.md`](../Regular_Expression_Matching.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/regular-expression-matching/
+> **Problem link:** <a href="https://leetcode.com/problems/regular-expression-matching/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/regular-expression-matching/</a>
 
 ---
 

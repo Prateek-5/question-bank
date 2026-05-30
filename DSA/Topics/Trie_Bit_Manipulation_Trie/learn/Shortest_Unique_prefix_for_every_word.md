@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Shortest_Unique_prefix_for_every_word.md`](../Shortest_Unique_prefix_for_every_word.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://www.geeksforgeeks.org/find-all-shortest-unique-prefixes-to-represent-each-word-in-a-given-list/
+> **Problem link:** <a href="https://www.geeksforgeeks.org/find-all-shortest-unique-prefixes-to-represent-each-word-in-a-given-list/" target="_blank" rel="noopener noreferrer">https://www.geeksforgeeks.org/find-all-shortest-unique-prefixes-to-represent-each-word-in-a-given-list/</a>
 
 ---
 

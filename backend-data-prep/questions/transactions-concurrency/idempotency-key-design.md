@@ -1,7 +1,7 @@
 # Design an idempotency-key system for retryable API calls
 
 ## Source / Origin
-- Stripe's public API design (https://stripe.com/docs/api/idempotent_requests) — the canonical reference.
+- Stripe's public API design (<a href="https://stripe.com/docs/api/idempotent_requests" target="_blank" rel="noopener noreferrer">https://stripe.com/docs/api/idempotent_requests</a>) — the canonical reference.
 - Standard payments / webhooks system-design question.
 - Concept reference: `backend-data-prep/sql/06-transactions.md`.
 

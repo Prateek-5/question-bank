@@ -1,7 +1,7 @@
 # Distinct Subsequences
 
 **Problem Link:**
-https://leetcode.com/problems/distinct-subsequences/
+<a href="https://leetcode.com/problems/distinct-subsequences/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/distinct-subsequences/</a>
 
 **Topic:**
 Dynamic Programming (DP)

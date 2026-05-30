@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Kth_Smallest_Element_in_Sorted_Matrix.md`](../Kth_Smallest_Element_in_Sorted_Matrix.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/kth-smallest-element-in-a-sorted-matrix/
+> **Problem link:** <a href="https://leetcode.com/problems/kth-smallest-element-in-a-sorted-matrix/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/kth-smallest-element-in-a-sorted-matrix/</a>
 
 ---
 

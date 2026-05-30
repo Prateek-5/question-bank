@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Max_Points_on_a_Line.md`](../Max_Points_on_a_Line.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/max-points-on-a-line/
+> **Problem link:** <a href="https://leetcode.com/problems/max-points-on-a-line/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/max-points-on-a-line/</a>
 
 ---
 

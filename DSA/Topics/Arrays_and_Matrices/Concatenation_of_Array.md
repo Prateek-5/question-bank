@@ -1,7 +1,7 @@
 # Concatenation of Array
 
 **Problem Link:**
-https://leetcode.com/problems/concatenation-of-array/
+<a href="https://leetcode.com/problems/concatenation-of-array/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/concatenation-of-array/</a>
 
 **Topic:**
 Arrays & Matrices

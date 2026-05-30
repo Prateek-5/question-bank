@@ -1,7 +1,7 @@
 # Decode Ways
 
 **Problem Link:**
-https://leetcode.com/problems/decode-ways/
+<a href="https://leetcode.com/problems/decode-ways/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/decode-ways/</a>
 
 **Topic:**
 Dynamic Programming (DP)

@@ -1,7 +1,7 @@
 # Edit Distance
 
 **Problem Link:**
-https://leetcode.com/problems/edit-distance/
+<a href="https://leetcode.com/problems/edit-distance/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/edit-distance/</a>
 
 **Topic:**
 Dynamic Programming (DP)

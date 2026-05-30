@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Binary_Search_Tree_Iterator.md`](../Binary_Search_Tree_Iterator.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/binary-search-tree-iterator/
+> **Problem link:** <a href="https://leetcode.com/problems/binary-search-tree-iterator/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/binary-search-tree-iterator/</a>
 
 ---
 

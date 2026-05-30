@@ -1,7 +1,7 @@
 # Invert Binary Tree
 
 **Problem Link:**
-https://leetcode.com/problems/invert-binary-tree/
+<a href="https://leetcode.com/problems/invert-binary-tree/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/invert-binary-tree/</a>
 
 **Topic:**
 Trees / Binary Trees

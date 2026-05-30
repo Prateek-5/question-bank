@@ -1,7 +1,7 @@
 # Count of Smaller Numbers After Self
 
 **Problem Link:**
-https://leetcode.com/problems/count-of-smaller-numbers-after-self/
+<a href="https://leetcode.com/problems/count-of-smaller-numbers-after-self/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/count-of-smaller-numbers-after-self/</a>
 
 **Topic:**
 Sorting / Divide & Conquer

@@ -2,7 +2,7 @@
 
 > **Difficulty:** Medium   |   **Time:** ~20 min   |   **Prereqs:** [promise-time-limit.md](./promise-time-limit.md), [abortcontroller-fanout.md](./abortcontroller-fanout.md)
 >
-> **Source:** Standard frontend/backend interview question. MDN: [AbortController](https://developer.mozilla.org/en-US/docs/Web/API/AbortController).
+> **Source:** Standard frontend/backend interview question. MDN: <a href="https://developer.mozilla.org/en-US/docs/Web/API/AbortController" target="_blank" rel="noopener noreferrer">AbortController</a>.
 
 ---
 

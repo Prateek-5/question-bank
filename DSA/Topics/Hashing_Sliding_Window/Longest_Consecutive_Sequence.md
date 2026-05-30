@@ -1,7 +1,7 @@
 # Longest Consecutive Sequence
 
 **Problem Link:**
-https://leetcode.com/problems/longest-consecutive-sequence/
+<a href="https://leetcode.com/problems/longest-consecutive-sequence/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/longest-consecutive-sequence/</a>
 
 **Topic:**
 Hashing / Sliding Window

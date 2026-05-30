@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../All_Elements_in_Two_BSTs.md`](../All_Elements_in_Two_BSTs.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/all-elements-in-two-binary-search-trees/
+> **Problem link:** <a href="https://leetcode.com/problems/all-elements-in-two-binary-search-trees/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/all-elements-in-two-binary-search-trees/</a>
 
 ---
 

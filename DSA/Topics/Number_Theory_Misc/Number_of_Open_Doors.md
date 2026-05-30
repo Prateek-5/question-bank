@@ -1,7 +1,7 @@
 # Number of Open Doors
 
 **Problem Link:**
-https://www.geeksforgeeks.org/problems/number-of-open-doors1552/1
+<a href="https://www.geeksforgeeks.org/problems/number-of-open-doors1552/1" target="_blank" rel="noopener noreferrer">https://www.geeksforgeeks.org/problems/number-of-open-doors1552/1</a>
 
 **Topic:**
 Number Theory / Misc

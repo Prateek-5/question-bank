@@ -1,7 +1,7 @@
 # Sum Root to Leaf Numbers
 
 **Problem Link:**
-https://leetcode.com/problems/sum-root-to-leaf-numbers/
+<a href="https://leetcode.com/problems/sum-root-to-leaf-numbers/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/sum-root-to-leaf-numbers/</a>
 
 **Topic:**
 Trees / Binary Trees

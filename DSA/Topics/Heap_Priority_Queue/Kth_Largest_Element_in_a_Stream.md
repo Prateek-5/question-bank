@@ -1,7 +1,7 @@
 # Kth Largest Element in a Stream
 
 **Problem Link:**
-https://leetcode.com/problems/kth-largest-element-in-a-stream/
+<a href="https://leetcode.com/problems/kth-largest-element-in-a-stream/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/kth-largest-element-in-a-stream/</a>
 
 **Topic:**
 Heap / Priority Queue

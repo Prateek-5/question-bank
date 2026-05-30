@@ -1,7 +1,7 @@
 # Queue Reconstruction by Height
 
 **Problem Link:**
-https://leetcode.com/problems/queue-reconstruction-by-height/
+<a href="https://leetcode.com/problems/queue-reconstruction-by-height/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/queue-reconstruction-by-height/</a>
 
 **Topic:**
 Binary Search Tree (BST)

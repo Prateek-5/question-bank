@@ -1,7 +1,7 @@
 # Open the Lock
 
 **Problem Link:**
-https://leetcode.com/problems/open-the-lock/
+<a href="https://leetcode.com/problems/open-the-lock/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/open-the-lock/</a>
 
 **Topic:**
 Sorting / Divide and Conquer (really a BFS problem)

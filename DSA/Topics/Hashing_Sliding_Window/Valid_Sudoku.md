@@ -1,7 +1,7 @@
 # Valid Sudoku
 
 **Problem Link:**
-https://leetcode.com/problems/valid-sudoku/
+<a href="https://leetcode.com/problems/valid-sudoku/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/valid-sudoku/</a>
 
 **Topic:**
 Hashing / Sliding Window

@@ -1,7 +1,7 @@
 # Assign Cookies
 
 **Problem Link:**
-https://leetcode.com/problems/assign-cookies/
+<a href="https://leetcode.com/problems/assign-cookies/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/assign-cookies/</a>
 
 **Topic:**
 Greedy

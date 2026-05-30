@@ -1,7 +1,7 @@
 # Distribute Candies
 
 **Problem Link:**
-https://leetcode.com/problems/distribute-candies/
+<a href="https://leetcode.com/problems/distribute-candies/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/distribute-candies/</a>
 
 **Topic:**
 Greedy

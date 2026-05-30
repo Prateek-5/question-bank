@@ -1,7 +1,7 @@
 # Find Median from Data Stream
 
 **Problem Link:**
-https://leetcode.com/problems/find-median-from-data-stream/
+<a href="https://leetcode.com/problems/find-median-from-data-stream/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/find-median-from-data-stream/</a>
 
 **Topic:**
 Heap / Priority Queue

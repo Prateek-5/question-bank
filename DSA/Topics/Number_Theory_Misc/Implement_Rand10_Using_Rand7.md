@@ -1,7 +1,7 @@
 # Implement Rand10() Using Rand7()
 
 **Problem Link:**
-https://leetcode.com/problems/implement-rand10-using-rand7/description/
+<a href="https://leetcode.com/problems/implement-rand10-using-rand7/description/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/implement-rand10-using-rand7/description/</a>
 
 **Topic:**
 Number Theory / Misc (also randomization)

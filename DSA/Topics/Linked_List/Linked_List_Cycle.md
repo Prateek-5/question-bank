@@ -1,7 +1,7 @@
 # Linked List Cycle
 
 **Problem Link:**
-https://leetcode.com/problems/linked-list-cycle/
+<a href="https://leetcode.com/problems/linked-list-cycle/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/linked-list-cycle/</a>
 
 **Topic:**
 Linked List

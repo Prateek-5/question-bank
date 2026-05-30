@@ -1,7 +1,7 @@
 # Implement Trie (Prefix Tree)
 
 **Problem Link:**
-https://leetcode.com/problems/implement-trie-prefix-tree/
+<a href="https://leetcode.com/problems/implement-trie-prefix-tree/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/implement-trie-prefix-tree/</a>
 
 **Topic:**
 Trie / Bit Manipulation Trie

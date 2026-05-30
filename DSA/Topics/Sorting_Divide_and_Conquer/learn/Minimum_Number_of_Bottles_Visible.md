@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Minimum_Number_of_Bottles_Visible.md`](../Minimum_Number_of_Bottles_Visible.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/minimum-number-of-bottles-visible-when-standing-on-a-shelf/
+> **Problem link:** <a href="https://leetcode.com/problems/minimum-number-of-bottles-visible-when-standing-on-a-shelf/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/minimum-number-of-bottles-visible-when-standing-on-a-shelf/</a>
 
 ---
 

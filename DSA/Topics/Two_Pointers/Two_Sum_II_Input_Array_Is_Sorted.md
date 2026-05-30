@@ -1,7 +1,7 @@
 # Two Sum II — Input Array Is Sorted
 
 **Problem Link:**
-https://leetcode.com/problems/two-sum-ii-input-array-is-sorted/
+<a href="https://leetcode.com/problems/two-sum-ii-input-array-is-sorted/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/two-sum-ii-input-array-is-sorted/</a>
 
 **Topic:**
 Two Pointers

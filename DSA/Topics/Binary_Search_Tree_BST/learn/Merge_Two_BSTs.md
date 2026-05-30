@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Merge_Two_BSTs.md`](../Merge_Two_BSTs.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://www.geeksforgeeks.org/merge-two-balanced-binary-search-trees/
+> **Problem link:** <a href="https://www.geeksforgeeks.org/merge-two-balanced-binary-search-trees/" target="_blank" rel="noopener noreferrer">https://www.geeksforgeeks.org/merge-two-balanced-binary-search-trees/</a>
 
 ---
 

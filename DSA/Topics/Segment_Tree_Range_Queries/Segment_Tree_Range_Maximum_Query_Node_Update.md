@@ -1,7 +1,7 @@
 # Segment Tree — Range Maximum Query with Node Update
 
 **Problem Link:**
-https://www.geeksforgeeks.org/dsa/segment-tree-set-2-range-maximum-query-node-update/
+<a href="https://www.geeksforgeeks.org/dsa/segment-tree-set-2-range-maximum-query-node-update/" target="_blank" rel="noopener noreferrer">https://www.geeksforgeeks.org/dsa/segment-tree-set-2-range-maximum-query-node-update/</a>
 
 **Topic:**
 Segment Tree / Range Queries

@@ -2,7 +2,7 @@
 
 > **Difficulty:** Easy-Medium   |   **Time:** ~15 min   |   **Prereqs:** [build-promise-from-scratch.md](./build-promise-from-scratch.md), [promise-all-polyfill.md](./promise-all-polyfill.md)
 >
-> **Source:** ES2018. BFE.dev #74. MDN: [Promise.prototype.finally](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise/finally).
+> **Source:** ES2018. BFE.dev #74. MDN: <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise/finally" target="_blank" rel="noopener noreferrer">Promise.prototype.finally</a>.
 
 ---
 

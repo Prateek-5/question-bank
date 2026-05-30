@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Matrix_Chain_Multiplication.md`](../Matrix_Chain_Multiplication.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://www.geeksforgeeks.org/matrix-chain-multiplication-dp-8/
+> **Problem link:** <a href="https://www.geeksforgeeks.org/matrix-chain-multiplication-dp-8/" target="_blank" rel="noopener noreferrer">https://www.geeksforgeeks.org/matrix-chain-multiplication-dp-8/</a>
 
 ---
 

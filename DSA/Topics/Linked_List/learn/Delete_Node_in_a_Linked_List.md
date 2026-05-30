@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Delete_Node_in_a_Linked_List.md`](../Delete_Node_in_a_Linked_List.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/delete-node-in-a-linked-list/
+> **Problem link:** <a href="https://leetcode.com/problems/delete-node-in-a-linked-list/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/delete-node-in-a-linked-list/</a>
 
 ---
 

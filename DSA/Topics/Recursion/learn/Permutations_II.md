@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Permutations_II.md`](../Permutations_II.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/permutations-ii/
+> **Problem link:** <a href="https://leetcode.com/problems/permutations-ii/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/permutations-ii/</a>
 
 ---
 

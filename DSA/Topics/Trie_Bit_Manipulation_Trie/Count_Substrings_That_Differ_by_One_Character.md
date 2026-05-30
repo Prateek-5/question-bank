@@ -1,7 +1,7 @@
 # Count Substrings That Differ by One Character
 
 **Problem Link:**
-https://leetcode.com/problems/count-substrings-that-differ-by-one-character/description/
+<a href="https://leetcode.com/problems/count-substrings-that-differ-by-one-character/description/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/count-substrings-that-differ-by-one-character/description/</a>
 
 **Topic:**
 Trie / Bit Manipulation Trie (solvable via DP too)

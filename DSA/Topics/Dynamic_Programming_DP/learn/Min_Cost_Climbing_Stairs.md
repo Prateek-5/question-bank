@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Min_Cost_Climbing_Stairs.md`](../Min_Cost_Climbing_Stairs.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/min-cost-climbing-stairs/
+> **Problem link:** <a href="https://leetcode.com/problems/min-cost-climbing-stairs/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/min-cost-climbing-stairs/</a>
 
 ---
 

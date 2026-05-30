@@ -1,7 +1,7 @@
 # Spiral Matrix II
 
 **Problem Link:**
-https://leetcode.com/problems/spiral-matrix-ii/
+<a href="https://leetcode.com/problems/spiral-matrix-ii/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/spiral-matrix-ii/</a>
 
 **Topic:**
 Arrays & Matrices

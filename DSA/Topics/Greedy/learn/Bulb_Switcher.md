@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Bulb_Switcher.md`](../Bulb_Switcher.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/bulb-switcher/
+> **Problem link:** <a href="https://leetcode.com/problems/bulb-switcher/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/bulb-switcher/</a>
 
 ---
 

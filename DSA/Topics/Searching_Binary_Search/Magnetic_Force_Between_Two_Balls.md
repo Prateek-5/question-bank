@@ -1,7 +1,7 @@
 # Magnetic Force Between Two Balls
 
 **Problem Link:**
-https://leetcode.com/problems/magnetic-force-between-two-balls/
+<a href="https://leetcode.com/problems/magnetic-force-between-two-balls/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/magnetic-force-between-two-balls/</a>
 
 **Topic:**
 Searching / Binary Search

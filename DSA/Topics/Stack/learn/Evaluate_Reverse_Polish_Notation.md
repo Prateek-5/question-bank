@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Evaluate_Reverse_Polish_Notation.md`](../Evaluate_Reverse_Polish_Notation.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/evaluate-reverse-polish-notation/
+> **Problem link:** <a href="https://leetcode.com/problems/evaluate-reverse-polish-notation/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/evaluate-reverse-polish-notation/</a>
 
 ---
 

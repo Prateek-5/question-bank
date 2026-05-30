@@ -1,7 +1,7 @@
 # Maximize Sum After K Negations
 
 **Problem Link:**
-https://leetcode.com/problems/maximize-sum-of-array-after-k-negations/
+<a href="https://leetcode.com/problems/maximize-sum-of-array-after-k-negations/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/maximize-sum-of-array-after-k-negations/</a>
 
 **Topic:**
 Greedy

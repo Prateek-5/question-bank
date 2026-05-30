@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Minimum_Platforms.md`](../Minimum_Platforms.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://www.geeksforgeeks.org/minimum-number-platforms-required-railwaybus-station/
+> **Problem link:** <a href="https://www.geeksforgeeks.org/minimum-number-platforms-required-railwaybus-station/" target="_blank" rel="noopener noreferrer">https://www.geeksforgeeks.org/minimum-number-platforms-required-railwaybus-station/</a>
 
 ---
 

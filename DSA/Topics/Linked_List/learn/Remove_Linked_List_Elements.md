@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Remove_Linked_List_Elements.md`](../Remove_Linked_List_Elements.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/remove-linked-list-elements/
+> **Problem link:** <a href="https://leetcode.com/problems/remove-linked-list-elements/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/remove-linked-list-elements/</a>
 
 ---
 

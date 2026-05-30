@@ -1,7 +1,7 @@
 # Maximum Size Subarray Sum Equals K
 
 **Problem Link:**
-https://leetcode.com/problems/maximum-size-subarray-sum-equals-k/
+<a href="https://leetcode.com/problems/maximum-size-subarray-sum-equals-k/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/maximum-size-subarray-sum-equals-k/</a>
 
 **Topic:**
 Hashing / Sliding Window

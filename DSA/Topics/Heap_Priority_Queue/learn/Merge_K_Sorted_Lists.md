@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Merge_K_Sorted_Lists.md`](../Merge_K_Sorted_Lists.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/merge-k-sorted-lists/
+> **Problem link:** <a href="https://leetcode.com/problems/merge-k-sorted-lists/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/merge-k-sorted-lists/</a>
 
 ---
 

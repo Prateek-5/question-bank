@@ -1,7 +1,7 @@
 # Subsets II
 
 **Problem Link:**
-https://leetcode.com/problems/subsets-ii/
+<a href="https://leetcode.com/problems/subsets-ii/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/subsets-ii/</a>
 
 **Topic:**
 Recursion

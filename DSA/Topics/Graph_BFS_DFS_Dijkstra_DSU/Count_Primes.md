@@ -1,7 +1,7 @@
 # Count Primes
 
 **Problem Link:**
-https://leetcode.com/problems/count-primes/
+<a href="https://leetcode.com/problems/count-primes/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/count-primes/</a>
 
 **Topic:**
 Graph (BFS / DFS / Dijkstra / DSU)

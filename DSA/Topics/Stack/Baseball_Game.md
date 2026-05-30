@@ -1,7 +1,7 @@
 # Baseball Game
 
 **Problem Link:**
-https://leetcode.com/problems/baseball-game/
+<a href="https://leetcode.com/problems/baseball-game/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/baseball-game/</a>
 
 **Topic:**
 Stack

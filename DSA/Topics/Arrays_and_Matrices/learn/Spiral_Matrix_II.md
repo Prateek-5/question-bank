@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Spiral_Matrix_II.md`](../Spiral_Matrix_II.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/spiral-matrix-ii/
+> **Problem link:** <a href="https://leetcode.com/problems/spiral-matrix-ii/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/spiral-matrix-ii/</a>
 
 ---
 

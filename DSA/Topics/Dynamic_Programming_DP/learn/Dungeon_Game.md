@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Dungeon_Game.md`](../Dungeon_Game.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/dungeon-game/
+> **Problem link:** <a href="https://leetcode.com/problems/dungeon-game/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/dungeon-game/</a>
 
 ---
 

@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Maximum_Size_Subarray_Sum_Equals_K.md`](../Maximum_Size_Subarray_Sum_Equals_K.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/maximum-size-subarray-sum-equals-k/
+> **Problem link:** <a href="https://leetcode.com/problems/maximum-size-subarray-sum-equals-k/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/maximum-size-subarray-sum-equals-k/</a>
 
 ---
 

@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Number_of_Operations_to_Make_Network_Connected.md`](../Number_of_Operations_to_Make_Network_Connected.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/number-of-operations-to-make-network-connected/
+> **Problem link:** <a href="https://leetcode.com/problems/number-of-operations-to-make-network-connected/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/number-of-operations-to-make-network-connected/</a>
 
 ---
 

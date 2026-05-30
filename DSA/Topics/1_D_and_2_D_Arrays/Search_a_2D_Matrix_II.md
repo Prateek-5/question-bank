@@ -1,7 +1,7 @@
 # Search a 2D Matrix II
 
 **Problem Link:**
-https://leetcode.com/problems/search-a-2d-matrix-ii/
+<a href="https://leetcode.com/problems/search-a-2d-matrix-ii/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/search-a-2d-matrix-ii/</a>
 
 **Topic:**
 1-D & 2-D Arrays

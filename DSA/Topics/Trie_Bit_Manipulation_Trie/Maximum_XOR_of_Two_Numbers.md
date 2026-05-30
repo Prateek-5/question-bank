@@ -1,7 +1,7 @@
 # Maximum XOR of Two Numbers
 
 **Problem Link:**
-https://leetcode.com/problems/maximum-xor-of-two-numbers-in-an-array/
+<a href="https://leetcode.com/problems/maximum-xor-of-two-numbers-in-an-array/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/maximum-xor-of-two-numbers-in-an-array/</a>
 
 **Topic:**
 Trie / Bit Manipulation Trie

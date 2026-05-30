@@ -1,7 +1,7 @@
 # Total Number of Divisors of a Given Number
 
 **Problem Link:**
-https://www.geeksforgeeks.org/dsa/total-number-divisors-given-number/
+<a href="https://www.geeksforgeeks.org/dsa/total-number-divisors-given-number/" target="_blank" rel="noopener noreferrer">https://www.geeksforgeeks.org/dsa/total-number-divisors-given-number/</a>
 
 **Topic:**
 Number Theory / Misc

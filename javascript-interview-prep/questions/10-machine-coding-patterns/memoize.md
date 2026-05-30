@@ -2,7 +2,7 @@
 
 > **Difficulty:** Easy-Medium   |   **Time:** ~15 min   |   **Prereqs:** [`concepts/closures.md`](../../concepts/closures.md), [`concepts/maps-sets.md`](../../concepts/maps-sets.md)
 >
-> **Source:** [LeetCode 2623 — Memoize](https://leetcode.com/problems/memoize/). The classic closure + Map exercise.
+> **Source:** <a href="https://leetcode.com/problems/memoize/" target="_blank" rel="noopener noreferrer">LeetCode 2623 — Memoize</a>. The classic closure + Map exercise.
 
 ---
 

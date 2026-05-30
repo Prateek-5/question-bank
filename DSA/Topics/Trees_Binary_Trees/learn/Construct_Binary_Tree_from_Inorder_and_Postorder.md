@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Construct_Binary_Tree_from_Inorder_and_Postorder.md`](../Construct_Binary_Tree_from_Inorder_and_Postorder.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/construct-binary-tree-from-inorder-and-postorder-traversal/
+> **Problem link:** <a href="https://leetcode.com/problems/construct-binary-tree-from-inorder-and-postorder-traversal/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/construct-binary-tree-from-inorder-and-postorder-traversal/</a>
 
 ---
 

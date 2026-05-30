@@ -2,7 +2,7 @@
 
 ## Source / Origin
 - Standard "explain MVCC internals" senior question.
-- Reference: Postgres internals doc (https://www.postgresql.org/docs/current/mvcc-intro.html), Bruce Momjian's MVCC slides.
+- Reference: Postgres internals doc (<a href="https://www.postgresql.org/docs/current/mvcc-intro.html" target="_blank" rel="noopener noreferrer">https://www.postgresql.org/docs/current/mvcc-intro.html</a>), Bruce Momjian's MVCC slides.
 - Concept reference: `backend-data-prep/sql/07-isolation-levels.md`.
 
 ## Why this question matters in interviews

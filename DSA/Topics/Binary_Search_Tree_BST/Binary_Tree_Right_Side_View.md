@@ -1,7 +1,7 @@
 # Binary Tree Right Side View
 
 **Problem Link:**
-https://leetcode.com/problems/binary-tree-right-side-view/
+<a href="https://leetcode.com/problems/binary-tree-right-side-view/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/binary-tree-right-side-view/</a>
 
 **Topic:**
 Binary Search Tree (BST)

@@ -1,7 +1,7 @@
 # Number of Islands
 
 **Problem Link:**
-https://leetcode.com/problems/number-of-islands/
+<a href="https://leetcode.com/problems/number-of-islands/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/number-of-islands/</a>
 
 **Topic:**
 Graph (BFS / DFS / Dijkstra / DSU)

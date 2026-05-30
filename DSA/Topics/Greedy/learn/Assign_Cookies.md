@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Assign_Cookies.md`](../Assign_Cookies.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/assign-cookies/
+> **Problem link:** <a href="https://leetcode.com/problems/assign-cookies/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/assign-cookies/</a>
 
 ---
 

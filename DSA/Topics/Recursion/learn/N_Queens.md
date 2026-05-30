@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../N_Queens.md`](../N_Queens.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/n-queens/
+> **Problem link:** <a href="https://leetcode.com/problems/n-queens/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/n-queens/</a>
 
 ---
 

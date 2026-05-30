@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Gray_Code.md`](../Gray_Code.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/gray-code/
+> **Problem link:** <a href="https://leetcode.com/problems/gray-code/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/gray-code/</a>
 
 ---
 

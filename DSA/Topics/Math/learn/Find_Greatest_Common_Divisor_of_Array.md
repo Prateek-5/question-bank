@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Find_Greatest_Common_Divisor_of_Array.md`](../Find_Greatest_Common_Divisor_of_Array.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/find-greatest-common-divisor-of-array/
+> **Problem link:** <a href="https://leetcode.com/problems/find-greatest-common-divisor-of-array/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/find-greatest-common-divisor-of-array/</a>
 
 ---
 

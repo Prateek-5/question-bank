@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Daily_Temperatures.md`](../Daily_Temperatures.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/daily-temperatures/
+> **Problem link:** <a href="https://leetcode.com/problems/daily-temperatures/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/daily-temperatures/</a>
 
 ---
 

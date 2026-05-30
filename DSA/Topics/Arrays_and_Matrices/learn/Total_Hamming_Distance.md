@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Total_Hamming_Distance.md`](../Total_Hamming_Distance.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/total-hamming-distance/
+> **Problem link:** <a href="https://leetcode.com/problems/total-hamming-distance/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/total-hamming-distance/</a>
 
 ---
 

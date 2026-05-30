@@ -1,7 +1,7 @@
 # Remove All Adjacent Duplicates in String
 
 **Problem Link:**
-https://leetcode.com/problems/remove-all-adjacent-duplicates-in-string/
+<a href="https://leetcode.com/problems/remove-all-adjacent-duplicates-in-string/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/remove-all-adjacent-duplicates-in-string/</a>
 
 **Topic:**
 Stack

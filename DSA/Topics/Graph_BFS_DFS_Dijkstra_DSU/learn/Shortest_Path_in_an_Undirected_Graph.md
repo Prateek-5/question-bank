@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Shortest_Path_in_an_Undirected_Graph.md`](../Shortest_Path_in_an_Undirected_Graph.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://www.geeksforgeeks.org/problems/shortest-path-in-weighted-undirected-graph/1
+> **Problem link:** <a href="https://www.geeksforgeeks.org/problems/shortest-path-in-weighted-undirected-graph/1" target="_blank" rel="noopener noreferrer">https://www.geeksforgeeks.org/problems/shortest-path-in-weighted-undirected-graph/1</a>
 
 ---
 

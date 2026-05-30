@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Distinct_Subsequences.md`](../Distinct_Subsequences.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/distinct-subsequences/
+> **Problem link:** <a href="https://leetcode.com/problems/distinct-subsequences/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/distinct-subsequences/</a>
 
 ---
 

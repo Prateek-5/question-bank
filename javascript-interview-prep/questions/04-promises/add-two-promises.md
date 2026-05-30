@@ -2,7 +2,7 @@
 
 > **Difficulty:** Easy   |   **Time:** ~10 min   |   **Prereqs:** [`concepts/promises.md`](../../concepts/promises.md), [sleep.md](./sleep.md)
 >
-> **Source:** [LeetCode 2723 — Add Two Promises](https://leetcode.com/problems/add-two-promises/).
+> **Source:** <a href="https://leetcode.com/problems/add-two-promises/" target="_blank" rel="noopener noreferrer">LeetCode 2723 — Add Two Promises</a>.
 
 ---
 

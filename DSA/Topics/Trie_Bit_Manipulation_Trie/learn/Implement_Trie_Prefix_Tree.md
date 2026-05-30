@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Implement_Trie_Prefix_Tree.md`](../Implement_Trie_Prefix_Tree.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/implement-trie-prefix-tree/
+> **Problem link:** <a href="https://leetcode.com/problems/implement-trie-prefix-tree/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/implement-trie-prefix-tree/</a>
 
 ---
 

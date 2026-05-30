@@ -2,7 +2,7 @@
 
 > **Difficulty:** Medium   |   **Time:** ~20 min   |   **Prereqs:** [build-promise-from-scratch.md](./build-promise-from-scratch.md), [`concepts/promises.md`](../../concepts/promises.md)
 >
-> **Source:** [LeetCode 2724 — Execute Asynchronous Functions in Parallel](https://leetcode.com/problems/execute-asynchronous-functions-in-parallel/); BFE.dev; every senior frontend/backend round.
+> **Source:** <a href="https://leetcode.com/problems/execute-asynchronous-functions-in-parallel/" target="_blank" rel="noopener noreferrer">LeetCode 2724 — Execute Asynchronous Functions in Parallel</a>; BFE.dev; every senior frontend/backend round.
 
 ---
 

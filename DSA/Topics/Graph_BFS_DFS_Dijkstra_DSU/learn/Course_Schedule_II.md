@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Course_Schedule_II.md`](../Course_Schedule_II.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/course-schedule-ii/
+> **Problem link:** <a href="https://leetcode.com/problems/course-schedule-ii/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/course-schedule-ii/</a>
 
 ---
 

@@ -1,7 +1,7 @@
 # Single Element in a Sorted Array
 
 **Problem Link:**
-https://leetcode.com/problems/single-element-in-a-sorted-array/
+<a href="https://leetcode.com/problems/single-element-in-a-sorted-array/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/single-element-in-a-sorted-array/</a>
 
 **Topic:**
 Searching / Binary Search

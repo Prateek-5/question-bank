@@ -2,7 +2,7 @@
 
 > **Difficulty:** Easy   |   **Time:** ~5 min   |   **Prereqs:** none (this *is* the prereq for the closures section)
 >
-> **Source:** [LeetCode 2667 — Create Hello World Function](https://leetcode.com/problems/create-hello-world-function/)
+> **Source:** <a href="https://leetcode.com/problems/create-hello-world-function/" target="_blank" rel="noopener noreferrer">LeetCode 2667 — Create Hello World Function</a>
 
 ---
 

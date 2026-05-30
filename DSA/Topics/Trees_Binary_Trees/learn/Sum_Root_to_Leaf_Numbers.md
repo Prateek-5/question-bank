@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Sum_Root_to_Leaf_Numbers.md`](../Sum_Root_to_Leaf_Numbers.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/sum-root-to-leaf-numbers/
+> **Problem link:** <a href="https://leetcode.com/problems/sum-root-to-leaf-numbers/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/sum-root-to-leaf-numbers/</a>
 
 ---
 

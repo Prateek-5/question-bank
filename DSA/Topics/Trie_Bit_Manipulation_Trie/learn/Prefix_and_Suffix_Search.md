@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Prefix_and_Suffix_Search.md`](../Prefix_and_Suffix_Search.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/prefix-and-suffix-search/
+> **Problem link:** <a href="https://leetcode.com/problems/prefix-and-suffix-search/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/prefix-and-suffix-search/</a>
 
 ---
 

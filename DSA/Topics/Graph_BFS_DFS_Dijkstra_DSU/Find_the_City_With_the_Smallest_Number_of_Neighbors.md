@@ -1,7 +1,7 @@
 # Find the City With the Smallest Number of Neighbors at a Threshold Distance
 
 **Problem Link:**
-https://leetcode.com/problems/find-the-city-with-the-smallest-number-of-neighbors-at-a-threshold-distance/
+<a href="https://leetcode.com/problems/find-the-city-with-the-smallest-number-of-neighbors-at-a-threshold-distance/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/find-the-city-with-the-smallest-number-of-neighbors-at-a-threshold-distance/</a>
 
 **Topic:**
 Graph (BFS / DFS / Dijkstra / DSU)

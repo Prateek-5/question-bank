@@ -1,7 +1,7 @@
 # Convert 1D Array Into 2D Array
 
 **Problem Link:**
-https://leetcode.com/problems/convert-1d-array-into-2d-array/
+<a href="https://leetcode.com/problems/convert-1d-array-into-2d-array/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/convert-1d-array-into-2d-array/</a>
 
 **Topic:**
 1-D & 2-D Arrays

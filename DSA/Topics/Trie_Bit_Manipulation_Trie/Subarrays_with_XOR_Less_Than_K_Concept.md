@@ -1,7 +1,7 @@
 # Subarrays with XOR Less Than K (Concept)
 
 **Problem Link:**
-https://leetcode.com/problems/subarray-xor-queries/
+<a href="https://leetcode.com/problems/subarray-xor-queries/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/subarray-xor-queries/</a>
 
 **Topic:**
 Trie / Bit Manipulation Trie

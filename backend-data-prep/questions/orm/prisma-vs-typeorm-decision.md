@@ -2,8 +2,8 @@
 
 ## Source / Origin
 - Real-world Node.js backend decision in every greenfield project since ~2021.
-- Prisma docs: https://www.prisma.io/docs
-- TypeORM docs: https://typeorm.io
+- Prisma docs: <a href="https://www.prisma.io/docs" target="_blank" rel="noopener noreferrer">https://www.prisma.io/docs</a>
+- TypeORM docs: <a href="https://typeorm.io" target="_blank" rel="noopener noreferrer">https://typeorm.io</a>
 - Honorable mentions: Drizzle (rising), Sequelize (legacy but alive), Kysely (query builder, not ORM), MikroORM (the closest Node has to a real Unit-of-Work ORM).
 
 ## Why this question matters in interviews

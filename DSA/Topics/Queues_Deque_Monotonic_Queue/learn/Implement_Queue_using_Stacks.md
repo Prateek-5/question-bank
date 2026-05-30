@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Implement_Queue_using_Stacks.md`](../Implement_Queue_using_Stacks.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/implement-queue-using-stacks/
+> **Problem link:** <a href="https://leetcode.com/problems/implement-queue-using-stacks/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/implement-queue-using-stacks/</a>
 
 ---
 

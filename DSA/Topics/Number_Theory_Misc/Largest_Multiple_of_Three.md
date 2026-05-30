@@ -1,7 +1,7 @@
 # Largest Multiple of Three
 
 **Problem Link:**
-https://leetcode.com/problems/largest-multiple-of-three/
+<a href="https://leetcode.com/problems/largest-multiple-of-three/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/largest-multiple-of-three/</a>
 
 **Topic:**
 Number Theory / Misc (also greedy)

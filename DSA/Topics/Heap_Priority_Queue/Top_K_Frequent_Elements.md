@@ -1,7 +1,7 @@
 # Top K Frequent Elements
 
 **Problem Link:**
-https://leetcode.com/problems/top-k-frequent-elements/
+<a href="https://leetcode.com/problems/top-k-frequent-elements/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/top-k-frequent-elements/</a>
 
 **Topic:**
 Heap / Priority Queue

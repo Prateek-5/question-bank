@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Lucky_Numbers_in_a_Matrix.md`](../Lucky_Numbers_in_a_Matrix.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/lucky-numbers-in-a-matrix/description/
+> **Problem link:** <a href="https://leetcode.com/problems/lucky-numbers-in-a-matrix/description/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/lucky-numbers-in-a-matrix/description/</a>
 
 ---
 

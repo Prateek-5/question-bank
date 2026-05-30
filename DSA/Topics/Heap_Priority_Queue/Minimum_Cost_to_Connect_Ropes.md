@@ -1,7 +1,7 @@
 # Minimum Cost to Connect Ropes
 
 **Problem Link:**
-https://leetcode.com/problems/minimum-cost-to-connect-sticks/
+<a href="https://leetcode.com/problems/minimum-cost-to-connect-sticks/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/minimum-cost-to-connect-sticks/</a>
 
 **Topic:**
 Heap / Priority Queue

@@ -2,7 +2,7 @@
 
 > **Difficulty:** Senior   |   **Time:** ~30 min   |   **Prereqs:** [`concepts/recursion.md`](../../concepts/recursion.md), [trie.md](./trie.md)
 >
-> **Source:** [BFE.dev #21](https://bigfrontend.dev/problem/JSON-parse), Frontend Masters parser series. The smallest "real parser" you can write under interview pressure.
+> **Source:** <a href="https://bigfrontend.dev/problem/JSON-parse" target="_blank" rel="noopener noreferrer">BFE.dev #21</a>, Frontend Masters parser series. The smallest "real parser" you can write under interview pressure.
 
 ---
 

@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Max_Consecutive_Ones.md`](../Max_Consecutive_Ones.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/max-consecutive-ones/
+> **Problem link:** <a href="https://leetcode.com/problems/max-consecutive-ones/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/max-consecutive-ones/</a>
 
 ---
 

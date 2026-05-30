@@ -1,7 +1,7 @@
 # Binary Tree Left Side View
 
 **Problem Link:**
-https://www.geeksforgeeks.org/print-left-view-binary-tree/
+<a href="https://www.geeksforgeeks.org/print-left-view-binary-tree/" target="_blank" rel="noopener noreferrer">https://www.geeksforgeeks.org/print-left-view-binary-tree/</a>
 
 **Topic:**
 Binary Search Tree (BST)

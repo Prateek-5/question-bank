@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Number_of_Open_Doors.md`](../Number_of_Open_Doors.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://www.geeksforgeeks.org/problems/number-of-open-doors1552/1
+> **Problem link:** <a href="https://www.geeksforgeeks.org/problems/number-of-open-doors1552/1" target="_blank" rel="noopener noreferrer">https://www.geeksforgeeks.org/problems/number-of-open-doors1552/1</a>
 
 ---
 

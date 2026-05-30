@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Gas_Station.md`](../Gas_Station.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/gas-station/
+> **Problem link:** <a href="https://leetcode.com/problems/gas-station/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/gas-station/</a>
 
 ---
 

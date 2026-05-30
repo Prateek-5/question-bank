@@ -1,7 +1,7 @@
 # Sliding Window Maximum
 
 **Problem Link:**
-https://leetcode.com/problems/sliding-window-maximum/
+<a href="https://leetcode.com/problems/sliding-window-maximum/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/sliding-window-maximum/</a>
 
 **Topic:**
 Queues / Deque / Monotonic Queue

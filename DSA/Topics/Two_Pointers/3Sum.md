@@ -1,7 +1,7 @@
 # 3Sum
 
 **Problem Link:**
-https://leetcode.com/problems/3sum/
+<a href="https://leetcode.com/problems/3sum/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/3sum/</a>
 
 **Topic:**
 Two Pointers

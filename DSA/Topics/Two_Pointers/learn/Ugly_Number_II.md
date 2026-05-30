@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Ugly_Number_II.md`](../Ugly_Number_II.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/ugly-number-ii/
+> **Problem link:** <a href="https://leetcode.com/problems/ugly-number-ii/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/ugly-number-ii/</a>
 
 ---
 

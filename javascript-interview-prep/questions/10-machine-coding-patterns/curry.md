@@ -2,7 +2,7 @@
 
 > **Difficulty:** Medium   |   **Time:** ~20 min   |   **Prereqs:** [`concepts/closures.md`](../../concepts/closures.md), [`02-closures/partial-application.md`](../02-closures/partial-application.md)
 >
-> **Source:** Lodash `_.curry`, Ramda `R.curry`, [codedamn Curry](https://codedamn.com/problem/vqf9CjnUNextjlV5yQ4NP). Common at FE/full-stack rounds.
+> **Source:** Lodash `_.curry`, Ramda `R.curry`, <a href="https://codedamn.com/problem/vqf9CjnUNextjlV5yQ4NP" target="_blank" rel="noopener noreferrer">codedamn Curry</a>. Common at FE/full-stack rounds.
 
 ---
 

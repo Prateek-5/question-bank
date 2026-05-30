@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Maximum_XOR_of_Two_Numbers.md`](../Maximum_XOR_of_Two_Numbers.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/maximum-xor-of-two-numbers-in-an-array/
+> **Problem link:** <a href="https://leetcode.com/problems/maximum-xor-of-two-numbers-in-an-array/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/maximum-xor-of-two-numbers-in-an-array/</a>
 
 ---
 

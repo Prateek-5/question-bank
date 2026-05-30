@@ -1,7 +1,7 @@
 # Maximum Gap
 
 **Problem Link:**
-https://leetcode.com/problems/maximum-gap/
+<a href="https://leetcode.com/problems/maximum-gap/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/maximum-gap/</a>
 
 **Topic:**
 Arrays & Matrices

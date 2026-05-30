@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Divisor_Game.md`](../Divisor_Game.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/divisor-game/
+> **Problem link:** <a href="https://leetcode.com/problems/divisor-game/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/divisor-game/</a>
 
 ---
 

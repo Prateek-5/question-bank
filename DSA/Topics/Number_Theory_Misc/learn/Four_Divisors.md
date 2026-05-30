@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Four_Divisors.md`](../Four_Divisors.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/four-divisors/
+> **Problem link:** <a href="https://leetcode.com/problems/four-divisors/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/four-divisors/</a>
 
 ---
 

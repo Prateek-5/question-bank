@@ -1,7 +1,7 @@
 # Redis Redlock — Distributed Lock + Critique + Fencing Tokens
 
 ## Source / Origin
-- Original "Redlock" algorithm by antirez (Salvatore Sanfilippo): https://redis.io/docs/manual/patterns/distributed-locks/
+- Original "Redlock" algorithm by antirez (Salvatore Sanfilippo): <a href="https://redis.io/docs/manual/patterns/distributed-locks/" target="_blank" rel="noopener noreferrer">https://redis.io/docs/manual/patterns/distributed-locks/</a>
 - Famous critique by Martin Kleppmann: "How to do distributed locking" (2016) — disputed Redlock's safety.
 - Counter-rebuttal by antirez: "Is Redlock safe?" — same year.
 - Companion concept doc: `backend-data-prep/caching/02-redis-patterns.md` — Distributed locks section.

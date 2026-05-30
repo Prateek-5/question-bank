@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../K_Closest_Points_to_Origin.md`](../K_Closest_Points_to_Origin.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/k-closest-points-to-origin/
+> **Problem link:** <a href="https://leetcode.com/problems/k-closest-points-to-origin/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/k-closest-points-to-origin/</a>
 
 ---
 

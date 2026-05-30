@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Sum_of_All_Submatrices_Odd_Length_Subarrays.md`](../Sum_of_All_Submatrices_Odd_Length_Subarrays.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/sum-of-all-odd-length-subarrays/
+> **Problem link:** <a href="https://leetcode.com/problems/sum-of-all-odd-length-subarrays/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/sum-of-all-odd-length-subarrays/</a>
 >
 > **Note on the filename:** The folder name says "Submatrices" but the problem is about subarrays (1D). The original file's content matches the LeetCode problem (odd-length **subarrays**); the filename is a small mismatch in the repo.
 

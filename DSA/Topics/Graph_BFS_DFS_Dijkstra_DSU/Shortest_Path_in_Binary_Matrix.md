@@ -1,7 +1,7 @@
 # Shortest Path in Binary Matrix
 
 **Problem Link:**
-https://leetcode.com/problems/shortest-path-in-binary-matrix/
+<a href="https://leetcode.com/problems/shortest-path-in-binary-matrix/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/shortest-path-in-binary-matrix/</a>
 
 **Topic:**
 Graph (BFS / DFS / Dijkstra / DSU)

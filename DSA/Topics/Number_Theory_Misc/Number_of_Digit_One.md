@@ -1,7 +1,7 @@
 # Number of Digit One
 
 **Problem Link:**
-https://leetcode.com/problems/number-of-digit-one/description/
+<a href="https://leetcode.com/problems/number-of-digit-one/description/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/number-of-digit-one/description/</a>
 
 **Topic:**
 Number Theory / Misc (also digit DP)

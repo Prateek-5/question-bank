@@ -2,7 +2,7 @@
 
 > **Difficulty:** Medium-Senior   |   **Time:** ~15 min   |   **Prereqs:** [`concepts/recursion.md`](../../concepts/recursion.md), [`10-machine-coding-patterns/deep-clone-with-cycles.md`](../10-machine-coding-patterns/deep-clone-with-cycles.md)
 >
-> **Source:** [LeetCode 2700 — Differences Between Two Objects](https://leetcode.com/problems/differences-between-two-objects/). Atlassian, Razorpay, Shopify.
+> **Source:** <a href="https://leetcode.com/problems/differences-between-two-objects/" target="_blank" rel="noopener noreferrer">LeetCode 2700 — Differences Between Two Objects</a>. Atlassian, Razorpay, Shopify.
 
 ---
 

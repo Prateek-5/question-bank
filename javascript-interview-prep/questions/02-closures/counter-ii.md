@@ -2,7 +2,7 @@
 
 > **Difficulty:** Easy-Medium   |   **Time:** ~12 min   |   **Prereqs:** [counter.md](./counter.md), [`concepts/closures.md`](../../concepts/closures.md)
 >
-> **Source:** [LeetCode 2665 — Counter II](https://leetcode.com/problems/counter-ii/)
+> **Source:** <a href="https://leetcode.com/problems/counter-ii/" target="_blank" rel="noopener noreferrer">LeetCode 2665 — Counter II</a>
 
 ---
 

@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Sort_Colors.md`](../Sort_Colors.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/sort-colors/
+> **Problem link:** <a href="https://leetcode.com/problems/sort-colors/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/sort-colors/</a>
 
 ---
 

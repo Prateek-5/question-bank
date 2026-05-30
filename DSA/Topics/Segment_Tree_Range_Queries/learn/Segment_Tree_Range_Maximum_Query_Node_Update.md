@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Segment_Tree_Range_Maximum_Query_Node_Update.md`](../Segment_Tree_Range_Maximum_Query_Node_Update.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://www.geeksforgeeks.org/dsa/segment-tree-set-2-range-maximum-query-node-update/
+> **Problem link:** <a href="https://www.geeksforgeeks.org/dsa/segment-tree-set-2-range-maximum-query-node-update/" target="_blank" rel="noopener noreferrer">https://www.geeksforgeeks.org/dsa/segment-tree-set-2-range-maximum-query-node-update/</a>
 
 ---
 

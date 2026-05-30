@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Find_K_Pairs_with_Smallest_Sums.md`](../Find_K_Pairs_with_Smallest_Sums.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/find-k-pairs-with-smallest-sums/
+> **Problem link:** <a href="https://leetcode.com/problems/find-k-pairs-with-smallest-sums/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/find-k-pairs-with-smallest-sums/</a>
 
 ---
 

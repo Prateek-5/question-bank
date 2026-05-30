@@ -1,7 +1,7 @@
 # Surrounded Regions
 
 **Problem Link:**
-https://leetcode.com/problems/surrounded-regions/
+<a href="https://leetcode.com/problems/surrounded-regions/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/surrounded-regions/</a>
 
 **Topic:**
 Graph (BFS / DFS / Dijkstra / DSU)

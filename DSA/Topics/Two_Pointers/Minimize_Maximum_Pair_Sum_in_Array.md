@@ -1,7 +1,7 @@
 # Minimize Maximum Pair Sum in Array
 
 **Problem Link:**
-https://leetcode.com/problems/minimize-maximum-pair-sum-in-array/description/
+<a href="https://leetcode.com/problems/minimize-maximum-pair-sum-in-array/description/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/minimize-maximum-pair-sum-in-array/description/</a>
 
 **Topic:**
 Two Pointers

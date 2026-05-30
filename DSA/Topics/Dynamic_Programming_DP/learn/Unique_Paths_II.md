@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Unique_Paths_II.md`](../Unique_Paths_II.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/unique-paths-ii/
+> **Problem link:** <a href="https://leetcode.com/problems/unique-paths-ii/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/unique-paths-ii/</a>
 
 ---
 

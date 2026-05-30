@@ -1,7 +1,7 @@
 # Design Add and Search Words DS
 
 **Problem Link:**
-https://leetcode.com/problems/design-add-and-search-words-data-structure/
+<a href="https://leetcode.com/problems/design-add-and-search-words-data-structure/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/design-add-and-search-words-data-structure/</a>
 
 **Topic:**
 Trie / Bit Manipulation Trie

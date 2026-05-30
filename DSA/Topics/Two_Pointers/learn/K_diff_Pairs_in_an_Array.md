@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../K_diff_Pairs_in_an_Array.md`](../K_diff_Pairs_in_an_Array.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/k-diff-pairs-in-an-array/
+> **Problem link:** <a href="https://leetcode.com/problems/k-diff-pairs-in-an-array/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/k-diff-pairs-in-an-array/</a>
 
 ---
 

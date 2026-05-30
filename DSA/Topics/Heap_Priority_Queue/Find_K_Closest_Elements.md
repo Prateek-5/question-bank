@@ -1,7 +1,7 @@
 # Find K Closest Elements
 
 **Problem Link:**
-https://leetcode.com/problems/find-k-closest-elements/
+<a href="https://leetcode.com/problems/find-k-closest-elements/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/find-k-closest-elements/</a>
 
 **Topic:**
 Heap / Priority Queue

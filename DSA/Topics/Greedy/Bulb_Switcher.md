@@ -1,7 +1,7 @@
 # Bulb Switcher
 
 **Problem Link:**
-https://leetcode.com/problems/bulb-switcher/
+<a href="https://leetcode.com/problems/bulb-switcher/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/bulb-switcher/</a>
 
 **Topic:**
 Greedy

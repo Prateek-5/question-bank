@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Rectangle_Area.md`](../Rectangle_Area.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/rectangle-area/description/
+> **Problem link:** <a href="https://leetcode.com/problems/rectangle-area/description/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/rectangle-area/description/</a>
 
 ---
 

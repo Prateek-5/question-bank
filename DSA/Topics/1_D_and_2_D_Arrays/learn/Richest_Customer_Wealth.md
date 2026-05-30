@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Richest_Customer_Wealth.md`](../Richest_Customer_Wealth.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/richest-customer-wealth/
+> **Problem link:** <a href="https://leetcode.com/problems/richest-customer-wealth/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/richest-customer-wealth/</a>
 
 ---
 

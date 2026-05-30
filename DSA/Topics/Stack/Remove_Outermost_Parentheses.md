@@ -1,7 +1,7 @@
 # Remove Outermost Parentheses
 
 **Problem Link:**
-https://leetcode.com/problems/remove-outermost-parentheses/
+<a href="https://leetcode.com/problems/remove-outermost-parentheses/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/remove-outermost-parentheses/</a>
 
 **Topic:**
 Stack

@@ -1,7 +1,7 @@
 # Max Points on a Line
 
 **Problem Link:**
-https://leetcode.com/problems/max-points-on-a-line/
+<a href="https://leetcode.com/problems/max-points-on-a-line/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/max-points-on-a-line/</a>
 
 **Topic:**
 Hashing / Sliding Window

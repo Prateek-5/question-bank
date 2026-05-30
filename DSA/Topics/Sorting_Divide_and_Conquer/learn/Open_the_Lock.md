@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Open_the_Lock.md`](../Open_the_Lock.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/open-the-lock/
+> **Problem link:** <a href="https://leetcode.com/problems/open-the-lock/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/open-the-lock/</a>
 
 ---
 

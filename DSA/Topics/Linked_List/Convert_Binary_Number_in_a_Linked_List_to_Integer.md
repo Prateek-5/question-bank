@@ -1,7 +1,7 @@
 # Convert Binary Number in a Linked List to Integer
 
 **Problem Link:**
-https://leetcode.com/problems/convert-binary-number-in-a-linked-list-to-integer/
+<a href="https://leetcode.com/problems/convert-binary-number-in-a-linked-list-to-integer/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/convert-binary-number-in-a-linked-list-to-integer/</a>
 
 **Topic:**
 Linked List

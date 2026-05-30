@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Lowest_Common_Ancestor_of_BST.md`](../Lowest_Common_Ancestor_of_BST.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/lowest-common-ancestor-of-a-binary-search-tree/
+> **Problem link:** <a href="https://leetcode.com/problems/lowest-common-ancestor-of-a-binary-search-tree/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/lowest-common-ancestor-of-a-binary-search-tree/</a>
 
 ---
 

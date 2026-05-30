@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Satisfiability_of_Equality_Equations.md`](../Satisfiability_of_Equality_Equations.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/satisfiability-of-equality-equations/
+> **Problem link:** <a href="https://leetcode.com/problems/satisfiability-of-equality-equations/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/satisfiability-of-equality-equations/</a>
 
 ---
 

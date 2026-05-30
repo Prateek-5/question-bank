@@ -1,7 +1,7 @@
 # Min Stack
 
 **Problem Link:**
-https://leetcode.com/problems/min-stack/
+<a href="https://leetcode.com/problems/min-stack/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/min-stack/</a>
 
 **Topic:**
 Stack

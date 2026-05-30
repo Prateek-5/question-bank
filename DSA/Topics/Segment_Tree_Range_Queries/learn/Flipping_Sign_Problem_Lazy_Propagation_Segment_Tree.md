@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Flipping_Sign_Problem_Lazy_Propagation_Segment_Tree.md`](../Flipping_Sign_Problem_Lazy_Propagation_Segment_Tree.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://www.geeksforgeeks.org/dsa/flipping-sign-problem-lazy-propagation-segment-tree/
+> **Problem link:** <a href="https://www.geeksforgeeks.org/dsa/flipping-sign-problem-lazy-propagation-segment-tree/" target="_blank" rel="noopener noreferrer">https://www.geeksforgeeks.org/dsa/flipping-sign-problem-lazy-propagation-segment-tree/</a>
 
 ---
 

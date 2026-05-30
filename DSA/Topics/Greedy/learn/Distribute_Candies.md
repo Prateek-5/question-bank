@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Distribute_Candies.md`](../Distribute_Candies.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/distribute-candies/
+> **Problem link:** <a href="https://leetcode.com/problems/distribute-candies/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/distribute-candies/</a>
 
 ---
 

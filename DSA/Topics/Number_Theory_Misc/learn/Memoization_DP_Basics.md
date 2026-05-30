@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Memoization_DP_Basics.md`](../Memoization_DP_Basics.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/tag/dynamic-programming/
+> **Problem link:** <a href="https://leetcode.com/tag/dynamic-programming/" target="_blank" rel="noopener noreferrer">https://leetcode.com/tag/dynamic-programming/</a>
 
 ---
 

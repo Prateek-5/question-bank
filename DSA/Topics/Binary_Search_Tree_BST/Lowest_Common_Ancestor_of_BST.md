@@ -1,7 +1,7 @@
 # Lowest Common Ancestor of BST
 
 **Problem Link:**
-https://leetcode.com/problems/lowest-common-ancestor-of-a-binary-search-tree/
+<a href="https://leetcode.com/problems/lowest-common-ancestor-of-a-binary-search-tree/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/lowest-common-ancestor-of-a-binary-search-tree/</a>
 
 **Topic:**
 Binary Search Tree (BST)

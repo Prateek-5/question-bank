@@ -2,7 +2,7 @@
 
 > **Difficulty:** Easy-Medium   |   **Time:** ~15 min   |   **Prereqs:** [build-promise-from-scratch.md](./build-promise-from-scratch.md), [promise-all-polyfill.md](./promise-all-polyfill.md)
 >
-> **Source:** Canonical interview problem (BFE.dev, Frontend Masters, codedamn). MDN: [Promise.race](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise/race).
+> **Source:** Canonical interview problem (BFE.dev, Frontend Masters, codedamn). MDN: <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise/race" target="_blank" rel="noopener noreferrer">Promise.race</a>.
 
 ---
 

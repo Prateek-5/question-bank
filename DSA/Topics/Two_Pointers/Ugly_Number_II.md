@@ -1,7 +1,7 @@
 # Ugly Number II
 
 **Problem Link:**
-https://leetcode.com/problems/ugly-number-ii/
+<a href="https://leetcode.com/problems/ugly-number-ii/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/ugly-number-ii/</a>
 
 **Topic:**
 Two Pointers

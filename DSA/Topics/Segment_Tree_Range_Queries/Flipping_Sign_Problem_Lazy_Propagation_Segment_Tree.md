@@ -1,7 +1,7 @@
 # Flipping Sign Problem (Lazy Propagation Segment Tree)
 
 **Problem Link:**
-https://www.geeksforgeeks.org/dsa/flipping-sign-problem-lazy-propagation-segment-tree/
+<a href="https://www.geeksforgeeks.org/dsa/flipping-sign-problem-lazy-propagation-segment-tree/" target="_blank" rel="noopener noreferrer">https://www.geeksforgeeks.org/dsa/flipping-sign-problem-lazy-propagation-segment-tree/</a>
 
 **Topic:**
 Segment Tree / Range Queries

@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Find_the_Town_Judge.md`](../Find_the_Town_Judge.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/find-the-town-judge/
+> **Problem link:** <a href="https://leetcode.com/problems/find-the-town-judge/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/find-the-town-judge/</a>
 
 ---
 

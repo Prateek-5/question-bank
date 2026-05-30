@@ -1,7 +1,7 @@
 # Rotting Oranges
 
 **Problem Link:**
-https://leetcode.com/problems/rotting-oranges/
+<a href="https://leetcode.com/problems/rotting-oranges/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/rotting-oranges/</a>
 
 **Topic:**
 Graph (BFS / DFS / Dijkstra / DSU)

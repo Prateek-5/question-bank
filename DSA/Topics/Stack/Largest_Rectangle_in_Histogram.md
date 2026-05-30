@@ -1,7 +1,7 @@
 # Largest Rectangle in Histogram
 
 **Problem Link:**
-https://leetcode.com/problems/largest-rectangle-in-histogram/
+<a href="https://leetcode.com/problems/largest-rectangle-in-histogram/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/largest-rectangle-in-histogram/</a>
 
 **Topic:**
 Stack

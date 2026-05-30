@@ -1,7 +1,7 @@
 # Remove Nth Node From End of List
 
 **Problem Link:**
-https://leetcode.com/problems/remove-nth-node-from-end-of-list/
+<a href="https://leetcode.com/problems/remove-nth-node-from-end-of-list/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/remove-nth-node-from-end-of-list/</a>
 
 **Topic:**
 Linked List

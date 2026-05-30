@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Minimize_Maximum_Pair_Sum_in_Array.md`](../Minimize_Maximum_Pair_Sum_in_Array.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/minimize-maximum-pair-sum-in-array/
+> **Problem link:** <a href="https://leetcode.com/problems/minimize-maximum-pair-sum-in-array/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/minimize-maximum-pair-sum-in-array/</a>
 
 ---
 

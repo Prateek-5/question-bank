@@ -2,7 +2,7 @@
 
 > **Difficulty:** Medium   |   **Time:** ~20 min   |   **Prereqs:** [`02-closures/ring-buffer-via-closure.md`](../02-closures/ring-buffer-via-closure.md), [`concepts/arrays.md`](../../concepts/arrays.md)
 >
-> **Source:** [LeetCode 622 — Design Circular Queue](https://leetcode.com/problems/design-circular-queue/). Used in audio/video frame buffers, packet rings (DPDK, io_uring), rolling-window metrics, ring loggers.
+> **Source:** <a href="https://leetcode.com/problems/design-circular-queue/" target="_blank" rel="noopener noreferrer">LeetCode 622 — Design Circular Queue</a>. Used in audio/video frame buffers, packet rings (DPDK, io_uring), rolling-window metrics, ring loggers.
 
 ---
 

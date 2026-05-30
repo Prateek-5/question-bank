@@ -35,10 +35,14 @@ def write(path: str, content: str):
 
 def make_question_md(title, link, topic, q):
     """q: dict with concept, intuition, explanation, dry_run, approach, complexity, code, followups."""
+    link_html = (
+        f'<a href="{link}" target="_blank" rel="noopener noreferrer">{link}</a>'
+        if link else ""
+    )
     return f"""# {title}
 
 ## Problem Link
-{link}
+{link_html}
 
 ## Topic
 {topic}

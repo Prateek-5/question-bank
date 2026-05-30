@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Container_With_Most_Water.md`](../Container_With_Most_Water.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/container-with-most-water/
+> **Problem link:** <a href="https://leetcode.com/problems/container-with-most-water/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/container-with-most-water/</a>
 
 ---
 

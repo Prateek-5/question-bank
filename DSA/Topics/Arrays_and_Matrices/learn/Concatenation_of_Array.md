@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Concatenation_of_Array.md`](../Concatenation_of_Array.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/concatenation-of-array/
+> **Problem link:** <a href="https://leetcode.com/problems/concatenation-of-array/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/concatenation-of-array/</a>
 
 ---
 

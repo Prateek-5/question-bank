@@ -1,7 +1,7 @@
 # Maximum Product of Three Numbers
 
 **Problem Link:**
-https://leetcode.com/problems/maximum-product-of-three-numbers/
+<a href="https://leetcode.com/problems/maximum-product-of-three-numbers/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/maximum-product-of-three-numbers/</a>
 
 **Topic:**
 Greedy

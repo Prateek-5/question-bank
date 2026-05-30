@@ -1,7 +1,7 @@
 # Number of Enclaves
 
 **Problem Link:**
-https://leetcode.com/problems/number-of-enclaves/
+<a href="https://leetcode.com/problems/number-of-enclaves/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/number-of-enclaves/</a>
 
 **Topic:**
 Graph (BFS / DFS / Dijkstra / DSU)

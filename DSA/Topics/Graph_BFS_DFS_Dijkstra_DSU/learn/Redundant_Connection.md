@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Redundant_Connection.md`](../Redundant_Connection.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/redundant-connection/
+> **Problem link:** <a href="https://leetcode.com/problems/redundant-connection/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/redundant-connection/</a>
 
 ---
 

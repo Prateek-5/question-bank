@@ -2,7 +2,7 @@
 
 > **Difficulty:** Medium   |   **Time:** ~20 min   |   **Prereqs:** [`concepts/maps-sets.md`](../../concepts/maps-sets.md), [`concepts/recursion.md`](../../concepts/recursion.md)
 >
-> **Source:** [LeetCode 208 — Implement Trie (Prefix Tree)](https://leetcode.com/problems/implement-trie-prefix-tree/). Used in autocomplete, URL routers (Express, Fastify), IP routing tables.
+> **Source:** <a href="https://leetcode.com/problems/implement-trie-prefix-tree/" target="_blank" rel="noopener noreferrer">LeetCode 208 — Implement Trie (Prefix Tree)</a>. Used in autocomplete, URL routers (Express, Fastify), IP routing tables.
 
 ---
 
@@ -250,7 +250,7 @@ autocomplete('ca'):
 Counter at each `isEnd` for frequency tracking; `count(word)`, `decrement(word)`.
 
 ### Variant 2 — Wildcard search
-`?` (any char), `*` (any sequence). DFS with backtracking — [LeetCode 211](https://leetcode.com/problems/design-add-and-search-words-data-structure/).
+`?` (any char), `*` (any sequence). DFS with backtracking — <a href="https://leetcode.com/problems/design-add-and-search-words-data-structure/" target="_blank" rel="noopener noreferrer">LeetCode 211</a>.
 
 ### Variant 3 — Ranked autocomplete
 Frequency stored at each node; DFS keeps a heap of top-K. Used by real autocomplete services.

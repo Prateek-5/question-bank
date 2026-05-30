@@ -1,7 +1,7 @@
 # Range Sum Query 2D — Immutable
 
 **Problem Link:**
-https://leetcode.com/problems/range-sum-query-2d-immutable/
+<a href="https://leetcode.com/problems/range-sum-query-2d-immutable/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/range-sum-query-2d-immutable/</a>
 
 **Topic:**
 1-D & 2-D Arrays

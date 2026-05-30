@@ -1,7 +1,7 @@
 # Single Number
 
 **Problem Link:**
-https://leetcode.com/problems/single-number/
+<a href="https://leetcode.com/problems/single-number/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/single-number/</a>
 
 **Topic:**
 Bit Manipulation

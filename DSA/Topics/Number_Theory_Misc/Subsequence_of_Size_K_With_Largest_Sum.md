@@ -1,7 +1,7 @@
 # Subsequence of Size K With Largest Sum
 
 **Problem Link:**
-https://leetcode.com/problems/subsequence-of-size-k-with-the-largest-sum/
+<a href="https://leetcode.com/problems/subsequence-of-size-k-with-the-largest-sum/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/subsequence-of-size-k-with-the-largest-sum/</a>
 
 **Topic:**
 Number Theory / Misc (really sorting / selection)

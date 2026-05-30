@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Find_the_Pivot_Integer.md`](../Find_the_Pivot_Integer.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/find-the-pivot-integer/
+> **Problem link:** <a href="https://leetcode.com/problems/find-the-pivot-integer/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/find-the-pivot-integer/</a>
 
 ---
 

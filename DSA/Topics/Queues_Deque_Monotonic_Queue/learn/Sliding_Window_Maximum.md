@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Sliding_Window_Maximum.md`](../Sliding_Window_Maximum.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/sliding-window-maximum/
+> **Problem link:** <a href="https://leetcode.com/problems/sliding-window-maximum/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/sliding-window-maximum/</a>
 
 ---
 

@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Expression_Contains_Redundant_Bracket_or_Not.md`](../Expression_Contains_Redundant_Bracket_or_Not.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://www.geeksforgeeks.org/expression-contains-redundant-bracket-not/
+> **Problem link:** <a href="https://www.geeksforgeeks.org/expression-contains-redundant-bracket-not/" target="_blank" rel="noopener noreferrer">https://www.geeksforgeeks.org/expression-contains-redundant-bracket-not/</a>
 
 ---
 

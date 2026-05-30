@@ -2,7 +2,7 @@
 
 > **Difficulty:** Medium   |   **Time:** ~20 min   |   **Prereqs:** [`concepts/maps-sets.md`](../../concepts/maps-sets.md), [`concepts/closures.md`](../../concepts/closures.md)
 >
-> **Source:** [LeetCode 2694 — Event Emitter](https://leetcode.com/problems/event-emitter/). Node.js `events` module. The #1 most-asked machine-coding problem for backend roles.
+> **Source:** <a href="https://leetcode.com/problems/event-emitter/" target="_blank" rel="noopener noreferrer">LeetCode 2694 — Event Emitter</a>. Node.js `events` module. The #1 most-asked machine-coding problem for backend roles.
 
 ---
 

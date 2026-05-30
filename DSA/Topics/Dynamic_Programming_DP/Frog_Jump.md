@@ -1,7 +1,7 @@
 # Frog Jump
 
 **Problem Link:**
-https://leetcode.com/problems/frog-jump/
+<a href="https://leetcode.com/problems/frog-jump/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/frog-jump/</a>
 
 **Topic:**
 Dynamic Programming (DP)

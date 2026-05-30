@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../3Sum.md`](../3Sum.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/3sum/
+> **Problem link:** <a href="https://leetcode.com/problems/3sum/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/3sum/</a>
 
 ---
 

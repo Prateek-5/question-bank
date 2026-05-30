@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Implement_Rand10_Using_Rand7.md`](../Implement_Rand10_Using_Rand7.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/implement-rand10-using-rand7/description/
+> **Problem link:** <a href="https://leetcode.com/problems/implement-rand10-using-rand7/description/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/implement-rand10-using-rand7/description/</a>
 
 ---
 

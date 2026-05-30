@@ -2,7 +2,7 @@
 
 > **Difficulty:** Easy   |   **Time:** ~10 min   |   **Prereqs:** [event-loop-concurrency.md](./event-loop-concurrency.md)
 >
-> **Source:** [LeetCode 2715 — Timeout Cancellation](https://leetcode.com/problems/timeout-cancellation/).
+> **Source:** <a href="https://leetcode.com/problems/timeout-cancellation/" target="_blank" rel="noopener noreferrer">LeetCode 2715 — Timeout Cancellation</a>.
 
 ---
 

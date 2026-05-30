@@ -1,7 +1,7 @@
 # Reverse Bits
 
 **Problem Link:**
-https://leetcode.com/problems/reverse-bits/
+<a href="https://leetcode.com/problems/reverse-bits/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/reverse-bits/</a>
 
 **Topic:**
 Bit Manipulation

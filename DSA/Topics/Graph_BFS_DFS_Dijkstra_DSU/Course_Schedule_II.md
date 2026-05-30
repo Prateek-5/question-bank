@@ -1,7 +1,7 @@
 # Course Schedule II
 
 **Problem Link:**
-https://leetcode.com/problems/course-schedule-ii/
+<a href="https://leetcode.com/problems/course-schedule-ii/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/course-schedule-ii/</a>
 
 **Topic:**
 Graph (BFS / DFS / Dijkstra / DSU)

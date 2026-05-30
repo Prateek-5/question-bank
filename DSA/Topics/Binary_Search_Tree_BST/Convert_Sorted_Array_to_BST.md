@@ -1,7 +1,7 @@
 # Convert Sorted Array to BST
 
 **Problem Link:**
-https://leetcode.com/problems/convert-sorted-array-to-binary-search-tree/
+<a href="https://leetcode.com/problems/convert-sorted-array-to-binary-search-tree/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/convert-sorted-array-to-binary-search-tree/</a>
 
 **Topic:**
 Binary Search Tree (BST)

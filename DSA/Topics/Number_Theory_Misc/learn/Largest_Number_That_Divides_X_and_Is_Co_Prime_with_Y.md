@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Largest_Number_That_Divides_X_and_Is_Co_Prime_with_Y.md`](../Largest_Number_That_Divides_X_and_Is_Co_Prime_with_Y.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://www.geeksforgeeks.org/dsa/largest-number-divides-x-co-prime-y/
+> **Problem link:** <a href="https://www.geeksforgeeks.org/dsa/largest-number-divides-x-co-prime-y/" target="_blank" rel="noopener noreferrer">https://www.geeksforgeeks.org/dsa/largest-number-divides-x-co-prime-y/</a>
 
 ---
 

@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Most_Stones_Removed_with_Same_Row_or_Column.md`](../Most_Stones_Removed_with_Same_Row_or_Column.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/most-stones-removed-with-same-row-or-column/
+> **Problem link:** <a href="https://leetcode.com/problems/most-stones-removed-with-same-row-or-column/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/most-stones-removed-with-same-row-or-column/</a>
 
 ---
 

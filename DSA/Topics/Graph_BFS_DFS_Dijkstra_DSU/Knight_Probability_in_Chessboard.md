@@ -1,7 +1,7 @@
 # Knight Probability in Chessboard
 
 **Problem Link:**
-https://leetcode.com/problems/knight-probability-in-chessboard/
+<a href="https://leetcode.com/problems/knight-probability-in-chessboard/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/knight-probability-in-chessboard/</a>
 
 **Topic:**
 Graph (BFS / DFS / Dijkstra / DSU)

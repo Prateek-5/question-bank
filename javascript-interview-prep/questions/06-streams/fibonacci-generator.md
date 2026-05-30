@@ -2,7 +2,7 @@
 
 > **Difficulty:** Easy   |   **Time:** ~10 min   |   **Prereqs:** [`concepts/streams.md`](../../concepts/streams.md), [custom-iterator.md](./custom-iterator.md)
 >
-> **Source:** [LeetCode 2648 — Generate Fibonacci Sequence](https://leetcode.com/problems/generate-fibonacci-sequence/). Canonical generator interview.
+> **Source:** <a href="https://leetcode.com/problems/generate-fibonacci-sequence/" target="_blank" rel="noopener noreferrer">LeetCode 2648 — Generate Fibonacci Sequence</a>. Canonical generator interview.
 
 ---
 

@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Minimum_Jumps_to_Reach_Home.md`](../Minimum_Jumps_to_Reach_Home.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/minimum-jumps-to-reach-home/
+> **Problem link:** <a href="https://leetcode.com/problems/minimum-jumps-to-reach-home/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/minimum-jumps-to-reach-home/</a>
 
 ---
 

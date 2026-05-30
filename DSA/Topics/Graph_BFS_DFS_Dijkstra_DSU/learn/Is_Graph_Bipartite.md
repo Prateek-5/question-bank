@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Is_Graph_Bipartite.md`](../Is_Graph_Bipartite.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/is-graph-bipartite/
+> **Problem link:** <a href="https://leetcode.com/problems/is-graph-bipartite/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/is-graph-bipartite/</a>
 
 ---
 

@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Maximum_Product_of_Three_Numbers.md`](../Maximum_Product_of_Three_Numbers.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/maximum-product-of-three-numbers/
+> **Problem link:** <a href="https://leetcode.com/problems/maximum-product-of-three-numbers/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/maximum-product-of-three-numbers/</a>
 
 ---
 

@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Reverse_Bits.md`](../Reverse_Bits.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/reverse-bits/
+> **Problem link:** <a href="https://leetcode.com/problems/reverse-bits/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/reverse-bits/</a>
 
 ---
 

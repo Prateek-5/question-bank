@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Balanced_Binary_Tree.md`](../Balanced_Binary_Tree.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/balanced-binary-tree/
+> **Problem link:** <a href="https://leetcode.com/problems/balanced-binary-tree/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/balanced-binary-tree/</a>
 
 ---
 

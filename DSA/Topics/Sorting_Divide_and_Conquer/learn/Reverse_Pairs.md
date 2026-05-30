@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Reverse_Pairs.md`](../Reverse_Pairs.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/reverse-pairs/
+> **Problem link:** <a href="https://leetcode.com/problems/reverse-pairs/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/reverse-pairs/</a>
 
 ---
 

@@ -2,7 +2,7 @@
 
 ## Source / Origin
 - SaaS architecture canon: Microsoft Azure SaaS guidance, AWS SaaS Lens, Salesforce's multi-tenant whitepaper.
-- Postgres Row Level Security (RLS) docs: https://www.postgresql.org/docs/current/ddl-rowsecurity.html
+- Postgres Row Level Security (RLS) docs: <a href="https://www.postgresql.org/docs/current/ddl-rowsecurity.html" target="_blank" rel="noopener noreferrer">https://www.postgresql.org/docs/current/ddl-rowsecurity.html</a>
 - Real-world reference: how Notion, Slack, Linear, GitHub partition tenant data.
 
 ## Why this question matters in interviews

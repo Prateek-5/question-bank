@@ -2,7 +2,7 @@
 
 ## Source / Origin
 - Ongaro & Ousterhout, "In Search of an Understandable Consensus Algorithm" (USENIX ATC '14).
-- The Raft paper: https://raft.github.io/raft.pdf
+- The Raft paper: <a href="https://raft.github.io/raft.pdf" target="_blank" rel="noopener noreferrer">https://raft.github.io/raft.pdf</a>
 - Production systems: etcd, Consul, CockroachDB, TiKV, MongoDB ≥3.4, Kafka KRaft, Redis Raft.
 - Interview prompt: "Walk me through how Raft elects a leader and replicates writes" — staple of senior backend / infrastructure rounds.
 

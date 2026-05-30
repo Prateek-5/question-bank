@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Sudoku_Solver.md`](../Sudoku_Solver.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/sudoku-solver/
+> **Problem link:** <a href="https://leetcode.com/problems/sudoku-solver/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/sudoku-solver/</a>
 
 ---
 

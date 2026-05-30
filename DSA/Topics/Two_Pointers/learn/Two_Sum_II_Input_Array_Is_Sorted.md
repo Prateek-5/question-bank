@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Two_Sum_II_Input_Array_Is_Sorted.md`](../Two_Sum_II_Input_Array_Is_Sorted.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/two-sum-ii-input-array-is-sorted/
+> **Problem link:** <a href="https://leetcode.com/problems/two-sum-ii-input-array-is-sorted/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/two-sum-ii-input-array-is-sorted/</a>
 
 ---
 

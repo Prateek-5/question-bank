@@ -1,7 +1,7 @@
 # Regular Expression Matching
 
 **Problem Link:**
-https://leetcode.com/problems/regular-expression-matching/
+<a href="https://leetcode.com/problems/regular-expression-matching/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/regular-expression-matching/</a>
 
 **Topic:**
 Dynamic Programming (DP)

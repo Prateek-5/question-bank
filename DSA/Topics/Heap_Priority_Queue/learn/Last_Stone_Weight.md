@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Last_Stone_Weight.md`](../Last_Stone_Weight.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/last-stone-weight/
+> **Problem link:** <a href="https://leetcode.com/problems/last-stone-weight/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/last-stone-weight/</a>
 
 ---
 

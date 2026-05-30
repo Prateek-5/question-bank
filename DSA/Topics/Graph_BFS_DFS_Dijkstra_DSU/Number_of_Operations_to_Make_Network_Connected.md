@@ -1,7 +1,7 @@
 # Number of Operations to Make Network Connected
 
 **Problem Link:**
-https://leetcode.com/problems/number-of-operations-to-make-network-connected/
+<a href="https://leetcode.com/problems/number-of-operations-to-make-network-connected/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/number-of-operations-to-make-network-connected/</a>
 
 **Topic:**
 Graph (BFS / DFS / Dijkstra / DSU)

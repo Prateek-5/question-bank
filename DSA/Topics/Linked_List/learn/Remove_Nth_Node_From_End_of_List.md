@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Remove_Nth_Node_From_End_of_List.md`](../Remove_Nth_Node_From_End_of_List.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/remove-nth-node-from-end-of-list/
+> **Problem link:** <a href="https://leetcode.com/problems/remove-nth-node-from-end-of-list/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/remove-nth-node-from-end-of-list/</a>
 
 ---
 

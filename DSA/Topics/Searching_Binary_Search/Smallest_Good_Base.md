@@ -1,7 +1,7 @@
 # Smallest Good Base
 
 **Problem Link:**
-https://leetcode.com/problems/smallest-good-base/description/
+<a href="https://leetcode.com/problems/smallest-good-base/description/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/smallest-good-base/description/</a>
 
 **Topic:**
 Searching / Binary Search

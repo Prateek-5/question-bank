@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Binary_Tree_Left_Side_View.md`](../Binary_Tree_Left_Side_View.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://www.geeksforgeeks.org/print-left-view-binary-tree/
+> **Problem link:** <a href="https://www.geeksforgeeks.org/print-left-view-binary-tree/" target="_blank" rel="noopener noreferrer">https://www.geeksforgeeks.org/print-left-view-binary-tree/</a>
 
 ---
 

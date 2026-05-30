@@ -1,7 +1,7 @@
 # Maximum Depth of Binary Tree
 
 **Problem Link:**
-https://leetcode.com/problems/maximum-depth-of-binary-tree/
+<a href="https://leetcode.com/problems/maximum-depth-of-binary-tree/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/maximum-depth-of-binary-tree/</a>
 
 **Topic:**
 Trees / Binary Trees

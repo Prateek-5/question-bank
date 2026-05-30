@@ -2,7 +2,7 @@
 
 > **Difficulty:** Medium-Hard   |   **Time:** ~45 min   |   **Prereqs:** [`concepts/promises.md`](../../concepts/promises.md), [`05-event-loop/microtask-macrotask-order.md`](../05-event-loop/microtask-macrotask-order.md)
 >
-> **Source:** Canonical machine-coding interview (Google, Microsoft, Atlassian, Series-B+ startups). BFE.dev #67, GreatFrontEnd. Reference: [Promises/A+ spec](https://promisesaplus.com/) — interview level is looser.
+> **Source:** Canonical machine-coding interview (Google, Microsoft, Atlassian, Series-B+ startups). BFE.dev #67, GreatFrontEnd. Reference: <a href="https://promisesaplus.com/" target="_blank" rel="noopener noreferrer">Promises/A+ spec</a> — interview level is looser.
 
 ---
 

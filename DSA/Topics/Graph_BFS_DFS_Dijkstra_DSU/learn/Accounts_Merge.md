@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Accounts_Merge.md`](../Accounts_Merge.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/accounts-merge/
+> **Problem link:** <a href="https://leetcode.com/problems/accounts-merge/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/accounts-merge/</a>
 
 ---
 

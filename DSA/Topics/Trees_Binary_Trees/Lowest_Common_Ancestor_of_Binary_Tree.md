@@ -1,7 +1,7 @@
 # Lowest Common Ancestor of Binary Tree
 
 **Problem Link:**
-https://leetcode.com/problems/lowest-common-ancestor-of-a-binary-tree/
+<a href="https://leetcode.com/problems/lowest-common-ancestor-of-a-binary-tree/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/lowest-common-ancestor-of-a-binary-tree/</a>
 
 **Topic:**
 Trees / Binary Trees

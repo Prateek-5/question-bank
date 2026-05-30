@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Range_Sum_of_BST.md`](../Range_Sum_of_BST.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/range-sum-of-bst/
+> **Problem link:** <a href="https://leetcode.com/problems/range-sum-of-bst/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/range-sum-of-bst/</a>
 
 ---
 

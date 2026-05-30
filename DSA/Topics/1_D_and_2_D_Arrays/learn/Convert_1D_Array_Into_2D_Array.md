@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Convert_1D_Array_Into_2D_Array.md`](../Convert_1D_Array_Into_2D_Array.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/convert-1d-array-into-2d-array/
+> **Problem link:** <a href="https://leetcode.com/problems/convert-1d-array-into-2d-array/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/convert-1d-array-into-2d-array/</a>
 
 ---
 

@@ -1,7 +1,7 @@
 # Fizz Buzz
 
 **Problem Link:**
-https://leetcode.com/problems/fizz-buzz/
+<a href="https://leetcode.com/problems/fizz-buzz/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/fizz-buzz/</a>
 
 **Topic:**
 Arrays & Matrices

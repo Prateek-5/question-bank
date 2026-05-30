@@ -1,7 +1,7 @@
 # Kth Largest Element in an Array
 
 **Problem Link:**
-https://leetcode.com/problems/kth-largest-element-in-an-array/
+<a href="https://leetcode.com/problems/kth-largest-element-in-an-array/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/kth-largest-element-in-an-array/</a>
 
 **Topic:**
 Heap / Priority Queue

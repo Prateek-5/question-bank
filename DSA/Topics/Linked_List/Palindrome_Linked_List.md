@@ -1,7 +1,7 @@
 # Palindrome Linked List
 
 **Problem Link:**
-https://leetcode.com/problems/palindrome-linked-list/
+<a href="https://leetcode.com/problems/palindrome-linked-list/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/palindrome-linked-list/</a>
 
 **Topic:**
 Linked List

@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Number_of_Provinces.md`](../Number_of_Provinces.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/number-of-provinces/
+> **Problem link:** <a href="https://leetcode.com/problems/number-of-provinces/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/number-of-provinces/</a>
 
 ---
 

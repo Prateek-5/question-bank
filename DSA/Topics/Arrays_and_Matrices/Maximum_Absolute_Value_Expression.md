@@ -1,7 +1,7 @@
 # Maximum Absolute Value Expression
 
 **Problem Link:**
-https://leetcode.com/problems/maximum-of-absolute-value-expression/
+<a href="https://leetcode.com/problems/maximum-of-absolute-value-expression/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/maximum-of-absolute-value-expression/</a>
 
 **Topic:**
 Arrays and Matrices

@@ -1,7 +1,7 @@
 # Minimum Number of Bottles Visible
 
 **Problem Link:**
-https://leetcode.com/problems/minimum-number-of-bottles-visible-when-standing-on-a-shelf/
+<a href="https://leetcode.com/problems/minimum-number-of-bottles-visible-when-standing-on-a-shelf/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/minimum-number-of-bottles-visible-when-standing-on-a-shelf/</a>
 
 **Topic:**
 Sorting / Divide and Conquer

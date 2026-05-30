@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Single_Element_in_a_Sorted_Array.md`](../Single_Element_in_a_Sorted_Array.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/single-element-in-a-sorted-array/
+> **Problem link:** <a href="https://leetcode.com/problems/single-element-in-a-sorted-array/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/single-element-in-a-sorted-array/</a>
 
 ---
 

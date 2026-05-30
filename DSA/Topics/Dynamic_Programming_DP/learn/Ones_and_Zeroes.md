@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Ones_and_Zeroes.md`](../Ones_and_Zeroes.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/ones-and-zeroes/
+> **Problem link:** <a href="https://leetcode.com/problems/ones-and-zeroes/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/ones-and-zeroes/</a>
 
 ---
 

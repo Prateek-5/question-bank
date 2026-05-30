@@ -2,7 +2,7 @@
 
 > **Difficulty:** Medium   |   **Time:** ~15 min   |   **Prereqs:** [timeout-cancellation.md](./timeout-cancellation.md)
 >
-> **Source:** [LeetCode 2725 — Interval Cancellation](https://leetcode.com/problems/interval-cancellation/).
+> **Source:** <a href="https://leetcode.com/problems/interval-cancellation/" target="_blank" rel="noopener noreferrer">LeetCode 2725 — Interval Cancellation</a>.
 
 ---
 

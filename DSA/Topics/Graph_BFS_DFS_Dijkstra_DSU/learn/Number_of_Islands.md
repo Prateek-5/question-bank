@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Number_of_Islands.md`](../Number_of_Islands.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/number-of-islands/
+> **Problem link:** <a href="https://leetcode.com/problems/number-of-islands/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/number-of-islands/</a>
 
 ---
 

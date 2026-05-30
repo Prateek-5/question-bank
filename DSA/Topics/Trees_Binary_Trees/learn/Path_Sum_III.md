@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Path_Sum_III.md`](../Path_Sum_III.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/path-sum-iii/
+> **Problem link:** <a href="https://leetcode.com/problems/path-sum-iii/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/path-sum-iii/</a>
 
 ---
 

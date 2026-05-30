@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Palindrome_Partitioning.md`](../Palindrome_Partitioning.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/palindrome-partitioning/
+> **Problem link:** <a href="https://leetcode.com/problems/palindrome-partitioning/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/palindrome-partitioning/</a>
 
 ---
 

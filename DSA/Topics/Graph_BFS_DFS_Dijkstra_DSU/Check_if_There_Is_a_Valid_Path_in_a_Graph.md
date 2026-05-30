@@ -1,7 +1,7 @@
 # Check if There Is a Valid Path in a Graph
 
 **Problem Link:**
-https://leetcode.com/problems/find-if-path-exists-in-graph/
+<a href="https://leetcode.com/problems/find-if-path-exists-in-graph/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/find-if-path-exists-in-graph/</a>
 
 **Topic:**
 Graph (BFS / DFS / Dijkstra / DSU)

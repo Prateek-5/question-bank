@@ -2,7 +2,7 @@
 
 > **Difficulty:** Medium   |   **Time:** ~20 min   |   **Prereqs:** [debounce.md](./debounce.md), [`concepts/closures.md`](../../concepts/closures.md)
 >
-> **Source:** [LeetCode 2676 — Throttle](https://leetcode.com/problems/throttle/). The immediate follow-up to debounce.
+> **Source:** <a href="https://leetcode.com/problems/throttle/" target="_blank" rel="noopener noreferrer">LeetCode 2676 — Throttle</a>. The immediate follow-up to debounce.
 
 ---
 

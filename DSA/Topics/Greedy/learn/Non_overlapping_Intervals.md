@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Non_overlapping_Intervals.md`](../Non_overlapping_Intervals.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/non-overlapping-intervals/
+> **Problem link:** <a href="https://leetcode.com/problems/non-overlapping-intervals/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/non-overlapping-intervals/</a>
 
 ---
 

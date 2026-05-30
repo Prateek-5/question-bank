@@ -2,7 +2,7 @@
 
 > **Reference card (post-mastery):** [`../Search_in_Rotated_Sorted_Array.md`](../Search_in_Rotated_Sorted_Array.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** https://leetcode.com/problems/search-in-rotated-sorted-array/
+> **Problem link:** <a href="https://leetcode.com/problems/search-in-rotated-sorted-array/" target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/search-in-rotated-sorted-array/</a>
 
 ---
 
