@@ -149,3 +149,17 @@ A subtle style choice: I compare `iv[0] >= lastEnd` (non-strict). This lets touc
 - **Weighted interval scheduling (each interval has value; maximize total value without overlap).** Greedy fails; use DP with binary search.
 - **Intervals on a circle** (e.g., jobs around 24-hour clock). Split at some point and run scheduling on each half.
 - **Handle touching-endpoint intervals as overlapping.** Change `iv[0] >= lastEnd` to `iv[0] > lastEnd`.
+
+
+---
+
+## Interview Signals (from LeetLens)
+
+This problem (or close variants) was reported in **1 real interview(s)** in the LeetLens dataset (snapshot 2026-05-31). Pay attention to the company context when practicing.
+
+| Company | Difficulty | LeetLens ID | Match | Variant note |
+|---|---|---|---|---|
+| Google | Easy | `e6ea74c2` | 1.00 (exact-title) | Non-overlapping Intervals |
+
+_Source: LeetLens DB. Match methods: `substring` = direct hit; `token-coverage` = ≥70% of this card's filename tokens appear in the question; `jaccard`/`ratio` = fuzzy title similarity._
+_See the parent folder's `EXTRACTED_QUESTIONS.md` §2 for the full list of incorporated questions._

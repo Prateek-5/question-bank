@@ -1,7 +1,124 @@
-# Coverage Map — JS + Backend Interview Question Bank
+# Coverage Map — Question Bank
 
 > A senior-engineer-grade audit of which patterns/verticals are covered, which are gap-filling, and which are still pending.
 > Goal: **No vertical or pattern is unexplored. No surprises in the interview.**
+>
+> **See also:** [`CONTRIBUTING-v2.md`](./CONTRIBUTING-v2.md) for the repo conventions every new file follows.
+
+---
+
+## Migration history (current state)
+
+> A snapshot of what's been delivered. Updated as milestones complete. The **Original Coverage Audit** further down is the kickoff plan and includes both completed and pending items — read it alongside this section.
+
+### DSA — ✅ COMPLETE (22/22 topics, 226 problems migrated to v2)
+
+Every DSA topic has both a **reference card** (`Topics/X/<Problem>.md`, generator-emitted) AND a **teaching walkthrough** (`Topics/X/learn/<Problem>.md`, hand-written following [`DSA/TEMPLATE-v2.md`](./DSA/TEMPLATE-v2.md)).
+
+| Topic | Problems | Status |
+|---|---|---|
+| Arrays_and_Matrices | 9 | ✅ |
+| 1_D_and_2_D_Arrays | 8 | ✅ |
+| Two_Pointers | 7 | ✅ |
+| Hashing_Sliding_Window | 10 | ✅ |
+| Stack | 10 | ✅ |
+| Linked_List | 11 | ✅ |
+| Searching_Binary_Search | 8 | ✅ |
+| Math | 7 | ✅ |
+| Bit_Manipulation | 4 | ✅ |
+| Queues_Deque_Monotonic_Queue | 5 | ✅ |
+| Sorting_Divide_and_Conquer | 6 | ✅ |
+| Recursion | 6 | ✅ |
+| Backtracking | 4 | ✅ |
+| Trees_Binary_Trees | 15 | ✅ |
+| Binary_Search_Tree_BST | 11 | ✅ |
+| Trie_Bit_Manipulation_Trie | 7 | ✅ |
+| Heap_Priority_Queue | 11 | ✅ |
+| Graph_BFS_DFS_Dijkstra_DSU | 27 | ✅ |
+| Greedy | 7 | ✅ |
+| Dynamic_Programming_DP | 28 | ✅ |
+| Segment_Tree_Range_Queries | 6 | ✅ |
+| Number_Theory_Misc | 19 | ✅ |
+| **Total** | **226** | **✅** |
+
+All 22 topics' `LEARNING.md` files updated with dual-tier links (reference + walkthrough). 226 walkthrough links added across the navigators.
+
+### JavaScript — partial
+
+| Phase | Status | Files |
+|---|---|---|
+| Phase A — gap-fill / enhance existing (10 folders) | ✅ Complete | 232 existing question files enhanced |
+| Phase B — v2 migration to learner-first walkthroughs | 🚧 Partial | 2/9 folders fully v2-migrated; 1 in-progress; 6 pending |
+
+| Folder | Existing | v2 status |
+|---|---|---|
+| 01-hoisting | 18 | ⏳ pending |
+| 02-closures | 22 | ✅ v2 migrated + INDEX.md |
+| 03-prototype | 22 | ⏳ pending |
+| 04-promises | 26 | ✅ v2 migrated + INDEX.md |
+| 05-event-loop | 22 | ⏳ pending |
+| 06-streams | 20 | ⏳ pending |
+| 07-arrays | 23 | ⏳ pending |
+| 08-maps-sets | 19 | ⏳ pending |
+| 09-recursion | 22 | ⏳ pending |
+| 10-machine-coding-patterns | 38 | 🚧 in-progress |
+
+**Counter exemplar:** [`javascript-interview-prep/questions/02-closures/counter.md`](./javascript-interview-prep/questions/02-closures/counter.md) is the canonical worked v2 example. Per-folder `INDEX.md` files exist for the two completed folders.
+
+### Backend — partial
+
+Net-new question bank for backend interviews. 5 of 9 topics have content; 4 still in-progress.
+
+| Topic | Status |
+|---|---|
+| sql/ | ✅ |
+| nosql/ | ✅ |
+| caching/ | ✅ |
+| orm/ | ✅ |
+| transactions-concurrency/ | ✅ |
+| system-design/ | 🚧 in-progress |
+| messaging/ | 🚧 in-progress |
+| distributed-systems/ | 🚧 in-progress |
+| observability/ | 🚧 in-progress |
+
+### Repo-wide hygiene
+
+| Item | Status | Notes |
+|---|---|---|
+| External link policy (`target="_blank"`) | ✅ Applied | 504 files swept; 512 external links wrapped; generator updated. See [`CONTRIBUTING-v2.md`](./CONTRIBUTING-v2.md) §7. |
+| `LEARNING.md` dual-tier link format | ✅ Applied | All 22 DSA topics updated with `[walkthrough →](./learn/...)` alongside reference links |
+| `TEMPLATE-v2.md` (root, JS) | ✅ Refreshed | DSA-era refinements folded in (Map of file, Mini-refresher, Shape table, Self-check) |
+| `DSA/TEMPLATE-v2.md` | ✅ Comprehensive | 11 required sections + mini-refresher format + style rules + checklist |
+| `CONTRIBUTING-v2.md` (repo-level) | ✅ Created | Single source of truth for layout, conventions, link policy, runbook |
+
+### LeetLens import — ✅ metadata layer landed (2026-05-31)
+
+Categorization + per-bucket question manifests inserted across all three verticals. **785 questions** ingested as metadata-only manifests (no walkthroughs yet — that's the next horizon).
+
+| Layer | Location | Status |
+|---|---|---|
+| Categorization catalogue | [`leetlens-import/`](./leetlens-import/) | ✅ STUDY-GUIDE.md + DSA/LLD/HLD-questions.md + overlaps.md |
+| DSA question manifests | `DSA/Topics/<Topic>/EXTRACTED_QUESTIONS.md` | ✅ 10 topic folders received manifests (208 questions) |
+| LLD vertical (NEW) | [`LLD/`](./LLD/) | ✅ Created from scratch: 19 bucket folders, 145 questions, `LEARNING.md` + placeholder `TEMPLATE-v2.md` |
+| HLD vertical (NEW) | [`HLD/`](./HLD/) | ✅ Created from scratch: 17 bucket folders, 357 questions (incl. 24 rerouted from DSA Distributed-Systems overflow + 23 catch-all), `LEARNING.md` + placeholder `TEMPLATE-v2.md` |
+| JS overflow | [`javascript-interview-prep/EXTRACTED_QUESTIONS.md`](./javascript-interview-prep/EXTRACTED_QUESTIONS.md) | ✅ 56 JS-tagged-as-DSA questions routed here |
+| Uncategorized | `DSA/EXTRACTED_UNCATEGORIZED.md`, `HLD/EXTRACTED_UNCATEGORIZED.md` | ✅ 8 niche cases for hand review |
+
+Total files written: **52** (47 EXTRACTED_QUESTIONS.md + 2 LEARNING.md + 2 TEMPLATE-v2.md + 1 EXTRACTED_UNCATEGORIZED.md). Each manifest carries: sequence number (study order), difficulty, company, full question, topics, LeetLens ID, overlap flags. See [`leetlens-import/STUDY-GUIDE.md`](./leetlens-import/STUDY-GUIDE.md) for the cross-vertical study path.
+
+### Next horizons (not yet started)
+
+- **LLD vertical buildout** — `LLD/TEMPLATE-v2.md` is a placeholder. Draft the LLD-specific walkthrough template, then start authoring per-question walkthroughs alongside the EXTRACTED_QUESTIONS.md manifests.
+- **HLD vertical buildout** — same situation. `HLD/TEMPLATE-v2.md` needs filling in (the placeholder lists the expected sections). Per-question walkthroughs come next.
+- **DSA gap-fill** — the 208 LeetLens DSA questions inserted into existing topic folders should be cross-checked against the existing 226 v1 problems to identify NET-NEW vs duplicates, then authored as v2 walkthroughs for the net-new ones.
+- **Finish JS v2 migration** (6 pending folders + 1 in-progress).
+- **Finish backend question topics** (4 in-progress).
+
+---
+
+## Original Coverage Audit (preserved as project record)
+
+> The remainder of this file is the **original audit** as written at project kickoff — `EXISTS` / `ADD` / `ENHANCE` entries for every planned file. Cross-reference with the migration history above to see what's been delivered.
 
 Status legend:
 - `EXISTS` — file already present in the repo

@@ -169,3 +169,17 @@ The elegance here comes from the dual use of the return value: sometimes it's "t
 - **LCA with parent pointers.** Build the set of ancestors of `p` by walking up; then walk up from `q` until hitting a node in that set.
 - **Tarjan's offline LCA algorithm.** When we have many LCA queries on the same tree, preprocessing with union-find gives near-linear total time.
 - **LCA via Euler tour + RMQ.** Flatten the tree into an Euler tour, then LCA(p, q) is the minimum-depth node in the tour segment between p's and q's first appearances. O(n log n) preprocessing, O(1) per query.
+
+
+---
+
+## Interview Signals (from LeetLens)
+
+This problem (or close variants) was reported in **1 real interview(s)** in the LeetLens dataset (snapshot 2026-05-31). Pay attention to the company context when practicing.
+
+| Company | Difficulty | LeetLens ID | Match | Variant note |
+|---|---|---|---|---|
+| Meta | Medium | `7335b8a6` | 1.00 (strong-jaccard) | Lowest Common Ancestor of a Binary Tree |
+
+_Source: LeetLens DB. Match methods: `substring` = direct hit; `token-coverage` = ≥70% of this card's filename tokens appear in the question; `jaccard`/`ratio` = fuzzy title similarity._
+_See the parent folder's `EXTRACTED_QUESTIONS.md` §2 for the full list of incorporated questions._

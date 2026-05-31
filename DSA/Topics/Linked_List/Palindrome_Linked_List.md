@@ -206,3 +206,18 @@ A few details:
 - **Recursive O(n) space solution.** Elegant: recurse to the end (effectively reversing via the call stack), then compare upward. Uses O(n) stack.
 - **Time complexity of the "copy and two-pointer" approach vs this one.** Both O(n) time, but constants differ — array indexing is fast, pointer chasing slower.
 - **What if the list has cycles?** Slow/fast finds the cycle meet point, not a middle. You'd handle cycles separately; for this problem, input is assumed acyclic.
+
+
+---
+
+## Interview Signals (from LeetLens)
+
+This problem (or close variants) was reported in **2 real interview(s)** in the LeetLens dataset (snapshot 2026-05-31). Pay attention to the company context when practicing.
+
+| Company | Difficulty | LeetLens ID | Match | Variant note |
+|---|---|---|---|---|
+| Google | Medium | `0713e877` | 1.00 (exact-title) | Palindrome Linked List (2nd) |
+| Google | Medium | `ce1035ef` | 1.00 (exact-title) | Palindrome Linked List |
+
+_Source: LeetLens DB. Match methods: `substring` = direct hit; `token-coverage` = ≥70% of this card's filename tokens appear in the question; `jaccard`/`ratio` = fuzzy title similarity._
+_See the parent folder's `EXTRACTED_QUESTIONS.md` §2 for the full list of incorporated questions._

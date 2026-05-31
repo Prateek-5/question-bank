@@ -155,3 +155,18 @@ int maxDepth(TreeNode* root) {
 - **Balanced binary tree check.** Post-order returning -1 as a "balance broken" sentinel, else the height. If we ever see -1 from a subtree, propagate up.
 - **Average level depth.** BFS level by level; aggregate per-level averages.
 - **Serialize and deserialize a binary tree.** Traversal design matters for round-tripping.
+
+
+---
+
+## Interview Signals (from LeetLens)
+
+This problem (or close variants) was reported in **2 real interview(s)** in the LeetLens dataset (snapshot 2026-05-31). Pay attention to the company context when practicing.
+
+| Company | Difficulty | LeetLens ID | Match | Variant note |
+|---|---|---|---|---|
+| Meta | Medium | `19ffe2a6` | 1.00 (exact-title) | Maximum Depth of Binary Tree |
+| Meta | Medium | `373ec869` | 1.00 (exact-title) | Maximum Depth of Binary Tree |
+
+_Source: LeetLens DB. Match methods: `substring` = direct hit; `token-coverage` = ≥70% of this card's filename tokens appear in the question; `jaccard`/`ratio` = fuzzy title similarity._
+_See the parent folder's `EXTRACTED_QUESTIONS.md` §2 for the full list of incorporated questions._

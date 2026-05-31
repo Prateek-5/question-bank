@@ -1,6 +1,10 @@
-# Question File Template — v2 (Learner-First)
+# Question File Template — v2 (Learner-First) — JavaScript
 
-This is the canonical structure every question file should follow. v2 reorders the v1 template so a **first-time learner** can read top-to-bottom and build understanding before seeing the answer.
+> **This is the JS-flavored template.** For DSA / algorithmic problems use [`DSA/TEMPLATE-v2.md`](./DSA/TEMPLATE-v2.md) instead. The two are intentionally separate — DSA frames around brute-force → pivot → optimal; JS frames around mental model → mechanism → traps.
+>
+> **Repo-level rules** (file paths, naming, link policy): see [`CONTRIBUTING-v2.md`](./CONTRIBUTING-v2.md).
+
+This is the canonical structure every JavaScript question file should follow. v2 reorders the v1 template so a **first-time learner** can read top-to-bottom and build understanding before seeing the answer.
 
 > **Design principle:** write from *the problem's* perspective, not *the answer's*. A reader who has never seen the question should know **what they're being asked**, **why it's hard**, **how to think about it**, and **only then** see the solution.
 
@@ -252,6 +256,145 @@ For each existing file:
 
 ---
 
+## DSA-era refinements (fold these into every new JS walkthrough)
+
+These four patterns evolved across the 226-file DSA migration. They're not in the original v2 sketch above, but they should be in every new JS walkthrough from now on — they're what makes a "v2 file" actually self-contained.
+
+### 1. "Map of this file" opener (immediately after the chip line)
+
+Right after the Difficulty/Time/Prereqs chip, add a one-paragraph reading-time + lesson summary, then a numbered map of the file's sections. The reader skims it before committing.
+
+```markdown
+## How to use this file
+
+Paced for someone seeing this problem for the first time. Reading time: ~16 minutes. **The lesson: <one-sentence takeaway>.**
+
+**Map of this file (9 sections):**
+
+1. Problem statement
+2. Plain-English restatement
+3. Mental model
+4. Try it yourself first
+5. Brute force — walked through
+6. The unlocking insight
+7. Solution (annotated)
+8. Common confusion + traps
+9. The shape — when else this pattern applies
+```
+
+The map turns the file into a navigable index even before you've read a word of the body.
+
+### 2. Mini-refresher blockquote — for any non-obvious JS sub-concept
+
+JS questions touch a lot of mechanisms (event loop, prototype chain, lexical environments, microtask queue, this binding, ...). Whenever the SOLUTION assumes one of these, embed a refresher box at the FIRST point the concept appears — never up-front in a "prerequisites" dump.
+
+```markdown
+> **Mini-refresher: lexical environments.**
+>
+> Every function call creates a fresh "lexical environment" (LE) — a tiny record holding the function's local variables. The inner function defined inside captures a reference to this LE in its hidden `[[Environment]]` slot. The LE survives on the heap for as long as something reachable still references it.
+>
+> Quick example: in `function outer() { let n = 0; return () => n++; }`, the returned arrow function's `[[Environment]]` keeps the outer's `{ n }` alive forever.
+```
+
+**JS concepts that virtually always need a refresher (when touched by the solution):**
+
+- Lexical environment / closure capture mechanics
+- Prototype chain lookup
+- `this` binding (strict vs sloppy; methods vs arrow; `.call`/`.apply`/`.bind`)
+- Microtask queue vs macrotask queue
+- Event loop phases (Node specifically)
+- Promise state machine + `then` chaining order
+- `async/await` desugaring to `.then`
+- Hoisting + TDZ
+- Reference vs value semantics (object vs primitive)
+- ES module live bindings
+- `Symbol.iterator` / `Symbol.asyncIterator` protocols
+- WeakMap / WeakRef / FinalizationRegistry reachability rules
+
+Format: `> **Mini-refresher: <name>.**` blockquote. 30–60 seconds. Optional "Quick example."
+
+### 3. The "Shape — pattern" section with YES/NO transfer table
+
+Every JS walkthrough closes by naming the pattern and showing where else it applies — but also where it LOOKS like it should apply and doesn't. The NO column teaches discrimination, not just recognition.
+
+```markdown
+## The shape — closure-as-private-state
+
+The pattern: **a function call's lexical environment outlives the call when the inner function escapes, giving you private state per factory call.**
+
+| Problem | Pattern? | Why / why not |
+|---|---|---|
+| Counter factory (this file) | ✅ | LE holds the count |
+| `once(fn)` | ✅ | LE holds a "called" flag |
+| Debounce | ✅ | LE holds the pending timer id |
+| Memoize | ✅ | LE holds the cache Map |
+| Class with `#field` | partial — same outcome via different mechanism (per-instance slot) |
+| Module-level `let n` | ❌ — shared across all callers, not per-factory-call |
+| Global state | ❌ — not private; not per-instance |
+
+**Pattern to internalize:** "When you need PRIVATE state PER factory call, return a function that closes over a local — not a class field, not a module variable."
+```
+
+### 4. "Self-check — the question to ask next time"
+
+Replace or supplement the "60-second revision" block (which serves a different purpose — morning-of cram) with a closing **self-check question**. This is the **transferable skill** the file ships:
+
+```markdown
+> **Self-check — the question to ask next time.**
+>
+> When you see a JS question that needs PRIVATE state that survives across calls but isn't shared globally, ask:
+>
+> > **"Can I close a returned function over a local variable in the outer factory?"**
+>
+> If yes, you've got the closure pattern in 5 lines.
+```
+
+The self-check is the transferable lesson, packaged as the question the reader should ask themselves on the next problem.
+
+### Where these slot into the existing 13-section structure
+
+| Existing section | Add the DSA-era pattern? |
+|---|---|
+| Header (chip line) | — |
+| **New:** "How to use this file" + Map | **add as the new section 0** (between chip line and section 1) |
+| 1. Problem statement | — |
+| 2. Plain-English restatement | — |
+| 3. Why this matters in interviews | — |
+| 4. Mental model | embed Mini-refreshers here AND at first appearance of each concept |
+| 5. Try it yourself first | — |
+| 6. Brute force — walked through | — |
+| 7. The unlocking insight | embed Mini-refresher if the insight relies on a JS mechanism |
+| 8. Solution (annotated) | — |
+| 9. Step-by-step dry run | — |
+| 10. Common confusion + traps | — |
+| 11. Senior follow-ups & variants | — |
+| 12. How to think aloud in the interview | — |
+| **New:** The shape — pattern + YES/NO transfer table | **add as section 12.5** (between "think aloud" and "revision") |
+| 13. 60-second revision block | keep |
+| **New:** Self-check question | **add as final section** (after revision block) |
+
+---
+
+## Length targets (consolidated)
+
+| Difficulty | Lines | Reading time |
+|---|---|---|
+| Easy (Counter, Debounce, Once, Memoize basics) | 200–350 | ~10–15 min |
+| Medium (Promise polyfill, EventEmitter, LRU, currying) | 350–550 | ~20–25 min |
+| Senior (Async pool, custom rate-limiter, structured concurrency, regex matching, complex prototype quizzes) | 500–700 | ~30–40 min |
+
+If you go over, you're either over-explaining or the question should be split into a "concepts/" primer plus the question file.
+
+---
+
 ## Exemplar
 
-See [`02-closures/counter.v2.md`](javascript-interview-prep/questions/02-closures/counter.v2.md) for the canonical worked example. Every new or migrated file should match its shape and voice.
+See [`02-closures/counter.md`](./javascript-interview-prep/questions/02-closures/counter.md) for the canonical worked example. It already follows sections 1–13 of the original template. Future migrations should layer the four DSA-era refinements above on top of that shape.
+
+---
+
+## See also
+
+- [`CONTRIBUTING-v2.md`](./CONTRIBUTING-v2.md) — repo-level layout, naming, link policy
+- [`DSA/TEMPLATE-v2.md`](./DSA/TEMPLATE-v2.md) — DSA flavor of the same template (algorithmic framing)
+- [`COVERAGE.md`](./COVERAGE.md) — what's been migrated, what's pending

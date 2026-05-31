@@ -244,3 +244,17 @@ Both are ~10 lines. Pick the one that feels clearer to you.
 - **Right view with N-ary tree.** Rightmost means the last child in each level's list.
 - **Return the visible node objects (not just values).** Same algorithm, append the node instead.
 - **Tree that's been serialized — compute right view without reconstructing.** Can be done directly on the serialized form if it's level-order.
+
+
+---
+
+## Interview Signals (from LeetLens)
+
+This problem (or close variants) was reported in **1 real interview(s)** in the LeetLens dataset (snapshot 2026-05-31). Pay attention to the company context when practicing.
+
+| Company | Difficulty | LeetLens ID | Match | Variant note |
+|---|---|---|---|---|
+| Meta | Medium | `4c260e13` | 1.00 (exact-title) | Binary Tree Right Side View |
+
+_Source: LeetLens DB. Match methods: `substring` = direct hit; `token-coverage` = ≥70% of this card's filename tokens appear in the question; `jaccard`/`ratio` = fuzzy title similarity._
+_See the parent folder's `EXTRACTED_QUESTIONS.md` §2 for the full list of incorporated questions._

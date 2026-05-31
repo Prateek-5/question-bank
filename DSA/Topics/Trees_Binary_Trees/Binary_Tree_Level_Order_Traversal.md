@@ -188,3 +188,18 @@ The `sz--` in the inner while does two things: it controls loop iterations and d
 - **Average value of each level.** Accumulate a sum during the inner loop; divide at the end.
 - **Find the right-most node at each level (Right Side View).** During the inner loop, emit only the last node.
 - **Serialize a tree using level order.** Include null markers to represent missing children, so deserialization works.
+
+
+---
+
+## Interview Signals (from LeetLens)
+
+This problem (or close variants) was reported in **2 real interview(s)** in the LeetLens dataset (snapshot 2026-05-31). Pay attention to the company context when practicing.
+
+| Company | Difficulty | LeetLens ID | Match | Variant note |
+|---|---|---|---|---|
+| Meta | Medium | `a94e223e` | 0.83 (strong-jaccard) | Design a binary tree zigzag level order traversal |
+| Meta | Medium | `d9e894cc` | 0.95 (title-contains-card) | Design a binary tree level order traversal II |
+
+_Source: LeetLens DB. Match methods: `substring` = direct hit; `token-coverage` = ≥70% of this card's filename tokens appear in the question; `jaccard`/`ratio` = fuzzy title similarity._
+_See the parent folder's `EXTRACTED_QUESTIONS.md` §2 for the full list of incorporated questions._

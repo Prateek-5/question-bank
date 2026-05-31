@@ -172,3 +172,17 @@ Iterating `i` then `j` ensures dependencies (`dp[i-1][j-1]`, `dp[i-1][j]`, `dp[i
 - **Longest Palindromic Subsequence.** Equivalent to LCS of `s` and `reverse(s)`.
 - **LCS when strings are huge but differ in only a few spots.** Hunt-Szymanski algorithm gives better performance when characters are largely distinct.
 - **Space-optimize to O(min(n, m)).** Maintain just the previous row and current row, carefully handling the diagonal dependency.
+
+
+---
+
+## Interview Signals (from LeetLens)
+
+This problem (or close variants) was reported in **1 real interview(s)** in the LeetLens dataset (snapshot 2026-05-31). Pay attention to the company context when practicing.
+
+| Company | Difficulty | LeetLens ID | Match | Variant note |
+|---|---|---|---|---|
+| — | Easy | `8fd212c7` | 1.00 (exact-title) | Longest Common Subsequence (LCS) |
+
+_Source: LeetLens DB. Match methods: `substring` = direct hit; `token-coverage` = ≥70% of this card's filename tokens appear in the question; `jaccard`/`ratio` = fuzzy title similarity._
+_See the parent folder's `EXTRACTED_QUESTIONS.md` §2 for the full list of incorporated questions._

@@ -206,3 +206,17 @@ Clean 12-line implementation. The recurrence does all the work.
 - **Hamming distance instead (only replaces, strings of equal length).** Linear scan counting mismatches.
 - **Approximate string matching: find substrings of `t` within edit distance k of `s`.** Modify the DP initialization to allow the first row to be 0 everywhere.
 - **Space optimization to O(min(n, m)).** Maintain just the previous row; carefully update with a temp variable for the diagonal dependency.
+
+
+---
+
+## Interview Signals (from LeetLens)
+
+This problem (or close variants) was reported in **1 real interview(s)** in the LeetLens dataset (snapshot 2026-05-31). Pay attention to the company context when practicing.
+
+| Company | Difficulty | LeetLens ID | Match | Variant note |
+|---|---|---|---|---|
+| — | Medium | `f1f60fe7` | 1.00 (exact-title) | Edit Distance (Manhattan Distance) |
+
+_Source: LeetLens DB. Match methods: `substring` = direct hit; `token-coverage` = ≥70% of this card's filename tokens appear in the question; `jaccard`/`ratio` = fuzzy title similarity._
+_See the parent folder's `EXTRACTED_QUESTIONS.md` §2 for the full list of incorporated questions._

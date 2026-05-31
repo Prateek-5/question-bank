@@ -203,3 +203,18 @@ ListNode* removeNthFromEnd(ListNode* head, int n) {
 - **Remove all nodes whose values satisfy a predicate.** Single-pass with a dummy head; advance or splice out based on value.
 - **Remove multiple nodes from the end in one pass.** Keep a queue of the last k pointers; after the pass, the queue holds the candidates.
 - **Doubly-linked list variant.** Easier — with back-pointers you don't need a dummy head at all.
+
+
+---
+
+## Interview Signals (from LeetLens)
+
+This problem (or close variants) was reported in **2 real interview(s)** in the LeetLens dataset (snapshot 2026-05-31). Pay attention to the company context when practicing.
+
+| Company | Difficulty | LeetLens ID | Match | Variant note |
+|---|---|---|---|---|
+| Google | Easy | `83842ad2` | 1.00 (exact-title) | Remove nth Node from end of list (2nd) |
+| Google | Medium | `a6ea576b` | 1.00 (exact-title) | Remove nth Node from end of list |
+
+_Source: LeetLens DB. Match methods: `substring` = direct hit; `token-coverage` = ≥70% of this card's filename tokens appear in the question; `jaccard`/`ratio` = fuzzy title similarity._
+_See the parent folder's `EXTRACTED_QUESTIONS.md` §2 for the full list of incorporated questions._

@@ -183,3 +183,21 @@ Important style note: when checking `x <= minSt.top()` during push, I use `<=` (
 - **Stack that supports middle-element access in O(1).** Use a doubly-linked list with explicit middle pointer; moves one step per push/pop.
 - **Implement a queue with the same "getMin in O(1)" property.** Harder — you'd need two stacks with min-tracking, or a monotonic deque.
 - **If pop returns "the minimum" instead of "the top", it's a priority queue.** Different data structure — O(log n), not O(1).
+
+
+---
+
+## Interview Signals (from LeetLens)
+
+This problem (or close variants) was reported in **5 real interview(s)** in the LeetLens dataset (snapshot 2026-05-31). Pay attention to the company context when practicing.
+
+| Company | Difficulty | LeetLens ID | Match | Variant note |
+|---|---|---|---|---|
+| — | Medium | `021069d8` | 0.95 (title-contains-card) | Design a Min Stack |
+| — | Medium | `676d5519` | 0.92 (subject-prefix) | Design a Min Stack with Support for Push and Pop Operations, and a Queue |
+| — | Medium | `d9276c1c` | 0.92 (subject-prefix) | Design a Min Stack with Support for Push and Pop Operations, and a Trie |
+| — | Medium | `dbf332aa` | 0.92 (subject-prefix) | Design a Min Stack with Support for Push and Pop Operations |
+| — | Medium | `e303480f` | 0.92 (subject-prefix) | Design a Min Stack with Support for Push and Pop Operations, and a Trie |
+
+_Source: LeetLens DB. Match methods: `substring` = direct hit; `token-coverage` = ≥70% of this card's filename tokens appear in the question; `jaccard`/`ratio` = fuzzy title similarity._
+_See the parent folder's `EXTRACTED_QUESTIONS.md` §2 for the full list of incorporated questions._

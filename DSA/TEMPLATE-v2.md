@@ -52,8 +52,10 @@ Every v2 file follows this skeleton. Some sections may collapse to a sentence fo
 
 > **Reference card (post-mastery):** [`../Problem.md`](../Problem.md). Use that once you've solved this. This file is for the first time.
 >
-> **Problem link:** <url>
+> **Problem link:** <a href="https://leetcode.com/problems/..." target="_blank" rel="noopener noreferrer">https://leetcode.com/problems/...</a>
 ```
+
+> **External link policy** — all `http(s)://` URLs in this repo use HTML anchors with `target="_blank" rel="noopener noreferrer"` so they open in a new tab. Plain markdown can't enforce target; HTML is required. See [`../CONTRIBUTING-v2.md`](../CONTRIBUTING-v2.md) §7 for the policy + bulk-conversion script. Internal relative links (e.g., `[../sibling.md](../sibling.md)`) stay as plain markdown so the reader can navigate the repo in the same tab.
 
 ### Section "How to use this file"
 

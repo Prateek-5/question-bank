@@ -210,3 +210,18 @@ TreeNode* invertTree(TreeNode* root) {
 - **Produce a new inverted tree without modifying the original.** Allocate new nodes in the recursion — return `new TreeNode(val, invert(right), invert(left))`.
 - **Invert in constant memory (no recursion, no queue).** Morris-like traversal — possible but fiddly; rarely asked.
 - **N-ary tree inversion.** Reverse the children array at each node, then recurse.
+
+
+---
+
+## Interview Signals (from LeetLens)
+
+This problem (or close variants) was reported in **2 real interview(s)** in the LeetLens dataset (snapshot 2026-05-31). Pay attention to the company context when practicing.
+
+| Company | Difficulty | LeetLens ID | Match | Variant note |
+|---|---|---|---|---|
+| Meta | Easy | `f34bd300` | 1.00 (exact-title) | Invert Binary Tree |
+| Meta | Medium | `4b9a5637` | 1.00 (exact-title) | Invert Binary Tree |
+
+_Source: LeetLens DB. Match methods: `substring` = direct hit; `token-coverage` = ≥70% of this card's filename tokens appear in the question; `jaccard`/`ratio` = fuzzy title similarity._
+_See the parent folder's `EXTRACTED_QUESTIONS.md` §2 for the full list of incorporated questions._

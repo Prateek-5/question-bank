@@ -186,3 +186,17 @@ int lengthOfLIS(vector<int>& nums) {
 - **Russian Doll Envelopes (2D LIS).** Sort by width ascending, height descending (the desc tie-breaker is the key), then LIS on heights.
 - **LIS with frequent updates.** Segment tree indexed by value with range-max queries gives O(log n) per update/query.
 - **K-th longest increasing subsequence.** Much harder — count LIS and use DP with ordered structures.
+
+
+---
+
+## Interview Signals (from LeetLens)
+
+This problem (or close variants) was reported in **1 real interview(s)** in the LeetLens dataset (snapshot 2026-05-31). Pay attention to the company context when practicing.
+
+| Company | Difficulty | LeetLens ID | Match | Variant note |
+|---|---|---|---|---|
+| — | Easy | `51c1cc90` | 1.00 (exact-title) | Longest Increasing Subsequence (LIS) |
+
+_Source: LeetLens DB. Match methods: `substring` = direct hit; `token-coverage` = ≥70% of this card's filename tokens appear in the question; `jaccard`/`ratio` = fuzzy title similarity._
+_See the parent folder's `EXTRACTED_QUESTIONS.md` §2 for the full list of incorporated questions._

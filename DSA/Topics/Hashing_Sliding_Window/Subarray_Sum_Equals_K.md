@@ -179,3 +179,17 @@ Reading the code: we update `sum`, we look up how many previous prefix sums equa
 - **Longest subarray with sum at most k.** If the array has non-negative elements, sliding window in O(n). With negatives, it's harder — sorted set of prefix sums + binary search.
 - **Count subarrays with average equal to m.** Subtract `m` from each element, then ask for subarrays with sum zero.
 - **What if the array is very large and streams in?** You can't use this technique directly since you may run out of memory; approximate sketches (count-min) help in special cases.
+
+
+---
+
+## Interview Signals (from LeetLens)
+
+This problem (or close variants) was reported in **1 real interview(s)** in the LeetLens dataset (snapshot 2026-05-31). Pay attention to the company context when practicing.
+
+| Company | Difficulty | LeetLens ID | Match | Variant note |
+|---|---|---|---|---|
+| Google | Medium | `1c2d3772` | 1.00 (exact-title) | Subarray Sum Equals K |
+
+_Source: LeetLens DB. Match methods: `substring` = direct hit; `token-coverage` = ≥70% of this card's filename tokens appear in the question; `jaccard`/`ratio` = fuzzy title similarity._
+_See the parent folder's `EXTRACTED_QUESTIONS.md` §2 for the full list of incorporated questions._

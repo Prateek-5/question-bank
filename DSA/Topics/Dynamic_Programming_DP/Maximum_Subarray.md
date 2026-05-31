@@ -165,3 +165,17 @@ int maxSubArray(vector<int>& a) {
 - **Maximum subarray product instead of sum?** Multiplication with negatives flips signs — track both current min and current max at each position.
 - **2D version — maximum sum submatrix?** Fix a pair of rows, collapse the rows between them into a 1D array of column sums, run Kadane on that. O(n³).
 - **What if we allow deleting at most one element?** Track two running sums: with and without a deletion used so far.
+
+
+---
+
+## Interview Signals (from LeetLens)
+
+This problem (or close variants) was reported in **1 real interview(s)** in the LeetLens dataset (snapshot 2026-05-31). Pay attention to the company context when practicing.
+
+| Company | Difficulty | LeetLens ID | Match | Variant note |
+|---|---|---|---|---|
+| — | Medium | `df8f5435` | 0.95 (title-contains-card) | Design a Maximum Subarray Sum |
+
+_Source: LeetLens DB. Match methods: `substring` = direct hit; `token-coverage` = ≥70% of this card's filename tokens appear in the question; `jaccard`/`ratio` = fuzzy title similarity._
+_See the parent folder's `EXTRACTED_QUESTIONS.md` §2 for the full list of incorporated questions._

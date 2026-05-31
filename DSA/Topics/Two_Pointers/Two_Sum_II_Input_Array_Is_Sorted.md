@@ -139,3 +139,22 @@ Another implementation detail: watch for integer overflow in `numbers[l] + numbe
 - **Three Sum equals target.** Sort, fix each `i`, two-pointer on the remaining range. O(n²).
 - **Two Sum in a sorted matrix.** Row-by-row two-pointer, or use the staircase trick from "Search a 2D Matrix II."
 - **Can we solve in O(log n)?** Only if the target is constrained to be a specific function of indices; in general no — we need to examine Ω(n) elements.
+
+
+---
+
+## Interview Signals (from LeetLens)
+
+This problem (or close variants) was reported in **6 real interview(s)** in the LeetLens dataset (snapshot 2026-05-31). Pay attention to the company context when practicing.
+
+| Company | Difficulty | LeetLens ID | Match | Variant note |
+|---|---|---|---|---|
+| Google | Easy | `14770997` | 0.95 (card-contains-title) | Two Sum II - Input Array Is Sorted |
+| Google | Easy | `5301618f` | 0.95 (card-contains-title) | Two Sum II - Input Array Is Sorted |
+| Google | Easy | `7edf6c6c` | 0.95 (card-contains-title) | Two Sum II - Input Array Is Sorted |
+| Google | Easy | `9361d0e9` | 0.95 (card-contains-title) | Two Sum II - Input Array Is Sorted |
+| — | Easy | `016ea76a` | 0.95 (card-contains-title) | Two Sum II - Input Array Is Sorted |
+| — | Easy | `3038cf99` | 0.95 (card-contains-title) | Two Sum II - Input Array Is Sorted |
+
+_Source: LeetLens DB. Match methods: `substring` = direct hit; `token-coverage` = ≥70% of this card's filename tokens appear in the question; `jaccard`/`ratio` = fuzzy title similarity._
+_See the parent folder's `EXTRACTED_QUESTIONS.md` §2 for the full list of incorporated questions._
