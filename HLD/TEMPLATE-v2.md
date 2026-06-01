@@ -249,8 +249,9 @@ Uses `theme: neutral` (a light theme) + an explicit soft-pastel palette. Three n
 
 1. **`edgeLabelBackground` / `labelBackground`** give every flowchart arrow label (the `|text|` between arrows, like `CDN -->|miss → origin| LB`) a **white card backdrop**. Without this, arrow labels float on the page background, which is invisible in dark-mode viewers.
 2. **`themeCSS` halo for sequence message labels.** Mermaid sequence diagrams use floating SVG text for messages like "1: POST(long_url)" — there's no built-in `messageBackgroundColor` theme variable. To give them a white "card" effect, we apply `paint-order: stroke fill` with a 5px white stroke, which renders a white halo around each glyph. Works in VS Code's mermaid preview; **GitHub strips themeCSS for security**, so in GitHub web the labels fall back to plain slate text (still readable on white, dim on dark). Best-effort fix; the alternative would be wrapping each message in a Note, which is structurally heavier.
-3. **`lineColor` / `signalColor` = `#1976d2` (Material blue-700), not slate-gray.** Slate-gray arrows (`#495057`) blend into GitHub's dark-mode page background. `#1976d2` clears the WCAG-AA 3:1 contrast threshold against both white (4.1:1) AND GitHub dark `#0d1117` (3.2:1), so arrows stay visible in either viewer mode. It also coordinates visually with the `primaryBorderColor` `#084298` on box outlines (same blue family).
-4. **`look: handDrawn` is INTENTIONALLY OMITTED** — that mermaid feature caused dark-bg rendering on multiple viewers.
+3. **`lineColor` / `signalColor` = `#0d47a1` (Material blue-900, deep navy)** — bold and matches the `primaryBorderColor` `#084298` box-outline color, so arrows and box borders visually unify. Same-hue family throughout the diagram. Strongest contrast on white (8:1); dimmer on GitHub dark (~2:1), but the **`themeCSS` arrow-thickness rule (2.5 px)** keeps lines perceptible.
+4. **`themeCSS` stroke-width override.** Mermaid's default arrow stroke is ~1-1.5 px (thin). We force 2.5 px on every edge type (`.edgePath`, `.flowchart-link`, `.messageLine0/1`, `.relation`, `.composition`, etc.) via themeCSS. Bolder lines = more visually prominent diagrams. **GitHub strips themeCSS**, so on GitHub web the arrows revert to the default thin stroke. To make individual flowchart arrows thick in GitHub specifically, add a `linkStyle default stroke-width:2.5px` directive at the end of the diagram body (not via themeCSS).
+5. **`look: handDrawn` is INTENTIONALLY OMITTED** — that mermaid feature caused dark-bg rendering on multiple viewers.
 
 ````markdown
 ```mermaid
@@ -268,7 +269,7 @@ config:
     tertiaryColor: '#d1e7dd'
     tertiaryTextColor: '#1f2937'
     tertiaryBorderColor: '#0a3622'
-    lineColor: '#1976d2'
+    lineColor: '#0d47a1'
     textColor: '#1f2937'
     noteBkgColor: '#fff3cd'
     noteTextColor: '#1f2937'
@@ -276,7 +277,7 @@ config:
     actorBkg: '#cfe2ff'
     actorBorder: '#084298'
     actorTextColor: '#1f2937'
-    signalColor: '#1976d2'
+    signalColor: '#0d47a1'
     signalTextColor: '#1f2937'
     labelBoxBkgColor: '#ffffff'
     labelBoxBorderColor: '#d3d3d3'

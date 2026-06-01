@@ -152,7 +152,7 @@ config:
     tertiaryColor: '#d1e7dd'
     tertiaryTextColor: '#1f2937'
     tertiaryBorderColor: '#0a3622'
-    lineColor: '#1976d2'
+    lineColor: '#0d47a1'
     textColor: '#1f2937'
     noteBkgColor: '#fff3cd'
     noteTextColor: '#1f2937'
@@ -160,7 +160,7 @@ config:
     actorBkg: '#cfe2ff'
     actorBorder: '#084298'
     actorTextColor: '#1f2937'
-    signalColor: '#1976d2'
+    signalColor: '#0d47a1'
     signalTextColor: '#1f2937'
     labelBoxBkgColor: '#ffffff'
     labelBoxBorderColor: '#d3d3d3'
@@ -176,6 +176,20 @@ config:
       stroke-width: 5px;
       stroke-linejoin: round;
       stroke-linecap: round;
+    }
+    .edgePath path,
+    .flowchart-link,
+    .messageLine0,
+    .messageLine1,
+    .relation,
+    .composition,
+    .aggregation,
+    .extension,
+    .dependency {
+      stroke-width: 2.5px !important;
+    }
+    marker path {
+      stroke-width: 1.5px !important;
     }
 ---
 classDiagram
@@ -477,7 +491,7 @@ config:
     tertiaryColor: '#d1e7dd'
     tertiaryTextColor: '#1f2937'
     tertiaryBorderColor: '#0a3622'
-    lineColor: '#1976d2'
+    lineColor: '#0d47a1'
     textColor: '#1f2937'
     noteBkgColor: '#fff3cd'
     noteTextColor: '#1f2937'
@@ -485,7 +499,7 @@ config:
     actorBkg: '#cfe2ff'
     actorBorder: '#084298'
     actorTextColor: '#1f2937'
-    signalColor: '#1976d2'
+    signalColor: '#0d47a1'
     signalTextColor: '#1f2937'
     labelBoxBkgColor: '#ffffff'
     labelBoxBorderColor: '#d3d3d3'
@@ -501,6 +515,20 @@ config:
       stroke-width: 5px;
       stroke-linejoin: round;
       stroke-linecap: round;
+    }
+    .edgePath path,
+    .flowchart-link,
+    .messageLine0,
+    .messageLine1,
+    .relation,
+    .composition,
+    .aggregation,
+    .extension,
+    .dependency {
+      stroke-width: 2.5px !important;
+    }
+    marker path {
+      stroke-width: 1.5px !important;
     }
 ---
 classDiagram
@@ -653,7 +681,7 @@ config:
     tertiaryColor: '#d1e7dd'
     tertiaryTextColor: '#1f2937'
     tertiaryBorderColor: '#0a3622'
-    lineColor: '#1976d2'
+    lineColor: '#0d47a1'
     textColor: '#1f2937'
     noteBkgColor: '#fff3cd'
     noteTextColor: '#1f2937'
@@ -661,7 +689,7 @@ config:
     actorBkg: '#cfe2ff'
     actorBorder: '#084298'
     actorTextColor: '#1f2937'
-    signalColor: '#1976d2'
+    signalColor: '#0d47a1'
     signalTextColor: '#1f2937'
     labelBoxBkgColor: '#ffffff'
     labelBoxBorderColor: '#d3d3d3'
@@ -677,6 +705,20 @@ config:
       stroke-width: 5px;
       stroke-linejoin: round;
       stroke-linecap: round;
+    }
+    .edgePath path,
+    .flowchart-link,
+    .messageLine0,
+    .messageLine1,
+    .relation,
+    .composition,
+    .aggregation,
+    .extension,
+    .dependency {
+      stroke-width: 2.5px !important;
+    }
+    marker path {
+      stroke-width: 1.5px !important;
     }
 ---
 classDiagram
@@ -826,7 +868,7 @@ config:
     tertiaryColor: '#d1e7dd'
     tertiaryTextColor: '#1f2937'
     tertiaryBorderColor: '#0a3622'
-    lineColor: '#1976d2'
+    lineColor: '#0d47a1'
     textColor: '#1f2937'
     noteBkgColor: '#fff3cd'
     noteTextColor: '#1f2937'
@@ -834,7 +876,7 @@ config:
     actorBkg: '#cfe2ff'
     actorBorder: '#084298'
     actorTextColor: '#1f2937'
-    signalColor: '#1976d2'
+    signalColor: '#0d47a1'
     signalTextColor: '#1f2937'
     labelBoxBkgColor: '#ffffff'
     labelBoxBorderColor: '#d3d3d3'
@@ -850,6 +892,20 @@ config:
       stroke-width: 5px;
       stroke-linejoin: round;
       stroke-linecap: round;
+    }
+    .edgePath path,
+    .flowchart-link,
+    .messageLine0,
+    .messageLine1,
+    .relation,
+    .composition,
+    .aggregation,
+    .extension,
+    .dependency {
+      stroke-width: 2.5px !important;
+    }
+    marker path {
+      stroke-width: 1.5px !important;
     }
 ---
 classDiagram
@@ -891,7 +947,7 @@ config:
     tertiaryColor: '#d1e7dd'
     tertiaryTextColor: '#1f2937'
     tertiaryBorderColor: '#0a3622'
-    lineColor: '#1976d2'
+    lineColor: '#0d47a1'
     textColor: '#1f2937'
     noteBkgColor: '#fff3cd'
     noteTextColor: '#1f2937'
@@ -899,7 +955,7 @@ config:
     actorBkg: '#cfe2ff'
     actorBorder: '#084298'
     actorTextColor: '#1f2937'
-    signalColor: '#1976d2'
+    signalColor: '#0d47a1'
     signalTextColor: '#1f2937'
     labelBoxBkgColor: '#ffffff'
     labelBoxBorderColor: '#d3d3d3'
@@ -915,6 +971,20 @@ config:
       stroke-width: 5px;
       stroke-linejoin: round;
       stroke-linecap: round;
+    }
+    .edgePath path,
+    .flowchart-link,
+    .messageLine0,
+    .messageLine1,
+    .relation,
+    .composition,
+    .aggregation,
+    .extension,
+    .dependency {
+      stroke-width: 2.5px !important;
+    }
+    marker path {
+      stroke-width: 1.5px !important;
     }
 ---
 classDiagram
@@ -985,7 +1055,7 @@ config:
     tertiaryColor: '#d1e7dd'
     tertiaryTextColor: '#1f2937'
     tertiaryBorderColor: '#0a3622'
-    lineColor: '#1976d2'
+    lineColor: '#0d47a1'
     textColor: '#1f2937'
     noteBkgColor: '#fff3cd'
     noteTextColor: '#1f2937'
@@ -993,7 +1063,7 @@ config:
     actorBkg: '#cfe2ff'
     actorBorder: '#084298'
     actorTextColor: '#1f2937'
-    signalColor: '#1976d2'
+    signalColor: '#0d47a1'
     signalTextColor: '#1f2937'
     labelBoxBkgColor: '#ffffff'
     labelBoxBorderColor: '#d3d3d3'
@@ -1009,6 +1079,20 @@ config:
       stroke-width: 5px;
       stroke-linejoin: round;
       stroke-linecap: round;
+    }
+    .edgePath path,
+    .flowchart-link,
+    .messageLine0,
+    .messageLine1,
+    .relation,
+    .composition,
+    .aggregation,
+    .extension,
+    .dependency {
+      stroke-width: 2.5px !important;
+    }
+    marker path {
+      stroke-width: 1.5px !important;
     }
 ---
 classDiagram
@@ -1287,7 +1371,7 @@ config:
     tertiaryColor: '#d1e7dd'
     tertiaryTextColor: '#1f2937'
     tertiaryBorderColor: '#0a3622'
-    lineColor: '#1976d2'
+    lineColor: '#0d47a1'
     textColor: '#1f2937'
     noteBkgColor: '#fff3cd'
     noteTextColor: '#1f2937'
@@ -1295,7 +1379,7 @@ config:
     actorBkg: '#cfe2ff'
     actorBorder: '#084298'
     actorTextColor: '#1f2937'
-    signalColor: '#1976d2'
+    signalColor: '#0d47a1'
     signalTextColor: '#1f2937'
     labelBoxBkgColor: '#ffffff'
     labelBoxBorderColor: '#d3d3d3'
@@ -1311,6 +1395,20 @@ config:
       stroke-width: 5px;
       stroke-linejoin: round;
       stroke-linecap: round;
+    }
+    .edgePath path,
+    .flowchart-link,
+    .messageLine0,
+    .messageLine1,
+    .relation,
+    .composition,
+    .aggregation,
+    .extension,
+    .dependency {
+      stroke-width: 2.5px !important;
+    }
+    marker path {
+      stroke-width: 1.5px !important;
     }
 ---
 sequenceDiagram
@@ -1366,7 +1464,7 @@ config:
     tertiaryColor: '#d1e7dd'
     tertiaryTextColor: '#1f2937'
     tertiaryBorderColor: '#0a3622'
-    lineColor: '#1976d2'
+    lineColor: '#0d47a1'
     textColor: '#1f2937'
     noteBkgColor: '#fff3cd'
     noteTextColor: '#1f2937'
@@ -1374,7 +1472,7 @@ config:
     actorBkg: '#cfe2ff'
     actorBorder: '#084298'
     actorTextColor: '#1f2937'
-    signalColor: '#1976d2'
+    signalColor: '#0d47a1'
     signalTextColor: '#1f2937'
     labelBoxBkgColor: '#ffffff'
     labelBoxBorderColor: '#d3d3d3'
@@ -1390,6 +1488,20 @@ config:
       stroke-width: 5px;
       stroke-linejoin: round;
       stroke-linecap: round;
+    }
+    .edgePath path,
+    .flowchart-link,
+    .messageLine0,
+    .messageLine1,
+    .relation,
+    .composition,
+    .aggregation,
+    .extension,
+    .dependency {
+      stroke-width: 2.5px !important;
+    }
+    marker path {
+      stroke-width: 1.5px !important;
     }
 ---
 sequenceDiagram
