@@ -243,36 +243,39 @@ All HLD diagrams are **inline mermaid code blocks** in the walkthrough `.md` fil
 
 **Why mermaid (and not excalidraw renders).** Prior iterations of this template tried programmatically-generated excalidraw PNGs. That approach fights two losing battles: (a) programmatic layout can't match what human visual taste produces; (b) PNG snapshots get stale relative to their sources. Mermaid trades artistic polish for **always-correct + always-inline + zero-workflow** rendering. That's the right tradeoff here.
 
-**Canonical theme block** — copy verbatim at the top of every mermaid diagram. This forces a light background + dark text + colored boxes with readable contrast, overriding viewer dark-mode preferences:
+**Canonical theme block** — copy verbatim at the top of every mermaid diagram. Uses `theme: neutral` (a guaranteed-light-bg theme) plus an explicit light pastel palette, ensuring legibility regardless of GitHub / VS Code dark mode. `look: handDrawn` is INTENTIONALLY OMITTED — empirically it caused dark-bg rendering on some viewers, and the tradeoff isn't worth the readability hit:
 
 ````markdown
 ```mermaid
 ---
 config:
-  look: handDrawn
-  theme: base
+  theme: neutral
   themeVariables:
     background: '#ffffff'
-    primaryColor: '#e7f5ff'
-    primaryTextColor: '#1e1e1e'
-    primaryBorderColor: '#1971c2'
-    lineColor: '#1e1e1e'
-    secondaryColor: '#fff3bf'
-    secondaryTextColor: '#1e1e1e'
-    secondaryBorderColor: '#e67700'
-    tertiaryColor: '#d3f9d8'
-    tertiaryTextColor: '#1e1e1e'
-    tertiaryBorderColor: '#2f9e44'
-    noteBkgColor: '#fff9db'
-    noteTextColor: '#1e1e1e'
-    noteBorderColor: '#fab005'
-    actorBkg: '#e7f5ff'
-    actorBorder: '#1971c2'
-    actorTextColor: '#1e1e1e'
-    signalColor: '#1e1e1e'
-    signalTextColor: '#1e1e1e'
-    classText: '#1e1e1e'
-    fontFamily: 'Segoe UI, Helvetica, Arial, sans-serif'
+    primaryColor: '#cfe2ff'
+    primaryTextColor: '#1f2937'
+    primaryBorderColor: '#084298'
+    secondaryColor: '#fff3cd'
+    secondaryTextColor: '#1f2937'
+    secondaryBorderColor: '#664d03'
+    tertiaryColor: '#d1e7dd'
+    tertiaryTextColor: '#1f2937'
+    tertiaryBorderColor: '#0a3622'
+    lineColor: '#495057'
+    textColor: '#1f2937'
+    noteBkgColor: '#fff3cd'
+    noteTextColor: '#1f2937'
+    noteBorderColor: '#997404'
+    actorBkg: '#cfe2ff'
+    actorBorder: '#084298'
+    actorTextColor: '#1f2937'
+    signalColor: '#495057'
+    signalTextColor: '#1f2937'
+    labelBoxBkgColor: '#ffffff'
+    labelBoxBorderColor: '#d3d3d3'
+    labelTextColor: '#1f2937'
+    classText: '#1f2937'
+    fontFamily: 'system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif'
 ---
 flowchart TB
   ...
@@ -283,10 +286,11 @@ flowchart TB
 
 | Mermaid var | Hex | Role | Use for |
 |---|---|---|---|
-| `primaryColor` | `#e7f5ff` (light blue) | Concrete domain class / service | Client, API, Lot, Ticket |
-| `secondaryColor` | `#fff3bf` (yellow) | Interface / abstract / coordinator | Mermaid interfaces, side-services |
-| `tertiaryColor` | `#d3f9d8` (light green) | Concrete impl / leaf / consumer | FlatRate, Active state, Analytics |
-| `noteBkgColor` | `#fff9db` (cream) | Note / annotation / pivot question | `Note over X,Y: ...` |
+| `primaryColor` | `#cfe2ff` (soft blue) | Concrete domain class / service | Client, API, Lot, Ticket |
+| `secondaryColor` | `#fff3cd` (soft yellow) | Interface / abstract / coordinator | Interfaces, Kafka, Counter |
+| `tertiaryColor` | `#d1e7dd` (soft green) | Concrete impl / leaf / consumer | FlatRate, Active state, Analytics |
+| `noteBkgColor` | `#fff3cd` (soft yellow) | Note / annotation / pivot question | `Note over X,Y: ...` |
+| All text | `#1f2937` (slate-800) | High-contrast on every pastel above | |
 
 **Recommended diagrams per HLD walkthrough:**
 

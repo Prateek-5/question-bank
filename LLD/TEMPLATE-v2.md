@@ -35,36 +35,39 @@ All LLD diagrams are **inline mermaid code blocks** in the walkthrough `.md` fil
 
 **Why mermaid (and not bespoke excalidraw renders).** Earlier iterations of this template tried excalidraw JSON sources + a programmatic render pipeline. Two losing battles surfaced: (a) programmatic layout can't match human visual taste; (b) rendered snapshots stale relative to their sources. Mermaid trades artistic polish for **always-correct + always-inline + zero-workflow** rendering. The right tradeoff.
 
-**Canonical theme block — copy verbatim at the top of every mermaid diagram.** Forces a light background + dark text + colored boxes with readable contrast, overriding viewer dark-mode preferences:
+**Canonical theme block — copy verbatim at the top of every mermaid diagram.** Uses `theme: neutral` (guaranteed-light-bg) plus an explicit light pastel palette. `look: handDrawn` is INTENTIONALLY OMITTED — empirically that combination caused dark-bg rendering on some viewers, and readability beats the sketch aesthetic:
 
 ````markdown
 ```mermaid
 ---
 config:
-  look: handDrawn
-  theme: base
+  theme: neutral
   themeVariables:
     background: '#ffffff'
-    primaryColor: '#e7f5ff'
-    primaryTextColor: '#1e1e1e'
-    primaryBorderColor: '#1971c2'
-    lineColor: '#1e1e1e'
-    secondaryColor: '#fff3bf'
-    secondaryTextColor: '#1e1e1e'
-    secondaryBorderColor: '#e67700'
-    tertiaryColor: '#d3f9d8'
-    tertiaryTextColor: '#1e1e1e'
-    tertiaryBorderColor: '#2f9e44'
-    noteBkgColor: '#fff9db'
-    noteTextColor: '#1e1e1e'
-    noteBorderColor: '#fab005'
-    actorBkg: '#e7f5ff'
-    actorBorder: '#1971c2'
-    actorTextColor: '#1e1e1e'
-    signalColor: '#1e1e1e'
-    signalTextColor: '#1e1e1e'
-    classText: '#1e1e1e'
-    fontFamily: 'Segoe UI, Helvetica, Arial, sans-serif'
+    primaryColor: '#cfe2ff'
+    primaryTextColor: '#1f2937'
+    primaryBorderColor: '#084298'
+    secondaryColor: '#fff3cd'
+    secondaryTextColor: '#1f2937'
+    secondaryBorderColor: '#664d03'
+    tertiaryColor: '#d1e7dd'
+    tertiaryTextColor: '#1f2937'
+    tertiaryBorderColor: '#0a3622'
+    lineColor: '#495057'
+    textColor: '#1f2937'
+    noteBkgColor: '#fff3cd'
+    noteTextColor: '#1f2937'
+    noteBorderColor: '#997404'
+    actorBkg: '#cfe2ff'
+    actorBorder: '#084298'
+    actorTextColor: '#1f2937'
+    signalColor: '#495057'
+    signalTextColor: '#1f2937'
+    labelBoxBkgColor: '#ffffff'
+    labelBoxBorderColor: '#d3d3d3'
+    labelTextColor: '#1f2937'
+    classText: '#1f2937'
+    fontFamily: 'system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif'
 ---
 classDiagram
   ...
@@ -75,10 +78,11 @@ classDiagram
 
 | Mermaid var | Hex | Role | Use for |
 |---|---|---|---|
-| `primaryColor` | `#e7f5ff` (light blue) | Concrete domain class | Ticket, Spot, ParkingLot |
-| `secondaryColor` | `#fff3bf` (yellow) | Interface / abstract | `<<interface>>` boxes |
-| `tertiaryColor` | `#d3f9d8` (light green) | Concrete impl / leaf | ActiveState, FlatRate |
-| `noteBkgColor` | `#fff9db` (cream) | Note / annotation | `Note over X: …` |
+| `primaryColor` | `#cfe2ff` (soft blue) | Concrete domain class | Ticket, Spot, ParkingLot |
+| `secondaryColor` | `#fff3cd` (soft yellow) | Interface / abstract | `<<interface>>` boxes |
+| `tertiaryColor` | `#d1e7dd` (soft green) | Concrete impl / leaf | ActiveState, FlatRate |
+| `noteBkgColor` | `#fff3cd` (soft yellow) | Note / annotation | `Note over X: …` |
+| All text | `#1f2937` (slate-800) | High-contrast on every pastel above | |
 
 **Recommended mermaid diagram types per LLD section:**
 
