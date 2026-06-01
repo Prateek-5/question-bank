@@ -1,0 +1,39 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>excalidraw renderer</title>
+<style>html,body { margin:0; padding:0; background:#fff; }</style>
+<!-- React + ReactDOM are peer deps of excalidraw's UMD bundle. -->
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<!-- Excalidraw UMD bundle attaches to window.ExcalidrawLib. -->
+<script src="https://unpkg.com/@excalidraw/excalidraw@0.17.6/dist/excalidraw.production.min.js" crossorigin></script>
+</head>
+<body>
+<script>
+  // Wait for ExcalidrawLib to be available, then expose the render function.
+  function ready() {
+    if (typeof ExcalidrawLib === 'undefined' || !ExcalidrawLib.exportToCanvas) {
+      return setTimeout(ready, 50);
+    }
+    window.__readyForRender = true;
+
+    window.renderToPngDataUrl = async function(scene) {
+      const elements = scene.elements || [];
+      const appState = scene.appState || {};
+      const files    = scene.files    || {};
+
+      const canvas = await ExcalidrawLib.exportToCanvas({
+        elements,
+        appState: { ...appState, exportBackground: true, viewBackgroundColor: '#ffffff' },
+        files,
+        getDimensions: (w, h) => ({ width: w * 2, height: h * 2, scale: 2 }),
+      });
+      return canvas.toDataURL('image/png');
+    };
+  }
+  ready();
+</script>
+</body>
+</html>

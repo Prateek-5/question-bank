@@ -207,43 +207,58 @@ Same convention as DSA/LLD. Embed inline at first appearance.
 - Hot key mitigation (key splitting / per-shard caches)
 - CRDTs
 
-### Rule 3 — Architecture diagrams via excalidraw + ASCII fallback
+### Rule 3 — Architecture diagrams: excalidraw sources + auto-rendered inline PNGs
 
-**Excalidraw convention:**
+Diagrams in HLD walkthroughs follow a **two-file-per-diagram model with strict directory separation** (same convention as LLD):
 
-1. Walkthrough file is `<Problem>.md`. Sibling diagram files:
-   - `<Problem>.architecture.excalidraw` — main architecture (required)
-   - `<Problem>.sequence.excalidraw` — key flow sequence (required)
-   - `<Problem>.data-model.excalidraw` — optional, for graph-shaped data models
-   - Additional state-machine / deployment diagrams as needed
-2. Each `.excalidraw` file is committed as JSON. Open it in [https://excalidraw.com](https://excalidraw.com) to edit.
-3. **In the markdown**, ALWAYS include an ASCII rendering inline. The two must stay in sync.
+1. **Source:** `.excalidraw` JSON file, edited in [excalidraw.com](https://excalidraw.com). Lives under `HLD/diagrams/<Bucket>/<Question>/<name>.excalidraw`.
+2. **Output:** `.png` rendered by `tools/render-diagrams/`. Sits next to the `.excalidraw`. The walkthrough `.md` references it via relative `![]()`.
 
-**ASCII architecture conventions:**
+**Walkthrough `.md` files (in `HLD/Topics/<Bucket>/`) contain ONLY narrative + image references** — no `.excalidraw` clutter, no mermaid blocks, no ASCII art for diagrams.
+
+**Directory layout:**
 
 ```
-   ┌──────────┐
-   │  Client  │
-   └────┬─────┘
-        │ HTTPS
-        ▼
-   ┌──────────┐
-   │   CDN    │
-   └────┬─────┘
-        │
-        ▼
-   ┌──────────┐      ┌────────────┐
-   │   LB     │─────▶│   Service  │
-   └──────────┘      └─────┬──────┘
-                           │
-                ┌──────────┼──────────┐
-                ▼          ▼          ▼
-            ┌──────┐  ┌────────┐  ┌──────┐
-            │Redis │  │Postgres│  │Kafka │
-            └──────┘  └────────┘  └──────┘
+HLD/
+├── Topics/<Bucket>/<Question>.md                 ← narrative + image refs only
+└── diagrams/<Bucket>/<Question>/
+    ├── <name>.excalidraw                         ← editable source
+    └── <name>.png                                ← engine-rendered output
 ```
 
-Annotate each arrow with the protocol (HTTP / gRPC / SQL / Redis RESP / Kafka topic name) and key data shape.
+**Referenced from the walkthrough via relative path:**
+
+```markdown
+![<descriptive alt text>](../../diagrams/<Bucket>/<Question>/<name>.png)
+
+*Editable source: [`../../diagrams/<Bucket>/<Question>/<name>.excalidraw`](../../diagrams/<Bucket>/<Question>/<name>.excalidraw)*
+
+**Reader's tour.**
+1. ...
+2. ...
+```
+
+**Recommended diagrams per HLD walkthrough** (mirrors the LLD-style progressive arc):
+
+| Diagram | When | Purpose |
+|---|---|---|
+| `data-model.excalidraw` | §9 | Tables + columns + access patterns |
+| `iteration-1-naive.excalidraw` | §10.A | The simplest possible design + capacity check showing it breaks |
+| `iteration-2-with-cache.excalidraw` | §10.B | Add the smallest fix; show it still breaks at hot keys / cross-region / cold start |
+| `final-architecture.excalidraw` | §10.C | Final composite system |
+| `sequence-<flow1>.excalidraw` | §12.A | Create-path flow |
+| `sequence-<flow2>-hit.excalidraw` | §12.B | Happy-path (cache hit, fastest) |
+| `sequence-<flow2>-miss.excalidraw` | §12.C | Worst-case path (full miss, longest latency) |
+
+**Workflow:**
+1. Edit the `.excalidraw` source in excalidraw.com (`File → Open` from the path).
+2. `File → Save to disk` — overwrite the file.
+3. From `tools/render-diagrams/`, run `npm run diagrams` — incremental re-render.
+4. Commit both files.
+
+See [`../tools/render-diagrams/README.md`](../tools/render-diagrams/README.md) for engine details.
+
+**See:** [`Topics/URL_Shortener/URL_Shortener_Design.md`](./Topics/URL_Shortener/URL_Shortener_Design.md) for the canonical exemplar with 7 diagrams across 4 sections (§9 data-model, §10.A/B/C three architecture iterations, §12.A/B/C three sequence flows).
 
 ### Rule 4 — Capacity estimation is REQUIRED
 

@@ -234,71 +234,153 @@ Round to:               80 GB (16 × 5GB Redis shards comfortably)
 
 Written async via Kafka → batch consumer → time-series DB (Cassandra or ClickHouse). Aggregate counts maintained in Redis with periodic flush.
 
+### Data model — visualized
+
+```mermaid
+---
+config:
+  look: handDrawn
+  theme: default
+---
+erDiagram
+  url_mappings {
+    char(7)        short_code        PK "7-char base62"
+    varchar(2048)  long_url             "NOT NULL"
+    uuid           user_id           FK "nullable"
+    timestamptz    created_at           "NOT NULL"
+    timestamptz    expires_at           "nullable (NULL = no expiry)"
+    bool           is_custom_alias      "default false"
+  }
+```
+
+**Indexes:**
+- PK on `short_code` — every redirect uses this
+- Secondary INDEX on `user_id` — "list my URLs"
+- PARTIAL INDEX on `expires_at WHERE expires_at IS NOT NULL` — TTL sweep
+
+**Access patterns (the only thing that matters):**
+
+| Pattern | Frequency | Latency budget |
+|---|---|---|
+| `SELECT long_url WHERE short_code = ?` | ~30K/sec | < 5 ms p99 |
+| `INSERT INTO url_mappings (...)` | ~40/sec | < 50 ms |
+| `SELECT WHERE user_id = ? LIMIT 50` | rare | < 200 ms |
+| `DELETE WHERE expires_at < now()` (batched) | periodic | background |
+
 ---
 
-## 10. Architecture diagram + component overview
+## 10. Architecture — derived progressively
 
-> **Editable source:** [`./URL_Shortener_Design.architecture.excalidraw`](./URL_Shortener_Design.architecture.excalidraw)
->
-> Open in [https://excalidraw.com](https://excalidraw.com) and use File → Open.
+Instead of presenting the final architecture as a fait accompli, let's DERIVE it. Start with the simplest possible thing that could work. Compute where it breaks against the capacity numbers from §6 (30K reads/sec peak, 100:1 read:write). Add the smallest fix. Repeat until we land.
 
-**ASCII rendering:**
+### 10.A — Iteration 1: naive (single Postgres + single app)
 
+What does the absolute simplest version look like?
+
+```mermaid
+---
+config:
+  look: handDrawn
+  theme: default
+---
+flowchart TB
+  Client["Client<br/>(browser)"]
+  API["API server<br/>(single Node.js)<br/>⚠ ~3K RPS sustained"]
+  DB[("Primary DB Postgres<br/>⚠ ~5K reads/sec ceiling")]
+  Client -->|HTTPS GET /:code| API
+  API -->|SELECT long_url WHERE code = ?| DB
+
+  X[/"⚠ Capacity check<br/>Target: 30K reads/sec peak<br/>This design: 3K app · 5K DB<br/>→ BREAKS by 6-10×"/]
+  Y[/"Pivot question:<br/>where is the read amplification?<br/>→ most reads hit the SAME hot keys<br/>→ CACHE them (Iteration 2)"/]
 ```
-                          ┌──────────┐
-                          │  Client  │
-                          │ (browser)│
-                          └─────┬────┘
-                                │  HTTPS
-                                ▼
-                        ┌─────────────────┐
-                        │  Global Anycast │
-                        │      DNS        │ → nearest POP
-                        └────────┬────────┘
-                                 │
-                                 ▼
-                        ┌─────────────────┐
-                        │   CDN / Edge    │  302 cached for popular codes
-                        └────────┬────────┘
-                                 │  miss → origin
-                                 ▼
-                        ┌─────────────────┐
-                        │  Load Balancer  │  L7 (ALB / nginx)
-                        │  (per-region)   │  health-checked, RR
-                        └────────┬────────┘
-                ┌────────────────┼────────────────┐
-                ▼                ▼                ▼
-       ┌─────────────┐  ┌─────────────┐  ┌─────────────┐
-       │  API svc 1  │  │  API svc 2  │  │  API svc N  │  stateless, autoscale
-       └──────┬──────┘  └──────┬──────┘  └──────┬──────┘
-              │  ↓ READ          │  ↓ READ        │  ↓ WRITE
-              ├────────┬─────────┴────────────────┘
-              │        │
-              ▼        ▼
-      ┌────────────┐  ┌──────────────────┐         ┌──────────────────┐
-      │  Redis     │  │  Counter Alloc   │         │   Validation /   │
-      │  Cluster   │  │   (Zookeeper)    │         │  Blocklist Svc   │
-      │  (sharded) │  │  block alloc     │         └──────────────────┘
-      └─────┬──────┘  └────────┬─────────┘
-            │ miss            │ allocs 1000 ids
-            ▼                  ▼
-      ┌────────────────────────────────────┐
-      │  Primary DB (Postgres / Cassandra) │
-      │  region A primary                  │
-      │  → async replicate to region B/C   │
-      └──────────────┬─────────────────────┘
-                     │ WAL → CDC
-                     ▼
-              ┌──────────────┐
-              │   Kafka      │  click events + WAL CDC
-              └──────┬───────┘
-       ┌─────────────┼──────────────┐
-       ▼             ▼              ▼
-  ┌─────────┐  ┌──────────┐  ┌─────────────┐
-  │Analytics│  │ TTL      │  │ Search /    │
-  │Consumer │  │ Sweeper  │  │ Anti-abuse  │
-  │→ C*     │  │ → DB del │  │ consumer    │
-  └─────────┘  └──────────┘  └─────────────┘
+
+**Where it breaks.** Two ceilings hit before we approach the target:
+
+| Component | Capacity | Target | Verdict |
+|---|---|---|---|
+| Single Node.js API instance | ~3K RPS sustained | 30K | breaks 10× |
+| Single Postgres for full-row SELECT | ~5K reads/sec | 30K | breaks 6× |
+
+**Pivot question:** where's the read amplification, and what can absorb it?
+
+The answer comes from observation: short codes follow a power-law distribution — a small fraction of codes get most of the traffic. We don't actually need to LOOK UP each redirect; we need to CACHE the popular ones. Redis is the smallest thing that changes.
+
+### 10.B — Iteration 2: add a Redis cache in front
+
+```mermaid
+---
+config:
+  look: handDrawn
+  theme: default
+---
+flowchart TB
+  Client[Client]
+  API["API server<br/>+ cache-aside logic"]
+  Redis[("Redis Cluster<br/>per-region<br/>~100K ops/sec/shard")]
+  DB[("Primary DB Postgres<br/>cache miss rate ≈ 20%")]
+  Client --> API
+  API -->|"1: GET code"| Redis
+  API -->|"2: MISS → DB"| DB
+
+  Pros[/"✓ Reads served by Redis hit the 30K target<br/>✓ DB load drops ~5× (miss rate ≈ 20%)"/]
+  Cons[/"⚠ Hot keys: one viral link saturates a shard<br/>⚠ Cache stampede on cold start hits DB<br/>⚠ Single API instance still bottleneck<br/>⚠ Sync analytics blocks the redirect"/]
+  Pivot[/"Pivot: split load + distribute hot keys + decouple<br/>→ Add CDN + LB+replicas + Kafka (Iteration 3)"/]
+```
+
+**What this fixes:** Redis absorbs the 30K read load. DB load drops to ~20% (cache miss rate).
+
+**What's still wrong:**
+- **Hot keys.** A single viral link can saturate ONE Redis shard. Need cache layer ABOVE Redis for extreme hot keys → CDN.
+- **Cache stampede.** If Redis goes cold (deploy, eviction wave), N API instances all hit DB simultaneously → DB melts. Need single-flight or pre-warm.
+- **Single API instance.** Still a bottleneck. Need LB + horizontally-scaled API fleet.
+- **Synchronous analytics.** Click counts written inline block the redirect. Need fire-and-forget via Kafka.
+
+**Pivot question:** how do we split the load, distribute the hot keys, and decouple analytics? Three additions, in parallel: CDN (absolute hot keys), LB + replicas (horizontal scale), Kafka (async).
+
+### 10.C — Iteration 3: the final architecture
+
+Adding the remaining components in one step (each is a familiar primitive — no derivation needed beyond "this is where it goes"):
+
+```mermaid
+---
+config:
+  look: handDrawn
+  theme: default
+---
+flowchart TB
+  Client[Client browser]
+  DNS[Anycast DNS]
+  CDN["CDN / Edge<br/>302 cached for popular codes"]
+  LB["Load Balancer L7<br/>per-region, health-checked"]
+  subgraph API_fleet["API fleet (stateless, autoscale)"]
+    API1[API svc 1]
+    API2[API svc 2]
+    API3[API svc N]
+  end
+  Counter[/"Counter Alloc<br/>Zookeeper<br/>block-allocates IDs"/]
+  Blocklist[/"Validation /<br/>Blocklist Svc"/]
+  Redis[("Redis Cluster<br/>consistent-hashed<br/>~16 shards × 5GB")]
+  DB[("Primary DB<br/>Postgres or Cassandra<br/>async replicate region B/C")]
+  Kafka{{"Kafka  (click events + DB CDC)"}}
+  Analytics[/"Analytics → Cassandra<br/>(time-series clicks)"/]
+  Sweeper[/"TTL Sweeper<br/>(deletes expired)"/]
+  Rescan[/"Anti-abuse rescan<br/>(consumes CDC)"/]
+
+  Client -->|HTTPS| CDN
+  DNS -.->|POP| CDN
+  CDN -->|miss → origin| LB
+  LB --> API1
+  LB --> API2
+  LB --> API3
+  API2 -->|GET code| Redis
+  API2 -->|SELECT| DB
+  API1 -.->|allocId| Counter
+  API3 -.->|check url| Blocklist
+  DB -.->|WAL → CDC| Kafka
+  API2 -.->|fire-and-forget| Kafka
+  Kafka --> Analytics
+  Kafka --> Sweeper
+  Kafka --> Rescan
 ```
 
 **Components at a glance (boxes in the diagram, deep-dived in §11):**
@@ -442,55 +524,97 @@ For each component: what it does · what's inside · 2-3 design decisions · fai
 
 ---
 
-## 12. Key user flow — sequence diagram
+## 12. Key user flows — sequence diagrams
 
-> **Editable source:** [`./URL_Shortener_Design.sequence.excalidraw`](./URL_Shortener_Design.sequence.excalidraw)
+Three flows worth tracing explicitly. They span the full latency budget — from ~5 ms (CDN hit) to ~60 ms (full miss to DB) to ~300 ms (create).
 
-**Scenario:** A redirect on a moderately-popular code, with a cache HIT.
+### 12.A — Create flow (POST /shorten)
 
-**ASCII rendering:**
-
-```
- User         CDN        LB         API       Redis      DB        Kafka
-   │           │          │          │          │          │          │
-   │ GET /abc1234         │          │          │          │          │
-   ├──────────▶│          │          │          │          │          │
-   │           │ ◀── cached 302 ◀──┐ │          │          │          │
-   │ ◀── 302 ─┤  (very-popular)    │ │          │          │          │
-   │                              hit│          │          │          │
-   │                                                                  │
-   │  ── 2nd request, different code ──                               │
-   │           │                                                      │
-   │ GET /xyz789                                                      │
-   ├──────────▶│ miss     │          │          │          │          │
-   │           ├─────────▶│ route    │          │          │          │
-   │           │          ├─────────▶│ GET xyz789                     │
-   │           │          │          ├─────────▶│ HIT      │          │
-   │           │          │          │ ◀── url ─┤          │          │
-   │           │          │          │                                │
-   │           │          │ ◀── 302 ─┤                                │
-   │           │ ◀── 302 ─┤                                           │
-   │ ◀── 302 ─┤           │          │                                │
-   │                                                                  │
-   │                      │          ├─ fire-and-forget click event ─▶│
-   │                                                                  │
-   │  ── 3rd request, cache miss ──                                   │
-   │ GET /pqr456                                                      │
-   ├──────────▶│ miss────▶│─────────▶│ GET pqr456                     │
-   │           │          │          ├─────────▶│ MISS                │
-   │           │          │          ├──────────▶ SELECT long_url ──▶ │
-   │           │          │          │ ◀── url ──┤                    │
-   │           │          │          ├─ SET cache (TTL 5 min) ──▶     │
-   │           │          │ ◀── 302 ─┤                                │
-   │ ◀── 302 ─┤           │          │                                │
-   │                                 ├ fire-and-forget click ────────▶│
+```mermaid
+---
+config:
+  look: handDrawn
+  theme: default
+---
+sequenceDiagram
+  actor User
+  participant API
+  participant Blocklist
+  participant Counter
+  participant DB
+  participant Redis
+  User->>API: 1: POST {long_url}
+  API->>Blocklist: 2: check(long_url)
+  Blocklist-->>API: 3: ok / blocked
+  API->>Counter: 4: allocId() [from preallocated block]
+  Counter-->>API: 5: id = 421337
+  Note over API: 6: code = base62(421337) = 'abc1234'
+  API->>DB: 7: INSERT (abc1234, long_url, ...)
+  DB-->>API: 8: OK
+  API-)Redis: 9: SET cache (TTL 24h)
+  API-->>User: 10: 201 Created { short: '/abc1234' }
 ```
 
-Key things to notice:
+**Key things to notice in the create flow:**
+- **Counter allocation is in-memory** for the API instance. Zookeeper is touched only when a block runs out (every 1000 codes per instance), not per request.
+- **Cache SET on create** seeds the cache so the FIRST redirect is fast. Cache-aside doesn't usually pre-populate, but for newly-created codes the cost is one extra Redis call vs cold-cache-miss-on-redirect.
+- **Blocklist check is synchronous on create** — better to reject phishing URLs up-front than retroactively (much cheaper to clean).
 
-- **The click event is FIRE-AND-FORGET.** API service does NOT block the redirect on Kafka acknowledgment.
-- **Cache-aside pattern.** API populates Redis on miss, not on write — keeps invalidation simple.
-- **Three latency tiers.** CDN hit ~5 ms; Redis hit ~15 ms; DB miss ~50 ms. The DB tier is the SLO ceiling.
+### 12.B — Redirect with CDN hit (~5 ms total)
+
+```mermaid
+---
+config:
+  look: handDrawn
+  theme: default
+---
+sequenceDiagram
+  actor User
+  participant DNS
+  participant CDN
+  User->>DNS: 1: resolve nearest POP
+  DNS-->>User: 2: anycast IP
+  User->>CDN: 3: GET /abc1234
+  CDN-->>User: 4: 302  Location: long_url  (cached)
+  Note over User,CDN: Total ~5ms · no origin contact
+```
+
+**Why this matters:** for popular codes (the top ~5% by traffic), the redirect never leaves the CDN edge. Most of your 30K reads/sec at peak are absorbed here, never reaching the origin. The CDN tier is what makes 99.99% availability affordable.
+
+### 12.C — Redirect with full miss to DB (~60 ms)
+
+```mermaid
+---
+config:
+  look: handDrawn
+  theme: default
+---
+sequenceDiagram
+  actor User
+  participant CDN
+  participant LB
+  participant API
+  participant Redis
+  participant DB
+  participant Kafka
+  User->>CDN: 1: GET /xyz789
+  CDN->>LB: 2: miss → origin
+  LB->>API: 3: route to API instance
+  API->>Redis: 4: GET xyz789
+  Redis-->>API: 5: MISS (cold key)
+  API->>DB: 6: SELECT long_url WHERE code='xyz789'
+  DB-->>API: 7: long_url
+  API->>Redis: 8: SET cache (TTL 5 min)
+  API-->>User: 9: 302 → long_url
+  API-)Kafka: 10: fire-and-forget click event
+  Note over API,Kafka: ~60ms total · click event never blocks redirect
+```
+
+**Three things to notice in the miss path:**
+
+1. **The click event is FIRE-AND-FORGET.** API does NOT block the redirect on Kafka acknowledgment. If Kafka is slow, the click event is dropped — better than slowing the user.
+2. **Cache-aside, not write-through.** API populates Redis ONLY on miss, not on insert (though create flow §12.A also sets the cache). The slight inconsistency is absorbed by the create flow seeding the cache.
+3. **Three latency tiers, well-separated.** ~5ms (CDN), ~15ms (Redis), ~60ms (DB). The DB is your SLO ceiling — sized to absorb 4× steady-state read load so that a cache outage doesn't kill the service.
 
 ---
 
@@ -604,8 +728,15 @@ The honest answer in an interview: "I'd evolve this in three steps. Right now Po
 - **Vertical overview:** [`../../LEARNING.md`](../../LEARNING.md)
 - **Template:** [`../../TEMPLATE-v2.md`](../../TEMPLATE-v2.md)
 - **Diagrams:**
-  - [`./URL_Shortener_Design.architecture.excalidraw`](./URL_Shortener_Design.architecture.excalidraw)
-  - [`./URL_Shortener_Design.sequence.excalidraw`](./URL_Shortener_Design.sequence.excalidraw)
+  - All diagram sources live in [`../../diagrams/URL_Shortener/URL_Shortener_Design/`](../../diagrams/URL_Shortener/URL_Shortener_Design/):
+    - `data-model.excalidraw` — table schema + access patterns (§9)
+    - `iteration-1-naive.excalidraw` — naive single-DB design (§10.A)
+    - `iteration-2-with-cache.excalidraw` — added Redis (§10.B)
+    - `final-architecture.excalidraw` — full system (§10.C)
+    - `sequence-shorten.excalidraw` — POST /shorten create flow (§12.A)
+    - `sequence-redirect-hit.excalidraw` — CDN hit (§12.B)
+    - `sequence-redirect-miss.excalidraw` — full DB miss (§12.C)
+- **Engine:** [`../../../tools/render-diagrams/`](../../../tools/render-diagrams/) — `npm run diagrams` regenerates every PNG from its `.excalidraw` source.
 - **Related HLD walkthroughs (future):**
   - Caching deep-dive (in `../Caching/`)
   - Rate Limiting deep-dive (in `../Rate_Limiting/`)

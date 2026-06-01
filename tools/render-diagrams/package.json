@@ -1,0 +1,19 @@
+{
+  "name": "bosscode-render-diagrams",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Renders all .excalidraw files in LLD/diagrams and HLD/diagrams to sibling .png files. Run from this directory with `npm run diagrams`.",
+  "scripts": {
+    "diagrams": "node render.js",
+    "diagrams:force": "node render.js --force",
+    "diagrams:lld": "node render.js --only LLD",
+    "diagrams:hld": "node render.js --only HLD"
+  },
+  "dependencies": {
+    "@excalidraw/excalidraw": "^0.17.0",
+    "puppeteer": "^22.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
