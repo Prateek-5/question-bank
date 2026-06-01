@@ -3,6 +3,8 @@
 > A senior-engineer-grade audit of which patterns/verticals are covered, which are gap-filling, and which are still pending.
 > Goal: **No vertical or pattern is unexplored. No surprises in the interview.**
 >
+> **Stateless handoff for new sessions:** [`CONTINUATION.md`](./CONTINUATION.md) — single source of truth for pending work, the five v2 templates, the mermaid theme convention, and copy-paste reference prompts to start any task.
+>
 > **See also:** [`CONTRIBUTING-v2.md`](./CONTRIBUTING-v2.md) for the repo conventions every new file follows.
 
 ---
