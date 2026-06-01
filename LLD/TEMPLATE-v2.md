@@ -41,7 +41,8 @@ Uses `theme: neutral` + an explicit soft-pastel palette. Three non-obvious bits 
 
 1. **`edgeLabelBackground` / `labelBackground`** give every flowchart arrow label a **white card backdrop**. Without this, arrow labels float on the page bg — invisible in dark-mode viewers.
 2. **`themeCSS` halo for sequence message labels.** Mermaid sequence-diagram message labels (like "1: park(car)" floating above an arrow) have no built-in `messageBackgroundColor` variable. We apply `paint-order: stroke fill` with a 5px white stroke, rendering a white halo around each glyph — visually equivalent to a white card behind the text. Works in VS Code; **GitHub strips themeCSS**, in which case labels fall back to plain slate text. Best-effort.
-3. **`look: handDrawn` is INTENTIONALLY OMITTED** — caused dark-bg rendering on multiple viewers.
+3. **`lineColor` / `signalColor` = `#1976d2`** (Material blue-700), not slate-gray. Slate `#495057` blends into GitHub's dark page background. `#1976d2` clears WCAG-AA 3:1 contrast on both white (4.1:1) AND GitHub dark (3.2:1), so arrows stay visible in either viewer mode. Coordinates with the deep navy box borders.
+4. **`look: handDrawn` is INTENTIONALLY OMITTED** — caused dark-bg rendering on multiple viewers.
 
 ````markdown
 ```mermaid
@@ -59,7 +60,7 @@ config:
     tertiaryColor: '#d1e7dd'
     tertiaryTextColor: '#1f2937'
     tertiaryBorderColor: '#0a3622'
-    lineColor: '#495057'
+    lineColor: '#1976d2'
     textColor: '#1f2937'
     noteBkgColor: '#fff3cd'
     noteTextColor: '#1f2937'
@@ -67,7 +68,7 @@ config:
     actorBkg: '#cfe2ff'
     actorBorder: '#084298'
     actorTextColor: '#1f2937'
-    signalColor: '#495057'
+    signalColor: '#1976d2'
     signalTextColor: '#1f2937'
     labelBoxBkgColor: '#ffffff'
     labelBoxBorderColor: '#d3d3d3'
