@@ -29,63 +29,69 @@ A v2 LLD file MAY NOT assume, without an inline refresher:
 
 ---
 
-## Diagram convention — excalidraw sources + auto-rendered inline PNGs
+## Diagram convention — inline mermaid with `look: handDrawn` + explicit light theme
 
-Diagrams use a **two-file-per-diagram model with strict directory separation**:
+All LLD diagrams are **inline mermaid code blocks** in the walkthrough `.md` file. No external sources (no `.excalidraw`, no PNG, no SVG, no ASCII). Mermaid renders natively in GitHub, VS Code, and most markdown viewers — zero rendering step, zero binary artifacts.
 
-1. **Source:** `.excalidraw` JSON file, edited visually in [excalidraw.com](https://excalidraw.com). Lives under `LLD/diagrams/<Bucket>/<Question>/<name>.excalidraw`.
-2. **Output:** `.png` rendered by the repo's render engine (`tools/render-diagrams/`). Sits next to the `.excalidraw` source. The walkthrough `.md` references it via relative `![]()`.
+**Why mermaid (and not bespoke excalidraw renders).** Earlier iterations of this template tried excalidraw JSON sources + a programmatic render pipeline. Two losing battles surfaced: (a) programmatic layout can't match human visual taste; (b) rendered snapshots stale relative to their sources. Mermaid trades artistic polish for **always-correct + always-inline + zero-workflow** rendering. The right tradeoff.
 
-**Walkthrough `.md` files (in `LLD/Topics/<Bucket>/`) contain ONLY narrative + image references — no `.excalidraw` clutter.** The diagrams directory is parallel to the topics directory:
+**Canonical theme block — copy verbatim at the top of every mermaid diagram.** Forces a light background + dark text + colored boxes with readable contrast, overriding viewer dark-mode preferences:
 
+````markdown
+```mermaid
+---
+config:
+  look: handDrawn
+  theme: base
+  themeVariables:
+    background: '#ffffff'
+    primaryColor: '#e7f5ff'
+    primaryTextColor: '#1e1e1e'
+    primaryBorderColor: '#1971c2'
+    lineColor: '#1e1e1e'
+    secondaryColor: '#fff3bf'
+    secondaryTextColor: '#1e1e1e'
+    secondaryBorderColor: '#e67700'
+    tertiaryColor: '#d3f9d8'
+    tertiaryTextColor: '#1e1e1e'
+    tertiaryBorderColor: '#2f9e44'
+    noteBkgColor: '#fff9db'
+    noteTextColor: '#1e1e1e'
+    noteBorderColor: '#fab005'
+    actorBkg: '#e7f5ff'
+    actorBorder: '#1971c2'
+    actorTextColor: '#1e1e1e'
+    signalColor: '#1e1e1e'
+    signalTextColor: '#1e1e1e'
+    classText: '#1e1e1e'
+    fontFamily: 'Segoe UI, Helvetica, Arial, sans-serif'
+---
+classDiagram
+  ...
 ```
-LLD/
-├── Topics/<Bucket>/<Question>.md                 ← narrative + image refs only
-└── diagrams/<Bucket>/<Question>/
-    ├── <name>.excalidraw                         ← editable source
-    └── <name>.png                                ← engine-rendered output
-```
+````
 
-**Referenced from the walkthrough via relative path:**
+**Color semantics** (from `themeVariables`):
 
-```markdown
-![<descriptive alt text>](../../diagrams/<Bucket>/<Question>/<name>.png)
+| Mermaid var | Hex | Role | Use for |
+|---|---|---|---|
+| `primaryColor` | `#e7f5ff` (light blue) | Concrete domain class | Ticket, Spot, ParkingLot |
+| `secondaryColor` | `#fff3bf` (yellow) | Interface / abstract | `<<interface>>` boxes |
+| `tertiaryColor` | `#d3f9d8` (light green) | Concrete impl / leaf | ActiveState, FlatRate |
+| `noteBkgColor` | `#fff9db` (cream) | Note / annotation | `Note over X: …` |
 
-*Editable source: [`../../diagrams/<Bucket>/<Question>/<name>.excalidraw`](../../diagrams/<Bucket>/<Question>/<name>.excalidraw)*
+**Recommended mermaid diagram types per LLD section:**
 
-**Tour of this diagram.**
-1. ...
-2. ...
-```
+| Section | Mermaid type | What it shows |
+|---|---|---|
+| §7 Naive | `classDiagram` | Bare classes, no patterns; mark ⚠ pain points in field/method labels |
+| §9–§11 Pivots | `classDiagram` | After-state showing the slice that changed (the new interface + impls) |
+| §12 Final | `classDiagram` | Decomposed into 12.1/12.2/12.3 sub-diagrams (don't draw one huge diagram) |
+| §14 Sequences | `sequenceDiagram` | Numbered messages: `1: park(car)`, `2: assign(spot)`, … |
 
-**Workflow:**
+**Naming convention** when prose refers to a diagram: name it by what it depicts ("the iteration-1 diagram", "the §12.3 lifecycle diagram"), not by section number alone (which rots if sections renumber).
 
-1. Edit the `.excalidraw` source in excalidraw.com (`File → Open` from the path).
-2. `File → Save to disk` — overwrite the file.
-3. From `tools/render-diagrams/`, run `npm run diagrams` — regenerates every `.png` whose `.excalidraw` source is newer (incremental by mtime). First time: `npm install` once.
-4. Commit both files.
-
-See [`../tools/render-diagrams/README.md`](../tools/render-diagrams/README.md) for engine details.
-
-**Why this architecture:**
-
-| Concern | How it's addressed |
-|---|---|
-| Walkthrough `.md` files stay readable | Only narrative + image refs. No source clutter. |
-| Excalidraw's hand-drawn aesthetic preserved | PNG is rendered by `@excalidraw/excalidraw` itself, so the look matches the editor exactly. |
-| Diagrams render inline in markdown viewers | Standard `![]()` image syntax — works everywhere. |
-| Sources stay editable | `.excalidraw` JSON, opens in excalidraw.com. |
-| Programmatic refresh | `npm run diagrams` regenerates everything. |
-| Diagram directory uncluttered | Per-question subdirectory under `LLD/diagrams/`. |
-
-**Naming convention for `.excalidraw` files:** name by what the diagram DEPICTS, not which section it appears in.
-
-✅ `iteration-1.excalidraw`, `pivot-1-pricing-strategy.excalidraw`, `final-inventory.excalidraw`, `sequence-park.excalidraw`
-❌ `section-7.excalidraw`, `diagram.excalidraw`
-
-If §7 ever gets renumbered, the descriptive filename doesn't rot.
-
-**See:** [`Topics/Object_Oriented_Design/Parking_Lot.md`](./Topics/Object_Oriented_Design/Parking_Lot.md) for the canonical exemplar with 8 diagrams across 5 sections (iteration-1, pivot-1, pivot-2, final-{inventory,policy,lifecycle}, sequence-park, sequence-pay-exit).
+**See:** [`Topics/Object_Oriented_Design/Parking_Lot.md`](./Topics/Object_Oriented_Design/Parking_Lot.md) for the canonical exemplar with 8 mermaid diagrams across 5 sections.
 
 **Cross-referencing.** Add an HTML anchor to every figure-bearing section so prose elsewhere can link to it:
 

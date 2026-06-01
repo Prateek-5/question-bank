@@ -31,6 +31,43 @@ Paced for a candidate seeing the URL shortener question for the first time. Read
 
 ---
 
+## 0. Concepts you'll meet in this walkthrough
+
+> **Read this first if you're seeing HLD for the first time.** Below is every piece of jargon used later in this file, with a one-line definition. Don't try to memorize them — skim, recognize, and come back here whenever a term re-appears. Each is also re-explained INLINE the first time it shows up.
+
+| Term | One-line meaning | Where it appears |
+|---|---|---|
+| **HTTP 302 redirect** | A server response that says "the thing you asked for lives at this other URL — go there." The browser follows it automatically. | §1, §10.A |
+| **QPS** | "Queries per second" — the number of requests per second the system must handle. Used for sizing. | §5, §6 |
+| **p50 / p95 / p99 latency** | If you sort all request response-times, p50 = median, p95 = 95th percentile, p99 = the slowest 1% threshold. Tail latency matters because tails are what users notice. | §5 |
+| **Read:write ratio** | Reads vs writes. 100:1 means 100 reads per write — drives every caching decision in this design. | §1, §5, §7 |
+| **CDN (Content Delivery Network)** | A global network of cache servers (PoPs = "points of presence") sitting close to users. Caches responses at the network edge so users get them in 5-30ms instead of 100-300ms. Examples: Cloudflare, Fastly, CloudFront. | §10.C, §11.1 |
+| **Anycast DNS** | A DNS scheme where the SAME IP address is announced from many physical locations; the network routes you to the closest one. | §10.C, §11.1 |
+| **Load Balancer (LB) — L4 vs L7** | A box that distributes incoming requests across many backend servers. L4 = "transport layer" (TCP only, fast but dumb). L7 = "application layer" (knows HTTP, can route by URL path). | §10.C, §11.2 |
+| **Stateless service** | An app server that holds no in-memory data tied to a specific user/session. Any instance can serve any request → trivial horizontal scaling. | §10.C, §11.3 |
+| **Redis** | An in-memory key-value store. ~100K ops/sec per shard. Used as a cache (data evicted under memory pressure). | §10.B, §11.4 |
+| **Cache hit / miss / cache-aside** | Hit = data was in the cache. Miss = we have to go to the DB. Cache-aside = "look in cache first, fall back to DB on miss, populate the cache after the DB hit." | §10.B, §12.C |
+| **Cache stampede / thundering herd** | When the cache goes cold (e.g., deploy), many API instances all hit the DB simultaneously for the same key → DB melts. | §10.B, §13 |
+| **Hot key** | One specific key in a cache/DB that gets disproportionate traffic (e.g., a viral link). Can saturate a single Redis shard or DB partition. | §13 |
+| **Consistent hashing** | A way to map keys to N nodes such that adding/removing a node only reshuffles ~1/N of keys. Used by Redis Cluster and many DBs to add capacity without re-balancing everything. | §11.4 |
+| **Base62 encoding** | Encode a number using the alphabet `[0-9A-Za-z]` (62 characters). A 7-char base62 string represents up to 62⁷ ≈ 3.5 trillion values, all URL-safe. | §11.5 |
+| **Zookeeper (or any distributed coordinator)** | A small cluster (3-5 nodes) that gives you reliable distributed counters, locks, leader election. Slow per operation; we use it sparingly. | §11.5 |
+| **Kafka** | A distributed log / message queue. Producers write events; consumers read them later, possibly hours later. Decouples write paths from downstream processing. | §10.C, §11.8 |
+| **Fire-and-forget write** | The API writes to Kafka without waiting for an ack. If Kafka is slow or down, the write is dropped. Used when losing the occasional message is OK (e.g., click analytics). | §11.3, §12.C |
+| **At-least-once vs exactly-once delivery** | Most queues (incl. Kafka) deliver at-least-once: the same message may arrive 2+ times. Consumers must be **idempotent** (de-duping by id) for exactly-once SEMANTICS. | §11.9 |
+| **CDC (Change Data Capture)** | Tailing the database's write-ahead log to emit a stream of "row X changed" events. Used to feed search indexes, blocklist re-scans, audit logs. | §10.C, §11.8 |
+| **WAL (Write-Ahead Log)** | Database's append-only log of every change, used for crash recovery AND as the source for CDC. | §11.8 |
+| **Postgres vs Cassandra** | Postgres = single-leader SQL, strong consistency, transactions, easier to operate but harder to scale past one writer. Cassandra = multi-leader NoSQL, eventual consistency, linear scalability, native multi-region. Pick by your write throughput + consistency needs. | §11.7 |
+| **LWT (Lightweight Transactions, Cassandra)** | Cassandra's `INSERT ... IF NOT EXISTS` — slow but rare; used for unique-alias creation. | §11.7 |
+| **Replication / RPO / RTO** | Replication = copy DB to another node. RPO = Recovery Point Objective (how much data you can afford to lose, in time). RTO = Recovery Time Objective (how long the system can be down). | §11.7, §14 |
+| **Sharding** | Splitting a table across multiple DB nodes by some key (hash or range). Each node owns a fraction; queries are routed by the key. | §11.7, §15 |
+| **TTL (Time To Live)** | A duration after which a record is auto-deleted. Used here both for cache entries (so deletes propagate) and for the URL records themselves. | §11.4, §11.10 |
+| **Safe Browsing** | Google's API that tells you whether a URL is on a malware/phishing list. ~30ms lookup. | §11.6 |
+
+If you want a deeper refresher on any of these, the **Distributed Systems General** bucket in this repo will eventually have dedicated walkthroughs. For now, each term gets a 30-second mini-refresher inline the first time it appears below.
+
+---
+
 ## 1. Problem statement + clarifying questions
 
 **Prompt (typical phrasing):** "Design a URL shortener like bit.ly: take a long URL, return a short alias, and redirect users from the short alias to the long URL. Handle billions of redirects per day."
@@ -240,7 +277,29 @@ Written async via Kafka → batch consumer → time-series DB (Cassandra or Clic
 ---
 config:
   look: handDrawn
-  theme: default
+  theme: base
+  themeVariables:
+    background: '#ffffff'
+    primaryColor: '#e7f5ff'
+    primaryTextColor: '#1e1e1e'
+    primaryBorderColor: '#1971c2'
+    lineColor: '#1e1e1e'
+    secondaryColor: '#fff3bf'
+    secondaryTextColor: '#1e1e1e'
+    secondaryBorderColor: '#e67700'
+    tertiaryColor: '#d3f9d8'
+    tertiaryTextColor: '#1e1e1e'
+    tertiaryBorderColor: '#2f9e44'
+    noteBkgColor: '#fff9db'
+    noteTextColor: '#1e1e1e'
+    noteBorderColor: '#fab005'
+    actorBkg: '#e7f5ff'
+    actorBorder: '#1971c2'
+    actorTextColor: '#1e1e1e'
+    signalColor: '#1e1e1e'
+    signalTextColor: '#1e1e1e'
+    classText: '#1e1e1e'
+    fontFamily: 'Segoe UI, Helvetica, Arial, sans-serif'
 ---
 erDiagram
   url_mappings {
@@ -281,7 +340,29 @@ What does the absolute simplest version look like?
 ---
 config:
   look: handDrawn
-  theme: default
+  theme: base
+  themeVariables:
+    background: '#ffffff'
+    primaryColor: '#e7f5ff'
+    primaryTextColor: '#1e1e1e'
+    primaryBorderColor: '#1971c2'
+    lineColor: '#1e1e1e'
+    secondaryColor: '#fff3bf'
+    secondaryTextColor: '#1e1e1e'
+    secondaryBorderColor: '#e67700'
+    tertiaryColor: '#d3f9d8'
+    tertiaryTextColor: '#1e1e1e'
+    tertiaryBorderColor: '#2f9e44'
+    noteBkgColor: '#fff9db'
+    noteTextColor: '#1e1e1e'
+    noteBorderColor: '#fab005'
+    actorBkg: '#e7f5ff'
+    actorBorder: '#1971c2'
+    actorTextColor: '#1e1e1e'
+    signalColor: '#1e1e1e'
+    signalTextColor: '#1e1e1e'
+    classText: '#1e1e1e'
+    fontFamily: 'Segoe UI, Helvetica, Arial, sans-serif'
 ---
 flowchart TB
   Client["Client<br/>(browser)"]
@@ -311,7 +392,29 @@ The answer comes from observation: short codes follow a power-law distribution �
 ---
 config:
   look: handDrawn
-  theme: default
+  theme: base
+  themeVariables:
+    background: '#ffffff'
+    primaryColor: '#e7f5ff'
+    primaryTextColor: '#1e1e1e'
+    primaryBorderColor: '#1971c2'
+    lineColor: '#1e1e1e'
+    secondaryColor: '#fff3bf'
+    secondaryTextColor: '#1e1e1e'
+    secondaryBorderColor: '#e67700'
+    tertiaryColor: '#d3f9d8'
+    tertiaryTextColor: '#1e1e1e'
+    tertiaryBorderColor: '#2f9e44'
+    noteBkgColor: '#fff9db'
+    noteTextColor: '#1e1e1e'
+    noteBorderColor: '#fab005'
+    actorBkg: '#e7f5ff'
+    actorBorder: '#1971c2'
+    actorTextColor: '#1e1e1e'
+    signalColor: '#1e1e1e'
+    signalTextColor: '#1e1e1e'
+    classText: '#1e1e1e'
+    fontFamily: 'Segoe UI, Helvetica, Arial, sans-serif'
 ---
 flowchart TB
   Client[Client]
@@ -337,15 +440,205 @@ flowchart TB
 
 **Pivot question:** how do we split the load, distribute the hot keys, and decouple analytics? Three additions, in parallel: CDN (absolute hot keys), LB + replicas (horizontal scale), Kafka (async).
 
-### 10.C — Iteration 3: the final architecture
+### 10.C — Iteration 3: the final architecture (built in THREE sub-steps so the jump isn't huge)
 
-Adding the remaining components in one step (each is a familiar primitive — no derivation needed beyond "this is where it goes"):
+Iteration 2 left us with three problems: single-API-instance bottleneck, no edge caching for hot keys, and synchronous analytics blocking the redirect. Rather than draw the full 12-box system in one go (which is a lot to absorb), we'll add components in **three named sub-steps**. Each fixes one concrete problem.
+
+#### 10.C.1 — Horizontal scaling: Load Balancer + stateless API fleet
+
+**Problem to fix:** one API instance saturates around 3K RPS. We need MANY API instances behind a router.
+
+> **Mini-refresher: stateless service.**
+> An app server holding **no per-user / per-session data in memory**. Every request is independent. Consequence: ANY instance can serve ANY request — so you can add more boxes to handle more load without re-routing users. The opposite (stateful) requires sticky sessions and is hard to scale.
+
+> **Mini-refresher: Load Balancer (L4 vs L7).**
+> A box sitting in front of the API fleet that distributes incoming requests across instances. **L4** ("transport layer") only sees TCP/IP — fast but blind to HTTP. **L7** ("application layer") understands HTTP — can route by URL path, rate-limit per route, return 503 if all backends are down. We use L7 here because we want to rate-limit `/shorten` more strictly than `/:code`.
 
 ```mermaid
 ---
 config:
   look: handDrawn
-  theme: default
+  theme: base
+  themeVariables:
+    background: '#ffffff'
+    primaryColor: '#e7f5ff'
+    primaryTextColor: '#1e1e1e'
+    primaryBorderColor: '#1971c2'
+    lineColor: '#1e1e1e'
+    secondaryColor: '#fff3bf'
+    secondaryTextColor: '#1e1e1e'
+    secondaryBorderColor: '#e67700'
+    tertiaryColor: '#d3f9d8'
+    tertiaryTextColor: '#1e1e1e'
+    tertiaryBorderColor: '#2f9e44'
+    actorBkg: '#e7f5ff'
+    actorBorder: '#1971c2'
+    actorTextColor: '#1e1e1e'
+    classText: '#1e1e1e'
+    fontFamily: 'Segoe UI, Helvetica, Arial, sans-serif'
+---
+flowchart TB
+  Client[Client]
+  LB["Load Balancer L7<br/>(per-region, health-checked)"]
+  subgraph fleet["Stateless API fleet (autoscale)"]
+    A1[API 1]
+    A2[API 2]
+    A3[API N]
+  end
+  Redis[("Redis Cluster")]
+  DB[("Primary DB")]
+  Client --> LB
+  LB --> A1
+  LB --> A2
+  LB --> A3
+  A2 --> Redis
+  A2 --> DB
+```
+
+**What this fixes.** API now scales horizontally — add more instances under the LB until you hit the next bottleneck (DB writes, or Redis CPU). New ceiling: ~30K reads/sec is no problem at all, because each API instance is doing little CPU work (mostly forwarding Redis responses).
+
+**What's still wrong.**
+1. Every request still travels to your origin (region). For users far from your data center, network latency dominates (think: 200ms+ from Sydney to a us-east-1 origin).
+2. A truly viral link still hits ONE Redis shard hard.
+3. Synchronous analytics still blocks the redirect.
+
+→ Fix latency-from-distance next (CDN + DNS); then fix sync analytics (Kafka).
+
+#### 10.C.2 — Edge layer: CDN + Anycast DNS (absorbs popular codes at the network edge)
+
+**Problem to fix:** the redirect for `/abc1234` shouldn't have to travel to your origin region if the answer is "always go to `https://example.com/article`."
+
+> **Mini-refresher: CDN (Content Delivery Network).**
+> A global network of cache servers (called **PoPs**, "points of presence") sitting close to users. The CDN can cache an HTTP response near you so the next user 100ms away gets it in 5-10ms. For URL shortener: we cache the 302 response for popular codes at the CDN. Commercial CDNs: Cloudflare, Fastly, AWS CloudFront, Google Cloud CDN.
+
+> **Mini-refresher: Anycast DNS.**
+> A DNS scheme where the SAME IP address is announced from many physical locations (e.g., `1.1.1.1` from datacenters on six continents). The internet's routing layer (BGP) picks the path with fewest network hops, sending each user to their nearest PoP automatically — no application logic involved.
+
+```mermaid
+---
+config:
+  look: handDrawn
+  theme: base
+  themeVariables:
+    background: '#ffffff'
+    primaryColor: '#e7f5ff'
+    primaryTextColor: '#1e1e1e'
+    primaryBorderColor: '#1971c2'
+    lineColor: '#1e1e1e'
+    secondaryColor: '#fff3bf'
+    secondaryTextColor: '#1e1e1e'
+    secondaryBorderColor: '#e67700'
+    tertiaryColor: '#d3f9d8'
+    tertiaryTextColor: '#1e1e1e'
+    tertiaryBorderColor: '#2f9e44'
+    actorBkg: '#e7f5ff'
+    actorBorder: '#1971c2'
+    actorTextColor: '#1e1e1e'
+    classText: '#1e1e1e'
+    fontFamily: 'Segoe UI, Helvetica, Arial, sans-serif'
+---
+flowchart TB
+  Client[Client]
+  DNS[Anycast DNS]
+  CDN["CDN / Edge<br/>(302 cached for popular codes)"]
+  LB[Load Balancer]
+  subgraph fleet["API fleet"]
+    A1[API 1]
+    A2[API 2]
+  end
+  Redis[(Redis)]
+  DB[(DB)]
+  Client -->|HTTPS| CDN
+  DNS -.->|points client to nearest PoP| CDN
+  CDN -->|cache miss → origin| LB
+  LB --> A1
+  LB --> A2
+  A2 --> Redis
+  A2 --> DB
+```
+
+**What this fixes.** Top ~5% of codes by traffic (the ones that dominate by Zipf's-law distribution) are served entirely from the CDN edge — ~5ms latency, never touch the origin. CDN absorbs hot keys at planet scale.
+
+**What's still wrong.**
+1. Synchronous click analytics still blocks the redirect (we want to track every click, but blocking on Kafka per request is bad).
+2. Creating a new short code still needs ID generation (without collisions) + spam/malware validation. Where do those happen?
+
+→ Fix both via Kafka (async) + Counter + Blocklist (sync but fast).
+
+#### 10.C.3 — Final piece: async write path (Kafka + 3 consumers) + create-flow side services (Counter, Blocklist)
+
+**Two problems, three additions:**
+
+> **Mini-refresher: Kafka.**
+> A distributed log + message queue. Producers append events; consumers read them whenever they want (seconds, minutes, or hours later). Decouples writers from readers. We use it for: (a) click events fired by the redirect path — those don't block the user; (b) DB Change-Data-Capture (CDC) events — downstream services that don't need to be in the write path subscribe here.
+
+> **Mini-refresher: fire-and-forget write.**
+> The producer (here: our API) writes the message and immediately moves on — it doesn't wait for the broker to confirm receipt. If the broker is slow or down, the message is silently dropped. Used when missing a few messages is OK (click counting tolerates dropping 0.1% of events).
+
+> **Mini-refresher: CDC (Change Data Capture).**
+> Tailing the database's write-ahead log (WAL) to emit "row X was inserted/updated/deleted" events to Kafka. Downstream services (search index updater, anti-abuse re-scanner, audit log) consume those events instead of writing to multiple destinations from the API.
+
+> **Mini-refresher: Counter Allocator (Zookeeper) for ID generation.**
+> When creating a new short code, each API instance grabs a **block of 1000 unused IDs** from a central counter (Zookeeper). The instance then assigns IDs from that block in-memory. Result: ID generation is ~99.9% in-memory (no Zookeeper RTT on the hot path); Zookeeper is touched only every 1000th create. No collisions ever.
+
+Adding all three sub-systems gets us to the final architecture:
+
+```mermaid
+---
+config:
+  look: handDrawn
+  theme: base
+  themeVariables:
+    background: '#ffffff'
+    primaryColor: '#e7f5ff'
+    primaryTextColor: '#1e1e1e'
+    primaryBorderColor: '#1971c2'
+    lineColor: '#1e1e1e'
+    secondaryColor: '#fff3bf'
+    secondaryTextColor: '#1e1e1e'
+    secondaryBorderColor: '#e67700'
+    tertiaryColor: '#d3f9d8'
+    tertiaryTextColor: '#1e1e1e'
+    tertiaryBorderColor: '#2f9e44'
+    noteBkgColor: '#fff9db'
+    noteTextColor: '#1e1e1e'
+    noteBorderColor: '#fab005'
+    actorBkg: '#e7f5ff'
+    actorBorder: '#1971c2'
+    actorTextColor: '#1e1e1e'
+    signalColor: '#1e1e1e'
+    signalTextColor: '#1e1e1e'
+    classText: '#1e1e1e'
+    fontFamily: 'Segoe UI, Helvetica, Arial, sans-serif'
+---
+
+```mermaid
+---
+config:
+  look: handDrawn
+  theme: base
+  themeVariables:
+    background: '#ffffff'
+    primaryColor: '#e7f5ff'
+    primaryTextColor: '#1e1e1e'
+    primaryBorderColor: '#1971c2'
+    lineColor: '#1e1e1e'
+    secondaryColor: '#fff3bf'
+    secondaryTextColor: '#1e1e1e'
+    secondaryBorderColor: '#e67700'
+    tertiaryColor: '#d3f9d8'
+    tertiaryTextColor: '#1e1e1e'
+    tertiaryBorderColor: '#2f9e44'
+    noteBkgColor: '#fff9db'
+    noteTextColor: '#1e1e1e'
+    noteBorderColor: '#fab005'
+    actorBkg: '#e7f5ff'
+    actorBorder: '#1971c2'
+    actorTextColor: '#1e1e1e'
+    signalColor: '#1e1e1e'
+    signalTextColor: '#1e1e1e'
+    classText: '#1e1e1e'
+    fontFamily: 'Segoe UI, Helvetica, Arial, sans-serif'
 ---
 flowchart TB
   Client[Client browser]
@@ -534,7 +827,29 @@ Three flows worth tracing explicitly. They span the full latency budget — from
 ---
 config:
   look: handDrawn
-  theme: default
+  theme: base
+  themeVariables:
+    background: '#ffffff'
+    primaryColor: '#e7f5ff'
+    primaryTextColor: '#1e1e1e'
+    primaryBorderColor: '#1971c2'
+    lineColor: '#1e1e1e'
+    secondaryColor: '#fff3bf'
+    secondaryTextColor: '#1e1e1e'
+    secondaryBorderColor: '#e67700'
+    tertiaryColor: '#d3f9d8'
+    tertiaryTextColor: '#1e1e1e'
+    tertiaryBorderColor: '#2f9e44'
+    noteBkgColor: '#fff9db'
+    noteTextColor: '#1e1e1e'
+    noteBorderColor: '#fab005'
+    actorBkg: '#e7f5ff'
+    actorBorder: '#1971c2'
+    actorTextColor: '#1e1e1e'
+    signalColor: '#1e1e1e'
+    signalTextColor: '#1e1e1e'
+    classText: '#1e1e1e'
+    fontFamily: 'Segoe UI, Helvetica, Arial, sans-serif'
 ---
 sequenceDiagram
   actor User
@@ -566,7 +881,29 @@ sequenceDiagram
 ---
 config:
   look: handDrawn
-  theme: default
+  theme: base
+  themeVariables:
+    background: '#ffffff'
+    primaryColor: '#e7f5ff'
+    primaryTextColor: '#1e1e1e'
+    primaryBorderColor: '#1971c2'
+    lineColor: '#1e1e1e'
+    secondaryColor: '#fff3bf'
+    secondaryTextColor: '#1e1e1e'
+    secondaryBorderColor: '#e67700'
+    tertiaryColor: '#d3f9d8'
+    tertiaryTextColor: '#1e1e1e'
+    tertiaryBorderColor: '#2f9e44'
+    noteBkgColor: '#fff9db'
+    noteTextColor: '#1e1e1e'
+    noteBorderColor: '#fab005'
+    actorBkg: '#e7f5ff'
+    actorBorder: '#1971c2'
+    actorTextColor: '#1e1e1e'
+    signalColor: '#1e1e1e'
+    signalTextColor: '#1e1e1e'
+    classText: '#1e1e1e'
+    fontFamily: 'Segoe UI, Helvetica, Arial, sans-serif'
 ---
 sequenceDiagram
   actor User
@@ -587,7 +924,29 @@ sequenceDiagram
 ---
 config:
   look: handDrawn
-  theme: default
+  theme: base
+  themeVariables:
+    background: '#ffffff'
+    primaryColor: '#e7f5ff'
+    primaryTextColor: '#1e1e1e'
+    primaryBorderColor: '#1971c2'
+    lineColor: '#1e1e1e'
+    secondaryColor: '#fff3bf'
+    secondaryTextColor: '#1e1e1e'
+    secondaryBorderColor: '#e67700'
+    tertiaryColor: '#d3f9d8'
+    tertiaryTextColor: '#1e1e1e'
+    tertiaryBorderColor: '#2f9e44'
+    noteBkgColor: '#fff9db'
+    noteTextColor: '#1e1e1e'
+    noteBorderColor: '#fab005'
+    actorBkg: '#e7f5ff'
+    actorBorder: '#1971c2'
+    actorTextColor: '#1e1e1e'
+    signalColor: '#1e1e1e'
+    signalTextColor: '#1e1e1e'
+    classText: '#1e1e1e'
+    fontFamily: 'Segoe UI, Helvetica, Arial, sans-serif'
 ---
 sequenceDiagram
   actor User

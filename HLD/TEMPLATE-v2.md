@@ -113,7 +113,13 @@ Paced for a candidate seeing this design problem for the first time. Reading tim
 
 9. **Data model.** Tables/collections with columns, types, primary keys, and **access patterns**. Access patterns drive the choice of storage primitive — show how. ASCII table is fine; if the data model is graph-shaped, add a tiny diagram.
 
-10. **Architecture diagram + component overview.** **REQUIRED.** Both an excalidraw source file (sibling `.architecture.excalidraw`) AND an ASCII rendering inline. Show client → edge → service → cache → storage in 3 layers minimum. Annotate each arrow with the protocol (HTTP/gRPC/SQL/Redis/etc.).
+10. **Architecture — derived progressively in NAMED SUB-STEPS.** **REQUIRED.** The architecture is built up in **iterations** (§10.A → §10.B → §10.C → …), not asserted in one final diagram. Each iteration:
+    - Names ONE concrete problem from the previous iteration's "what's still wrong" list
+    - Adds **at most 4-5 new components** (more than that = split into sub-step 10.C.1 / 10.C.2 / etc.)
+    - Has its own small mermaid diagram showing the design AT THAT POINT
+    - Closes with: ✓ what this fixes · ⚠ what's still wrong · → pivot question into the next iteration
+    
+    The final iteration is the full architecture. A reader who sees only the final diagram with 12 boxes is overwhelmed; the same reader walking through 4 incremental diagrams arrives at 12 boxes calmly.
 
 11. **Component deep-dives.** For each box in the architecture diagram, a 2-4 paragraph deep-dive answering:
     - **What does it do?**
@@ -121,7 +127,7 @@ Paced for a candidate seeing this design problem for the first time. Reading tim
     - **What are the 2-3 design decisions you made for THIS component?**
     - **What's its failure mode?**
 
-12. **Key user flow — sequence diagram.** Pick the ONE flow that exercises the system most. (For URL shortener: redirect with cache miss + DB lookup + analytics fire-and-forget.) Sibling `.sequence.excalidraw` + ASCII fallback.
+12. **Key user flows — sequence diagrams.** Pick the 1-3 flows that exercise the system most. Best practice: cover the FAST path (cache hit) AND the SLOW path (full miss) — both are interesting; combining them in one diagram is too dense. Use inline mermaid `sequenceDiagram` blocks (see Rule 3 for diagram conventions).
 
 13. **Bottleneck analysis.** Required. Walk through the system and name where bottlenecks appear at 10x/100x scale:
     - **Read amplification:** N reads per logical request
@@ -145,6 +151,30 @@ Paced for a candidate seeing this design problem for the first time. Reading tim
     - **How to think aloud:** 5-7 beats of the candidate's monologue during the interview.
     - **Self-check:** the ONE archetype-recognition question for next time.
 
+### Required §0 — "Concepts you'll meet in this walkthrough"
+
+Place between the "How to use this file" map and §1. A table-style glossary listing every HLD-specific term used later, with a one-line definition and a column linking to the section where it first appears. This serves two purposes:
+
+- **Forewarning:** a first-time reader skims the glossary and recognizes ~30% of the terms, mentally flags the other ~70% as "things to look up if confused" — they no longer feel ambushed by jargon mid-walkthrough.
+- **Mini-glossary anchor:** when a term re-appears in §11, the reader can scroll up to §0 instead of re-reading the inline mini-refresher.
+
+**Format:**
+
+```markdown
+## 0. Concepts you'll meet in this walkthrough
+
+> Read this first if HLD is new. Each term gets a 30-second definition inline the first time it appears below.
+
+| Term | One-line meaning | Where it first appears |
+|---|---|---|
+| **HTTP 302 redirect** | Server response telling browser "go to this other URL." | §1 |
+| **CDN (Content Delivery Network)** | Global cache servers near users; absorbs popular responses at the edge. | §10.C.2 |
+| **Anycast DNS** | Same IP announced from many locations; network routes you to the nearest. | §10.C.2 |
+| (... and so on for ~20-30 terms ...) | | |
+```
+
+See [`Topics/URL_Shortener/URL_Shortener_Design.md`](./Topics/URL_Shortener/URL_Shortener_Design.md) §0 for the exemplar.
+
 ### Cross-references (bottom)
 
 ```markdown
@@ -153,10 +183,6 @@ Paced for a candidate seeing this design problem for the first time. Reading tim
 - **Parent topic manifest:** [`./EXTRACTED_QUESTIONS.md`](./EXTRACTED_QUESTIONS.md)
 - **Vertical overview:** [`../../LEARNING.md`](../../LEARNING.md)
 - **Related v2 walkthroughs:** [`<sibling>.md`]
-- **Diagrams:**
-  - [`./Problem_Name.architecture.excalidraw`](./Problem_Name.architecture.excalidraw)
-  - [`./Problem_Name.sequence.excalidraw`](./Problem_Name.sequence.excalidraw)
-  - [`./Problem_Name.data-model.excalidraw`](./Problem_Name.data-model.excalidraw) (if applicable)
 ```
 
 ---
@@ -175,9 +201,13 @@ Paced for a candidate seeing this design problem for the first time. Reading tim
 
 If the question doesn't supply numbers, **invent reasonable ones aloud** in §1 (clarifying questions) and proceed.
 
-### Rule 2 — Mini-refresher boxes for HLD concepts
+### Rule 2 — Mini-refresher boxes for HLD concepts (REQUIRED for first-time learners)
 
-Same convention as DSA/LLD. Embed inline at first appearance.
+HLD has more jargon than DSA or LLD, and most readers seeing a walkthrough for the first time have NOT internalized terms like CDN / Anycast DNS / consistent hashing / fire-and-forget / CDC / LWT. **The §0 "Concepts you'll meet" glossary lists every term up-front.** Mini-refreshers re-explain each at the point of FIRST INLINE USE so the reader doesn't have to scroll back to §0.
+
+A walkthrough that uses N HLD jargon terms should have N mini-refreshers. Skipping them is the #1 cause of "this walkthrough is overwhelming."
+
+**Format** (embed at first appearance, blockquote):
 
 ```markdown
 > **Mini-refresher: consistent hashing.**
@@ -207,58 +237,70 @@ Same convention as DSA/LLD. Embed inline at first appearance.
 - Hot key mitigation (key splitting / per-shard caches)
 - CRDTs
 
-### Rule 3 — Architecture diagrams: excalidraw sources + auto-rendered inline PNGs
+### Rule 3 — Diagrams: inline mermaid with `look: handDrawn` + explicit light theme
 
-Diagrams in HLD walkthroughs follow a **two-file-per-diagram model with strict directory separation** (same convention as LLD):
+All HLD diagrams are **inline mermaid code blocks** in the walkthrough `.md` file. No external sources (`.excalidraw`, PNG, SVG). No ASCII fallback. Mermaid renders natively in GitHub, VS Code, and most markdown viewers — zero rendering step, zero binary artifacts in the repo.
 
-1. **Source:** `.excalidraw` JSON file, edited in [excalidraw.com](https://excalidraw.com). Lives under `HLD/diagrams/<Bucket>/<Question>/<name>.excalidraw`.
-2. **Output:** `.png` rendered by `tools/render-diagrams/`. Sits next to the `.excalidraw`. The walkthrough `.md` references it via relative `![]()`.
+**Why mermaid (and not excalidraw renders).** Prior iterations of this template tried programmatically-generated excalidraw PNGs. That approach fights two losing battles: (a) programmatic layout can't match what human visual taste produces; (b) PNG snapshots get stale relative to their sources. Mermaid trades artistic polish for **always-correct + always-inline + zero-workflow** rendering. That's the right tradeoff here.
 
-**Walkthrough `.md` files (in `HLD/Topics/<Bucket>/`) contain ONLY narrative + image references** — no `.excalidraw` clutter, no mermaid blocks, no ASCII art for diagrams.
+**Canonical theme block** — copy verbatim at the top of every mermaid diagram. This forces a light background + dark text + colored boxes with readable contrast, overriding viewer dark-mode preferences:
 
-**Directory layout:**
-
+````markdown
+```mermaid
+---
+config:
+  look: handDrawn
+  theme: base
+  themeVariables:
+    background: '#ffffff'
+    primaryColor: '#e7f5ff'
+    primaryTextColor: '#1e1e1e'
+    primaryBorderColor: '#1971c2'
+    lineColor: '#1e1e1e'
+    secondaryColor: '#fff3bf'
+    secondaryTextColor: '#1e1e1e'
+    secondaryBorderColor: '#e67700'
+    tertiaryColor: '#d3f9d8'
+    tertiaryTextColor: '#1e1e1e'
+    tertiaryBorderColor: '#2f9e44'
+    noteBkgColor: '#fff9db'
+    noteTextColor: '#1e1e1e'
+    noteBorderColor: '#fab005'
+    actorBkg: '#e7f5ff'
+    actorBorder: '#1971c2'
+    actorTextColor: '#1e1e1e'
+    signalColor: '#1e1e1e'
+    signalTextColor: '#1e1e1e'
+    classText: '#1e1e1e'
+    fontFamily: 'Segoe UI, Helvetica, Arial, sans-serif'
+---
+flowchart TB
+  ...
 ```
-HLD/
-├── Topics/<Bucket>/<Question>.md                 ← narrative + image refs only
-└── diagrams/<Bucket>/<Question>/
-    ├── <name>.excalidraw                         ← editable source
-    └── <name>.png                                ← engine-rendered output
-```
+````
 
-**Referenced from the walkthrough via relative path:**
+**Color semantics** (from the themeVariables above):
 
-```markdown
-![<descriptive alt text>](../../diagrams/<Bucket>/<Question>/<name>.png)
+| Mermaid var | Hex | Role | Use for |
+|---|---|---|---|
+| `primaryColor` | `#e7f5ff` (light blue) | Concrete domain class / service | Client, API, Lot, Ticket |
+| `secondaryColor` | `#fff3bf` (yellow) | Interface / abstract / coordinator | Mermaid interfaces, side-services |
+| `tertiaryColor` | `#d3f9d8` (light green) | Concrete impl / leaf / consumer | FlatRate, Active state, Analytics |
+| `noteBkgColor` | `#fff9db` (cream) | Note / annotation / pivot question | `Note over X,Y: ...` |
 
-*Editable source: [`../../diagrams/<Bucket>/<Question>/<name>.excalidraw`](../../diagrams/<Bucket>/<Question>/<name>.excalidraw)*
+**Recommended diagrams per HLD walkthrough:**
 
-**Reader's tour.**
-1. ...
-2. ...
-```
-
-**Recommended diagrams per HLD walkthrough** (mirrors the LLD-style progressive arc):
-
-| Diagram | When | Purpose |
+| Diagram | When | Mermaid type |
 |---|---|---|
-| `data-model.excalidraw` | §9 | Tables + columns + access patterns |
-| `iteration-1-naive.excalidraw` | §10.A | The simplest possible design + capacity check showing it breaks |
-| `iteration-2-with-cache.excalidraw` | §10.B | Add the smallest fix; show it still breaks at hot keys / cross-region / cold start |
-| `final-architecture.excalidraw` | §10.C | Final composite system |
-| `sequence-<flow1>.excalidraw` | §12.A | Create-path flow |
-| `sequence-<flow2>-hit.excalidraw` | §12.B | Happy-path (cache hit, fastest) |
-| `sequence-<flow2>-miss.excalidraw` | §12.C | Worst-case path (full miss, longest latency) |
+| Data model | §9 | `erDiagram` |
+| Iteration 1 — naive | §10.A | `flowchart TB` (3-4 components) |
+| Iteration 2 — added cache | §10.B | `flowchart TB` (4-5 components) |
+| Iteration 3 sub-steps (10.C.1, 10.C.2, …) | §10.C | `flowchart TB` (incremental — see incrementality rule in §10 above) |
+| Sequence — fast path (cache hit) | §12.B | `sequenceDiagram` |
+| Sequence — slow path (full miss) | §12.C | `sequenceDiagram` |
+| Sequence — create flow | §12.A | `sequenceDiagram` |
 
-**Workflow:**
-1. Edit the `.excalidraw` source in excalidraw.com (`File → Open` from the path).
-2. `File → Save to disk` — overwrite the file.
-3. From `tools/render-diagrams/`, run `npm run diagrams` — incremental re-render.
-4. Commit both files.
-
-See [`../tools/render-diagrams/README.md`](../tools/render-diagrams/README.md) for engine details.
-
-**See:** [`Topics/URL_Shortener/URL_Shortener_Design.md`](./Topics/URL_Shortener/URL_Shortener_Design.md) for the canonical exemplar with 7 diagrams across 4 sections (§9 data-model, §10.A/B/C three architecture iterations, §12.A/B/C three sequence flows).
+**See:** [`Topics/URL_Shortener/URL_Shortener_Design.md`](./Topics/URL_Shortener/URL_Shortener_Design.md) for the canonical exemplar with 9 mermaid diagrams across 5 sections.
 
 ### Rule 4 — Capacity estimation is REQUIRED
 

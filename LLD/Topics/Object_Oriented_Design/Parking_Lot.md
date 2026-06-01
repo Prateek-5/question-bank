@@ -141,7 +141,29 @@ Let's write the simplest thing that could possibly work. No design patterns — 
 ---
 config:
   look: handDrawn
-  theme: default
+  theme: base
+  themeVariables:
+    background: '#ffffff'
+    primaryColor: '#e7f5ff'
+    primaryTextColor: '#1e1e1e'
+    primaryBorderColor: '#1971c2'
+    lineColor: '#1e1e1e'
+    secondaryColor: '#fff3bf'
+    secondaryTextColor: '#1e1e1e'
+    secondaryBorderColor: '#e67700'
+    tertiaryColor: '#d3f9d8'
+    tertiaryTextColor: '#1e1e1e'
+    tertiaryBorderColor: '#2f9e44'
+    noteBkgColor: '#fff9db'
+    noteTextColor: '#1e1e1e'
+    noteBorderColor: '#fab005'
+    actorBkg: '#e7f5ff'
+    actorBorder: '#1971c2'
+    actorTextColor: '#1e1e1e'
+    signalColor: '#1e1e1e'
+    signalTextColor: '#1e1e1e'
+    classText: '#1e1e1e'
+    fontFamily: 'Segoe UI, Helvetica, Arial, sans-serif'
 ---
 classDiagram
   direction TB
@@ -431,7 +453,29 @@ class Ticket {
 ---
 config:
   look: handDrawn
-  theme: default
+  theme: base
+  themeVariables:
+    background: '#ffffff'
+    primaryColor: '#e7f5ff'
+    primaryTextColor: '#1e1e1e'
+    primaryBorderColor: '#1971c2'
+    lineColor: '#1e1e1e'
+    secondaryColor: '#fff3bf'
+    secondaryTextColor: '#1e1e1e'
+    secondaryBorderColor: '#e67700'
+    tertiaryColor: '#d3f9d8'
+    tertiaryTextColor: '#1e1e1e'
+    tertiaryBorderColor: '#2f9e44'
+    noteBkgColor: '#fff9db'
+    noteTextColor: '#1e1e1e'
+    noteBorderColor: '#fab005'
+    actorBkg: '#e7f5ff'
+    actorBorder: '#1971c2'
+    actorTextColor: '#1e1e1e'
+    signalColor: '#1e1e1e'
+    signalTextColor: '#1e1e1e'
+    classText: '#1e1e1e'
+    fontFamily: 'Segoe UI, Helvetica, Arial, sans-serif'
 ---
 classDiagram
   direction TB
@@ -572,7 +616,29 @@ inline void PaidState::exit(Ticket& t) {
 ---
 config:
   look: handDrawn
-  theme: default
+  theme: base
+  themeVariables:
+    background: '#ffffff'
+    primaryColor: '#e7f5ff'
+    primaryTextColor: '#1e1e1e'
+    primaryBorderColor: '#1971c2'
+    lineColor: '#1e1e1e'
+    secondaryColor: '#fff3bf'
+    secondaryTextColor: '#1e1e1e'
+    secondaryBorderColor: '#e67700'
+    tertiaryColor: '#d3f9d8'
+    tertiaryTextColor: '#1e1e1e'
+    tertiaryBorderColor: '#2f9e44'
+    noteBkgColor: '#fff9db'
+    noteTextColor: '#1e1e1e'
+    noteBorderColor: '#fab005'
+    actorBkg: '#e7f5ff'
+    actorBorder: '#1971c2'
+    actorTextColor: '#1e1e1e'
+    signalColor: '#1e1e1e'
+    signalTextColor: '#1e1e1e'
+    classText: '#1e1e1e'
+    fontFamily: 'Segoe UI, Helvetica, Arial, sans-serif'
 ---
 classDiagram
   direction TB
@@ -710,7 +776,29 @@ Showing the entire final design in one diagram becomes a wall of boxes. Instead,
 ---
 config:
   look: handDrawn
-  theme: default
+  theme: base
+  themeVariables:
+    background: '#ffffff'
+    primaryColor: '#e7f5ff'
+    primaryTextColor: '#1e1e1e'
+    primaryBorderColor: '#1971c2'
+    lineColor: '#1e1e1e'
+    secondaryColor: '#fff3bf'
+    secondaryTextColor: '#1e1e1e'
+    secondaryBorderColor: '#e67700'
+    tertiaryColor: '#d3f9d8'
+    tertiaryTextColor: '#1e1e1e'
+    tertiaryBorderColor: '#2f9e44'
+    noteBkgColor: '#fff9db'
+    noteTextColor: '#1e1e1e'
+    noteBorderColor: '#fab005'
+    actorBkg: '#e7f5ff'
+    actorBorder: '#1971c2'
+    actorTextColor: '#1e1e1e'
+    signalColor: '#1e1e1e'
+    signalTextColor: '#1e1e1e'
+    classText: '#1e1e1e'
+    fontFamily: 'Segoe UI, Helvetica, Arial, sans-serif'
 ---
 classDiagram
   direction TB
@@ -740,7 +828,29 @@ classDiagram
 ---
 config:
   look: handDrawn
-  theme: default
+  theme: base
+  themeVariables:
+    background: '#ffffff'
+    primaryColor: '#e7f5ff'
+    primaryTextColor: '#1e1e1e'
+    primaryBorderColor: '#1971c2'
+    lineColor: '#1e1e1e'
+    secondaryColor: '#fff3bf'
+    secondaryTextColor: '#1e1e1e'
+    secondaryBorderColor: '#e67700'
+    tertiaryColor: '#d3f9d8'
+    tertiaryTextColor: '#1e1e1e'
+    tertiaryBorderColor: '#2f9e44'
+    noteBkgColor: '#fff9db'
+    noteTextColor: '#1e1e1e'
+    noteBorderColor: '#fab005'
+    actorBkg: '#e7f5ff'
+    actorBorder: '#1971c2'
+    actorTextColor: '#1e1e1e'
+    signalColor: '#1e1e1e'
+    signalTextColor: '#1e1e1e'
+    classText: '#1e1e1e'
+    fontFamily: 'Segoe UI, Helvetica, Arial, sans-serif'
 ---
 classDiagram
   direction TB
@@ -799,7 +909,29 @@ classDiagram
 ---
 config:
   look: handDrawn
-  theme: default
+  theme: base
+  themeVariables:
+    background: '#ffffff'
+    primaryColor: '#e7f5ff'
+    primaryTextColor: '#1e1e1e'
+    primaryBorderColor: '#1971c2'
+    lineColor: '#1e1e1e'
+    secondaryColor: '#fff3bf'
+    secondaryTextColor: '#1e1e1e'
+    secondaryBorderColor: '#e67700'
+    tertiaryColor: '#d3f9d8'
+    tertiaryTextColor: '#1e1e1e'
+    tertiaryBorderColor: '#2f9e44'
+    noteBkgColor: '#fff9db'
+    noteTextColor: '#1e1e1e'
+    noteBorderColor: '#fab005'
+    actorBkg: '#e7f5ff'
+    actorBorder: '#1971c2'
+    actorTextColor: '#1e1e1e'
+    signalColor: '#1e1e1e'
+    signalTextColor: '#1e1e1e'
+    classText: '#1e1e1e'
+    fontFamily: 'Segoe UI, Helvetica, Arial, sans-serif'
 ---
 classDiagram
   direction TB
@@ -1066,7 +1198,29 @@ This is the moment of truth for the design — read across the swimlanes to see 
 ---
 config:
   look: handDrawn
-  theme: default
+  theme: base
+  themeVariables:
+    background: '#ffffff'
+    primaryColor: '#e7f5ff'
+    primaryTextColor: '#1e1e1e'
+    primaryBorderColor: '#1971c2'
+    lineColor: '#1e1e1e'
+    secondaryColor: '#fff3bf'
+    secondaryTextColor: '#1e1e1e'
+    secondaryBorderColor: '#e67700'
+    tertiaryColor: '#d3f9d8'
+    tertiaryTextColor: '#1e1e1e'
+    tertiaryBorderColor: '#2f9e44'
+    noteBkgColor: '#fff9db'
+    noteTextColor: '#1e1e1e'
+    noteBorderColor: '#fab005'
+    actorBkg: '#e7f5ff'
+    actorBorder: '#1971c2'
+    actorTextColor: '#1e1e1e'
+    signalColor: '#1e1e1e'
+    signalTextColor: '#1e1e1e'
+    classText: '#1e1e1e'
+    fontFamily: 'Segoe UI, Helvetica, Arial, sans-serif'
 ---
 sequenceDiagram
   actor Driver
@@ -1110,7 +1264,29 @@ sequenceDiagram
 ---
 config:
   look: handDrawn
-  theme: default
+  theme: base
+  themeVariables:
+    background: '#ffffff'
+    primaryColor: '#e7f5ff'
+    primaryTextColor: '#1e1e1e'
+    primaryBorderColor: '#1971c2'
+    lineColor: '#1e1e1e'
+    secondaryColor: '#fff3bf'
+    secondaryTextColor: '#1e1e1e'
+    secondaryBorderColor: '#e67700'
+    tertiaryColor: '#d3f9d8'
+    tertiaryTextColor: '#1e1e1e'
+    tertiaryBorderColor: '#2f9e44'
+    noteBkgColor: '#fff9db'
+    noteTextColor: '#1e1e1e'
+    noteBorderColor: '#fab005'
+    actorBkg: '#e7f5ff'
+    actorBorder: '#1971c2'
+    actorTextColor: '#1e1e1e'
+    signalColor: '#1e1e1e'
+    signalTextColor: '#1e1e1e'
+    classText: '#1e1e1e'
+    fontFamily: 'Segoe UI, Helvetica, Arial, sans-serif'
 ---
 sequenceDiagram
   actor Driver
