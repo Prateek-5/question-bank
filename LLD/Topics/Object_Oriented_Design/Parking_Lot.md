@@ -165,8 +165,18 @@ config:
     labelBoxBkgColor: '#ffffff'
     labelBoxBorderColor: '#d3d3d3'
     labelTextColor: '#1f2937'
+    edgeLabelBackground: '#ffffff'
+    labelBackground: '#ffffff'
     classText: '#1f2937'
     fontFamily: 'system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif'
+  themeCSS: |
+    .messageText, .labelText, .sequenceNumber {
+      paint-order: stroke fill;
+      stroke: #ffffff;
+      stroke-width: 5px;
+      stroke-linejoin: round;
+      stroke-linecap: round;
+    }
 ---
 classDiagram
   direction TB
@@ -480,8 +490,18 @@ config:
     labelBoxBkgColor: '#ffffff'
     labelBoxBorderColor: '#d3d3d3'
     labelTextColor: '#1f2937'
+    edgeLabelBackground: '#ffffff'
+    labelBackground: '#ffffff'
     classText: '#1f2937'
     fontFamily: 'system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif'
+  themeCSS: |
+    .messageText, .labelText, .sequenceNumber {
+      paint-order: stroke fill;
+      stroke: #ffffff;
+      stroke-width: 5px;
+      stroke-linejoin: round;
+      stroke-linecap: round;
+    }
 ---
 classDiagram
   direction TB
@@ -646,8 +666,18 @@ config:
     labelBoxBkgColor: '#ffffff'
     labelBoxBorderColor: '#d3d3d3'
     labelTextColor: '#1f2937'
+    edgeLabelBackground: '#ffffff'
+    labelBackground: '#ffffff'
     classText: '#1f2937'
     fontFamily: 'system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif'
+  themeCSS: |
+    .messageText, .labelText, .sequenceNumber {
+      paint-order: stroke fill;
+      stroke: #ffffff;
+      stroke-width: 5px;
+      stroke-linejoin: round;
+      stroke-linecap: round;
+    }
 ---
 classDiagram
   direction TB
@@ -809,8 +839,18 @@ config:
     labelBoxBkgColor: '#ffffff'
     labelBoxBorderColor: '#d3d3d3'
     labelTextColor: '#1f2937'
+    edgeLabelBackground: '#ffffff'
+    labelBackground: '#ffffff'
     classText: '#1f2937'
     fontFamily: 'system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif'
+  themeCSS: |
+    .messageText, .labelText, .sequenceNumber {
+      paint-order: stroke fill;
+      stroke: #ffffff;
+      stroke-width: 5px;
+      stroke-linejoin: round;
+      stroke-linecap: round;
+    }
 ---
 classDiagram
   direction TB
@@ -864,8 +904,18 @@ config:
     labelBoxBkgColor: '#ffffff'
     labelBoxBorderColor: '#d3d3d3'
     labelTextColor: '#1f2937'
+    edgeLabelBackground: '#ffffff'
+    labelBackground: '#ffffff'
     classText: '#1f2937'
     fontFamily: 'system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif'
+  themeCSS: |
+    .messageText, .labelText, .sequenceNumber {
+      paint-order: stroke fill;
+      stroke: #ffffff;
+      stroke-width: 5px;
+      stroke-linejoin: round;
+      stroke-linecap: round;
+    }
 ---
 classDiagram
   direction TB
@@ -948,8 +998,18 @@ config:
     labelBoxBkgColor: '#ffffff'
     labelBoxBorderColor: '#d3d3d3'
     labelTextColor: '#1f2937'
+    edgeLabelBackground: '#ffffff'
+    labelBackground: '#ffffff'
     classText: '#1f2937'
     fontFamily: 'system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif'
+  themeCSS: |
+    .messageText, .labelText, .sequenceNumber {
+      paint-order: stroke fill;
+      stroke: #ffffff;
+      stroke-width: 5px;
+      stroke-linejoin: round;
+      stroke-linecap: round;
+    }
 ---
 classDiagram
   direction TB
@@ -1240,8 +1300,18 @@ config:
     labelBoxBkgColor: '#ffffff'
     labelBoxBorderColor: '#d3d3d3'
     labelTextColor: '#1f2937'
+    edgeLabelBackground: '#ffffff'
+    labelBackground: '#ffffff'
     classText: '#1f2937'
     fontFamily: 'system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif'
+  themeCSS: |
+    .messageText, .labelText, .sequenceNumber {
+      paint-order: stroke fill;
+      stroke: #ffffff;
+      stroke-width: 5px;
+      stroke-linejoin: round;
+      stroke-linecap: round;
+    }
 ---
 sequenceDiagram
   actor Driver
@@ -1309,8 +1379,18 @@ config:
     labelBoxBkgColor: '#ffffff'
     labelBoxBorderColor: '#d3d3d3'
     labelTextColor: '#1f2937'
+    edgeLabelBackground: '#ffffff'
+    labelBackground: '#ffffff'
     classText: '#1f2937'
     fontFamily: 'system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif'
+  themeCSS: |
+    .messageText, .labelText, .sequenceNumber {
+      paint-order: stroke fill;
+      stroke: #ffffff;
+      stroke-width: 5px;
+      stroke-linejoin: round;
+      stroke-linecap: round;
+    }
 ---
 sequenceDiagram
   actor Driver

@@ -301,8 +301,18 @@ config:
     labelBoxBkgColor: '#ffffff'
     labelBoxBorderColor: '#d3d3d3'
     labelTextColor: '#1f2937'
+    edgeLabelBackground: '#ffffff'
+    labelBackground: '#ffffff'
     classText: '#1f2937'
     fontFamily: 'system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif'
+  themeCSS: |
+    .messageText, .labelText, .sequenceNumber {
+      paint-order: stroke fill;
+      stroke: #ffffff;
+      stroke-width: 5px;
+      stroke-linejoin: round;
+      stroke-linecap: round;
+    }
 ---
 erDiagram
   url_mappings {
@@ -367,8 +377,18 @@ config:
     labelBoxBkgColor: '#ffffff'
     labelBoxBorderColor: '#d3d3d3'
     labelTextColor: '#1f2937'
+    edgeLabelBackground: '#ffffff'
+    labelBackground: '#ffffff'
     classText: '#1f2937'
     fontFamily: 'system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif'
+  themeCSS: |
+    .messageText, .labelText, .sequenceNumber {
+      paint-order: stroke fill;
+      stroke: #ffffff;
+      stroke-width: 5px;
+      stroke-linejoin: round;
+      stroke-linecap: round;
+    }
 ---
 flowchart TB
   Client["Client<br/>(browser)"]
@@ -422,8 +442,18 @@ config:
     labelBoxBkgColor: '#ffffff'
     labelBoxBorderColor: '#d3d3d3'
     labelTextColor: '#1f2937'
+    edgeLabelBackground: '#ffffff'
+    labelBackground: '#ffffff'
     classText: '#1f2937'
     fontFamily: 'system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif'
+  themeCSS: |
+    .messageText, .labelText, .sequenceNumber {
+      paint-order: stroke fill;
+      stroke: #ffffff;
+      stroke-width: 5px;
+      stroke-linejoin: round;
+      stroke-linecap: round;
+    }
 ---
 flowchart TB
   Client[Client]
@@ -491,8 +521,18 @@ config:
     labelBoxBkgColor: '#ffffff'
     labelBoxBorderColor: '#d3d3d3'
     labelTextColor: '#1f2937'
+    edgeLabelBackground: '#ffffff'
+    labelBackground: '#ffffff'
     classText: '#1f2937'
     fontFamily: 'system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif'
+  themeCSS: |
+    .messageText, .labelText, .sequenceNumber {
+      paint-order: stroke fill;
+      stroke: #ffffff;
+      stroke-width: 5px;
+      stroke-linejoin: round;
+      stroke-linecap: round;
+    }
 ---
 flowchart TB
   Client[Client]
@@ -559,8 +599,18 @@ config:
     labelBoxBkgColor: '#ffffff'
     labelBoxBorderColor: '#d3d3d3'
     labelTextColor: '#1f2937'
+    edgeLabelBackground: '#ffffff'
+    labelBackground: '#ffffff'
     classText: '#1f2937'
     fontFamily: 'system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif'
+  themeCSS: |
+    .messageText, .labelText, .sequenceNumber {
+      paint-order: stroke fill;
+      stroke: #ffffff;
+      stroke-width: 5px;
+      stroke-linejoin: round;
+      stroke-linecap: round;
+    }
 ---
 flowchart TB
   Client[Client]
@@ -636,40 +686,18 @@ config:
     labelBoxBkgColor: '#ffffff'
     labelBoxBorderColor: '#d3d3d3'
     labelTextColor: '#1f2937'
+    edgeLabelBackground: '#ffffff'
+    labelBackground: '#ffffff'
     classText: '#1f2937'
     fontFamily: 'system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif'
----
-
-```mermaid
----
-config:
-  theme: neutral
-  themeVariables:
-    background: '#ffffff'
-    primaryColor: '#cfe2ff'
-    primaryTextColor: '#1f2937'
-    primaryBorderColor: '#084298'
-    secondaryColor: '#fff3cd'
-    secondaryTextColor: '#1f2937'
-    secondaryBorderColor: '#664d03'
-    tertiaryColor: '#d1e7dd'
-    tertiaryTextColor: '#1f2937'
-    tertiaryBorderColor: '#0a3622'
-    lineColor: '#495057'
-    textColor: '#1f2937'
-    noteBkgColor: '#fff3cd'
-    noteTextColor: '#1f2937'
-    noteBorderColor: '#997404'
-    actorBkg: '#cfe2ff'
-    actorBorder: '#084298'
-    actorTextColor: '#1f2937'
-    signalColor: '#495057'
-    signalTextColor: '#1f2937'
-    labelBoxBkgColor: '#ffffff'
-    labelBoxBorderColor: '#d3d3d3'
-    labelTextColor: '#1f2937'
-    classText: '#1f2937'
-    fontFamily: 'system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif'
+  themeCSS: |
+    .messageText, .labelText, .sequenceNumber {
+      paint-order: stroke fill;
+      stroke: #ffffff;
+      stroke-width: 5px;
+      stroke-linejoin: round;
+      stroke-linecap: round;
+    }
 ---
 flowchart TB
   Client[Client browser]
@@ -882,8 +910,18 @@ config:
     labelBoxBkgColor: '#ffffff'
     labelBoxBorderColor: '#d3d3d3'
     labelTextColor: '#1f2937'
+    edgeLabelBackground: '#ffffff'
+    labelBackground: '#ffffff'
     classText: '#1f2937'
     fontFamily: 'system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif'
+  themeCSS: |
+    .messageText, .labelText, .sequenceNumber {
+      paint-order: stroke fill;
+      stroke: #ffffff;
+      stroke-width: 5px;
+      stroke-linejoin: round;
+      stroke-linecap: round;
+    }
 ---
 sequenceDiagram
   actor User
@@ -939,8 +977,18 @@ config:
     labelBoxBkgColor: '#ffffff'
     labelBoxBorderColor: '#d3d3d3'
     labelTextColor: '#1f2937'
+    edgeLabelBackground: '#ffffff'
+    labelBackground: '#ffffff'
     classText: '#1f2937'
     fontFamily: 'system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif'
+  themeCSS: |
+    .messageText, .labelText, .sequenceNumber {
+      paint-order: stroke fill;
+      stroke: #ffffff;
+      stroke-width: 5px;
+      stroke-linejoin: round;
+      stroke-linecap: round;
+    }
 ---
 sequenceDiagram
   actor User
@@ -985,8 +1033,18 @@ config:
     labelBoxBkgColor: '#ffffff'
     labelBoxBorderColor: '#d3d3d3'
     labelTextColor: '#1f2937'
+    edgeLabelBackground: '#ffffff'
+    labelBackground: '#ffffff'
     classText: '#1f2937'
     fontFamily: 'system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif'
+  themeCSS: |
+    .messageText, .labelText, .sequenceNumber {
+      paint-order: stroke fill;
+      stroke: #ffffff;
+      stroke-width: 5px;
+      stroke-linejoin: round;
+      stroke-linecap: round;
+    }
 ---
 sequenceDiagram
   actor User

@@ -243,7 +243,13 @@ All HLD diagrams are **inline mermaid code blocks** in the walkthrough `.md` fil
 
 **Why mermaid (and not excalidraw renders).** Prior iterations of this template tried programmatically-generated excalidraw PNGs. That approach fights two losing battles: (a) programmatic layout can't match what human visual taste produces; (b) PNG snapshots get stale relative to their sources. Mermaid trades artistic polish for **always-correct + always-inline + zero-workflow** rendering. That's the right tradeoff here.
 
-**Canonical theme block** — copy verbatim at the top of every mermaid diagram. Uses `theme: neutral` (a guaranteed-light-bg theme) plus an explicit light pastel palette, ensuring legibility regardless of GitHub / VS Code dark mode. `look: handDrawn` is INTENTIONALLY OMITTED — empirically it caused dark-bg rendering on some viewers, and the tradeoff isn't worth the readability hit:
+**Canonical theme block — MANDATORY: copy verbatim at the top of every mermaid diagram.**
+
+Uses `theme: neutral` (a light theme) + an explicit soft-pastel palette. Three non-obvious bits worth understanding:
+
+1. **`edgeLabelBackground` / `labelBackground`** give every flowchart arrow label (the `|text|` between arrows, like `CDN -->|miss → origin| LB`) a **white card backdrop**. Without this, arrow labels float on the page background, which is invisible in dark-mode viewers.
+2. **`themeCSS` halo for sequence message labels.** Mermaid sequence diagrams use floating SVG text for messages like "1: POST(long_url)" — there's no built-in `messageBackgroundColor` theme variable. To give them a white "card" effect, we apply `paint-order: stroke fill` with a 5px white stroke, which renders a white halo around each glyph. Works in VS Code's mermaid preview; **GitHub strips themeCSS for security**, so in GitHub web the labels fall back to plain slate text (still readable on white, dim on dark). Best-effort fix; the alternative would be wrapping each message in a Note, which is structurally heavier.
+3. **`look: handDrawn` is INTENTIONALLY OMITTED** — that mermaid feature caused dark-bg rendering on multiple viewers.
 
 ````markdown
 ```mermaid
@@ -274,23 +280,36 @@ config:
     labelBoxBkgColor: '#ffffff'
     labelBoxBorderColor: '#d3d3d3'
     labelTextColor: '#1f2937'
+    edgeLabelBackground: '#ffffff'
+    labelBackground: '#ffffff'
     classText: '#1f2937'
     fontFamily: 'system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif'
+  themeCSS: |
+    .messageText, .labelText, .sequenceNumber {
+      paint-order: stroke fill;
+      stroke: #ffffff;
+      stroke-width: 5px;
+      stroke-linejoin: round;
+      stroke-linecap: round;
+    }
 ---
 flowchart TB
   ...
 ```
 ````
 
-**Color semantics** (from the themeVariables above):
+**Color semantics** (which themeVariable corresponds to which role):
 
-| Mermaid var | Hex | Role | Use for |
-|---|---|---|---|
-| `primaryColor` | `#cfe2ff` (soft blue) | Concrete domain class / service | Client, API, Lot, Ticket |
-| `secondaryColor` | `#fff3cd` (soft yellow) | Interface / abstract / coordinator | Interfaces, Kafka, Counter |
-| `tertiaryColor` | `#d1e7dd` (soft green) | Concrete impl / leaf / consumer | FlatRate, Active state, Analytics |
-| `noteBkgColor` | `#fff3cd` (soft yellow) | Note / annotation / pivot question | `Note over X,Y: ...` |
-| All text | `#1f2937` (slate-800) | High-contrast on every pastel above | |
+| Role | Variable | Hex | Visible on white? | Visible on dark? |
+|---|---|---|---|---|
+| Concrete domain class (Client, API, Ticket) | `primaryColor` fill + `primaryBorderColor` | `#bbdefb` / `#1565c0` | ✓ (border dark on light) | ✓ (fill is a light pastel against dark) |
+| Interface / abstract / coordinator | `secondaryColor` + `secondaryBorderColor` | `#fff9c4` / `#f57f17` | ✓ | ✓ |
+| Concrete impl / leaf / consumer | `tertiaryColor` + `tertiaryBorderColor` | `#c8e6c9` / `#2e7d32` | ✓ | ✓ |
+| Lines / arrows | `lineColor` `signalColor` | `#1976d2` (medium blue) | ✓ (4.5+ on white) | ✓ (3+ on dark) |
+| Edge & signal labels | `labelBoxBkgColor` (white card) | `#ffffff` bg | n/a | label box visible as white rectangle on dark page |
+| In-box text (every role) | `*TextColor` (`#0d47a1`) | always against a light pastel fill | ✓ | ✓ (light pastel still shows) |
+
+**Why these specific variables and not others.** Mermaid's `theme: neutral` provides safe light defaults. The full themeVariables set above forces overrides for EVERY rendered element type (nodes, edges, signals, notes, labels). Skipping any of them lets mermaid's defaults — which sometimes match `theme: dark` automatically in dark-mode viewers — leak through.
 
 **Recommended diagrams per HLD walkthrough:**
 

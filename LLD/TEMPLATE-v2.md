@@ -35,7 +35,13 @@ All LLD diagrams are **inline mermaid code blocks** in the walkthrough `.md` fil
 
 **Why mermaid (and not bespoke excalidraw renders).** Earlier iterations of this template tried excalidraw JSON sources + a programmatic render pipeline. Two losing battles surfaced: (a) programmatic layout can't match human visual taste; (b) rendered snapshots stale relative to their sources. Mermaid trades artistic polish for **always-correct + always-inline + zero-workflow** rendering. The right tradeoff.
 
-**Canonical theme block — copy verbatim at the top of every mermaid diagram.** Uses `theme: neutral` (guaranteed-light-bg) plus an explicit light pastel palette. `look: handDrawn` is INTENTIONALLY OMITTED — empirically that combination caused dark-bg rendering on some viewers, and readability beats the sketch aesthetic:
+**Canonical theme block — MANDATORY: copy verbatim at the top of every mermaid diagram.**
+
+Uses `theme: neutral` + an explicit soft-pastel palette. Three non-obvious bits worth understanding:
+
+1. **`edgeLabelBackground` / `labelBackground`** give every flowchart arrow label a **white card backdrop**. Without this, arrow labels float on the page bg — invisible in dark-mode viewers.
+2. **`themeCSS` halo for sequence message labels.** Mermaid sequence-diagram message labels (like "1: park(car)" floating above an arrow) have no built-in `messageBackgroundColor` variable. We apply `paint-order: stroke fill` with a 5px white stroke, rendering a white halo around each glyph — visually equivalent to a white card behind the text. Works in VS Code; **GitHub strips themeCSS**, in which case labels fall back to plain slate text. Best-effort.
+3. **`look: handDrawn` is INTENTIONALLY OMITTED** — caused dark-bg rendering on multiple viewers.
 
 ````markdown
 ```mermaid
@@ -66,23 +72,33 @@ config:
     labelBoxBkgColor: '#ffffff'
     labelBoxBorderColor: '#d3d3d3'
     labelTextColor: '#1f2937'
+    edgeLabelBackground: '#ffffff'
+    labelBackground: '#ffffff'
     classText: '#1f2937'
     fontFamily: 'system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif'
+  themeCSS: |
+    .messageText, .labelText, .sequenceNumber {
+      paint-order: stroke fill;
+      stroke: #ffffff;
+      stroke-width: 5px;
+      stroke-linejoin: round;
+      stroke-linecap: round;
+    }
 ---
 classDiagram
   ...
 ```
 ````
 
-**Color semantics** (from `themeVariables`):
+**Color semantics:**
 
-| Mermaid var | Hex | Role | Use for |
-|---|---|---|---|
-| `primaryColor` | `#cfe2ff` (soft blue) | Concrete domain class | Ticket, Spot, ParkingLot |
-| `secondaryColor` | `#fff3cd` (soft yellow) | Interface / abstract | `<<interface>>` boxes |
-| `tertiaryColor` | `#d1e7dd` (soft green) | Concrete impl / leaf | ActiveState, FlatRate |
-| `noteBkgColor` | `#fff3cd` (soft yellow) | Note / annotation | `Note over X: …` |
-| All text | `#1f2937` (slate-800) | High-contrast on every pastel above | |
+| Role | Variable | Hex | Visible on white? | Visible on dark? |
+|---|---|---|---|---|
+| Concrete domain class | `primaryColor` fill + `primaryBorderColor` | `#bbdefb` / `#1565c0` | ✓ | ✓ |
+| Interface / abstract | `secondaryColor` + `secondaryBorderColor` | `#fff9c4` / `#f57f17` | ✓ | ✓ |
+| Concrete impl / leaf | `tertiaryColor` + `tertiaryBorderColor` | `#c8e6c9` / `#2e7d32` | ✓ | ✓ |
+| Lines / arrows | `lineColor` `signalColor` | `#1976d2` (medium blue) | ✓ | ✓ |
+| In-box text | `*TextColor` | `#0d47a1` (deep navy) | ✓ (against pastel fill) | ✓ (same) |
 
 **Recommended mermaid diagram types per LLD section:**
 
