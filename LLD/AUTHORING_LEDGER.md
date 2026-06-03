@@ -61,60 +61,60 @@
 | OOD13 | Thread pool executor | Hard | Strategy (rejection policy) + concurrency | `Object_Oriented_Design/Thread_Pool_Executor.md` | passed | 100 | 1 | `0f1f9a6b` |
 | OOD14 | JSON parser | Hard | Recursive descent + Visitor | `Object_Oriented_Design/JSON_Parser.md` | passed | 100 | 1 | `4f2321d3` |
 | OOD15 | Elevator system | Hard | Strategy + State machine | `Object_Oriented_Design/Elevator_System.md` | passed | 100 | 1 | `26d997db` |
-| OOD16 | Connection pool manager | Hard | Object Pool + concurrency | `Object_Oriented_Design/Connection_Pool_Manager.md` | pending | | 1 | `492b4d0f` |
-| OOD17 | Sudoku solver and validator | Hard | Backtracking + constraint propagation | `Object_Oriented_Design/Sudoku_Solver.md` | pending | | 1 | `0092c47c` |
+| OOD16 | Connection pool manager | Hard | Object Pool + concurrency | `Object_Oriented_Design/Connection_Pool_Manager.md` | passed | 100 | 1 | `492b4d0f` |
+| OOD17 | Sudoku solver and validator | Hard | Backtracking + constraint propagation | `Object_Oriented_Design/Sudoku_Solver.md` | passed | 100 | 1 | `0092c47c` |
 
 ## Strategy_Pattern (17 pending)
 
 | GID | Title | Diff | Pattern focus | File | Status | Score | Merged | LeetLens |
 |---|---|---|---|---|---|---:|---:|---|
-| SG1 | Notification service | Medium | Strategy + Observer + Template Method | `Strategy_Pattern/Notification_Service.md` | pending | | 1 | `3bf3ca90` |
-| SG2 | Feature toggle service | Medium | Strategy (targeting rules) | `Strategy_Pattern/Feature_Toggle_Service.md` | pending | | 1 | `eee89a2c` |
-| SG3 | Online shopping cart | Medium | Strategy + Decorator + State | `Strategy_Pattern/Shopping_Cart.md` | pending | | 1 | `3d164b11` |
-| SG4 | Load testing framework | Medium | Strategy (ramp/rate) | `Strategy_Pattern/Load_Testing_Framework.md` | pending | | 1 | `c8510771` |
-| SG5 | Coupon/discount engine | Medium | Strategy + CoR + Decorator | `Strategy_Pattern/Coupon_Discount_Engine.md` | pending | | 1 | `e1b697b7` |
-| SG6 | Car rental system | Medium | Strategy + State | `Strategy_Pattern/Car_Rental_System.md` | pending | | 1 | `fc5aeac8` |
-| SG7 | Battleship game | Medium | Strategy (AI vs human) | `Strategy_Pattern/Battleship_Game.md` | pending | | 1 | `836db4b6` |
-| SG8 | Media player | Medium | Strategy + State + Adapter | `Strategy_Pattern/Media_Player.md` | pending | | 1 | `81aa67a3` |
-| SG9 | Deck of cards (multi-game) | Medium | Strategy + Template Method | `Strategy_Pattern/Deck_Of_Cards.md` | pending | | 1 | `0e9a55ef` |
-| SG10 | Tic-Tac-Toe (minimax) | Medium | Strategy (player AI) | `Strategy_Pattern/Tic_Tac_Toe.md` | pending | | 1 | `559033fe` |
-| SG11 | Payment processing system | Hard | Strategy + State + idempotency | `Strategy_Pattern/Payment_Processing.md` | pending | | 1 | `b66b6bd7` |
-| SG12 | Rate limiter (4 algorithms) | Hard | Strategy (token/leaky/window) | `Strategy_Pattern/Rate_Limiter.md` | pending | | 1 | `54f14e02` |
-| SG13 | Calendar app (recurrence) | Hard | Strategy + Iterator | `Strategy_Pattern/Calendar_Application.md` | pending | | 1 | `06a3090b` |
-| SG14 | Social media feed | Hard | Strategy (ranking) + Observer | `Strategy_Pattern/Social_Media_Feed.md` | pending | | 1 | `4c65863a` |
-| SG15 | Airline reservation system | Hard | Strategy + State + inventory | `Strategy_Pattern/Airline_Reservation.md` | pending | | 1 | `f44a6d2c` |
-| SG16 | ETL pipeline (class-level) | Hard | Strategy + Adapter + pipeline | `Strategy_Pattern/ETL_Pipeline.md` | pending | | 1 | `71657d0f` |
-| SG17 | Auction system (3 types) | Hard | Strategy + State + Template Method | `Strategy_Pattern/Auction_System.md` | pending | | 1 | `899ce857` |
+| SG1 | Notification service | Medium | Strategy + Observer + Template Method | `Strategy_Pattern/Notification_Service.md` | passed | 100 | 1 | `3bf3ca90` |
+| SG2 | Feature toggle service | Medium | Strategy (targeting rules) | `Strategy_Pattern/Feature_Toggle_Service.md` | passed | 100 | 1 | `eee89a2c` |
+| SG3 | Online shopping cart | Medium | Strategy + Decorator + State | `Strategy_Pattern/Shopping_Cart.md` | passed | 100 | 1 | `3d164b11` |
+| SG4 | Load testing framework | Medium | Strategy (ramp/rate) | `Strategy_Pattern/Load_Testing_Framework.md` | passed | 99 | 1 | `c8510771` |
+| SG5 | Coupon/discount engine | Medium | Strategy + CoR + Decorator | `Strategy_Pattern/Coupon_Discount_Engine.md` | passed | 100 | 1 | `e1b697b7` |
+| SG6 | Car rental system | Medium | Strategy + State | `Strategy_Pattern/Car_Rental_System.md` | passed | 100 | 1 | `fc5aeac8` |
+| SG7 | Battleship game | Medium | Strategy (AI vs human) | `Strategy_Pattern/Battleship_Game.md` | passed | 98 | 1 | `836db4b6` |
+| SG8 | Media player | Medium | Strategy + State + Adapter | `Strategy_Pattern/Media_Player.md` | passed | 99 | 1 | `81aa67a3` |
+| SG9 | Deck of cards (multi-game) | Medium | Strategy + Template Method | `Strategy_Pattern/Deck_Of_Cards.md` | passed | 98 | 1 | `0e9a55ef` |
+| SG10 | Tic-Tac-Toe (minimax) | Medium | Strategy (player AI) | `Strategy_Pattern/Tic_Tac_Toe.md` | passed | 100 | 1 | `559033fe` |
+| SG11 | Payment processing system | Hard | Strategy + State + idempotency | `Strategy_Pattern/Payment_Processing.md` | passed | 99 | 1 | `b66b6bd7` |
+| SG12 | Rate limiter (4 algorithms) | Hard | Strategy (token/leaky/window) | `Strategy_Pattern/Rate_Limiter.md` | passed | 100 | 1 | `54f14e02` |
+| SG13 | Calendar app (recurrence) | Hard | Strategy + Iterator | `Strategy_Pattern/Calendar_Application.md` | passed | 97 | 1 | `06a3090b` |
+| SG14 | Social media feed | Hard | Strategy (ranking) + Observer | `Strategy_Pattern/Social_Media_Feed.md` | passed | 100 | 1 | `4c65863a` |
+| SG15 | Airline reservation system | Hard | Strategy + State + inventory | `Strategy_Pattern/Airline_Reservation.md` | passed | 99 | 1 | `f44a6d2c` |
+| SG16 | ETL pipeline (class-level) | Hard | Strategy + Adapter + pipeline | `Strategy_Pattern/ETL_Pipeline.md` | passed | 99 | 1 | `71657d0f` |
+| SG17 | Auction system (3 types) | Hard | Strategy + State + Template Method | `Strategy_Pattern/Auction_System.md` | passed | 100 | 1 | `899ce857` |
 
 ## State_Pattern (10 pending)
 
 | GID | Title | Diff | Pattern focus | File | Status | Score | Merged | LeetLens |
 |---|---|---|---|---|---|---:|---:|---|
-| ST1 | Order management system | Medium | State + Event Sourcing | `State_Pattern/Order_Management_System.md` | pending | | 1 | `6ea9c102` |
-| ST2 | ATM machine | Medium | State + CoR + concurrency | `State_Pattern/ATM_Machine.md` | pending | | 1 | `a47f949b` |
-| ST3 | Traffic signal control | Medium | State + Observer (FSM) | `State_Pattern/Traffic_Signal_Control.md` | pending | | 1 | `091c200b` |
-| ST4 | State machine framework | Hard | State + generics (framework) | `State_Pattern/State_Machine_Framework.md` | pending | | 1 | `286fb9b9` |
-| ST5 | Regex engine (NFA) | Hard | State machine + parser | `State_Pattern/Regex_Engine.md` | pending | | 1 | `651a9e3f` |
-| ST6 | Workflow engine | Hard | State + CoR + Saga | `State_Pattern/Workflow_Engine.md` | pending | | 1 | `656dea03` |
-| ST7 | Ride-sharing application | Hard | State + Strategy + Observer | `State_Pattern/Ride_Sharing_Application.md` | pending | | 1 | `26102174` |
-| ST8 | Food delivery system | Hard | State + Strategy + Observer | `State_Pattern/Food_Delivery_System.md` | pending | | 1 | `8ee8211f` |
-| ST9 | Movie ticket booking | Hard | State + seat locking | `State_Pattern/Movie_Ticket_Booking.md` | pending | | 1 | `3e21d773` |
-| ST10 | Chatbot framework | Hard | State machine + Strategy | `State_Pattern/Chatbot_Framework.md` | pending | | 1 | `76a80a75` |
+| ST1 | Order management system | Medium | State + Event Sourcing | `State_Pattern/Order_Management_System.md` | passed | 98 | 1 | `6ea9c102` |
+| ST2 | ATM machine | Medium | State + CoR + concurrency | `State_Pattern/ATM_Machine.md` | passed | 100 | 1 | `a47f949b` |
+| ST3 | Traffic signal control | Medium | State + Observer (FSM) | `State_Pattern/Traffic_Signal_Control.md` | passed | 100 | 1 | `091c200b` |
+| ST4 | State machine framework | Hard | State + generics (framework) | `State_Pattern/State_Machine_Framework.md` | passed | 100 | 1 | `286fb9b9` |
+| ST5 | Regex engine (NFA) | Hard | State machine + parser | `State_Pattern/Regex_Engine.md` | passed | 99 | 1 | `651a9e3f` |
+| ST6 | Workflow engine | Hard | State + CoR + Saga | `State_Pattern/Workflow_Engine.md` | passed | 100 | 1 | `656dea03` |
+| ST7 | Ride-sharing application | Hard | State + Strategy + Observer | `State_Pattern/Ride_Sharing_Application.md` | passed | 100 | 1 | `26102174` |
+| ST8 | Food delivery system | Hard | State + Strategy + Observer | `State_Pattern/Food_Delivery_System.md` | passed | 99 | 1 | `8ee8211f` |
+| ST9 | Movie ticket booking | Hard | State + seat locking | `State_Pattern/Movie_Ticket_Booking.md` | passed | 100 | 1 | `3e21d773` |
+| ST10 | Chatbot framework | Hard | State machine + Strategy | `State_Pattern/Chatbot_Framework.md` | passed | 99 | 1 | `76a80a75` |
 
 ## Observer_Pattern (12 pending)
 
 | GID | Title | Diff | Pattern focus | File | Status | Score | Merged | LeetLens |
 |---|---|---|---|---|---|---:|---:|---|
-| OB1 | Config hot-reload system | Medium | Observer + Strategy | `Observer_Pattern/Config_Hot_Reload.md` | pending | | 1 | `3cdf1fec` |
-| OB2 | Email client (class-level) | Medium | Observer + Composite | `Observer_Pattern/Email_Client.md` | pending | | 1 | `22994584` |
-| OB3 | Q&A platform (StackOverflow) | Medium | Observer + Strategy (reputation) | `Observer_Pattern/QA_Platform.md` | pending | | 1 | `7bbb166b` |
-| OB4 | Auction countdown timer | Medium | Observer + time sync | `Observer_Pattern/Auction_Countdown_Timer.md` | pending | | 1 | `f4449453` |
-| OB5 | Inventory management system | Medium | Observer + Repository + Event Sourcing | `Observer_Pattern/Inventory_Management.md` | pending | | 1 | `41926aaa` |
-| OB6 | Meeting room scheduler | Medium | Observer + Builder + interval | `Observer_Pattern/Meeting_Room_Scheduler.md` | pending | | 1 | `10ca67e4` |
-| OB7 | Game lobby / matchmaking | Medium | Observer + State | `Observer_Pattern/Game_Lobby.md` | pending | | 1 | `184c31e9` |
-| OB8 | Observer vs Pub/Sub (explainer) | Medium | Observer vs Pub/Sub coupling | `Observer_Pattern/Observer_Vs_PubSub.md` | pending | | 1 | `14083dd8` |
-| OB9 | Restaurant reservation system | Medium | Observer + State + scheduling | `Observer_Pattern/Restaurant_Reservation.md` | pending | | 1 | `211bb357` |
-| OB10 | Spreadsheet (formula recalc) | Hard | Observer + topo-sort + parsing | `Observer_Pattern/Spreadsheet_Application.md` | pending | | 1 | `7dfb37e6` |
+| OB1 | Config hot-reload system | Medium | Observer + Strategy | `Observer_Pattern/Config_Hot_Reload.md` | passed | 100 | 1 | `3cdf1fec` |
+| OB2 | Email client (class-level) | Medium | Observer + Composite | `Observer_Pattern/Email_Client.md` | passed | 100 | 1 | `22994584` |
+| OB3 | Q&A platform (StackOverflow) | Medium | Observer + Strategy (reputation) | `Observer_Pattern/QA_Platform.md` | passed | 100 | 1 | `7bbb166b` |
+| OB4 | Auction countdown timer | Medium | Observer + time sync | `Observer_Pattern/Auction_Countdown_Timer.md` | passed | 100 | 1 | `f4449453` |
+| OB5 | Inventory management system | Medium | Observer + Repository + Event Sourcing | `Observer_Pattern/Inventory_Management.md` | passed | 100 | 1 | `41926aaa` |
+| OB6 | Meeting room scheduler | Medium | Observer + Builder + interval | `Observer_Pattern/Meeting_Room_Scheduler.md` | passed | 99 | 1 | `10ca67e4` |
+| OB7 | Game lobby / matchmaking | Medium | Observer + State | `Observer_Pattern/Game_Lobby.md` | passed | 100 | 1 | `184c31e9` |
+| OB8 | Observer vs Pub/Sub (explainer) | Medium | Observer vs Pub/Sub coupling | `Observer_Pattern/Observer_Vs_PubSub.md` | passed | 99 | 1 | `14083dd8` |
+| OB9 | Restaurant reservation system | Medium | Observer + State + scheduling | `Observer_Pattern/Restaurant_Reservation.md` | passed | 100 | 1 | `211bb357` |
+| OB10 | Spreadsheet (formula recalc) | Hard | Observer + topo-sort + parsing | `Observer_Pattern/Spreadsheet_Application.md` | passed | 99 | 1 | `7dfb37e6` |
 | OB11 | Pub-sub messaging system | Hard | Observer + message queue | `Observer_Pattern/PubSub_Messaging_System.md` | pending | | 1 | `09c3e938` |
 | OB12 | Event-driven architecture framework | Hard | Mediator + CoR + Event Sourcing | `Observer_Pattern/Event_Driven_Framework.md` | pending | | 1 | `28f2ca4d` |
 
@@ -199,10 +199,11 @@
 
 - **Total canonical authorable:** 89
 - **Done:** 1 (Parking_Lot)
-- **Passed:** 15 (batches 1–5; avg score 99.4)
+- **Passed:** 54 (batches 1–18; avg score 99.2)
 - **Needs-fix:** 0
-- **Pending:** 74
-- **Next pending row:** OOD16 (Connection pool manager) — start batch 6 here.
+- **Pending:** 35
+- **Next pending row:** OB11 (Pub-sub messaging system) — start batch 19 here.
+- **Open polish note:** SG13 (`Calendar_Application.md`) §12.3 has an abbreviated mermaid theme block (passed at 97; canonical-verbatim swap deferred).
 
 ### Batch log
 | Batch | GIDs | Result | Tokens (approx) |
@@ -212,3 +213,16 @@
 | 3 | OOD7, OOD8, OOD9 | 3/3 passed (100/100/100) | ~477k |
 | 4 | OOD10, OOD11, OOD12 | 3/3 passed (100/100/100) | ~504k |
 | 5 | OOD13, OOD14, OOD15 | 3/3 passed (100/100/100) | ~493k |
+| 6 | OOD16, OOD17, SG1 | 3/3 passed (100/100/100) | ~476k |
+| 7 | SG2, SG3, SG4 | 3/3 passed (100/100/99) | ~531k |
+| 8 | SG5, SG6, SG7 | 3/3 passed (100/100/98) | ~503k |
+| 9 | SG8, SG9, SG10 | 3/3 passed (99/98/100) | ~455k |
+| 10 | SG11, SG12, SG13 | 3/3 passed (99/100/97) | ~574k |
+| 11 | SG14, SG15, SG16 | 3/3 passed (100/99/99) | ~469k |
+| 12 | SG17, ST1, ST2 | 3/3 passed (100/98/100) | ~445k |
+| 13 | ST3, ST4, ST5 | 3/3 passed (100/100/99) | ~464k |
+| 14 | ST6, ST7, ST8 | 3/3 passed (100/100/99) | ~499k |
+| 15 | ST9, ST10, OB1 | 3/3 passed (100/99/100) | ~481k |
+| 16 | OB2, OB3, OB4 | 3/3 passed (100/100/100) | ~431k |
+| 17 | OB5, OB6, OB7 | 3/3 passed (100/99/100) | ~442k |
+| 18 | OB8, OB9, OB10 | 3/3 passed (99/100/99) | ~461k |
