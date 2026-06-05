@@ -115,76 +115,76 @@
 | OB8 | Observer vs Pub/Sub (explainer) | Medium | Observer vs Pub/Sub coupling | `Observer_Pattern/Observer_Vs_PubSub.md` | passed | 99 | 1 | `14083dd8` |
 | OB9 | Restaurant reservation system | Medium | Observer + State + scheduling | `Observer_Pattern/Restaurant_Reservation.md` | passed | 100 | 1 | `211bb357` |
 | OB10 | Spreadsheet (formula recalc) | Hard | Observer + topo-sort + parsing | `Observer_Pattern/Spreadsheet_Application.md` | passed | 99 | 1 | `7dfb37e6` |
-| OB11 | Pub-sub messaging system | Hard | Observer + message queue | `Observer_Pattern/PubSub_Messaging_System.md` | pending | | 1 | `09c3e938` |
-| OB12 | Event-driven architecture framework | Hard | Mediator + CoR + Event Sourcing | `Observer_Pattern/Event_Driven_Framework.md` | pending | | 1 | `28f2ca4d` |
+| OB11 | Pub-sub messaging system | Hard | Observer + message queue | `Observer_Pattern/PubSub_Messaging_System.md` | passed | 100 | 1 | `09c3e938` |
+| OB12 | Event-driven architecture framework | Hard | Mediator + CoR + Event Sourcing | `Observer_Pattern/Event_Driven_Framework.md` | passed | 99 | 1 | `28f2ca4d` |
 
 ## LLD_DataStructures (12 pending)
 
 | GID | Title | Diff | Pattern focus | File | Status | Score | Merged | LeetLens |
 |---|---|---|---|---|---|---:|---:|---|
-| DS1 | LRU Cache O(1) | Medium | DLL + hashmap + eviction callback | `LLD_DataStructures/LRU_Cache.md` | pending | | 5 | `209dd444` |
-| DS2 | URL shortener (class-level) | Medium | Base62 + Repository | `LLD_DataStructures/URL_Shortener_LLD.md` | pending | | 1 | `11f81600` |
-| DS3 | Min Stack O(1) | Medium | Auxiliary-stack invariant | `LLD_DataStructures/Min_Stack.md` | pending | | 6 | `1870eebc` |
-| DS4 | Min Queue O(1) | Medium | Two-stack / monotonic deque | `LLD_DataStructures/Min_Queue.md` | pending | | 11 | `1dd575b1` |
-| DS5 | Min Deque | Medium | Monotonic deque invariant | `LLD_DataStructures/Min_Deque.md` | pending | | 14 | `71f12ed8` |
-| DS6 | Min Heap / Min Priority Queue | Medium | Binary heap from scratch | `LLD_DataStructures/Min_Heap.md` | pending | | 9 | `8085fcd4` |
-| DS7 | API rate limiter middleware | Hard | Decorator/middleware + sliding window | `LLD_DataStructures/Rate_Limiter_Middleware.md` | pending | | 1 | `36d2b952` |
-| DS8 | Version control (simplified Git) | Hard | Content-addressable store + DAG | `LLD_DataStructures/Version_Control_System.md` | pending | | 1 | `d043ce7e` |
-| DS9 | Task scheduler (DAG + retry) | Hard | Priority queue + DAG + Observer | `LLD_DataStructures/Task_Scheduler.md` | pending | | 1 | `24907f7a` |
-| DS10 | Type-ahead suggestion (trie) | Hard | Trie + ranking + fuzzy | `LLD_DataStructures/Typeahead_Suggestion.md` | pending | | 1 | `a7f9a4d1` |
-| DS11 | Cron job scheduler | Hard | Cron parser + priority queue + DAG | `LLD_DataStructures/Cron_Job_Scheduler.md` | pending | | 1 | `202aae2a` |
-| DS12 | Distributed queue (microservices) | Hard | Queue modeling + delivery semantics | `LLD_DataStructures/Distributed_Queue.md` | pending | | 3 | `218c434f` |
+| DS1 | LRU Cache O(1) | Medium | DLL + hashmap + eviction callback | `LLD_DataStructures/LRU_Cache.md` | passed | 100 | 5 | `209dd444` |
+| DS2 | URL shortener (class-level) | Medium | Base62 + Repository | `LLD_DataStructures/URL_Shortener_LLD.md` | passed | 100 | 1 | `11f81600` |
+| DS3 | Min Stack O(1) | Medium | Auxiliary-stack invariant | `LLD_DataStructures/Min_Stack.md` | passed | 100 | 6 | `1870eebc` |
+| DS4 | Min Queue O(1) | Medium | Two-stack / monotonic deque | `LLD_DataStructures/Min_Queue.md` | passed | 99 | 11 | `1dd575b1` |
+| DS5 | Min Deque | Medium | Monotonic deque invariant | `LLD_DataStructures/Min_Deque.md` | passed | 100 | 14 | `71f12ed8` |
+| DS6 | Min Heap / Min Priority Queue | Medium | Binary heap from scratch | `LLD_DataStructures/Min_Heap.md` | passed | 100 | 9 | `8085fcd4` |
+| DS7 | API rate limiter middleware | Hard | Decorator/middleware + sliding window | `LLD_DataStructures/Rate_Limiter_Middleware.md` | passed | 100 | 1 | `36d2b952` |
+| DS8 | Version control (simplified Git) | Hard | Content-addressable store + DAG | `LLD_DataStructures/Version_Control_System.md` | passed | 100 | 1 | `d043ce7e` |
+| DS9 | Task scheduler (DAG + retry) | Hard | Priority queue + DAG + Observer | `LLD_DataStructures/Task_Scheduler.md` | passed | 99 | 1 | `24907f7a` |
+| DS10 | Type-ahead suggestion (trie) | Hard | Trie + ranking + fuzzy | `LLD_DataStructures/Typeahead_Suggestion.md` | passed | 100 | 1 | `a7f9a4d1` |
+| DS11 | Cron job scheduler | Hard | Cron parser + priority queue + DAG | `LLD_DataStructures/Cron_Job_Scheduler.md` | passed | 99 | 1 | `202aae2a` |
+| DS12 | Distributed queue (microservices) | Hard | Queue modeling + delivery semantics | `LLD_DataStructures/Distributed_Queue.md` | passed | 100 | 3 | `218c434f` |
 
 ## Command_Pattern (3 pending)
 
 | GID | Title | Diff | Pattern focus | File | Status | Score | Merged | LeetLens |
 |---|---|---|---|---|---|---:|---:|---|
-| CM1 | Image processing pipeline | Medium | Command + lazy eval | `Command_Pattern/Image_Processing_Pipeline.md` | pending | | 1 | `78c1aa5d` |
-| CM2 | Chess game | Hard | Command + polymorphism | `Command_Pattern/Chess_Game.md` | pending | | 1 | `b0345354` |
-| CM3 | Text editor (undo/redo) | Hard | Command + Memento + rope | `Command_Pattern/Text_Editor.md` | pending | | 1 | `459fb15d` |
+| CM1 | Image processing pipeline | Medium | Command + Composite + lazy eval + Builder | `Command_Pattern/Image_Processing_Pipeline.md` | passed | 95 | 1 | `78c1aa5d` |
+| CM2 | Chess game | Hard | Command + polymorphism | `Command_Pattern/Chess_Game.md` | passed | 100 | 1 | `b0345354` |
+| CM3 | Text editor (undo/redo) | Hard | Command + Memento + rope | `Command_Pattern/Text_Editor.md` | passed | 100 | 1 | `459fb15d` |
 
 ## Retry_Pattern (3 pending)
 
 | GID | Title | Diff | Pattern focus | File | Status | Score | Merged | LeetLens |
 |---|---|---|---|---|---|---:|---:|---|
-| R1 | Retry framework (backoff) | Medium | Strategy + circuit breaker | `Retry_Pattern/Retry_Framework.md` | pending | | 1 | `490ea197` |
-| R2 | Circuit breaker | Medium | State (closed/open/half-open) | `Retry_Pattern/Circuit_Breaker.md` | pending | | 1 | `4a825994` |
-| R3 | HTTP client library | Medium | Interceptor + Builder + retry | `Retry_Pattern/HTTP_Client_Library.md` | pending | | 1 | `ce2f1995` |
+| R1 | Retry framework (backoff) | Medium | Strategy + circuit breaker | `Retry_Pattern/Retry_Framework.md` | passed | 100 | 1 | `490ea197` |
+| R2 | Circuit breaker | Medium | State (closed/open/half-open) | `Retry_Pattern/Circuit_Breaker.md` | passed | 99 | 1 | `4a825994` |
+| R3 | HTTP client library | Medium | Interceptor + Builder + retry | `Retry_Pattern/HTTP_Client_Library.md` | passed | 99 | 1 | `ce2f1995` |
 
 ## Composite_Pattern (2 pending)
 
 | GID | Title | Diff | Pattern focus | File | Status | Score | Merged | LeetLens |
 |---|---|---|---|---|---|---:|---:|---|
-| CP1 | In-memory file system | Hard | Composite + tree + permissions | `Composite_Pattern/In_Memory_File_System.md` | pending | | 1 | `672807eb` |
-| CP2 | Rules engine (DSL) | Hard | Interpreter + Composite | `Composite_Pattern/Rules_Engine_DSL.md` | pending | | 1 | `be6390df` |
+| CP1 | In-memory file system | Hard | Composite + tree + permissions | `Composite_Pattern/In_Memory_File_System.md` | passed | 100 | 1 | `672807eb` |
+| CP2 | Rules engine (DSL) | Hard | Interpreter + Composite | `Composite_Pattern/Rules_Engine_DSL.md` | passed | 100 | 1 | `be6390df` |
 
 ## Plugin_Architecture (2 pending)
 
 | GID | Title | Diff | Pattern focus | File | Status | Score | Merged | LeetLens |
 |---|---|---|---|---|---|---:|---:|---|
-| PL1 | Plugin architecture (lifecycle) | Hard | Plugin host + DI + service locator | `Plugin_Architecture/Plugin_Architecture.md` | pending | | 1 | `14ec0d48` |
-| PL2 | Test framework (JUnit/Jest) | Hard | Template Method + reflection | `Plugin_Architecture/Test_Framework.md` | pending | | 1 | `f4357306` |
+| PL1 | Plugin architecture (lifecycle) | Hard | Plugin host + DI + service locator | `Plugin_Architecture/Plugin_Architecture.md` | passed | 100 | 1 | `14ec0d48` |
+| PL2 | Test framework (JUnit/Jest) | Hard | Template Method + reflection | `Plugin_Architecture/Test_Framework.md` | passed | 100 | 1 | `f4357306` |
 
 ## Rule_Engine (2 pending)
 
 | GID | Title | Diff | Pattern focus | File | Status | Score | Merged | LeetLens |
 |---|---|---|---|---|---|---:|---:|---|
-| RE1 | Content management system | Medium | State (draft/publish) + RBAC + Template | `Rule_Engine/Content_Management_System.md` | pending | | 1 | `2aea8678` |
-| RE2 | Permission/authorization (RBAC/ABAC) | Hard | CoR + policy evaluation | `Rule_Engine/Authorization_System.md` | pending | | 1 | `473c74ec` |
+| RE1 | Content management system | Medium | State (draft/publish) + RBAC + Template | `Rule_Engine/Content_Management_System.md` | passed | 100 | 1 | `2aea8678` |
+| RE2 | Permission/authorization (RBAC/ABAC) | Hard | CoR + policy evaluation | `Rule_Engine/Authorization_System.md` | passed | 99 | 1 | `473c74ec` |
 
 ## Single-question buckets (8 pending)
 
 | GID | Title | Diff | Pattern focus | File | Status | Score | Merged | LeetLens |
 |---|---|---|---|---|---|---:|---:|---|
-| B1 | SQL query builder (fluent API) | Medium | Builder | `Builder_Pattern/SQL_Query_Builder.md` | pending | | 1 | `8383f87c` |
-| C1 | Logging framework | Medium | Chain of Responsibility + Observer | `Chain_of_Responsibility/Logging_Framework.md` | pending | | 1 | `101b8cf8` |
-| D1 | Caching decorator/proxy | Hard | Decorator + Proxy | `Decorator_Pattern/Caching_Decorator.md` | pending | | 1 | `f0f8d68f` |
-| DI1 | Dependency injection container | Hard | DI + Factory + reflection | `Dependency_Injection/DI_Container.md` | pending | | 1 | `4663a67e` |
-| F1 | Factory vs Abstract Factory vs Builder | Medium | Factory family discrimination | `Factory_Pattern/Factory_Family_Comparison.md` | pending | | 1 | `0817d1fe` |
-| I1 | OAuth client library | Medium | Interceptor + token management | `Interceptor_Pattern/OAuth_Client_Library.md` | pending | | 1 | `8ef9ac7a` |
-| IT1 | Music playlist manager | Medium | Iterator + Strategy (shuffle) | `Iterator_Pattern/Playlist_Manager.md` | pending | | 1 | `0135ba18` |
-| S1 | SOLID principles (explainer) | Medium | S/O/L/I/D with counterexamples | `SOLID_Principles/SOLID_Principles_Explained.md` | pending | | 1 | `21623a26` |
-| TM1 | Multiplayer card game framework | Medium | Template Method + Strategy | `Template_Method/Card_Game_Framework.md` | pending | | 1 | `285a2421` |
+| B1 | SQL query builder (fluent API) | Medium | Builder | `Builder_Pattern/SQL_Query_Builder.md` | passed | 100 | 1 | `8383f87c` |
+| C1 | Logging framework | Medium | Chain of Responsibility + Observer | `Chain_of_Responsibility/Logging_Framework.md` | passed | 98 | 1 | `101b8cf8` |
+| D1 | Caching decorator/proxy | Hard | Decorator + Proxy | `Decorator_Pattern/Caching_Decorator.md` | passed | 100 | 1 | `f0f8d68f` |
+| DI1 | Dependency injection container | Hard | DI + Factory + reflection | `Dependency_Injection/DI_Container.md` | passed | 100 | 1 | `4663a67e` |
+| F1 | Factory vs Abstract Factory vs Builder | Medium | Factory family discrimination | `Factory_Pattern/Factory_Family_Comparison.md` | passed | 99 | 1 | `0817d1fe` |
+| I1 | OAuth client library | Medium | Interceptor + token management | `Interceptor_Pattern/OAuth_Client_Library.md` | passed | 100 | 1 | `8ef9ac7a` |
+| IT1 | Music playlist manager | Medium | Iterator + Strategy (shuffle) | `Iterator_Pattern/Playlist_Manager.md` | passed | 100 | 1 | `0135ba18` |
+| S1 | SOLID principles (explainer) | Medium | S/O/L/I/D with counterexamples | `SOLID_Principles/SOLID_Principles_Explained.md` | passed | 100 | 1 | `21623a26` |
+| TM1 | Multiplayer card game framework | Medium | Template Method + Strategy | `Template_Method/Card_Game_Framework.md` | passed | 100 | 1 | `285a2421` |
 
 ---
 
@@ -199,10 +199,10 @@
 
 - **Total canonical authorable:** 89
 - **Done:** 1 (Parking_Lot)
-- **Passed:** 54 (batches 1–18; avg score 99.2)
+- **Passed:** 89 (batches 1–31; avg score 99.3)
 - **Needs-fix:** 0
-- **Pending:** 35
-- **Next pending row:** OB11 (Pub-sub messaging system) — start batch 19 here.
+- **Pending:** 0 — ✅ **LLD COMPLETE** (all 89 canonical authorable walkthroughs done + 1 pre-existing `Parking_Lot`). Next: HLD phase.
+- **Next pending row:** none (LLD done). Proceed to HLD: dedup `HLD/Topics/*/EXTRACTED_QUESTIONS.md` → `HLD/AUTHORING_LEDGER.md`, clone the engine as `tools/hld-batch-workflow.js`.
 - **Open polish note:** SG13 (`Calendar_Application.md`) §12.3 has an abbreviated mermaid theme block (passed at 97; canonical-verbatim swap deferred).
 
 ### Batch log
@@ -226,3 +226,16 @@
 | 16 | OB2, OB3, OB4 | 3/3 passed (100/100/100) | ~431k |
 | 17 | OB5, OB6, OB7 | 3/3 passed (100/99/100) | ~442k |
 | 18 | OB8, OB9, OB10 | 3/3 passed (99/100/99) | ~461k |
+| 19 | OB11, OB12, DS1 | 3/3 passed (100/99/100) — re-fired after transient agent failure | ~474k |
+| 20 | DS2, DS3, DS4 | 3/3 passed (100/100/99) | ~429k |
+| 21 | DS5, DS6, DS7 | 3/3 passed (100/100/100) | ~446k |
+| 22 | DS8, DS9, DS10 | 3/3 passed (100/99/100) | ~560k |
+| 23 | DS11, DS12, CM1 | 3/3 passed (99/100/98; CM1 row adjusted to 95 on review) — re-fired 2× through an Opus 4.8 outage before succeeding | ~416k |
+| 24 | CM2, CM3, R1 | 1/3 passed (R1=100); CM2+CM3 transient StructuredOutput failure (outage flicker), stay pending → re-fired as batch 25 | ~314k |
+| 25 | CM2, CM3, R2 | 3/3 passed (100/100/99) | ~496k |
+| 26 | R3, CP1, CP2 | 3/3 passed (99/100/100) | ~463k |
+| 27 | PL1, PL2, RE1 | 3/3 passed (100/100/100) | ~589k |
+| 28 | RE2, B1, C1 | 3/3 passed (99/100/98) | ~431k |
+| 29 | D1, DI1, F1 | 3/3 passed (100/100/99) | ~435k |
+| 30 | I1, IT1, S1 | 3/3 passed (100/100/100) | ~432k |
+| 31 | TM1 | 1/1 passed (100) — final LLD row; LLD complete | ~219k |

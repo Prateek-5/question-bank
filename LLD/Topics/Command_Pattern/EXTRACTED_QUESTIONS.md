@@ -21,7 +21,7 @@
 
 | Seq | Difficulty | Company | Question | Topics | LeetLens ID | Also fits |
 |---:|---|---|---|---|---|---|
-| 1 | Medium | Adobe | Design an image processing pipeline supporting operations like resize, crop, rotate, flip, grayscale, blur, and watermark. Operations should be composable, lazily evaluated, and support both single images and batch processing. | Object-Oriented Design, Pipeline Pattern, Lazy Evaluation, Command Pattern, +1 | `78c1aa5d` | `Object_Oriented_Design` |
+| 1 | Medium | Adobe | Design an image processing pipeline supporting operations like resize, crop, rotate, flip, grayscale, blur, and watermark. Operations should be composable, lazily evaluated, and support both single images and batch processing. ✅ [walkthrough](./Image_Processing_Pipeline.md) | Object-Oriented Design, Pipeline Pattern, Lazy Evaluation, Command Pattern, +1 | `78c1aa5d` | `Object_Oriented_Design` |
 | 2 | Hard | Amazon | Design a chess game with all standard rules including castling, en passant, pawn promotion, check, checkmate, and stalemate detection. Model the board, pieces, moves, and game state. | Object-Oriented Design, Inheritance, Polymorphism, Command Pattern | `b0345354` | `Object_Oriented_Design` |
 | 3 | Hard | Google | Design a text editor supporting insert, delete, cursor movement, undo/redo operations, copy/paste, and find/replace. Use appropriate data structures for efficient text manipulation. | Object-Oriented Design, Command Pattern, Rope Data Structure, Memento Pattern | `459fb15d` | `Memento_Pattern` · `Object_Oriented_Design` |
 

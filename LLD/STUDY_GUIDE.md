@@ -1,30 +1,46 @@
 # LLD Study Guide — what to learn, in what order
 
-> A student-facing roadmap through the **completed** LLD walkthroughs. Only sections that already have authored answers appear here; this file grows as more sections finish. For the full authoring backlog and status, see [`AUTHORING_LEDGER.md`](./AUTHORING_LEDGER.md).
+> A student-facing roadmap through the **completed** LLD walkthroughs. Every LLD section is now authored, so this is the full curriculum. For authoring status and internal scores, see [`AUTHORING_LEDGER.md`](./AUTHORING_LEDGER.md).
 >
-> **Last updated:** 2026-06-03 · **Walkthroughs available:** 55 (across 4 sections)
+> **Last updated:** 2026-06-05 · **Walkthroughs available:** 90 (19 sections, grouped into 5 parts) · **Status:** ✅ complete
 
 ## How to use this guide
 
-- **Work top-to-bottom.** Sections are ordered so each one builds on the patterns learned in the previous. Within a section, questions are ordered **Easy → Hard** and from most-foundational to most-advanced.
+- **Work part-by-part, top-to-bottom.** Parts are ordered so each builds on the patterns learned before it. Within a section, questions go **Medium → Hard** and from most-foundational to most-advanced.
 - **Each walkthrough is self-contained** — it derives the design from a naive version, so you can also jump straight to any single question you're prepping for.
-- The **Pattern focus** column tells you the main idea being drilled. The **Score** is the internal quality score (all ≥97) — treat the 100s as the cleanest reference exemplars.
-- **First time doing LLD?** Start with the ⭐ **Parking lot** walkthrough — it's the canonical teaching exemplar the whole repo is modeled on.
+- The **Pattern focus** column names the main idea being drilled. The **Score** is the internal quality score (all ≥95) — treat the 100s as the cleanest reference exemplars.
+- **First time doing LLD?** Start with the ⭐ **Parking lot** walkthrough (Part A) — it's the canonical teaching exemplar the whole repo is modeled on.
+- **Part E (Data Structures from scratch)** is an orthogonal track — you can interleave it with the pattern work whenever you want a break from GoF patterns.
 
-## Recommended section order
+## Recommended order at a glance
 
-| # | Section | Why here | Status |
-|---:|---|---|---|
-| 1 | **Object-Oriented Design** | Foundations: composition vs inheritance, SOLID, the core GoF patterns. Everything else assumes this. | ✅ 18/18 |
-| 2 | **Strategy Pattern** | The simplest, most-asked behavioral pattern — "swap an algorithm at runtime." | ✅ 17/17 |
-| 3 | **State Pattern** | Builds directly on Strategy (its most-confused sibling). Learn them back-to-back. | ✅ 10/10 |
-| 4 | **Observer Pattern** | Notifications / pub-sub. Rounds out the three core behavioral patterns. | 🚧 10/12 |
+| Part | Theme | Sections | Count |
+|---|---|---|---:|
+| **A** | Foundations — principles + modeling | SOLID Principles · Object-Oriented Design | 19 |
+| **B** | Behavioral patterns (the most-asked core) | Strategy · State · Observer · Command · Template Method · Iterator · Chain of Responsibility | 45 |
+| **C** | Structural & creational patterns | Composite · Decorator · Factory family · Builder · Dependency Injection · Interceptor | 7 |
+| **D** | Resilience & extensibility (composite, applied) | Retry · Rule Engine · Plugin Architecture | 7 |
+| **E** | Data structures from scratch (parallel track) | LLD Data Structures | 12 |
+
+**Section sequence:** SOLID → OOD → Strategy → State → Observer → Command → Template Method → Iterator → Chain of Responsibility → Composite → Decorator → Factory → Builder → Dependency Injection → Interceptor → Retry → Rule Engine → Plugin Architecture → Data Structures.
 
 ---
 
-## 1. Object-Oriented Design  ✅ 18 walkthroughs
+# Part A — Foundations
 
-> Start here. These teach the modeling reflexes (entity extraction, composition, SOLID) every other section relies on.
+> The design vocabulary and modeling reflexes every other part assumes.
+
+## 1. SOLID Principles  ✅ 1 walkthrough
+
+> The five principles you'll cite in every interview. Read this first so the terms in later sections (SRP, OCP, dependency inversion) already mean something.
+
+| Order | Question | Pattern focus | Walkthrough | Score |
+|---:|---|---|---|---:|
+| 1 | SOLID principles (explainer) | S/O/L/I/D with counterexamples | [SOLID_Principles_Explained](./Topics/SOLID_Principles/SOLID_Principles_Explained.md) | 100 |
+
+## 2. Object-Oriented Design  ✅ 18 walkthroughs
+
+> The modeling reflexes — entity extraction, composition over inheritance, SOLID in practice — that every other section relies on.
 
 ### Easier first — Medium (warm-up + core modeling)
 
@@ -56,9 +72,13 @@
 
 ---
 
-## 2. Strategy Pattern  ✅ 17 walkthroughs
+# Part B — Behavioral patterns
 
-> "Encapsulate an algorithm behind an interface so the caller can swap it at runtime." The most common interview pattern — master it before State.
+> The most-asked family in LLD interviews. Strategy and State are the headline acts; learn them back-to-back since interviewers love testing whether you can tell them apart (**caller picks the algorithm = Strategy; the object transitions itself = State**).
+
+## 3. Strategy Pattern  ✅ 17 walkthroughs
+
+> "Encapsulate an algorithm behind an interface so the caller can swap it at runtime." Master this before State.
 
 ### Easier first — Medium
 
@@ -87,11 +107,9 @@
 | 16 | ETL pipeline (class-level) | Strategy + Adapter + pipeline | [ETL_Pipeline](./Topics/Strategy_Pattern/ETL_Pipeline.md) | 99 |
 | 17 | Auction system (3 types) | Strategy + State + Template Method | [Auction_System](./Topics/Strategy_Pattern/Auction_System.md) | 100 |
 
----
+## 4. State Pattern  ✅ 10 walkthroughs
 
-## 3. State Pattern  ✅ 10 walkthroughs
-
-> "The object changes its own behavior as its internal state changes." Learn it right after Strategy — interviewers love testing whether you can tell them apart (caller picks = Strategy; object transitions = State).
+> "The object changes its own behavior as its internal state changes." Learn it right after Strategy.
 
 ### Easier first — Medium
 
@@ -113,11 +131,9 @@
 | 9 | Chatbot framework | State machine + Strategy | [Chatbot_Framework](./Topics/State_Pattern/Chatbot_Framework.md) | 99 |
 | 10 | Regex engine (NFA) | State machine + parser | [Regex_Engine](./Topics/State_Pattern/Regex_Engine.md) | 99 |
 
----
+## 5. Observer Pattern  ✅ 12 walkthroughs
 
-## 4. Observer Pattern  🚧 10 of 12 walkthroughs available
-
-> "Subjects notify a list of observers when they change." The basis of event systems and pub-sub. **Two questions in this section are still being authored** (listed at the bottom — not yet available).
+> "Subjects notify a list of observers when they change." The basis of event systems and pub-sub. Start with the explainer, which also disambiguates Observer from Pub/Sub.
 
 ### Start with the concept, then Medium
 
@@ -138,11 +154,162 @@
 | Order | Question | Pattern focus | Walkthrough | Score |
 |---:|---|---|---|---:|
 | 10 | Spreadsheet (formula recalc) | Observer + topo-sort + parsing | [Spreadsheet_Application](./Topics/Observer_Pattern/Spreadsheet_Application.md) | 99 |
+| 11 | Pub-sub messaging system | Observer + message queue | [PubSub_Messaging_System](./Topics/Observer_Pattern/PubSub_Messaging_System.md) | 100 |
+| 12 | Event-driven architecture framework | Mediator + CoR + Event Sourcing | [Event_Driven_Framework](./Topics/Observer_Pattern/Event_Driven_Framework.md) | 99 |
 
-> **Coming soon (not yet authored):** Pub-sub messaging system · Event-driven architecture framework. This section's order will be revised when they land.
+## 6. Command Pattern  ✅ 3 walkthroughs
+
+> "Wrap an action as an object" — the key to undo/redo, queuing, and replay. Builds naturally on the behavioral patterns above.
+
+| Order | Question | Diff | Pattern focus | Walkthrough | Score |
+|---:|---|---|---|---|---:|
+| 1 | Image processing pipeline | Medium | Command + Composite + lazy eval + Builder | [Image_Processing_Pipeline](./Topics/Command_Pattern/Image_Processing_Pipeline.md) | 95 |
+| 2 | Chess game | Hard | Command + polymorphism | [Chess_Game](./Topics/Command_Pattern/Chess_Game.md) | 100 |
+| 3 | Text editor (undo/redo) | Hard | Command + Memento + rope | [Text_Editor](./Topics/Command_Pattern/Text_Editor.md) | 100 |
+
+## 7. Template Method  ✅ 1 walkthrough
+
+> "Define an algorithm's skeleton in a base class; let subclasses fill in the steps." The inheritance-based sibling of Strategy.
+
+| Order | Question | Diff | Pattern focus | Walkthrough | Score |
+|---:|---|---|---|---|---:|
+| 1 | Multiplayer card game framework | Medium | Template Method + Strategy | [Card_Game_Framework](./Topics/Template_Method/Card_Game_Framework.md) | 100 |
+
+## 8. Iterator  ✅ 1 walkthrough
+
+> "Expose sequential access to a collection without revealing its internals." Pairs well with Strategy (e.g. swappable shuffle).
+
+| Order | Question | Diff | Pattern focus | Walkthrough | Score |
+|---:|---|---|---|---|---:|
+| 1 | Music playlist manager | Medium | Iterator + Strategy (shuffle) | [Playlist_Manager](./Topics/Iterator_Pattern/Playlist_Manager.md) | 100 |
+
+## 9. Chain of Responsibility  ✅ 1 walkthrough
+
+> "Pass a request along a chain of handlers until one handles it." The pipeline/middleware backbone.
+
+| Order | Question | Diff | Pattern focus | Walkthrough | Score |
+|---:|---|---|---|---|---:|
+| 1 | Logging framework | Medium | Chain of Responsibility + Observer | [Logging_Framework](./Topics/Chain_of_Responsibility/Logging_Framework.md) | 98 |
 
 ---
 
-## Sections not yet started
+# Part C — Structural & creational patterns
 
-The following LLD sections have **no walkthroughs yet** and are intentionally omitted from this guide until they have answers: LLD_DataStructures, Command, Retry, Composite, Plugin Architecture, Rule Engine, Builder, Chain of Responsibility, Decorator, Dependency Injection, Factory, Interceptor, Iterator, SOLID Principles, Template Method. Track their progress in [`AUTHORING_LEDGER.md`](./AUTHORING_LEDGER.md).
+> How objects are composed and constructed. Shorter sections — most are a single deep example.
+
+## 10. Composite Pattern  ✅ 2 walkthroughs
+
+> "Treat individual objects and compositions of objects uniformly" — the tree pattern.
+
+| Order | Question | Diff | Pattern focus | Walkthrough | Score |
+|---:|---|---|---|---|---:|
+| 1 | In-memory file system | Hard | Composite + tree + permissions | [In_Memory_File_System](./Topics/Composite_Pattern/In_Memory_File_System.md) | 100 |
+| 2 | Rules engine (DSL) | Hard | Interpreter + Composite | [Rules_Engine_DSL](./Topics/Composite_Pattern/Rules_Engine_DSL.md) | 100 |
+
+## 11. Decorator Pattern  ✅ 1 walkthrough
+
+> "Attach responsibilities to an object dynamically by wrapping it." Contrast with Proxy (same shape, different intent).
+
+| Order | Question | Diff | Pattern focus | Walkthrough | Score |
+|---:|---|---|---|---|---:|
+| 1 | Caching decorator / proxy | Hard | Decorator + Proxy | [Caching_Decorator](./Topics/Decorator_Pattern/Caching_Decorator.md) | 100 |
+
+## 12. Factory family  ✅ 1 walkthrough
+
+> When to reach for Factory Method vs Abstract Factory vs Builder — and what breaks if you pick wrong.
+
+| Order | Question | Diff | Pattern focus | Walkthrough | Score |
+|---:|---|---|---|---|---:|
+| 1 | Factory vs Abstract Factory vs Builder | Medium | Factory family discrimination | [Factory_Family_Comparison](./Topics/Factory_Pattern/Factory_Family_Comparison.md) | 99 |
+
+## 13. Builder  ✅ 1 walkthrough
+
+> "Construct a complex object step by step" via a fluent API.
+
+| Order | Question | Diff | Pattern focus | Walkthrough | Score |
+|---:|---|---|---|---|---:|
+| 1 | SQL query builder (fluent API) | Medium | Builder | [SQL_Query_Builder](./Topics/Builder_Pattern/SQL_Query_Builder.md) | 100 |
+
+## 14. Dependency Injection  ✅ 1 walkthrough
+
+> Inversion of control made concrete — lifecycles, qualified bindings, circular-dependency detection.
+
+| Order | Question | Diff | Pattern focus | Walkthrough | Score |
+|---:|---|---|---|---|---:|
+| 1 | Dependency injection container | Hard | DI + Factory + reflection | [DI_Container](./Topics/Dependency_Injection/DI_Container.md) | 100 |
+
+## 15. Interceptor  ✅ 1 walkthrough
+
+> Cross-cutting behavior (auth, retries, logging) attached to a request flow without touching the caller.
+
+| Order | Question | Diff | Pattern focus | Walkthrough | Score |
+|---:|---|---|---|---|---:|
+| 1 | OAuth client library | Medium | Interceptor + token management | [OAuth_Client_Library](./Topics/Interceptor_Pattern/OAuth_Client_Library.md) | 100 |
+
+---
+
+# Part D — Resilience & extensibility
+
+> Composite, applied designs that stitch several patterns together. Best attempted once Parts A–C feel comfortable.
+
+## 16. Retry Pattern  ✅ 3 walkthroughs
+
+> Fault-tolerance building blocks. Do them in order — the HTTP client at the end combines retry + circuit breaker + interceptors.
+
+| Order | Question | Diff | Pattern focus | Walkthrough | Score |
+|---:|---|---|---|---|---:|
+| 1 | Retry framework (backoff) | Medium | Strategy + circuit breaker | [Retry_Framework](./Topics/Retry_Pattern/Retry_Framework.md) | 100 |
+| 2 | Circuit breaker | Medium | State (closed / open / half-open) | [Circuit_Breaker](./Topics/Retry_Pattern/Circuit_Breaker.md) | 99 |
+| 3 | HTTP client library | Medium | Interceptor + Builder + retry | [HTTP_Client_Library](./Topics/Retry_Pattern/HTTP_Client_Library.md) | 99 |
+
+## 17. Rule Engine  ✅ 2 walkthroughs
+
+> Policy and workflow evaluation — RBAC/ABAC, draft/publish, deny-override.
+
+| Order | Question | Diff | Pattern focus | Walkthrough | Score |
+|---:|---|---|---|---|---:|
+| 1 | Content management system | Medium | State (draft/publish) + RBAC + Template | [Content_Management_System](./Topics/Rule_Engine/Content_Management_System.md) | 100 |
+| 2 | Permission / authorization (RBAC / ABAC) | Hard | CoR + policy evaluation | [Authorization_System](./Topics/Rule_Engine/Authorization_System.md) | 99 |
+
+## 18. Plugin Architecture  ✅ 2 walkthroughs
+
+> Extensible hosts that load third-party code — the capstone that ties DI, lifecycle, and reflection together.
+
+| Order | Question | Diff | Pattern focus | Walkthrough | Score |
+|---:|---|---|---|---|---:|
+| 1 | Plugin architecture (lifecycle) | Hard | Plugin host + DI + service locator | [Plugin_Architecture](./Topics/Plugin_Architecture/Plugin_Architecture.md) | 100 |
+| 2 | Test framework (JUnit / Jest) | Hard | Template Method + reflection | [Test_Framework](./Topics/Plugin_Architecture/Test_Framework.md) | 100 |
+
+---
+
+# Part E — Data structures from scratch (parallel track)
+
+> "Implement a data structure with these guarantees" rather than "apply a design pattern." Orthogonal to Parts A–D — interleave it whenever you want. The Min-* family share one core trick (carry the running min/max alongside the data), so do them together.
+
+## 19. LLD Data Structures  ✅ 12 walkthroughs
+
+### Foundations — Medium
+
+| Order | Question | Pattern focus | Walkthrough | Score |
+|---:|---|---|---|---:|
+| 1 | LRU Cache O(1) | DLL + hashmap + eviction callback | [LRU_Cache](./Topics/LLD_DataStructures/LRU_Cache.md) | 100 |
+| 2 | Min Stack O(1) | Auxiliary-stack invariant | [Min_Stack](./Topics/LLD_DataStructures/Min_Stack.md) | 100 |
+| 3 | Min Queue O(1) | Two-stack / monotonic deque | [Min_Queue](./Topics/LLD_DataStructures/Min_Queue.md) | 99 |
+| 4 | Min Deque | Monotonic deque invariant | [Min_Deque](./Topics/LLD_DataStructures/Min_Deque.md) | 100 |
+| 5 | Min Heap / Min Priority Queue | Binary heap from scratch | [Min_Heap](./Topics/LLD_DataStructures/Min_Heap.md) | 100 |
+| 6 | URL shortener (class-level) | Base62 + Repository | [URL_Shortener_LLD](./Topics/LLD_DataStructures/URL_Shortener_LLD.md) | 100 |
+
+### Step up — Hard
+
+| Order | Question | Pattern focus | Walkthrough | Score |
+|---:|---|---|---|---:|
+| 7 | API rate limiter middleware | Decorator/middleware + sliding window | [Rate_Limiter_Middleware](./Topics/LLD_DataStructures/Rate_Limiter_Middleware.md) | 100 |
+| 8 | Type-ahead suggestion (trie) | Trie + ranking + fuzzy | [Typeahead_Suggestion](./Topics/LLD_DataStructures/Typeahead_Suggestion.md) | 100 |
+| 9 | Task scheduler (DAG + retry) | Priority queue + DAG + Observer | [Task_Scheduler](./Topics/LLD_DataStructures/Task_Scheduler.md) | 99 |
+| 10 | Cron job scheduler | Cron parser + priority queue + DAG | [Cron_Job_Scheduler](./Topics/LLD_DataStructures/Cron_Job_Scheduler.md) | 99 |
+| 11 | Version control (simplified Git) | Content-addressable store + DAG | [Version_Control_System](./Topics/LLD_DataStructures/Version_Control_System.md) | 100 |
+| 12 | Distributed queue (microservices) | Queue modeling + delivery semantics | [Distributed_Queue](./Topics/LLD_DataStructures/Distributed_Queue.md) | 100 |
+
+---
+
+> **What's next:** once you've worked the patterns here, move on to system design — see the HLD track (`../HLD/`), which assumes the modeling fluency this guide builds.
