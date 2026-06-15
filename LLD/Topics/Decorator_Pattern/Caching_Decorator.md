@@ -1097,7 +1097,7 @@ sequenceDiagram
   Cache->>Store: 3: load(hotKey)
   Store-->>Cache: 4: miss (expired)
   Cache->>Co: 5: loadSingleFlight(hotKey, fetch)
-  Co->>Co: 6: A acquires keyLock; B blocks
+  Co->>Co: 6: A acquires keyLock, B blocks
   Co->>Store: 7: double-check load(hotKey)
   Store-->>Co: 8: still miss
   Co->>Db: 9: get(hotKey)  [the ONE flight]

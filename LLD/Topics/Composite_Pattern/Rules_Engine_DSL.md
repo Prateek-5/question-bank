@@ -1201,30 +1201,30 @@ config:
 ---
 sequenceDiagram
   participant Engine as RulesEngine
-  participant Or
-  participant And
+  participant OrOp as Or
+  participant AndOp as And
   participant CmpAmt as Comparison(amount)
   participant Ctx as EvalContext
-  participant Not
+  participant NotOp as Not
   participant CmpVer as Comparison(isVerified)
   participant Res as FactResolver
-  Engine->>Or: 1: evaluate(ctx)
-  Or->>And: 2: evaluate(ctx)
-  And->>CmpAmt: 3: evaluate(ctx)
+  Engine->>OrOp: 1: evaluate(ctx)
+  OrOp->>AndOp: 2: evaluate(ctx)
+  AndOp->>CmpAmt: 3: evaluate(ctx)
   CmpAmt->>Ctx: 4: fact("order.amount")
   Ctx->>Res: 5: resolve("order.amount")
   Res-->>Ctx: 6: 7200
-  CmpAmt-->>And: 7: false (7200 > 5000 is true, but tenure check...)
-  Note over And: amount>5000 true, then tenureDays<30 → false ⇒ AND short-circuits false
-  And-->>Or: 8: false
-  Or->>Not: 9: evaluate(ctx)
-  Not->>CmpVer: 10: evaluate(ctx)
+  CmpAmt-->>AndOp: 7: false (7200 > 5000 is true, but tenure check...)
+  Note over AndOp: amount>5000 true, then tenureDays<30 → false ⇒ AND short-circuits false
+  AndOp-->>OrOp: 8: false
+  OrOp->>NotOp: 9: evaluate(ctx)
+  NotOp->>CmpVer: 10: evaluate(ctx)
   CmpVer->>Ctx: 11: fact("customer.isVerified")
   Ctx->>Res: 12: resolve("customer.isVerified")
   Res-->>CmpVer: 13: false
-  CmpVer-->>Not: 14: false (isVerified == true → false)
-  Not-->>Or: 15: true (NOT false)
-  Or-->>Engine: 16: true (short-circuit: OR stops, rule fires)
+  CmpVer-->>NotOp: 14: false (isVerified == true → false)
+  NotOp-->>OrOp: 15: true (NOT false)
+  OrOp-->>Engine: 16: true (short-circuit: OR stops, rule fires)
 ```
 
 **Tour of the flow. Read it slowly — this is where all the patterns meet.**

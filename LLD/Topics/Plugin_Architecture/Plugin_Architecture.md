@@ -1270,7 +1270,7 @@ sequenceDiagram
   Host->>Src: 2: discover()
   Src-->>Host: 3: [descA, descB]
   Host->>Res: 4: resolveLoadOrder(byId)
-  Res-->>Host: 5: [A, B]  (topo order; throws on cycle)
+  Res-->>Host: 5: [A, B]  (topo order, throws on cycle)
   Host->>Reg: 6: build ServiceContext for B (granted=[core.logger, audit.trail])
   Host->>B: 7: onLoad(ctx)
   B->>Reg: 8: ctx.get("audit.trail")  (permission-checked)

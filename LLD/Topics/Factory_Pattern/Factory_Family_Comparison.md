@@ -653,7 +653,7 @@ classDiagram
     +addSection(s) Builder
     +build() Document
   }
-  Document +-- Builder : nested
+  Document *-- Builder : nested
   Builder ..> Document : build() creates & validates
 ```
 

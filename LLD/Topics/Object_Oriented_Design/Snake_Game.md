@@ -1164,14 +1164,14 @@ config:
     fontFamily: 'system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif'
 ---
 sequenceDiagram
-  participant Loop as GameLoop (clock)
+  participant Clock as GameLoop (tick source)
   participant Game
   participant State as RunningState
   participant Topo as Topology
   participant Snake
   participant Spawn as FoodSpawner
   participant Speed as SpeedPolicy
-  Loop->>Game: 1: tick()
+  Clock->>Game: 1: tick()
   Game->>State: 2: state.tick(game)
   State->>Topo: 3: resolve(step(head, dir))
   Topo-->>State: 4: Cell next (or none → Over)
@@ -1181,9 +1181,9 @@ sequenceDiagram
   State->>Game: 8: onEat(points)
   State->>Spawn: 9: spawn(board, snake)
   Spawn-->>State: 10: new Food
-  Loop->>Game: 11: intervalMs()
+  Clock->>Game: 11: intervalMs()
   Game->>Speed: 12: intervalMs(score, eaten)
-  Speed-->>Loop: 13: next interval (ms)
+  Speed-->>Clock: 13: next interval (ms)
 ```
 
 **Tour of one tick. Read slowly — this is where every pattern cooperates.**

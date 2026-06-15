@@ -974,22 +974,22 @@ config:
 ---
 sequenceDiagram
   participant Sync as SyncEngine
-  participant Box as Mailbox
+  participant Mbox as Mailbox
   participant Folder as Inbox (Folder)
   participant View as InboxView
   participant Badge as UnreadBadge
   participant Notif as DesktopNotifier
-  Sync->>Box: 1: receive(message)
-  Box->>Folder: 2: add(MessageLeaf(message))
-  Note over Box: 3: build MailEvent{&message}
-  Box->>View: 4: onMail(event)
+  Sync->>Mbox: 1: receive(message)
+  Mbox->>Folder: 2: add(MessageLeaf(message))
+  Note over Mbox: 3: build MailEvent with message ref
+  Mbox->>View: 4: onMail(event)
   View->>Folder: 5: unreadCount() (recurses subtree)
   Folder-->>View: 6: 7 unread
-  Box->>Badge: 7: onMail(event)
+  Mbox->>Badge: 7: onMail(event)
   Badge->>Folder: 8: unreadCount()
   Folder-->>Badge: 9: 7
-  Box->>Notif: 10: onMail(event)
-  Notif-->>Box: 11: toast shown
+  Mbox->>Notif: 10: onMail(event)
+  Notif-->>Mbox: 11: toast shown
 ```
 
 **Tour of the flow. Read slowly — both patterns cooperate here.**

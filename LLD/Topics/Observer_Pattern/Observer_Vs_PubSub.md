@@ -996,7 +996,7 @@ sequenceDiagram
   Caller->>Order: 1: setStatus(PAID)
   Order->>Order: 2: notify(event)
   Order->>Email: 3: update(event)
-  Email-->>Order: 4: (returns; blocks here)
+  Email-->>Order: 4: (returns, blocks here)
   Order->>Inv: 5: update(event)
   Inv-->>Order: 6: (returns)
   Order-->>Caller: 7: setStatus returns

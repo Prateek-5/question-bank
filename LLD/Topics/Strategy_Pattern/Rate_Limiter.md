@@ -446,16 +446,16 @@ classDiagram
     +tryConsume(key, now) Decision
   }
   class FixedWindow {
-    -state : map~key,{count,windowStart}~
+    -state : map of key to WindowEntry
   }
   class SlidingWindow {
     -state : map~key,deque~timestamp~~
   }
   class TokenBucket {
-    -state : map~key,{tokens,lastRefill}~
+    -state : map of key to BucketEntry
   }
   class LeakyBucket {
-    -state : map~key,{queue,lastLeak}~
+    -state : map of key to LeakyEntry
   }
   RateLimiter o-- RateLimitAlgorithm : injected
   RateLimitAlgorithm <|.. FixedWindow

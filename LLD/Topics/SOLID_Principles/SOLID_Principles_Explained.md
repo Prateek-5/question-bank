@@ -855,7 +855,7 @@ sequenceDiagram
   participant Tax as TaxRule
   participant Disc as DiscountPolicy
   participant Repo as InvoiceWriter
-  participant Note as Notifier
+  participant Notif as Notifier
   Caller->>Bill: 1: total(invoice)
   Bill->>Tax: 2: tax(invoice)
   Tax-->>Bill: 3: 7.00
@@ -865,8 +865,8 @@ sequenceDiagram
   Caller->>Bill: 7: finalize(invoice)
   Bill->>Repo: 8: save(invoice)
   Repo-->>Bill: 9: ok
-  Bill->>Note: 10: notify(invoice)
-  Note-->>Bill: 11: ok
+  Bill->>Notif: 10: notify(invoice)
+  Notif-->>Bill: 11: ok
 ```
 
 **Tour of the flow. Read slowly — this is where the principles pay off.**

@@ -1232,7 +1232,7 @@ sequenceDiagram
   Buf-->>Cmd: 7: "...fox..."
   Cmd->>Buf: 8: replaceAll("fox","dog")
   Cmd->>Caret: 9: moveTo(0)
-  Hist->>Hist: 10: push cmd on undo stack; clear redo
+  Hist->>Hist: 10: push cmd on undo stack, clear redo
 ```
 
 **Tour of Phase 1.**

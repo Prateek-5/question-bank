@@ -1115,26 +1115,26 @@ config:
     fontFamily: 'system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif'
 ---
 sequenceDiagram
-  participant Loop as ReloadLoop
+  participant Runner as ReloadLoop
   participant Mgr as ConfigManager
   participant Src as FileSource
   participant Val as CompositeValidator
   participant DbL as DbPoolListener
   participant LogL as LogLevelListener
-  Loop->>Mgr: 1: reload()
+  Runner->>Mgr: 1: reload()
   Mgr->>Src: 2: hasChanged()
   Src-->>Mgr: 3: true
   Mgr->>Src: 4: load()
   Src-->>Mgr: 5: raw map
   Mgr->>Mgr: 6: merge → candidate snapshot
   Mgr->>Val: 7: validate(candidate)
-  Val-->>Mgr: 8: {ok}
-  Mgr->>Mgr: 9: previous = current; current = candidate (atomic swap)
+  Val-->>Mgr: 8: ok
+  Mgr->>Mgr: 9: previous = current, current = candidate (atomic swap)
   Mgr->>DbL: 10: onConfigChanged(change)
   DbL->>DbL: 11: changed("db.poolSize")? resize
   Mgr->>LogL: 12: onConfigChanged(change)
   LogL->>LogL: 13: changed("log.level")? setLevel
-  Mgr-->>Loop: 14: true
+  Mgr-->>Runner: 14: true
 ```
 
 **Tour of the reload flow. Read slowly — this is where Strategy and Observer cooperate.**

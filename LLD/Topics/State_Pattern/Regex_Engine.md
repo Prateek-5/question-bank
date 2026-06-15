@@ -592,15 +592,15 @@ classDiagram
   class CharState {
     -pred : CharClass
     -next : State*
-    step → pred.matches(c) ? next : {}
+    +step(c) State[]
   }
   class SplitState {
     -outs : State[2]
-    step → {} (consumes nothing)
-    epsilon → outs (fork)
+    +step(c) State[]
+    +epsilon() State[]
   }
   class AcceptState {
-    isAccept → true (terminal)
+    +isAccept() bool
   }
   State <|.. CharState
   State <|.. SplitState

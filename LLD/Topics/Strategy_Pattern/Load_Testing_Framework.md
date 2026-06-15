@@ -1061,22 +1061,22 @@ config:
     fontFamily: 'system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif'
 ---
 sequenceDiagram
-  participant Loop as LoadTest.run
+  participant Runner as LoadTest.run
   participant Ramp as RampUpPattern
   participant Rate as RateController
   participant Scn as Scenario
   participant Coll as MetricsCollector
   participant Obs as MetricsObserver(s)
-  Loop->>Ramp: 1: desiredUsersAt(t)
-  Ramp-->>Loop: 2: users = 30
+  Runner->>Ramp: 1: desiredUsersAt(t)
+  Ramp-->>Runner: 2: users = 30
   loop for each of 30 users
-    Loop->>Rate: 3: acquire()
-    Rate-->>Loop: 4: (returns when allowed)
-    Loop->>Scn: 5: execute(client)
-    Scn-->>Loop: 6: 8.5 ms (or throws)
-    Loop->>Coll: 7: record(8.5, ok)
+    Runner->>Rate: 3: acquire()
+    Rate-->>Runner: 4: (returns when allowed)
+    Runner->>Scn: 5: execute(client)
+    Scn-->>Runner: 6: 8.5 ms (or throws)
+    Runner->>Coll: 7: record(8.5, ok)
   end
-  Loop->>Coll: 8: publish()
+  Runner->>Coll: 8: publish()
   Coll->>Coll: 9: percentile(50/95/99)
   Coll->>Obs: 10: onSnapshot(p50,p95,p99,...)
   Obs-->>Coll: 11: (console / JSON / dashboard updated)

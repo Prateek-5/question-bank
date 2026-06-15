@@ -862,7 +862,7 @@ sequenceDiagram
   MD->>Aux: 8: read front
   Aux-->>Caller: 9: 3  (O(1))
   Caller->>MD: 10: popFront()
-  MD->>Data: 11: front=(5,0); pop_front
+  MD->>Data: 11: front=(5,0), pop_front
   MD->>Aux: 12: aux.front.idx(1) == 0 ? no
   Note over MD: aux untouched — 5 was already shadowed
   MD-->>Caller: 13: 5

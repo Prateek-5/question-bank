@@ -79,7 +79,9 @@ config:
     fontFamily: 'system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif'
 ---
 classDiagram
-  ...
+  class Example {
+    +method() ReturnType
+  }
 ```
 ````
 
@@ -246,7 +248,9 @@ config:
     # ...rest of canonical block (see §"Diagram convention" above)
 ---
 classDiagram
-  ...
+  class Example {
+    +method() ReturnType
+  }
 ```
 
 A reading guide (1-3 sentences explaining what the diagram shows): ParkingLot composes Floor[]; each Floor composes Spot[]. The three Strategy interfaces hang off ParkingLot via aggregation. Ticket composes a TicketState which drives the lifecycle.
@@ -309,6 +313,67 @@ Expecting 'SOLID_ARROW', 'DOTTED_ARROW', ... got 'NEWLINE'
 ```
 
 A repo-wide sweep on 2026-06-15 replaced 22 such arrows across 11 sequenceDiagram blocks. Do not re-introduce.
+
+#### sequenceDiagram reserved-word participants (HARD rule)
+
+Mermaid sequenceDiagram has keywords for control structures: `loop`, `end`, `alt`, `else`, `opt`, `par`, `and`, `or`, `not`, `note`, `box`, `rect`, `critical`, `break`, `activate`, `deactivate`, `participant`, `actor`, `autonumber`, `create`, `destroy`. **The tokenizer is case-insensitive for these keywords**, so a participant alias like `Loop`, `Note`, `Box`, `And`, `Or`, `Not` collides with the keyword and the parser fails with `Expecting '+', '-', '()', 'ACTOR', got 'loop'` (or similar).
+
+**Pick an alias that is not a keyword variant.** Common safe renames:
+
+| Forbidden alias | Safe rename |
+|---|---|
+| `Loop` (for "the main loop" / clock / runner) | `Runner`, `Clock`, `Driver`, `Tick` |
+| `Note` (for "notifier") | `Notif`, `Notifier` |
+| `Box` (for "mailbox" / container) | `Mbox`, `Cont`, `Container` |
+| `And` / `Or` / `Not` (boolean ops) | `AndOp`, `OrOp`, `NotOp`, `AndQ` |
+| `End` | `Done`, `Final` |
+
+```
+❌ participant Loop as ReloadLoop
+❌ participant Note as Notifier
+
+✅ participant Runner as ReloadLoop
+✅ participant Notif as Notifier
+```
+
+A repo-wide mmdc-validated sweep on 2026-06-15 fixed 7 walkthroughs that used these reserved aliases. Use the table above for any new participants.
+
+#### sequenceDiagram statement-separator (HARD rule)
+
+`;` is a STATEMENT SEPARATOR in mermaid (equivalent to a newline). Putting `;` inside the text portion of a message or Note splits the line into two statements, the second of which is usually malformed and triggers `Expecting 'SOLID_ARROW', ... got 'NEWLINE'`.
+
+**Use `,` (comma) instead.** Commas are never tokenized in text bodies.
+
+```
+❌ Note over Pol: index 1 occupied by "Anita" → collision; chain/probe
+✅ Note over Pol: index 1 occupied by "Anita" → collision, chain/probe
+```
+
+A repo-wide sweep on 2026-06-15 replaced 7 such semicolons across 7 files. Do not re-introduce.
+
+#### classDiagram type literals (HARD rule)
+
+Curly braces `{...}` inside a class member type or value are parsed as the END of the class body, breaking the diagram. Mermaid's classDiagram generic syntax uses tildes (`~K,V~`), not braces.
+
+```
+❌ -state : map~key,{count,windowStart}~
+❌ step → pred.matches(c) ? next : {}
+
+✅ -state : map of key to WindowEntry
+✅ +step(c) State[]
+```
+
+If you need to describe a struct-like value, declare a separate class for it (`class WindowEntry { ... }`) rather than embedding the literal.
+
+#### classDiagram relationship arrows (HARD rule)
+
+Valid mermaid classDiagram relationship arrows: `--`, `-->`, `..`, `..>`, `<|--`, `--|>`, `*--`, `--*`, `o--`, `--o`, `<|..`, `..|>`. **`+--` is not valid.**
+
+```
+❌ Document +-- Builder : nested
+✅ Document *-- Builder : nested    (composition — Document owns Builder)
+✅ Document --|> Builder : nested   (inheritance — Document IS-A Builder)
+```
 
 ### Rule 6 — C++ skeleton style
 

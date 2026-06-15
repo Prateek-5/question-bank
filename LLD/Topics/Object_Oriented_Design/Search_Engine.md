@@ -1334,19 +1334,19 @@ sequenceDiagram
   actor User
   participant Engine as SearchEngine
   participant Parser as QueryParser
-  participant And as AndQuery
+  participant AndQ as AndQuery
   participant T1 as TermQuery quick
   participant Idx as InvertedIndex
   participant Scorer
   User->>Engine: 1: search("quick AND fox", off=0, lim=10)
   Engine->>Parser: 2: parse("quick AND fox")
   Parser-->>Engine: 3: AndQuery[TermQuery, TermQuery]
-  Engine->>And: 4: evaluate(idx)
-  And->>T1: 5: evaluate(idx)
+  Engine->>AndQ: 4: evaluate(idx)
+  AndQ->>T1: 5: evaluate(idx)
   T1->>Idx: 6: docsContaining("quick")  (live only)
-  Idx-->>T1: 7: {d1}
-  T1-->>And: 8: {d1}
-  And-->>Engine: 9: {d1}  (intersection of children)
+  Idx-->>T1: 7: d1 set
+  T1-->>AndQ: 8: d1 set
+  AndQ-->>Engine: 9: d1 set  (intersection of children)
   Engine->>Scorer: 10: score(d1, [quick,fox], idx)
   Scorer->>Idx: 11: docFreq / termFreq / docLength
   Idx-->>Scorer: 12: stats
