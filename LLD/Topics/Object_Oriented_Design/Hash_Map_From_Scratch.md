@@ -877,7 +877,7 @@ sequenceDiagram
   Map->>H: 6: hash("Brian")
   H-->>Map: 7: 1190007
   Map->>Pol: 8: put(1190007, "Brian", 5)
-  Note over Pol: 9: index 1 occupied by "Anita" -> collision; chain/probe
+  Note over Pol: 9: index 1 occupied by "Anita" → collision; chain/probe
   Pol-->>Map: 10: nullopt (new key)
   Map-->>Caller: 11: nullopt
 ```

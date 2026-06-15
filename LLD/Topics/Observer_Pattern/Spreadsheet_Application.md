@@ -1326,12 +1326,12 @@ sequenceDiagram
   Sheet->>Graph: 2: setDependencies(A1, {})
   Sheet->>A1: 3: setLiteral(20)
   Sheet->>Recalc: 4: recompute(A1)
-  Recalc->>Graph: 5: dependents(A1) -> {C1}
-  Recalc->>Graph: 6: dependents(C1) -> {D1}
+  Recalc->>Graph: 5: dependents(A1) → {C1}
+  Recalc->>Graph: 6: dependents(C1) → {D1}
   Note over Recalc: topo order = [A1, C1, D1]
   Recalc->>A1: 7: reevaluate (literal, no-op)
-  Recalc->>C1: 8: reevaluate -> 20 + B2
-  Recalc->>D1: 9: reevaluate -> C1 / 2
+  Recalc->>C1: 8: reevaluate → 20 + B2
+  Recalc->>D1: 9: reevaluate → C1 / 2
   Sheet-->>User: 10: ok (C1, D1 refreshed)
 ```
 
@@ -1394,7 +1394,7 @@ sequenceDiagram
   Sheet->>Graph: 3: setDependencies(A1, {D1})  (tentative)
   Sheet->>Recalc: 4: recompute(A1)
   Recalc->>Graph: 5: DFS A1->C1->D1->A1
-  Note over Recalc: A1 is GRAY again -> back edge!
+  Note over Recalc: A1 is GRAY again → back edge!
   Recalc-->>Sheet: 6: throw CircularDependency(D1, A1)
   Sheet->>Graph: 7: setDependencies(A1, oldPrecedents)  (ROLLBACK)
   Sheet->>Sheet: 8: A1.setLiteral(#CIRCULAR!)

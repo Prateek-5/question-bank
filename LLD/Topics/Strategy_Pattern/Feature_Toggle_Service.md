@@ -1107,7 +1107,7 @@ sequenceDiagram
   Sdk->>Svc: 2: evaluate("new-checkout", ctx)
   Svc->>Flag: 3: lifecycle()  (gate 0)
   Flag-->>Svc: 4: ACTIVE
-  Svc->>Svc: 5: resolve deps (gate 1) -> all ON
+  Svc->>Svc: 5: resolve deps (gate 1) → all ON
   Svc->>Grp: 6: ownerFor(ctx)  (gate 2)
   Grp-->>Svc: 7: "new-checkout" (this flag wins)
   Svc->>Root: 8: matches(ctx)

@@ -1249,7 +1249,7 @@ sequenceDiagram
   C->>C: 4: push Session (gray = {Auth, Session})
   C->>C: 5: build Session → resolve<Auth>()
   C->>C: 6: Auth already in gray set!
-  C-->>App: 7: throw "Circular dependency: Auth -> Session -> Auth"
+  C-->>App: 7: throw "Circular dependency: Auth → Session → Auth"
 ```
 
 **Tour of Phase 2.** The resolver descends `Auth → Session → Auth`. On step 6, the second `resolve<Auth>()` checks the gray set and finds `Auth` already in progress — that's a back-edge. Instead of recursing forever (the naive design's stack overflow), it throws with the full path from `resolveStack_`. **The cycle is diagnosed, not survived.**

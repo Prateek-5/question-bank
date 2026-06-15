@@ -1290,7 +1290,7 @@ sequenceDiagram
   W->>Sched: 1: next()
   Sched-->>W: 2: Task A (highest priority)
   W->>T: 3: start()
-  T->>St: 4: onStart -> RunningState
+  T->>St: 4: onStart → RunningState
   Sched->>Obs: 5: notify(STARTED)
   W->>T: 6: run() throws!
   W->>T: 7: fail()
@@ -1302,7 +1302,7 @@ sequenceDiagram
   Sched->>Obs: 13: notify(RETRYING)
   Note over DQ,Sched: ...200ms later, pumpReady() fires A again, it succeeds...
   W->>T: 14: succeed()
-  T->>St: 15: onSuccess -> SucceededState
+  T->>St: 15: onSuccess → SucceededState
   Sched->>G: 16: markSucceeded(A)
   G-->>Sched: 17: [B] just unblocked (in-degree 0)
   Sched->>DQ: 18: push(fireAt=now, B)

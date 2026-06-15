@@ -287,6 +287,29 @@ Inside a `class X { ... }` body, every line MUST be ONE of:
 
 A repo-wide sweep on 2026-06-15 cleaned 186 arrow-truncations + 34 bare-paren deletions across 61 files. Do not re-introduce either pattern.
 
+#### sequenceDiagram text-token grammar (HARD rule — GitHub mermaid v10 rejects violations)
+
+In sequenceDiagram, `->` `-->` `->>` `-->>` are STRUCTURAL tokens used to declare messages between participants: `A->>B: msg`. When the same tokens appear in the TEXT portion of a message (after the `:`) or in a `Note over X: ...` body, the parser misclassifies the text-arrow as a structural arrow and bails with:
+
+```
+Parse error on line N:
+...occupied by "Anita" -> collision; chain/probe ...
+-----------------------^
+Expecting 'SOLID_ARROW', 'DOTTED_ARROW', ... got 'NEWLINE'
+```
+
+**DO NOT put ` -> ` (or ` --> `) inside sequenceDiagram message text or Note bodies.** Use the Unicode arrow ` → ` (U+2192) instead — it's not a mermaid token, so it's pure text. Same visual meaning.
+
+```
+❌ Note over Pol: index 1 occupied by "Anita" -> collision; chain/probe
+✅ Note over Pol: index 1 occupied by "Anita" → collision; chain/probe
+
+❌ A->>B: validate() -> returns 105
+✅ A->>B: validate() → returns 105
+```
+
+A repo-wide sweep on 2026-06-15 replaced 22 such arrows across 11 sequenceDiagram blocks. Do not re-introduce.
+
 ### Rule 6 — C++ skeleton style
 
 The repo's lingua franca for LLD is **C++17**. If the question explicitly demands Java/C#/Kotlin, switch and note the choice in the header.

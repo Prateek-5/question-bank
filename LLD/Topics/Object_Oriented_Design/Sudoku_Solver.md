@@ -1198,7 +1198,7 @@ sequenceDiagram
     Gen->>Board: 4: remove clue at p
     Gen->>Solver: 5: solve(probe, cs, limit=2)
     Solver-->>Gen: 6: count (1 = still unique, 2 = ambiguous)
-    Gen->>Board: 7: if count != 1 -> restore clue
+    Gen->>Board: 7: if count != 1 → restore clue
   end
   Gen->>Gen: 8: reachedTarget(HARD)? stop
   Gen-->>Caller: 9: puzzle with a unique solution

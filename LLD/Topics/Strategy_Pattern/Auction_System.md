@@ -1223,13 +1223,13 @@ sequenceDiagram
   A->>S: 2: state.placeBid(this, "u7", 105)
   S->>M: 3: processBid(bid, bids, item)  [Template Method]
   M->>M: 4: preCheck() ok
-  M->>M: 5: validate() -> 105 > high+inc? ok
+  M->>M: 5: validate() → 105 > high+inc? ok
   M->>M: 6: bids.push_back(bid)  [fixed step]
   M-->>S: 7: {accepted}
   S->>Snipe: 8: adjust(endAt, now)
   Snipe-->>S: 9: endAt + 60s  (sniped!)
   S->>A: 10: setEndAt(endAt+60s)
-  Note over S,A: closesOnAccept()=false (English) -> stay OPEN
+  Note over S,A: closesOnAccept()=false (English) → stay OPEN
   A-->>Bidder: 11: accepted
 ```
 

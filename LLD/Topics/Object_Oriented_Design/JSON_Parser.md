@@ -1312,9 +1312,9 @@ sequenceDiagram
   JP->>P: 2: parse()
   P->>T: 3: next()  (LBrace)
   T-->>P: 4: Token{LBrace, line1 col1}
-  P->>P: 5: parseValue() -> parseObject()
+  P->>P: 5: parseValue() → parseObject()
   P->>T: 6: next() (String "x"), expect(Colon)
-  P->>P: 7: parseValue() -> parseArray()  (recursion)
+  P->>P: 7: parseValue() → parseArray()  (recursion)
   P->>Obj: 8: set("x", arrayNode)
   P->>T: 9: next() (RBrace), expect(EndOfInput)
   P-->>JP: 10: unique_ptr~JsonValue~ (root = Obj)

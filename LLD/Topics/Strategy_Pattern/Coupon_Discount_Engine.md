@@ -753,9 +753,9 @@ sequenceDiagram
   E->>F: makeStrategy(row FLAT100)
   F-->>E: FlatOff(100)
   E->>H1: handle(ctx, cart)
-  Note over H1: computeDiscount(1000) = 100<br/>runningSubtotal 1000 -> 900, pass on
+  Note over H1: computeDiscount(1000) = 100<br/>runningSubtotal 1000 → 900, pass on
   H1->>H2: handle(ctx, cart)
-  Note over H2: computeDiscount(900) = 100<br/>runningSubtotal 900 -> 800, end of chain
+  Note over H2: computeDiscount(900) = 100<br/>runningSubtotal 900 → 800, end of chain
   H2-->>E: ctx.breakdown filled
   E-->>Client: Quote{finalTotal:800, breakdown:[...]}
 ```

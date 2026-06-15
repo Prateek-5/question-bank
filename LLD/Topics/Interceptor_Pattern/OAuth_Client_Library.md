@@ -1120,7 +1120,7 @@ sequenceDiagram
   T2->>TM: 2: getValidToken()
   Note over TM: 3: both see phase != FRESH (stale)
   TM->>TM: 4: T1 acquires lock, sets phase=REFRESHING
-  TM-->>T2: 5: T2 sees REFRESHING -> cv.wait()
+  TM-->>T2: 5: T2 sees REFRESHING → cv.wait()
   TM->>Flow: 6: refresh(refreshToken)  [lock released]
   Flow-->>TM: 7: new TokenSet
   TM->>Store: 8: save(tokenSet)

@@ -1266,8 +1266,8 @@ sequenceDiagram
   Sub->>Client: 7: onMessage(msg#7)
   Client-->>Sub: 8: Ack::ACK
   Sub->>Inf: 9: ack()
-  Inf->>Inf: 10: state.onAck() -> AckedState
-  Inf->>Sub: 11: advanceCursor(7) -> cursor=8
+  Inf->>Inf: 10: state.onAck() → AckedState
+  Inf->>Sub: 11: advanceCursor(7) → cursor=8
 ```
 
 **Tour of Phase 1 (happy path).**
@@ -1329,7 +1329,7 @@ sequenceDiagram
   Sub->>Client: 1: onMessage(msg#6)
   Client-->>Sub: 2: Ack::NACK (processing failed)
   Sub->>Inf: 3: nack()
-  Inf->>Inf: 4: state.onNack() -> bumpAttempt (=2)
+  Inf->>Inf: 4: state.onNack() → bumpAttempt (=2)
   Inf->>Policy: 5: decide(delivery)
   Policy-->>Inf: 6: RETRY_AFTER 400ms
   Inf->>Sub: 7: scheduleRedelivery(d, 400ms)
