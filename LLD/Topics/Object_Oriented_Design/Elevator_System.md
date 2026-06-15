@@ -647,8 +647,8 @@ classDiagram
   direction TB
   class ElevatorCar {
     -state : ElevatorState* (unique_ptr)
-    +step()     → state.step(this)
-    +addStop(f) → state.addStop(this, f)
+    +step()
+    +addStop(f)
     +transitionTo(s)
     +enterMaintenance()
   }
@@ -942,8 +942,8 @@ classDiagram
   class ElevatorCar {
     -state : ElevatorState*
     -door : DoorPolicy*
-    +step()     → state.step()
-    +addStop(f) → state.addStop()
+    +step()
+    +addStop(f)
     +transitionTo(s)
   }
   class ElevatorState {

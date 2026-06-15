@@ -541,9 +541,9 @@ classDiagram
   class Message {
     -state : MessageState* (unique_ptr)
     -retries : int
-    +deliver()  → state.deliver()
-    +ack()      → state.ack()
-    +nack(p)    → state.nack(p)
+    +deliver()
+    +ack()
+    +nack(p)
     +transitionTo(s)
   }
   class MessageState {
@@ -970,7 +970,6 @@ classDiagram
   direction TB
   class Broker {
     topics : map~string, Topic~
-    (root coordinator)
   }
   class Topic {
     name : string

@@ -467,7 +467,7 @@ config:
 classDiagram
   direction TB
   class PaymentProcessor {
-    +charge(req)  → method.authorize/capture
+    +charge(req)
   }
   class PaymentMethod {
     <<interface>>
@@ -652,8 +652,8 @@ classDiagram
   direction TB
   class Transaction {
     -state : TxnState* (unique_ptr)
-    +capture()  → state.capture()
-    +refund(a)  → state.refund()
+    +capture()
+    +refund(a)
     +transitionTo(s)
   }
   class TxnState {
@@ -1007,8 +1007,8 @@ classDiagram
   direction TB
   class Transaction {
     -state : TxnState* (unique_ptr)
-    +capture() → state.capture()
-    +refund(a) → state.refund()
+    +capture()
+    +refund(a)
     +transitionTo(s)
   }
   class TxnState {

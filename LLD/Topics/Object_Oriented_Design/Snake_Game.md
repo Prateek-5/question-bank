@@ -589,8 +589,8 @@ classDiagram
   direction TB
   class Game {
     -state : GameState* (unique_ptr)
-    +tick()         → state.tick()
-    +pauseToggle()  → state.onPauseToggle()
+    +tick()
+    +pauseToggle()
     +transitionTo(s)
   }
   class GameState {
@@ -771,7 +771,6 @@ classDiagram
   class Game {
     score : int
     foodsEaten : int
-    (root coordinator)
   }
   class Board {
     width : int
@@ -841,8 +840,8 @@ classDiagram
   direction TB
   class Game {
     -state : GameState*
-    +tick()        → state.tick()
-    +pauseToggle() → state.onPauseToggle()
+    +tick()
+    +pauseToggle()
     +transitionTo(s)
   }
   class GameState {

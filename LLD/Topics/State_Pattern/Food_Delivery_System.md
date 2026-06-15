@@ -515,8 +515,8 @@ classDiagram
   direction TB
   class Order {
     -state : OrderState* (unique_ptr)
-    +advance() → state.advance()
-    +cancel()  → state.cancel()
+    +advance()
+    +cancel()
     +transitionTo(s)
   }
   class OrderState {
@@ -859,7 +859,7 @@ classDiagram
     -observers : OrderObserver[]
     +subscribe(obs)
     +unsubscribe(obs)
-    -publish() → obs.onOrderEvent
+    -publish()
   }
   class OrderObserver {
     <<interface>>

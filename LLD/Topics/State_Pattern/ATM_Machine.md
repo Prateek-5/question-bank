@@ -459,10 +459,10 @@ classDiagram
   direction TB
   class ATM {
     -state : ATMState* (unique_ptr)
-    +insertCard(c) → state.insertCard()
-    +enterPin(p)   → state.enterPin()
-    +select(t)     → state.selectTransaction()
-    +ejectCard()   → state.ejectCard()
+    +insertCard(c)
+    +enterPin(p)
+    +select(t)
+    +ejectCard()
     +transitionTo(s)
   }
   class ATMState {

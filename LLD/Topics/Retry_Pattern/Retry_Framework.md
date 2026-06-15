@@ -583,9 +583,9 @@ classDiagram
   direction TB
   class CircuitBreaker {
     -state : BreakerStateBase* (unique_ptr)
-    +allow()     → state.allow()
-    +onSuccess() → state.onSuccess()
-    +onFailure() → state.onFailure()
+    +allow()
+    +onSuccess()
+    +onFailure()
     +transitionTo(s)
   }
   class BreakerStateBase {

@@ -581,7 +581,7 @@ classDiagram
   class EventBus {
     -chain : Middleware[]
     +use(m: Middleware)
-    +publish(e) → folds chain → fanOut
+    +publish(e)
   }
   class Middleware {
     <<interface>>
@@ -777,7 +777,7 @@ config:
 classDiagram
   direction TB
   class EventBus {
-    +publish(e) → store.append → chain → fanOut
+    +publish(e)
   }
   class EventStore {
     -log : Event[]

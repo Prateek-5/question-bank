@@ -936,7 +936,6 @@ classDiagram
   }
   class KeyExtractor {
     <<function>>
-    (ctx) string
   }
   class Decision {
     +allowed : bool

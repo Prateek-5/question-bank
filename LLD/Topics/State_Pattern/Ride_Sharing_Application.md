@@ -490,10 +490,10 @@ classDiagram
   direction TB
   class Ride {
     -state : RideState* (unique_ptr)
-    +match(d)   → state.match()
+    +match(d)
     +pickup/arrive/startTrip/dropoff
-    +cancel()   → state.cancel()
-    +rate(..)   → state.rate()
+    +cancel()
+    +rate(..)
     +transitionTo(s)
   }
   class RideState {
@@ -520,7 +520,6 @@ classDiagram
     rate → record (legal only here)
   }
   class NoShowState {
-    (NEW: fee + free driver)
   }
   Ride *-- RideState : owns
   RideState <|.. RequestedState
@@ -814,7 +813,6 @@ classDiagram
   class SurgeEngine
   class RatingService
   class FraudDetector {
-    (NEW: just subscribe)
   }
   RideSubject o-- RideObserver : notifies
   RideObserver <|.. PushNotifier
@@ -894,7 +892,6 @@ classDiagram
   class RideState {
     <<interface>>
     +match/arrive/startTrip/dropoff/cancel/rate
-    (defaults throw)
   }
   class RequestedState
   class MatchedState
@@ -1032,7 +1029,6 @@ config:
 classDiagram
   direction TB
   class RideService {
-    (IS-A RideSubject)
     +publish(ev, ride)
   }
   class RideSubject {
@@ -1049,7 +1045,7 @@ classDiagram
   class AnalyticsSink
   class SurgeEngine
   class RatingService {
-    +onRideEvent(COMPLETED) → prompt + avg
+    +onRideEvent(COMPLETED)
   }
   RideService --|> RideSubject
   RideSubject o-- RideObserver : notifies

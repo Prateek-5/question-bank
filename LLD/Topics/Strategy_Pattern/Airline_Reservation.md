@@ -724,10 +724,10 @@ classDiagram
   direction TB
   class Booking {
     -state : BookingState* (unique_ptr)
-    +confirm() → state.confirm()
-    +cancel()  → state.cancel()
-    +checkIn() → state.checkIn()
-    +board()   → state.board()
+    +confirm()
+    +cancel()
+    +checkIn()
+    +board()
     +transitionTo(s)
   }
   class BookingState {
@@ -912,7 +912,6 @@ classDiagram
   direction TB
   class ReservationSystem {
     flights : vector~Flight~
-    (root coordinator)
   }
   class Flight {
     number, origin, dest

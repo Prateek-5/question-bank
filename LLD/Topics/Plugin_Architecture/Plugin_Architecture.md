@@ -602,9 +602,9 @@ classDiagram
   direction TB
   class PluginEntry {
     -state : PluginState* (unique_ptr)
-    +enable()  → state.enable()
-    +disable() → state.disable()
-    +unload()  → state.unload()
+    +enable()
+    +disable()
+    +unload()
     +transitionTo(s)
   }
   class PluginState {

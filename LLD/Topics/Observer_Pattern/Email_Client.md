@@ -423,7 +423,7 @@ classDiagram
     -observers : MailObserver*[]
     +subscribe(o)
     +unsubscribe(o)
-    +receive(m) → loop notify
+    +receive(m)
   }
   class MailObserver {
     <<interface>>
@@ -695,13 +695,13 @@ config:
 classDiagram
   direction TB
   class SyncEngine {
-    +poll() → mailbox.receive(m)
+    +poll()
   }
   class Mailbox {
     -root : Folder
     -observers : MailObserver*[]
     +subscribe(o) / unsubscribe(o)
-    +receive(m) → store + notify
+    +receive(m)
     +send(m) / compose()
   }
   class MailObserver {

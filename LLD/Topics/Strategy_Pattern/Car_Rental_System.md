@@ -556,9 +556,9 @@ classDiagram
   direction TB
   class Reservation {
     -state : ReservationState* (unique_ptr)
-    +pickUp()         → state.pickUp()
-    +cancel()         → state.cancel()
-    +returnVehicle(m) → state.returnVehicle()
+    +pickUp()
+    +cancel()
+    +returnVehicle(m)
     +transitionTo(s)
   }
   class ReservationState {

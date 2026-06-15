@@ -435,7 +435,7 @@ classDiagram
   direction TB
   class NotificationDispatcher {
     -channels : map~string,Channel~
-    +notify(...)  → loop channels
+    +notify(...)
   }
   class Channel {
     <<interface>>
@@ -607,10 +607,10 @@ classDiagram
   class ExponentialBackoff
   class NoRetry
   class EmailChannel {
-    #doDeliver → smtp.send
+    #doDeliver
   }
   class SmsChannel {
-    #doDeliver → twilio.send
+    #doDeliver
   }
   Channel o-- RetryPolicy : composes
   RetryPolicy <|.. ExponentialBackoff
@@ -733,20 +733,20 @@ classDiagram
   class EventBus {
     -subs : map~string, EventObserver[]~
     +subscribe(cat, o)
-    +publish(e)  → fan-out
+    +publish(e)
   }
   class EventObserver {
     <<interface>>
     +onEvent(e)
   }
   class NotificationDispatcher {
-    +onEvent(e) → render+send
+    +onEvent(e)
   }
   class AnalyticsLogger {
-    +onEvent(e) → log
+    +onEvent(e)
   }
   class OrderService {
-    +ship() → bus.publish(e)
+    +ship()
   }
   EventBus o-- EventObserver : observers
   EventObserver <|.. NotificationDispatcher

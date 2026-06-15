@@ -432,11 +432,10 @@ classDiagram
   class PutRecord {
     -value : string
     -expireAtMs : int64
-    +applyTo → index.upsert
+    +applyTo
   }
   class DeleteRecord {
-    (tombstone)
-    +applyTo → index.remove
+    +applyTo
   }
   class Index {
     +upsert(key, loc)

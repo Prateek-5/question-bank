@@ -474,10 +474,10 @@ classDiagram
   direction TB
   class ShowSeat {
     -state : SeatState* (unique_ptr)
-    +lock(u)    → state.lock()
-    +confirm(u) → state.confirm()
-    +expire()   → state.expire()
-    +cancel()   → state.cancel()
+    +lock(u)
+    +confirm(u)
+    +expire()
+    +cancel()
     +transitionTo(s)
   }
   class SeatState {

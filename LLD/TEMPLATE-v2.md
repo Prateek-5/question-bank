@@ -254,6 +254,39 @@ A reading guide (1-3 sentences explaining what the diagram shows): ParkingLot co
 
 The reading guide replaces ASCII renderings. It's 1-3 sentences of prose explaining what the diagram shows, NOT a re-derivation.
 
+#### classDiagram member-line grammar (HARD rules — GitHub mermaid v10 rejects violations)
+
+Inside a `class X { ... }` body, every line MUST be ONE of:
+
+- A member declaration: `+name(params) ReturnType` or `+name(params)` or `+attr : Type`. Allowed visibility prefixes: `+` `-` `#` `~`.
+- A stereotype: `<<interface>>`, `<<abstract>>`, `<<enum>>`. Placed before the members.
+- Empty (blank line).
+
+**Two anti-patterns that break GitHub renders:**
+
+1. **DO NOT put `→` or `->` arrows inside method signatures.** Lines like `+pay(m) → state.pay()` are NOT valid mermaid — the arrow is not a recognized token in the member grammar. The "delegates-to" semantics belong in the prose reading-guide below the diagram, NOT in the class body.
+
+   ```
+   ❌ +pay(m)   → state.pay()
+   ✅ +pay(m)
+   ```
+
+2. **DO NOT put bare parenthesized prose lines** like `(root coordinator)` or `(linear probing + tombstones)` inside a class body. Mermaid treats any line that doesn't start with `+` `-` `#` `~` (or a stereotype) as a parse error. If you want to annotate the role of a class, use a stereotype OR put the annotation in the prose reading-guide:
+
+   ```
+   ❌ class HashMap {
+   ❌   (root coordinator)
+   ❌   -policy : ...
+   ❌ }
+
+   ✅ class HashMap {
+   ✅   <<coordinator>>
+   ✅   -policy : ...
+   ✅ }
+   ```
+
+A repo-wide sweep on 2026-06-15 cleaned 186 arrow-truncations + 34 bare-paren deletions across 61 files. Do not re-introduce either pattern.
+
 ### Rule 6 — C++ skeleton style
 
 The repo's lingua franca for LLD is **C++17**. If the question explicitly demands Java/C#/Kotlin, switch and note the choice in the header.

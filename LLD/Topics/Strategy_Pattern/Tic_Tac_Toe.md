@@ -436,7 +436,7 @@ classDiagram
   class Game {
     -playerX : Player*
     -playerO : Player*
-    +play()  → current.decideMove(board)
+    +play()
   }
   class Player {
     <<interface>>
@@ -572,7 +572,7 @@ classDiagram
   direction TB
   class Game {
     -win : WinStrategy*
-    +play()  → win.isWinningMove(board, last, mark)
+    +play()
   }
   class WinStrategy {
     <<interface>>

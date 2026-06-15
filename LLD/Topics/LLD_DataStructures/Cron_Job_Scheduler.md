@@ -1001,8 +1001,8 @@ classDiagram
     -jobId : string
     -state : RunState* (unique_ptr)
     -observers : RunObserver[]
-    +start()    → state.start()
-    +complete(o)→ state.complete()
+    +start()
+    +complete(o)
     +notify()
   }
   class RunState {

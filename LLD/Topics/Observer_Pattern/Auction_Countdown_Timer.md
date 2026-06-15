@@ -631,7 +631,7 @@ classDiagram
   }
   class TimerDisplayObserver {
     -clock : ClientClock&
-    +onAuctionEvent(e) → uses serverEnd from event
+    +onAuctionEvent(e)
   }
   Auction ..> ServerClock : reads truth
   TimerDisplayObserver --> ClientClock : reads estimate
@@ -850,7 +850,6 @@ classDiagram
   direction TB
   class ServerClock {
     +now() time_point
-    (single source of truth)
   }
   class ClientClock {
     -offset : duration

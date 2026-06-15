@@ -452,7 +452,7 @@ classDiagram
   direction TB
   class LoadTest {
     -ramp : RampUpPattern*
-    +run() → ramp.desiredUsersAt(t)
+    +run()
   }
   class RampUpPattern {
     <<interface>>
@@ -601,7 +601,6 @@ classDiagram
     -tokens : int
   }
   class UnlimitedController {
-    (no state)
   }
   LoadTest o-- RateController : injected
   RateController <|.. FixedRpsController

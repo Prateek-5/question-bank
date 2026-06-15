@@ -669,9 +669,9 @@ classDiagram
   direction TB
   class InventoryService {
     -store : EventStore*
-    +receive → append(RECEIVE)
-    +ship → append(SHIP)
-    +currentQty → project(history)
+    +receive
+    +ship
+    +currentQty
   }
   class EventStore {
     <<interface>>

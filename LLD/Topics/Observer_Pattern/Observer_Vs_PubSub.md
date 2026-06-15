@@ -379,7 +379,7 @@ classDiagram
     -observers : vector~Observer*~
     +subscribe(o)
     +unsubscribe(o)
-    +setStatus(s) → notify all
+    +setStatus(s)
   }
   class Observer {
     <<interface>>
@@ -511,7 +511,7 @@ classDiagram
   direction LR
   class Order {
     -bus : EventBus&
-    +setStatus(s) → publish("order.status", e)
+    +setStatus(s)
   }
   class EventBus {
     -topics : map~string, vector~Sub~~
@@ -658,7 +658,7 @@ classDiagram
   direction TB
   class Order {
     -observers : vector~weak_ptr~Observer~~
-    +setStatus() → lock & prune dead
+    +setStatus()
   }
   class Observer {
     <<interface>>
@@ -667,7 +667,7 @@ classDiagram
   class Subscription {
     -bus : EventBus*
     -topic, id
-    +~Subscription() → unsubscribe
+    +~Subscription()
   }
   class EventBus {
     +subscribe() long
@@ -793,7 +793,7 @@ classDiagram
   direction LR
   class Order {
     -bus : EventBus&
-    +setStatus(s) → publish
+    +setStatus(s)
   }
   class EventBus {
     <<interface>>
@@ -805,7 +805,7 @@ classDiagram
     -topics : map~string, vector~Sub~~
   }
   class Subscription {
-    +~Subscription() → unsubscribe
+    +~Subscription()
   }
   class EmailSub
   class AnalyticsSub

@@ -486,7 +486,6 @@ classDiagram
     +addEntry(e)
   }
   class Commit {
-    (defined in Pivot 2)
   }
   ObjectStore o-- GitObject : owns by Oid
   GitObject <|-- Blob

@@ -485,7 +485,7 @@ classDiagram
   direction TB
   class Booking {
     -refundPolicy : RefundPolicy*
-    +cancel() → policy.refundFor(this)
+    +cancel()
   }
   class RefundPolicy {
     <<interface>>
@@ -658,8 +658,8 @@ classDiagram
   direction TB
   class Booking {
     -state : BookingState* (unique_ptr)
-    +confirm()  → state.confirm()
-    +cancel()   → state.cancel()
+    +confirm()
+    +cancel()
     +transitionTo(s)
   }
   class BookingState {

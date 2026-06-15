@@ -427,7 +427,7 @@ classDiagram
   direction TB
   class Game {
     -evaluator : HandEvaluator*
-    +compare(a, b) → score(a) vs score(b)
+    +compare(a, b)
   }
   class HandEvaluator {
     <<interface>>

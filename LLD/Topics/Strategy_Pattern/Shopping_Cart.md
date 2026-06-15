@@ -726,9 +726,9 @@ classDiagram
   direction TB
   class Order {
     -state : OrderState* (unique_ptr)
-    +pay(m)   → state.pay()
-    +confirm() → state.confirm()
-    +cancel()  → state.cancel()
+    +pay(m)
+    +confirm()
+    +cancel()
     +transitionTo(s)
   }
   class OrderState {

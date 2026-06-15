@@ -463,7 +463,7 @@ classDiagram
     -ready : ReadyQueue
     -delayed : DelayQueue
     +submit(t) checks cycle
-    +pumpReady() moves due+eligible -> ready
+    +pumpReady() moves due+eligible
     +next() pop max priority
   }
   class DependencyGraph {
@@ -622,11 +622,11 @@ classDiagram
   direction TB
   class Task {
     -state : TaskState* (unique_ptr)
-    +markReady() -> state.onReady
-    +start()     -> state.onStart
-    +succeed()   -> state.onSuccess
-    +fail()      -> state.onFailure
-    +cancel()    -> state.onCancel
+    +markReady()
+    +start()
+    +succeed()
+    +fail()
+    +cancel()
   }
   class TaskState {
     <<interface>>

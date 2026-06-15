@@ -472,7 +472,6 @@ classDiagram
     evaluate → !child
   }
   class Comparison {
-    (leaf — see Pivot 2)
   }
   RuleExpr <|.. And
   RuleExpr <|.. Or

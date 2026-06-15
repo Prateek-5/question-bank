@@ -408,9 +408,9 @@ classDiagram
   direction TB
   class Order {
     -state : OrderState* (unique_ptr)
-    +confirm() → state.confirm()
-    +ship()    → state.ship()
-    +cancel()  → state.cancel()
+    +confirm()
+    +ship()
+    +cancel()
     +transitionTo(s)
   }
   class OrderState {
@@ -426,10 +426,8 @@ classDiagram
   }
   class ShippedState {
     deliver → Delivered
-    (ship inherits throw)
   }
   class CancelledState {
-    (overrides nothing = terminal)
   }
   Order *-- OrderState : owns
   OrderState <|.. PlacedState

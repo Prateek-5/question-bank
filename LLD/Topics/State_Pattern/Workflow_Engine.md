@@ -459,11 +459,11 @@ classDiagram
   direction TB
   class Task {
     -state : TaskState* (unique_ptr)
-    +start()      → state.start()
-    +complete()   → state.complete()
-    +fail()       → state.fail()
-    +timeOut()    → state.timeOut()
-    +compensate() → state.compensate()
+    +start()
+    +complete()
+    +fail()
+    +timeOut()
+    +compensate()
     +transitionTo(s)
   }
   class TaskState {
@@ -1003,7 +1003,7 @@ classDiagram
   class AtomicTask {
     -state : TaskState*
     -errorChain : ErrorHandler*
-    +run(ctx) → state transitions
+    +run(ctx)
   }
   class TaskState {
     <<interface>>

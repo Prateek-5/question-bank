@@ -459,12 +459,12 @@ classDiagram
     #invokeTest(tc)* 「abstract step」
   }
   class StandardRunner {
-    #beforeEach → run registered hooks
-    #afterEach  → run registered hooks
-    #invokeTest → tc.body()()
+    #beforeEach
+    #afterEach
+    #invokeTest
   }
   class RetryingRunner {
-    #invokeTest → loop up to N attempts
+    #invokeTest
   }
   AbstractTestRunner <|-- StandardRunner
   StandardRunner <|-- RetryingRunner
@@ -636,13 +636,13 @@ classDiagram
     -body : function
     -beforeEach : Hook[]
     -afterEach : Hook[]
-    +accept → runner.run(this)
+    +accept
   }
   class TestSuite {
     -children : TestNode[]
     -beforeAll : Hook[]
     -afterAll : Hook[]
-    +accept → recurse children
+    +accept
   }
   class TestDiscoverer {
     <<interface>>
@@ -823,7 +823,7 @@ classDiagram
     -discoverer : TestDiscoverer*
     -runner : AbstractTestRunner*
     -collector : ResultCollector*
-    +execute()  「discover → walk tree → finish」
+    +execute()
   }
   class AbstractTestRunner {
     <<abstract>>
@@ -956,7 +956,7 @@ classDiagram
     -listeners : TestListener[]
     -results : TestResult[]
     +subscribe(l)
-    +add(r) → notify all
+    +add(r)
   }
   class TestListener {
     <<interface>>

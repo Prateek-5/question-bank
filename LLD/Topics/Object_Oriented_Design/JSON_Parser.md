@@ -990,7 +990,6 @@ classDiagram
   direction TB
   class JsonParser {
     +parse(text) unique_ptr~JsonValue~
-    (facade over Tokenizer + Parser)
   }
   class Parser {
     -lexer : Tokenizer
@@ -1080,7 +1079,6 @@ classDiagram
   class PrettyPrintVisitor
   class NodeCountVisitor
   class SchemaVisitor {
-    (future op = 1 new class)
   }
   JsonValue ..> JsonVisitor : accept calls visit(this)
   JsonVisitor <|.. SerializeVisitor

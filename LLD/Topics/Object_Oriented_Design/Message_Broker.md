@@ -789,8 +789,8 @@ classDiagram
   class Delivery {
     -state : DeliveryState* (unique_ptr)
     -attempts : int
-    +ack()  → state.ack()
-    +nack() → state.nack()
+    +ack()
+    +nack()
     +transitionTo(s)
   }
   class DeliveryState {

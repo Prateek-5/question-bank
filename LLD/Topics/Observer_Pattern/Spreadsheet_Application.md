@@ -838,7 +838,6 @@ classDiagram
   class Spreadsheet {
     +setValue(ref, input)
     +getValue(ref) CellValue
-    (root coordinator)
   }
   class CellStore {
     -cells : map~CellRef, Cell~

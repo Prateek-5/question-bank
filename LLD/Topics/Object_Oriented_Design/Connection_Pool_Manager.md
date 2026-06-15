@@ -614,9 +614,9 @@ classDiagram
   direction TB
   class Connection {
     -state : ConnState* (unique_ptr)
-    +markBusy()  → state.onLend()
-    +markIdle()  → state.onReturn()
-    +markBroken()→ state.onFail()
+    +markBusy()
+    +markIdle()
+    +markBroken()
     +transitionTo(s)
   }
   class ConnState {
@@ -636,7 +636,6 @@ classDiagram
   }
   class BrokenState {
     lendable → false
-    (evictor closes it)
   }
   class ClosingState {
     terminal; rejects all
@@ -918,7 +917,7 @@ classDiagram
   class Lease {
     -conn : Connection*
     -pool : ConnectionPool*
-    +~Lease() → pool.release(conn)
+    +~Lease()
     +get() Connection*
   }
   class Connection {
@@ -978,9 +977,9 @@ classDiagram
   direction TB
   class Connection {
     -state : ConnState* (unique_ptr)
-    +markBusy() → state.onLend()
-    +markIdle() → state.onReturn()
-    +markBroken() → state.onFail()
+    +markBusy()
+    +markIdle()
+    +markBroken()
     +reset()
     +query(sql)
   }

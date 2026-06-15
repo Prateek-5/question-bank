@@ -670,9 +670,9 @@ classDiagram
   direction TB
   class Lobby {
     -state : LobbyState* (unique_ptr)
-    +join(p)        → state.join()
-    +markReady(p)   → state.markReady()
-    +startReadyCheck() → state.startReadyCheck()
+    +join(p)
+    +markReady(p)
+    +startReadyCheck()
     +transitionTo(s)
   }
   class LobbyState {

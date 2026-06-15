@@ -549,8 +549,8 @@ classDiagram
   direction TB
   class HashMap~K,V~ {
     -policy : CollisionPolicy~K,V~*
-    +put → policy.put(hash, k, v)
-    +get → policy.get(hash, k)
+    +put
+    +get
   }
   class CollisionPolicy~K,V~ {
     <<interface>>
@@ -564,7 +564,6 @@ classDiagram
   }
   class OpenAddressing~K,V~ {
     -slots : vector~optional~pair~~
-    (linear probing + tombstones)
   }
   HashMap *-- CollisionPolicy : owns (unique_ptr)
   CollisionPolicy <|.. SeparateChaining

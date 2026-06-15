@@ -601,7 +601,6 @@ classDiagram
   }
   class CaretMemento {
     -start, end : int
-    (opaque; friend Caret)
   }
   class ReplaceAllCommand {
     -before : CaretMemento
@@ -610,7 +609,6 @@ classDiagram
     +undo()
   }
   class History {
-    (Caretaker)
     -undo : vector~Command~
   }
   Caret ..> CaretMemento : creates / restores

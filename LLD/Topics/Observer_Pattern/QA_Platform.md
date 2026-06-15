@@ -602,7 +602,7 @@ classDiagram
   direction TB
   class ReputationObserver {
     -rule : ReputationStrategy*
-    +onEvent(e) → rule.deltasFor(e)
+    +onEvent(e)
   }
   class ReputationStrategy {
     <<interface>>

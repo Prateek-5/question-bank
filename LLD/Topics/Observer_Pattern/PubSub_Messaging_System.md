@@ -608,9 +608,9 @@ classDiagram
   class InflightDelivery {
     -attempts : uint32
     -state : DeliveryState* (unique_ptr)
-    +ack()  → state.onAck()
-    +nack() → state.onNack()
-    +onTimeout() → state.onTimeout()
+    +ack()
+    +nack()
+    +onTimeout()
     +transitionTo(s)
   }
   class DeliveryState {

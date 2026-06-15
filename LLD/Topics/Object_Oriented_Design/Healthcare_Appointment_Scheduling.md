@@ -477,9 +477,9 @@ classDiagram
   direction TB
   class Appointment {
     -state : ApptState* (unique_ptr)
-    +confirm() → state.confirm()
-    +checkIn() → state.checkIn()
-    +cancel()  → state.cancel()
+    +confirm()
+    +checkIn()
+    +cancel()
     +transitionTo(s)
   }
   class ApptState {
@@ -502,10 +502,8 @@ classDiagram
     start → InProgress
   }
   class CompletedState {
-    (terminal)
   }
   class CancelledState {
-    (terminal)
   }
   Appointment *-- ApptState : owns
   ApptState <|.. RequestedState
@@ -927,7 +925,7 @@ classDiagram
     +onEvent(e)
   }
   class ReminderScheduler {
-    +tick(now) → appt.notify(REMINDER)
+    +tick(now)
   }
   class SmsNotifier
   class EmailNotifier

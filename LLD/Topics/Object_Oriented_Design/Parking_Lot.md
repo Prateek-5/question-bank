@@ -659,8 +659,8 @@ classDiagram
   direction TB
   class Ticket {
     -state : TicketState* (unique_ptr)
-    +pay(m)   → state.pay()
-    +exit()   → state.exit()
+    +pay(m)
+    +exit()
     +transitionTo(s)
   }
   class TicketState {
@@ -824,7 +824,6 @@ classDiagram
   direction TB
   class ParkingLot {
     floors : vector~Floor~
-    (root coordinator)
   }
   class Floor {
     num : int
@@ -967,8 +966,8 @@ classDiagram
   direction TB
   class Ticket {
     -state : TicketState*
-    +pay(m)   → state.pay()
-    +exit()   → state.exit()
+    +pay(m)
+    +exit()
     +transitionTo(s)
   }
   class TicketState {

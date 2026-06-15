@@ -432,10 +432,10 @@ classDiagram
   direction TB
   class VendingMachine {
     -state : MachineState* (unique_ptr)
-    +selectProduct(c) → state.selectProduct()
-    +insertMoney(n)   → state.insertMoney()
-    +dispense()       → state.dispense()
-    +cancel()         → state.cancel()
+    +selectProduct(c)
+    +insertMoney(n)
+    +dispense()
+    +cancel()
     +transitionTo(s)
   }
   class MachineState {
@@ -460,7 +460,6 @@ classDiagram
   }
   class MaintenanceState {
     customer actions → throw
-    (admin path only)
   }
   VendingMachine *-- MachineState : owns
   MachineState <|.. IdleState
@@ -594,7 +593,7 @@ classDiagram
   direction TB
   class VendingMachine {
     -change : ChangeStrategy*
-    +dispense → change.makeChange()
+    +dispense
   }
   class ChangeStrategy {
     <<interface>>
@@ -739,7 +738,6 @@ classDiagram
   direction TB
   class VendingMachine {
     balance : int (cents)
-    (root coordinator)
   }
   class Inventory {
     slots : map~string,Slot~

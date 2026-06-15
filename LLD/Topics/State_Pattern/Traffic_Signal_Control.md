@@ -454,8 +454,8 @@ classDiagram
   direction TB
   class TrafficController {
     -phase : SignalPhase* (unique_ptr)
-    +tick()   → phase.onTimerExpired()
-    +onEmergency(d) → phase.onEmergency()
+    +tick()
+    +onEmergency(d)
     +transitionTo(next)
   }
   class SignalPhase {
@@ -608,7 +608,7 @@ classDiagram
   class TrafficController {
     -observers : vector~SignalObserver~
     +addObserver(o)
-    +transitionTo(next) → notifyAll
+    +transitionTo(next)
   }
   class SignalObserver {
     <<interface>>
@@ -741,7 +741,7 @@ classDiagram
   class TrafficController {
     -plan : TimingPlan*
     +setTimingPlan(p)
-    +currentDuration() → plan.durationFor(phase)
+    +currentDuration()
   }
   class TimingPlan {
     <<interface>>

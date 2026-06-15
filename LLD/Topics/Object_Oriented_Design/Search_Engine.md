@@ -874,7 +874,6 @@ config:
 classDiagram
   direction TB
   class SearchEngine {
-    (facade / coordinator)
     +index(doc)
     +search(q, page) ResultPage
     +remove(docId)
@@ -1022,7 +1021,7 @@ classDiagram
   class NotQuery
   class InvertedIndex {
     +addObserver(o)
-    +add / remove → notify
+    +add / remove
   }
   class IndexObserver {
     <<interface>>

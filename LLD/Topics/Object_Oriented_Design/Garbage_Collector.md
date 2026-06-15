@@ -461,8 +461,8 @@ classDiagram
   direction TB
   class Heap {
     -collector : Collector*
-    +collect() → collector.collect(this)
-    +onWrite(from,to) → collector.onWriteBarrier
+    +collect()
+    +onWrite(from,to)
   }
   class Collector {
     <<interface>>
@@ -647,9 +647,9 @@ classDiagram
   direction TB
   class GCObject {
     -state : ObjectState* (unique_ptr)
-    +onUnreachable() → state
-    +markReachable() → state
-    +runFinalizer()  → state
+    +onUnreachable()
+    +markReachable()
+    +runFinalizer()
     +transitionTo(s)
   }
   class ObjectState {
@@ -853,7 +853,6 @@ classDiagram
   class Heap {
     objects : vector~GCObject~
     finalizerQueue : queue~GCObject*~
-    (root coordinator)
   }
   class GCObject {
     id : int

@@ -433,7 +433,7 @@ classDiagram
     -inner : Repository*
     -store : CacheStore*
     -ttl
-    +get → hit? else delegate
+    +get
   }
   class CacheStore~K,V~ {
     <<interface>>
@@ -581,7 +581,7 @@ classDiagram
   direction TB
   class CachingRepository {
     -writePolicy : WritePolicy*
-    +put → writePolicy.write()
+    +put
   }
   class WritePolicy~K,V~ {
     <<interface>>
@@ -600,7 +600,7 @@ classDiagram
   class WriteBuffer {
     -queue
     +enqueue(k, v)
-    +flush() → inner.put
+    +flush()
   }
   CachingRepository o-- WritePolicy : injected
   WritePolicy <|.. WriteThrough
@@ -879,8 +879,8 @@ classDiagram
   direction TB
   class CachingRepository {
     -coordinator : LoadCoordinator*
-    +get → fast path, else loadSingleFlight
-    +warm(keys) → loadSingleFlight per key
+    +get
+    +warm(keys)
   }
   class LoadCoordinator~K,V~ {
     -keyLocks : map~K, mutex~

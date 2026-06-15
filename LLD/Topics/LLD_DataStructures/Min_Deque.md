@@ -369,9 +369,9 @@ classDiagram
     -aux : deque~(val,idx)~  monotone
     -frontIdx : long long
     -backIdx : long long
-    +pushBack(x)  → restore aux
-    +popFront()   → maybe retire aux front
-    +min()        → aux.front  O(1)
+    +pushBack(x)
+    +popFront()
+    +min()
   }
   note for MinDequeCore "INVARIANT: aux non-decreasing front→back; aux.front == min()"
 ```

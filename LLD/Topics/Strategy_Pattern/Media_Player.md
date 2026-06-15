@@ -586,9 +586,9 @@ classDiagram
   direction TB
   class MediaPlayer {
     -state : PlaybackState* (unique_ptr)
-    +play()  → state.play()
-    +pause() → state.pause()
-    +seek(s) → state.seek()
+    +play()
+    +pause()
+    +seek(s)
     +transitionTo(s)
   }
   class PlaybackState {
@@ -741,8 +741,8 @@ classDiagram
   class Mp3Decoder
   class VendorHevcAdapter {
     -ctx : VendorCtx*
-    +decode(p) → vendorPull
-    +seekTo(s) → vendorSeek (sec→usec)
+    +decode(p)
+    +seekTo(s)
   }
   class VendorCtx {
     <<foreign / adaptee>>
@@ -821,7 +821,6 @@ classDiagram
   class MediaPlayer {
     volume : double
     speed : double
-    (root coordinator)
   }
   class Playlist {
     tracks : vector~Track~

@@ -193,14 +193,14 @@ classDiagram
     +unlock(m: DoorMachine&)
   }
   class ClosedState {
-    +open ⚠ hardcoded → OpenState
-    +lock ⚠ hardcoded → LockedState
+    +open ⚠ hardcoded
+    +lock ⚠ hardcoded
   }
   class OpenState {
-    +close ⚠ hardcoded → ClosedState
+    +close ⚠ hardcoded
   }
   class LockedState {
-    +unlock ⚠ hardcoded → ClosedState
+    +unlock ⚠ hardcoded
   }
   DoorMachine *-- DoorState : owns current
   DoorState <|-- ClosedState

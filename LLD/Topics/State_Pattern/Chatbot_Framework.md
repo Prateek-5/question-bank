@@ -464,7 +464,7 @@ classDiagram
   class Conversation {
     -state : DialogState* (unique_ptr)
     -context : Context
-    +dispatch(m,i,e) → state.handle()
+    +dispatch(m,i,e)
     +transitionTo(s)
   }
   class DialogState {
@@ -973,7 +973,7 @@ classDiagram
   direction TB
   class Conversation {
     -state : DialogState* (unique_ptr)
-    +dispatch(m,i,e) → state.handle()
+    +dispatch(m,i,e)
     +transitionTo(s)
   }
   class DialogState {

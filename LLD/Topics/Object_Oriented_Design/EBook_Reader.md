@@ -588,7 +588,7 @@ classDiagram
   class ReadingSession {
     -observers : weak_ptr~ProgressObserver~[]
     +addObserver(o)
-    +goToOffset(o) → notify()
+    +goToOffset(o)
   }
   class ProgressObserver {
     <<interface>>
@@ -878,7 +878,7 @@ classDiagram
     <<Subject>>
     -observers : weak_ptr~ProgressObserver~[]
     +addObserver(o)
-    +goToOffset(o) → notify()
+    +goToOffset(o)
   }
   class ProgressObserver {
     <<interface>>

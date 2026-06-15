@@ -459,7 +459,7 @@ classDiagram
   }
   class LambdaProvider~T~ {
     -fn : function
-    +build(c) → fn(c)
+    +build(c)
   }
   Container o-- IProvider : map of recipes
   IProvider <|.. LambdaProvider~T~
@@ -592,13 +592,13 @@ classDiagram
   }
   class SingletonLifetime {
     -cache : map~BindingKey, instance~
-    +getOrCreate → cache hit or build-once
+    +getOrCreate
   }
   class TransientLifetime {
-    +getOrCreate → always build
+    +getOrCreate
   }
   class ScopedLifetime {
-    +getOrCreate → one per scope
+    +getOrCreate
   }
   Binding *-- IProvider : owns recipe
   Binding o-- ILifetime : uses policy

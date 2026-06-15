@@ -745,7 +745,6 @@ classDiagram
     -books : BookRepository*
     -members : MemberRepository*
     -loans : LoanRepository*
-    (root coordinator)
   }
   class BookRepository {
     <<interface>>
@@ -883,7 +882,6 @@ classDiagram
     barcode, memberId
     issuedAt, dueAt
     returnedAt : optional
-    (pure record - no computeFine)
   }
   class FineStrategy {
     <<interface>>

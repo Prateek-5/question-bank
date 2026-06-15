@@ -598,10 +598,10 @@ classDiagram
   direction TB
   class Reservation {
     -state : ReservationState* (unique_ptr)
-    +confirm() → state.confirm()
-    +seat()    → state.seat()
-    +cancel()  → state.cancel()
-    +noShow()  → state.noShow()
+    +confirm()
+    +seat()
+    +cancel()
+    +noShow()
     +transitionTo(s)
   }
   class ReservationState {
@@ -764,7 +764,6 @@ classDiagram
   class ReservationSystem {
     tables : vector~Table~
     waitlist : map~Slot, vector~Party~~
-    (root coordinator + Subject)
   }
   class Table {
     id : string

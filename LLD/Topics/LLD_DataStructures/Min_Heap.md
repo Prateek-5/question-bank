@@ -503,7 +503,7 @@ classDiagram
     -comp : Comparator*
     -data : vector~int~
     +insert / getMin / extractMin
-    -siftUp/Down → comp.higherPriority
+    -siftUp/Down
   }
   class Comparator {
     <<interface>>

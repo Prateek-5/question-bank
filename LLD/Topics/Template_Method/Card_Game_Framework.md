@@ -604,7 +604,7 @@ classDiagram
   class Game {
     <<abstract>>
     -scoring : ScoringStrategy*
-    #scoreAllHands() → scoring.score()
+    #scoreAllHands()
   }
   class ScoringStrategy {
     <<interface>>

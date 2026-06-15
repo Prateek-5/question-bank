@@ -459,9 +459,9 @@ classDiagram
   direction TB
   class Page {
     -state : PageState* (unique_ptr)
-    +edit(c) → state.edit()
-    +submit() → state.submit()
-    +publish() → state.publish()
+    +edit(c)
+    +submit()
+    +publish()
     +transitionTo(s)
   }
   class PageState {
@@ -780,7 +780,7 @@ classDiagram
   }
   class Page {
     -state : PageState*
-    +publish() → state.publish()
+    +publish()
   }
   class PageState {
     <<interface>>

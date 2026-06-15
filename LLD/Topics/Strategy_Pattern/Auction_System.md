@@ -617,9 +617,9 @@ classDiagram
   direction TB
   class Auction {
     -state : AuctionState* (unique_ptr)
-    +placeBid(...) → state.placeBid
-    +close()       → state.close
-    +settle()      → state.settle
+    +placeBid(...)
+    +close()
+    +settle()
     +transitionTo(s)
   }
   class AuctionState {
@@ -811,7 +811,6 @@ classDiagram
     id : string
     endAt : time_point
     bids : vector~Bid~
-    (root coordinator)
   }
   class Item {
     name : string
@@ -946,9 +945,9 @@ classDiagram
   direction TB
   class Auction {
     -state : AuctionState* (unique_ptr)
-    +placeBid → state.placeBid
-    +close    → state.close
-    +settle   → state.settle
+    +placeBid
+    +close
+    +settle
     +transitionTo(s)
   }
   class AuctionState {
