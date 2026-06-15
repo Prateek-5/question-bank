@@ -237,7 +237,7 @@ A walkthrough that uses N HLD jargon terms should have N mini-refreshers. Skippi
 - Hot key mitigation (key splitting / per-shard caches)
 - CRDTs
 
-### Rule 3 — Diagrams: inline mermaid with `look: handDrawn` + explicit light theme
+### Rule 3 — Diagrams: inline mermaid with `theme: neutral` + soft pastels
 
 All HLD diagrams are **inline mermaid code blocks** in the walkthrough `.md` file. No external sources (`.excalidraw`, PNG, SVG). No ASCII fallback. Mermaid renders natively in GitHub, VS Code, and most markdown viewers — zero rendering step, zero binary artifacts in the repo.
 
@@ -248,10 +248,9 @@ All HLD diagrams are **inline mermaid code blocks** in the walkthrough `.md` fil
 Uses `theme: neutral` (a light theme) + an explicit soft-pastel palette. Three non-obvious bits worth understanding:
 
 1. **`edgeLabelBackground` / `labelBackground`** give every flowchart arrow label (the `|text|` between arrows, like `CDN -->|miss → origin| LB`) a **white card backdrop**. Without this, arrow labels float on the page background, which is invisible in dark-mode viewers.
-2. **`themeCSS` halo for sequence message labels.** Mermaid sequence diagrams use floating SVG text for messages like "1: POST(long_url)" — there's no built-in `messageBackgroundColor` theme variable. To give them a white "card" effect, we apply `paint-order: stroke fill` with a 5px white stroke, which renders a white halo around each glyph. Works in VS Code's mermaid preview; **GitHub strips themeCSS for security**, so in GitHub web the labels fall back to plain slate text (still readable on white, dim on dark). Best-effort fix; the alternative would be wrapping each message in a Note, which is structurally heavier.
-3. **`lineColor` / `signalColor` = `#0d47a1` (Material blue-900, deep navy)** — bold and matches the `primaryBorderColor` `#084298` box-outline color, so arrows and box borders visually unify. Same-hue family throughout the diagram. Strongest contrast on white (8:1); dimmer on GitHub dark (~2:1), but the **`themeCSS` arrow-thickness rule (2.5 px)** keeps lines perceptible.
-4. **`themeCSS` stroke-width override.** Mermaid's default arrow stroke is ~1-1.5 px (thin). We force 2.5 px on every edge type (`.edgePath`, `.flowchart-link`, `.messageLine0/1`, `.relation`, `.composition`, etc.) via themeCSS. Bolder lines = more visually prominent diagrams. **GitHub strips themeCSS**, so on GitHub web the arrows revert to the default thin stroke. To make individual flowchart arrows thick in GitHub specifically, add a `linkStyle default stroke-width:2.5px` directive at the end of the diagram body (not via themeCSS).
-5. **`look: handDrawn` is INTENTIONALLY OMITTED** — that mermaid feature caused dark-bg rendering on multiple viewers.
+2. **`lineColor` / `signalColor` = `#0d47a1` (Material blue-900, deep navy)** — bold and matches the `primaryBorderColor` `#084298` box-outline color, so arrows and box borders visually unify. Same-hue family throughout the diagram. Strongest contrast on white (8:1); dimmer on GitHub dark (~2:1), but still readable.
+3. **`themeCSS` is INTENTIONALLY OMITTED** (removed 2026-06-15). Per the official mermaid spec, `themeCSS` is **not** a valid YAML frontmatter key — it only works via the `%%{init: ...}%%` init directive. GitHub's mermaid v10 parser tries to apply it as a config key, fails, then calls `.startsWith()` on `undefined`, producing the error `Cannot read properties of undefined (reading 'startsWith')`. Keeping themeCSS in YAML broke renders on GitHub for zero benefit (GitHub strips themeCSS for XSS regardless). It's gone repo-wide. To boost arrow thickness on a single flowchart, append `linkStyle default stroke-width:2.5px` to that diagram's body (GitHub-compatible). White halos on sequence labels are no longer applied anywhere.
+4. **`look: handDrawn` is INTENTIONALLY OMITTED** — caused dark-bg rendering on multiple viewers. Also: `look:` is mermaid v11+ and is rejected by GitHub the same way themeCSS was.
 
 ````markdown
 ```mermaid
@@ -286,14 +285,6 @@ config:
     labelBackground: '#ffffff'
     classText: '#1f2937'
     fontFamily: 'system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif'
-  themeCSS: |
-    .messageText, .labelText, .sequenceNumber {
-      paint-order: stroke fill;
-      stroke: #ffffff;
-      stroke-width: 5px;
-      stroke-linejoin: round;
-      stroke-linecap: round;
-    }
 ---
 flowchart TB
   ...

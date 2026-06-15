@@ -29,7 +29,7 @@ A v2 LLD file MAY NOT assume, without an inline refresher:
 
 ---
 
-## Diagram convention — inline mermaid with `look: handDrawn` + explicit light theme
+## Diagram convention — inline mermaid with `theme: neutral` + soft pastels
 
 All LLD diagrams are **inline mermaid code blocks** in the walkthrough `.md` file. No external sources (no `.excalidraw`, no PNG, no SVG, no ASCII). Mermaid renders natively in GitHub, VS Code, and most markdown viewers — zero rendering step, zero binary artifacts.
 
@@ -40,10 +40,9 @@ All LLD diagrams are **inline mermaid code blocks** in the walkthrough `.md` fil
 Uses `theme: neutral` + an explicit soft-pastel palette. Three non-obvious bits worth understanding:
 
 1. **`edgeLabelBackground` / `labelBackground`** give every flowchart arrow label a **white card backdrop**. Without this, arrow labels float on the page bg — invisible in dark-mode viewers.
-2. **`themeCSS` halo for sequence message labels.** Mermaid sequence-diagram message labels (like "1: park(car)" floating above an arrow) have no built-in `messageBackgroundColor` variable. We apply `paint-order: stroke fill` with a 5px white stroke, rendering a white halo around each glyph — visually equivalent to a white card behind the text. Works in VS Code; **GitHub strips themeCSS**, in which case labels fall back to plain slate text. Best-effort.
-3. **`lineColor` / `signalColor` = `#0d47a1`** (Material blue-900, deep navy) — same hue family as `primaryBorderColor` `#084298`, so arrows visually unify with box outlines. Bold on light page bg.
-4. **`themeCSS` arrow stroke-width.** Default mermaid arrows are 1-1.5 px (thin). We force 2.5 px on every edge type (`.edgePath`, `.flowchart-link`, `.messageLine0/1`, `.relation`, etc.) via themeCSS. Bolder lines, more visually prominent. **GitHub strips themeCSS**, so on GitHub web arrows revert to default thin stroke; to force thickness for a specific flowchart in GitHub, add `linkStyle default stroke-width:2.5px` directive at the end of the diagram body.
-5. **`look: handDrawn` is INTENTIONALLY OMITTED** — caused dark-bg rendering on multiple viewers.
+2. **`lineColor` / `signalColor` = `#0d47a1`** (Material blue-900, deep navy) — same hue family as `primaryBorderColor` `#084298`, so arrows visually unify with box outlines. Bold on light page bg.
+3. **`themeCSS` is INTENTIONALLY OMITTED** (removed 2026-06-15). Per the official mermaid spec, `themeCSS` is **not** a valid YAML frontmatter key — it only works via the `%%{init: ...}%%` init directive. GitHub's mermaid v10 parser tries to apply it as a config key, fails, then calls `.startsWith()` on `undefined`, producing the error `Cannot read properties of undefined (reading 'startsWith')`. Keeping themeCSS in YAML broke renders on GitHub for zero benefit (GitHub strips themeCSS for XSS regardless). It's gone repo-wide. To boost arrow thickness on a single flowchart, append `linkStyle default stroke-width:2.5px` to that diagram's body (GitHub-compatible). White halos on sequence labels are no longer applied anywhere.
+4. **`look: handDrawn` is INTENTIONALLY OMITTED** — caused dark-bg rendering on multiple viewers. Also: `look:` is mermaid v11+ and is rejected by GitHub the same way themeCSS was.
 
 ````markdown
 ```mermaid
@@ -78,14 +77,6 @@ config:
     labelBackground: '#ffffff'
     classText: '#1f2937'
     fontFamily: 'system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif'
-  themeCSS: |
-    .messageText, .labelText, .sequenceNumber {
-      paint-order: stroke fill;
-      stroke: #ffffff;
-      stroke-width: 5px;
-      stroke-linejoin: round;
-      stroke-linecap: round;
-    }
 ---
 classDiagram
   ...
@@ -249,8 +240,10 @@ Every diagram-bearing section gets an HTML anchor in its heading:
 ```mermaid
 ---
 config:
-  look: handDrawn
-  theme: default
+  theme: neutral
+  themeVariables:
+    primaryColor: '#cfe2ff'
+    # ...rest of canonical block (see §"Diagram convention" above)
 ---
 classDiagram
   ...

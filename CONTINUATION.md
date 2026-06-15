@@ -74,28 +74,6 @@ config:
     labelBackground: '#ffffff'
     classText: '#1f2937'
     fontFamily: 'system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif'
-  themeCSS: |
-    .messageText, .labelText, .sequenceNumber {
-      paint-order: stroke fill;
-      stroke: #ffffff;
-      stroke-width: 5px;
-      stroke-linejoin: round;
-      stroke-linecap: round;
-    }
-    .edgePath path,
-    .flowchart-link,
-    .messageLine0,
-    .messageLine1,
-    .relation,
-    .composition,
-    .aggregation,
-    .extension,
-    .dependency {
-      stroke-width: 2.5px !important;
-    }
-    marker path {
-      stroke-width: 1.5px !important;
-    }
 ---
 flowchart TB
   ...
@@ -108,9 +86,8 @@ flowchart TB
 2. **Soft pastels for box fills** (`#cfe2ff` blue, `#fff3cd` yellow, `#d1e7dd` green) — visible against both white AND dark page backgrounds. Slate-800 (`#1f2937`) in-box text contrasts cleanly on every pastel.
 3. **`lineColor: '#0d47a1'`** (Material blue-900, deep navy) — matches `primaryBorderColor` `#084298` for visual unity. Bold on light bg. On GitHub dark, the 2.5 px stroke width (next bullet) compensates for the lower contrast.
 4. **`edgeLabelBackground` / `labelBackground` = white** — gives flowchart `|miss → origin|` style arrow labels a white card backdrop, so they're readable in dark-mode viewers.
-5. **`themeCSS` halo** — sequence message labels (`1: park(car)` floating above arrows) get a white SVG stroke around each glyph via `paint-order: stroke fill`. Equivalent to a white card behind text. **Note: GitHub strips themeCSS for XSS prevention**; VS Code and most local viewers honor it. The slate text fallback in GitHub is still readable on light mode.
-6. **`themeCSS` stroke-width** — arrows are 2.5 px instead of the default 1-1.5 px. Bolder, more prominent. Same GitHub-strips-themeCSS limitation. To force thickness for one specific flowchart in GitHub specifically, add `linkStyle default stroke-width:2.5px` at the end of that diagram's body.
-7. **`look: handDrawn` is INTENTIONALLY OMITTED** — that combination caused a dark background rendering on multiple viewers. Sketch aesthetic isn't worth the readability hit.
+5. **`themeCSS` is INTENTIONALLY OMITTED** (removed 2026-06-15). Earlier versions of this block had a `themeCSS: |` multi-line entry inside the YAML frontmatter to render a white halo around sequence labels and thicker (2.5 px) arrows. Per the official mermaid spec, **`themeCSS` is NOT a valid YAML frontmatter key** — it's only allowed via the `%%{init: ...}%%` init directive. GitHub's parser tries to apply it as a config key, fails, then calls `.startsWith()` on `undefined`, producing the error `Cannot read properties of undefined (reading 'startsWith')`. Keeping themeCSS in YAML broke renders on GitHub while delivering zero benefit there (GitHub strips themeCSS for XSS anyway). It's gone. To boost arrow thickness on a single flowchart, append `linkStyle default stroke-width:2.5px` to that diagram's body (GitHub-compatible). Halo on sequence labels is no longer applied anywhere — slate text on the default white-ish background reads cleanly enough.
+6. **`look: handDrawn` is INTENTIONALLY OMITTED** — that combination caused a dark background rendering on multiple viewers. Sketch aesthetic isn't worth the readability hit. Also: `look:` is mermaid v11+; GitHub is on v10 and rejects it the same way it rejected themeCSS.
 
 ### Color semantics
 
@@ -262,7 +239,7 @@ Context:
 - Canonical exemplar: LLD/Topics/Object_Oriented_Design/Parking_Lot.md
 - Pending question list: LLD/Topics/<Bucket>/EXTRACTED_QUESTIONS.md
 - Output path: LLD/Topics/<Bucket>/<Question>.md
-- All diagrams use inline mermaid blocks with the canonical theme block from CONTINUATION.md §3 (or LLD/TEMPLATE-v2.md). DO NOT use look: handDrawn. Light bg + soft pastel fills + #0d47a1 navy arrows + edgeLabelBackground:#ffffff + themeCSS halo for sequence labels.
+- All diagrams use inline mermaid blocks with the canonical theme block from CONTINUATION.md §3 (or LLD/TEMPLATE-v2.md). DO NOT use look: handDrawn. DO NOT add themeCSS to the YAML frontmatter (it breaks GitHub renders). Light bg + soft pastel fills + #0d47a1 navy arrows + edgeLabelBackground:#ffffff.
 
 Pick a question from one of these buckets (priority order):
 1. Object_Oriented_Design  (26 questions — atm, elevator, vending machine, etc.)
@@ -418,7 +395,8 @@ A condensed history so a future-you understands why specific choices were made:
 | Mermaid + theme:default | light theme baseline | Same issue + some color overrides leaked through |
 | ASCII art with detailed walkthroughs | text-based, fully portable | Not as "intuitive" as user wanted; arrows hard to draw |
 | `.excalidraw` source + PNG render engine | true excalidraw look | Programmatic layout had label overlaps; required Node engine + manual export step; PNGs stale vs sources |
-| **Mermaid + theme:neutral + soft pastel themeVariables** | converged | Light bg, dark text, visible on most viewers, edgeLabelBackground for arrow labels, themeCSS halo for sequence labels, `#0d47a1` navy arrows at 2.5px thickness |
+| Mermaid + theme:neutral + themeVariables + themeCSS (halo + 2.5 px arrows) | almost converged | Beautiful in VS Code, but GitHub's mermaid v10 rejected themeCSS as an invalid YAML key → `Cannot read properties of undefined (reading 'startsWith')` on a sporadic subset of diagrams |
+| **Mermaid + theme:neutral + soft pastel themeVariables (NO themeCSS)** | converged 2026-06-15 | Same palette + navy arrows + edgeLabelBackground, themeCSS stripped repo-wide (662 blocks across 94 files). Renders identically on GitHub, VS Code, and mermaid.live. Lost the white halo on sequence labels; slate text reads fine on the soft pastel notes. |
 
 The **last row is the final state.** Anything that contradicts it should be rejected.
 

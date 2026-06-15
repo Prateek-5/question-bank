@@ -170,28 +170,6 @@ config:
     labelBackground: '#ffffff'
     classText: '#1f2937'
     fontFamily: 'system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif'
-  themeCSS: |
-    .messageText, .labelText, .sequenceNumber {
-      paint-order: stroke fill;
-      stroke: #ffffff;
-      stroke-width: 5px;
-      stroke-linejoin: round;
-      stroke-linecap: round;
-    }
-    .edgePath path,
-    .flowchart-link,
-    .messageLine0,
-    .messageLine1,
-    .relation,
-    .composition,
-    .aggregation,
-    .extension,
-    .dependency {
-      stroke-width: 2.5px !important;
-    }
-    marker path {
-      stroke-width: 1.5px !important;
-    }
 ---
 classDiagram
   direction TB
@@ -470,28 +448,6 @@ config:
     labelBackground: '#ffffff'
     classText: '#1f2937'
     fontFamily: 'system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif'
-  themeCSS: |
-    .messageText, .labelText, .sequenceNumber {
-      paint-order: stroke fill;
-      stroke: #ffffff;
-      stroke-width: 5px;
-      stroke-linejoin: round;
-      stroke-linecap: round;
-    }
-    .edgePath path,
-    .flowchart-link,
-    .messageLine0,
-    .messageLine1,
-    .relation,
-    .composition,
-    .aggregation,
-    .extension,
-    .dependency {
-      stroke-width: 2.5px !important;
-    }
-    marker path {
-      stroke-width: 1.5px !important;
-    }
 ---
 classDiagram
   direction TB
@@ -668,28 +624,6 @@ config:
     labelBackground: '#ffffff'
     classText: '#1f2937'
     fontFamily: 'system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif'
-  themeCSS: |
-    .messageText, .labelText, .sequenceNumber {
-      paint-order: stroke fill;
-      stroke: #ffffff;
-      stroke-width: 5px;
-      stroke-linejoin: round;
-      stroke-linecap: round;
-    }
-    .edgePath path,
-    .flowchart-link,
-    .messageLine0,
-    .messageLine1,
-    .relation,
-    .composition,
-    .aggregation,
-    .extension,
-    .dependency {
-      stroke-width: 2.5px !important;
-    }
-    marker path {
-      stroke-width: 1.5px !important;
-    }
 ---
 classDiagram
   direction TB
@@ -882,28 +816,6 @@ config:
     labelBackground: '#ffffff'
     classText: '#1f2937'
     fontFamily: 'system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif'
-  themeCSS: |
-    .messageText, .labelText, .sequenceNumber {
-      paint-order: stroke fill;
-      stroke: #ffffff;
-      stroke-width: 5px;
-      stroke-linejoin: round;
-      stroke-linecap: round;
-    }
-    .edgePath path,
-    .flowchart-link,
-    .messageLine0,
-    .messageLine1,
-    .relation,
-    .composition,
-    .aggregation,
-    .extension,
-    .dependency {
-      stroke-width: 2.5px !important;
-    }
-    marker path {
-      stroke-width: 1.5px !important;
-    }
 ---
 classDiagram
   direction TB
@@ -963,28 +875,6 @@ config:
     labelBackground: '#ffffff'
     classText: '#1f2937'
     fontFamily: 'system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif'
-  themeCSS: |
-    .messageText, .labelText, .sequenceNumber {
-      paint-order: stroke fill;
-      stroke: #ffffff;
-      stroke-width: 5px;
-      stroke-linejoin: round;
-      stroke-linecap: round;
-    }
-    .edgePath path,
-    .flowchart-link,
-    .messageLine0,
-    .messageLine1,
-    .relation,
-    .composition,
-    .aggregation,
-    .extension,
-    .dependency {
-      stroke-width: 2.5px !important;
-    }
-    marker path {
-      stroke-width: 1.5px !important;
-    }
 ---
 classDiagram
   direction TB
@@ -1059,28 +949,6 @@ config:
     labelBackground: '#ffffff'
     classText: '#1f2937'
     fontFamily: 'system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif'
-  themeCSS: |
-    .messageText, .labelText, .sequenceNumber {
-      paint-order: stroke fill;
-      stroke: #ffffff;
-      stroke-width: 5px;
-      stroke-linejoin: round;
-      stroke-linecap: round;
-    }
-    .edgePath path,
-    .flowchart-link,
-    .messageLine0,
-    .messageLine1,
-    .relation,
-    .composition,
-    .aggregation,
-    .extension,
-    .dependency {
-      stroke-width: 2.5px !important;
-    }
-    marker path {
-      stroke-width: 1.5px !important;
-    }
 ---
 classDiagram
   direction TB
@@ -1357,28 +1225,6 @@ config:
     labelBackground: '#ffffff'
     classText: '#1f2937'
     fontFamily: 'system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif'
-  themeCSS: |
-    .messageText, .labelText, .sequenceNumber {
-      paint-order: stroke fill;
-      stroke: #ffffff;
-      stroke-width: 5px;
-      stroke-linejoin: round;
-      stroke-linecap: round;
-    }
-    .edgePath path,
-    .flowchart-link,
-    .messageLine0,
-    .messageLine1,
-    .relation,
-    .composition,
-    .aggregation,
-    .extension,
-    .dependency {
-      stroke-width: 2.5px !important;
-    }
-    marker path {
-      stroke-width: 1.5px !important;
-    }
 ---
 sequenceDiagram
   actor CI
