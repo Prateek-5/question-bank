@@ -51,7 +51,26 @@ Clone `tools/lld-batch-workflow.js` → `tools/hld-batch-workflow.js`, swapping 
 - the **HLD rubric**: §0 glossary/refreshers, **capacity math** (QPS, storage, bandwidth,
   back-of-envelope), and **progressive architecture** (§10.A naive → §10.B bottleneck →
   §10.C scaled, mirroring the exemplar's arc), plus the mermaid canonical-theme-block rule
-  (verbatim, no `look: handDrawn`) carried over from LLD.
+  (verbatim, no `look: handDrawn`, no `themeCSS`) carried over from LLD.
+
+**Non-negotiable added after LLD completed (2026-09):** the engine's per-file post-step
+MUST invoke `./tools/validate-mermaid.sh <authored file>` before writing the ledger row's
+`status`. If validation fails, the row stays in the rectify loop until it passes.
+`mmdc` (headless-Chrome mermaid renderer, same as GitHub) is the only reliable check;
+regex-based sweeps miss ~2% of failures. The four HARD grammar rules the judge/rectifier
+must enforce are in `CONTINUATION.md` §11 (repo root) and `LLD/TEMPLATE-v2.md` Rule 5 —
+memorize them:
+
+1. NO `themeCSS:` in YAML frontmatter (breaks GitHub renders, zero benefit).
+2. classDiagram members: no bare `(parenthesized prose)` lines, no `→`/`->` arrows in
+   method signatures, no `{...}` struct literals in types, only valid relationship
+   arrows (`*--`, `--|>`, etc. — NOT `+--`).
+3. sequenceDiagram text: no `->` `-->` `->>` `-->>` inside message text or Note bodies
+   (use ` → `, U+2192); no `;` (use `,`).
+4. sequenceDiagram participants: no reserved-word aliases (`Loop`, `Note`, `Box`, `And`,
+   `Or`, `Not`, `End`, `Alt`, `Else`, `Opt`, `Par`, `Rect`, `Critical`, `Break`,
+   `Activate`, `Deactivate`, `Participant`, `Actor`, `Autonumber`, `Create`, `Destroy`).
+   Safe renames: `Runner`, `Clock`, `Notif`, `Mbox`, `AndOp`/`OrOp`/`NotOp`, etc.
 
 ## Phase 2 — Loop until HLD pending = 0
 

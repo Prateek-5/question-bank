@@ -1,0 +1,56 @@
+STUDY PLAN — QUICKSTART
+========================
+
+WHAT'S IN THIS ZIP
+-------------------
+1. Study_Plan_Progress.xlsx           <- the tracker itself
+2. study_plan_auto_date_solved.gs     <- the one script that auto-fills
+                                          Date Solved when Status = Solved
+
+SETUP (2 steps, about 60 seconds total)
+----------------------------------------
+STEP 1 — Get the sheet into Google Sheets
+  a. Go to sheets.google.com
+  b. File -> Import -> Upload -> pick Study_Plan_Progress.xlsx
+  c. Choose "Replace spreadsheet" if you're updating an older copy,
+     or create a new one. This keeps tab names exactly as they are
+     in the file (important for step 2).
+
+STEP 2 — Wire up the auto-date-solved script
+  a. In that Google Sheet: Extensions -> Apps Script
+  b. Delete everything in the editor (it starts with a placeholder
+     "function myFunction() {}")
+  c. Open study_plan_auto_date_solved.gs (from this zip) in any text
+     editor, copy its entire contents, and paste into the Apps Script
+     editor.
+  d. Press Ctrl+S / Cmd+S to save. Give the project any name.
+  e. Done. Nothing else to click, no "Run", no "Deploy".
+
+WHY THIS CAN'T BE FULLY AUTOMATIC
+-----------------------------------
+Google does not allow code to be auto-attached to a Sheet just by
+uploading a file — a human has to paste it into Apps Script at least
+once, as a security boundary. There is no file format (xlsx, zip, or
+otherwise) that skips this. The steps above are the minimum: one
+paste, one save.
+
+TESTING IT
+-----------
+On the "Study Plan" tab, click any cell in the Status column and set
+it to "Solved" (dropdown or typed). The Date Solved cell in that same
+row should fill in with today's date immediately.
+
+TROUBLESHOOTING
+-----------------
+- Nothing happens at all:
+    Check the tab is named EXACTLY "Study Plan" (Extensions -> Apps
+    Script only watches that exact tab name). If a previous import
+    left you with "Study Plan (1)", rename it back to "Study Plan".
+- You want to see what actually ran:
+    In the Apps Script editor, click the clock icon on the left
+    ("Executions"). Every edit to the sheet shows up there, with any
+    error message if one occurred.
+- A date already there got skipped:
+    That's intentional — the script never overwrites a Date Solved
+    cell that already has a value, so past dates you entered by hand
+    are safe.

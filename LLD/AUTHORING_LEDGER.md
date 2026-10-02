@@ -12,6 +12,24 @@
 - **Score:** judge's 0–100 rubric score (see rubric below). Blank until judged.
 - **Merged:** count of raw LeetLens rows collapsed into this canonical question (1 = no dedup).
 
+## Mermaid render-safety (added 2026-09 — post-LLD)
+
+Every `passed`/`done` file in this ledger has been validated end-to-end with `mmdc`
+(the same headless-Chrome mermaid renderer GitHub uses). Result on 2026-09-02:
+**663/663 mermaid blocks pass; zero failures.**
+
+If you re-open any LLD file for edits (e.g. polishing `Calendar_Application.md` §12.3
+or `Image_Processing_Pipeline.md`), run before commit:
+
+```bash
+./tools/validate-mermaid.sh LLD/Topics/<Bucket>/<File>.md
+```
+
+The four HARD grammar rules the LLD engine's original judge did NOT enforce (and which
+the mmdc sweep caught after the fact) are documented in `LLD/TEMPLATE-v2.md` Rule 5 and
+`CONTINUATION.md` §11 (repo root). Any new authoring workflow — or the HLD engine when
+built — must invoke the validator per-file before marking `passed`.
+
 ## Dedup decisions (transparency)
 
 | Collapse | Raw rows | → Canonical |
